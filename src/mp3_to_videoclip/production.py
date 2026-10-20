@@ -19,7 +19,7 @@ from .models import (
     Shot,
     Storyboard,
 )
-from .render import probe
+from .render import decoded_duration, probe
 from .storage import digest, file_hash, inside, read_json, write_json
 
 STAGE_FILES = {
@@ -83,7 +83,7 @@ def init_project(
     info = probe(source)
     if not any(s.get("codec_type") == "audio" for s in info["streams"]):
         raise ValueError("source has no audio stream")
-    duration = float(info["format"]["duration"])
+    duration = decoded_duration(info)
     width, height = (1920, 1080) if aspect == "16:9" else (1080, 1920)
     new_defaults = workflow_version == 2
     selected_model = image_model or (profiles.DEFAULT_MODEL if new_defaults else None)

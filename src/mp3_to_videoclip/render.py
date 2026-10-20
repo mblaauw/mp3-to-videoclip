@@ -125,6 +125,29 @@ def probe(path: Path | str) -> dict:
     return json.loads(out)
 
 
+def decoded_duration(info: dict) -> float:
+    """Seconds of audio actually in the stream, not the container's estimate.
+
+    An MP3 without a Xing header over-reports ``format.duration`` (a 60 s VBR file
+    probes 0.7 s long). ``duration_ts * time_base`` is the frame/sample-exact length
+    of the stream that gets muxed, so the film's frame count derives from audio
+    that exists.
+    """
+    streams = [s for s in info.get("streams") or [] if s.get("codec_type") == "audio"]
+    for stream in streams:
+        ticks, base = stream.get("duration_ts"), stream.get("time_base")
+        if not isinstance(ticks, int) or not isinstance(base, str) or "/" not in base:
+            continue
+        numerator, _, denominator = base.partition("/")
+        try:
+            seconds = ticks * int(numerator) / int(denominator)
+        except (ValueError, ZeroDivisionError):
+            continue
+        if seconds > 0:
+            return round(seconds, 6)
+    return float(info["format"]["duration"])
+
+
 def _video_stream(info: dict) -> dict:
     for stream in info.get("streams", []):
         if stream.get("codec_type") == "video":

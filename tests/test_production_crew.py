@@ -282,6 +282,10 @@ def test_bootstrap_check_is_read_only_and_reports_missing_pieces(tmp_path):
     assert "expected" in run_check(tmp_path).stdout
 
 
+@pytest.mark.skipif(
+    not (ROOT / ".opencode/vendor/runware-skills/.git/HEAD").is_file(),
+    reason="the pinned vendor checkout is an optional local installation",
+)
 def test_real_tree_check_passes_without_writing_or_network():
     before = snapshot(ROOT / ".opencode/skills")
     result = subprocess.run(

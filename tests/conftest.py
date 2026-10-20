@@ -39,21 +39,27 @@ def run_ffmpeg(argv: list[str]) -> None:
     subprocess.run(argv, check=True, capture_output=True)
 
 
-def read_frame(path: Path, seconds: float) -> np.ndarray:
+def read_frame(path: Path, seconds: float, fps: int = 24) -> np.ndarray:
+    """Decode one exact frame by index.
+
+    Input seeking lands on the nearest keyframe and then relies on decoder
+    behaviour, which differs between ffmpeg builds and between two files that
+    encode the same picture with different keyframe grids. Selecting the frame by
+    number is deterministic: the same index is the same picture in both files.
+    """
+    frame = int(round(seconds * fps))
     raw = subprocess.run(
         [
             "ffmpeg",
             "-nostdin",
             "-v",
             "error",
-            "-ss",
-            f"{seconds:.6f}",
             "-i",
             str(path),
+            "-vf",
+            f"select=eq(n\\,{frame}),format=rgb24,scale=in_range=limited:out_range=full",
             "-frames:v",
             "1",
-            "-vf",
-            "format=rgb24,scale=in_range=limited:out_range=full",
             "-f",
             "rawvideo",
             "-pix_fmt",
