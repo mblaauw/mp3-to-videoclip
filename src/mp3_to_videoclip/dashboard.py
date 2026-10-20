@@ -328,8 +328,8 @@ def _thumbnail(root: Path, cache: Path, relative: str) -> str | None:
     target = cache / f"{digest[:24]}-{THUMB_WIDTH}.jpg"
     if not target.is_file():
         try:
-            with Image.open(source) as image:
-                image = image.convert("RGB")
+            with Image.open(source) as opened:
+                image = opened.convert("RGB")
                 ratio = THUMB_WIDTH / image.width
                 image = image.resize((THUMB_WIDTH, max(1, round(image.height * ratio))))
                 buffer = io.BytesIO()

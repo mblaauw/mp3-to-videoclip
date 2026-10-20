@@ -103,7 +103,7 @@ def ligature(*, ink: str, accent: str) -> str:
 # --------------------------------------------------------------------------- #
 # 2. seal
 # --------------------------------------------------------------------------- #
-def seal(*, ink: str, accent: str, field: str) -> str:
+def seal(*, ink: str, accent: str) -> str:
     """The monogram badged, with one corner cut open.
 
     The clipped corner keeps the pipeline's open-frame motif without repeating it
@@ -137,25 +137,24 @@ def seal(*, ink: str, accent: str, field: str) -> str:
         f'<g transform="translate({offset_x:.2f},{offset_y:.2f}) scale({scale})">'
         f"{monogram(ink=ink, accent=accent)}</g>"
     )
-    del field
     return frame + opening + inner
 
 
 FULL = {
     "ligature": lambda: ligature(ink=INK, accent=GOLD),
-    "seal": lambda: seal(ink=INK, accent=GOLD, field=NIGHT),
+    "seal": lambda: seal(ink=INK, accent=GOLD),
 }
 ON_LIGHT = {
     "ligature": lambda: ligature(ink=INK_ON_LIGHT, accent=GOLD_ON_LIGHT),
-    "seal": lambda: seal(ink=INK_ON_LIGHT, accent=GOLD_ON_LIGHT, field=PAPER),
+    "seal": lambda: seal(ink=INK_ON_LIGHT, accent=GOLD_ON_LIGHT),
 }
 MONO_DARK = {
     "ligature": lambda: ligature(ink=INK, accent=INK),
-    "seal": lambda: seal(ink=INK, accent=INK, field=NIGHT),
+    "seal": lambda: seal(ink=INK, accent=INK),
 }
 MONO_LIGHT = {
     "ligature": lambda: ligature(ink=INK_ON_LIGHT, accent=INK_ON_LIGHT),
-    "seal": lambda: seal(ink=INK_ON_LIGHT, accent=INK_ON_LIGHT, field=PAPER),
+    "seal": lambda: seal(ink=INK_ON_LIGHT, accent=INK_ON_LIGHT),
 }
 
 

@@ -63,6 +63,9 @@ SCRIPT = """
  document.getElementById('slug').addEventListener('input',function(){auto=false;update();});
  ids.forEach(function(id){var el=document.getElementById(id);if(el){el.addEventListener('input',update);el.addEventListener('change',update);}});
 
+ function shq(value){
+   return "'"+String(value).replace(/'/g, "'\\\\''")+"'";
+ }
  function blockers(){
    var out=[];
    if(!v('mp3'))out.push(['blocker','source MP3 path is required']);
@@ -85,11 +88,11 @@ SCRIPT = """
    document.getElementById('copy').disabled=blocked;
    var slug=v('slug')||'<slug>';
    var commands=[
-     'uv run clip init projects/'+slug+' \\\\',
-     "  --mp3 '"+v('mp3')+"' --title '"+v('title')+"' --aspect "+(v('aspect')||'16:9')+
-       ' --fps '+(v('fps')||'24')+' --music-mode '+(v('mode')||'vocal'),
-     'uv run clip budget projects/'+slug+' --cap '+v('cap')+
-       ' --max-corrections '+(v('corrections')||'1')+" --note 'initial production cap'",
+     'uv run clip init '+shq('projects/'+slug)+' \\\\',
+     '  --mp3 '+shq(v('mp3'))+' --title '+shq(v('title'))+' --aspect '+shq(v('aspect')||'16:9')+
+       ' --fps '+shq(v('fps')||'24')+' --music-mode '+shq(v('mode')||'vocal'),
+     'uv run clip budget '+shq('projects/'+slug)+' --cap '+shq(v('cap'))+
+       ' --max-corrections '+shq(v('corrections')||'1')+' --note '+shq('initial production cap'),
    ];
    document.getElementById('commands').textContent=commands.join('\\n');
    document.getElementById('credits').textContent=

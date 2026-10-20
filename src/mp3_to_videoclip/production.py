@@ -849,7 +849,7 @@ def skeleton(root: Path, nominal_seconds=None, timing="beats", *, min_seconds=4,
                 purpose="TODO: approved story purpose",
                 image_prompt="TODO: compose this shot",
             )
-            for i, (start, end) in enumerate(zip(boundaries, boundaries[1:]))
+            for i, (start, end) in enumerate(zip(boundaries, boundaries[1:], strict=False))
         ]
         board = Storyboard(
             aspect=project.aspect, fps=project.fps, total_frames=project.total_frames, shots=shots

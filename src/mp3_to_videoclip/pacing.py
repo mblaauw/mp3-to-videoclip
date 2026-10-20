@@ -108,8 +108,8 @@ def _marked_frames(frames: Iterable[int], label: str, total_frames: int) -> set[
     except TypeError as error:
         raise PacingError(f"{label} must be an iterable of integer frames") from error
     marked: set[int] = set()
-    for frame in candidates:
-        frame = _integer(frame, f"{label} candidate")
+    for candidate in candidates:
+        frame = _integer(candidate, f"{label} candidate")
         if frame < 0:
             raise PacingError(f"{label} candidate {frame} is before the start of the track")
         if 0 < frame < total_frames:

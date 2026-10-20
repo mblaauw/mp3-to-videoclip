@@ -13,7 +13,6 @@ from the page.
 from __future__ import annotations
 
 import html
-import json
 import os
 import re
 from datetime import UTC, datetime
@@ -599,8 +598,3 @@ def build_studio(
     }
     write_json(target.with_suffix(".json"), sidecar)
     return sidecar
-
-
-def scan_json(entries: list[dict]) -> str:
-    """Small machine-readable view used by tests and future app clients."""
-    return json.dumps({"productions": entries}, indent=2, default=str)

@@ -1,11 +1,13 @@
-"""Read-only live layer: a loopback server that streams the durable spine.
+"""Live layer: a loopback server that streams the durable spine, read-only by default.
 
-Deliberately small and boring: no framework, no build step, no write endpoints. The
-server can read the journal, tail events over SSE and serve one live page. Every
-mutation still goes through `clip` under the project lock.
+Deliberately small and boring: no framework and no build step. Every GET is a
+read-only projection; every write verb is refused except the single parked
+``POST /api/create``, which calls the same kernel entry points as ``clip init`` and
+``clip budget`` under the project lock. Nothing here approves, selects or spends.
 
 Threat model: loopback only, and a per-session token so another local page cannot
-read the studio. Nothing is served from the project directory except JSON.
+read the studio. Nothing is served from the project directory except JSON and
+in-memory thumbnails resolved through ``storage.inside``.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import appdata, operations, sources, spine, studio
+from . import appdata, sources, spine, studio
 
 STREAM_INTERVAL = 0.5
 HEARTBEAT_SECONDS = 10.0
@@ -457,7 +459,7 @@ async function loadProjects(){
   const m=el('div','meta'); m.textContent=p.duration.toFixed(0)+'s · '+p.shots+' shots · '+(p.spend.accounted_usd||'—')+' / '+(p.spend.cap_usd||'no cap')+' USD';
   c.append(m);
   const tags=el('div','meta');
-  for(const [stage,state] of Object.entries(p.stages)){tags.append(el('span','tag '+(state==='approved'||state==='recorded'?'ok':(state==='stale'?'bad':'')),stage));}
+  for(const [stage,state] of Object.entries(p.stages)){const t=stateTag(state);t.textContent=stage+' '+t.textContent;tags.append(t);}
   c.append(tags);
   const n=el('div','meta'); n.textContent='next: '+p.next_step; c.append(n);
   c.addEventListener('click',function(){
@@ -730,13 +732,3 @@ def start_in_thread(projects_dir, db, *, port=0, token="test-token"):
     )
     thread.start()
     return httpd, url, thread
-
-
-def aggregate_operations(projects_dir: Path) -> dict:
-    """Per-project operation summaries, for the live page and future clients."""
-    result = {}
-    for folder in sorted(Path(projects_dir).iterdir()) if Path(projects_dir).is_dir() else []:
-        if not (folder / "project.json").is_file():
-            continue
-        result[folder.name] = operations.summary(folder)
-    return result

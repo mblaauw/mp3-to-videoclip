@@ -38,7 +38,7 @@ def assert_partition(boundaries, total, fps, min_seconds=MIN_SECONDS, max_second
     assert boundaries[-1] == total
     assert boundaries == sorted(boundaries)
     assert len(set(boundaries)) == len(boundaries)
-    durations = [end - start for start, end in zip(boundaries, boundaries[1:])]
+    durations = [end - start for start, end in zip(boundaries, boundaries[1:], strict=False)]
     assert sum(durations) == total
     if total < min_frames:
         assert boundaries == [0, total]
@@ -118,7 +118,7 @@ def test_reviewed_events_at_5_17_and_25_seconds_are_preferred():
     boundaries = plan_boundaries(total, 24, event_frames=events)
     assert boundaries[:4] == [0, 120, 408, 600]
     assert_partition(boundaries, total, 24)
-    durations = [end - start for start, end in zip(boundaries, boundaries[1:])]
+    durations = [end - start for start, end in zip(boundaries, boundaries[1:], strict=False)]
     # 5s, 12s, 8s, ... - genuinely varied, not eight seconds everywhere.
     assert durations[:3] == [120, 288, 192]
     assert len(set(durations)) > 1

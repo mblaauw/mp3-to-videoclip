@@ -123,6 +123,32 @@ def test_intake_emits_commands_and_refuses_impossible_ones(tmp_path):
     assert "never writes" in document.lower()
 
 
+def test_intake_quotes_every_interpolated_value(tmp_path):
+    """A title with an apostrophe must not break the emitted shell command.
+
+    The composer is JavaScript, so pytest asserts the structure rather than
+    executing it: every user value passes through shq(), and no raw
+    single-quote interpolation survives. The helper itself is verified with
+    node ('Don't Stop (take 2); rm -rf /' round-trips through shlex).
+    """
+    result = intake.build_intake(output_dir=tmp_path / "studio")
+    document = Path(result["page"]).read_text()
+    assert "function shq(value)" in document
+    assert "replace(/'/g" in document
+    for guarded in (
+        "--mp3 '+shq(v('mp3'))",
+        "--title '+shq(v('title'))",
+        "--cap '+shq(v('cap'))",
+        "'uv run clip init '+shq('projects/'+slug)",
+    ):
+        assert guarded in document, guarded
+    # No command interpolates a form value without the quoting helper.
+    commands = document[
+        document.index("var commands=[") : document.index("document.getElementById('commands')")
+    ]
+    assert "+v('" not in commands
+
+
 def test_intake_never_writes_outside_its_page(tmp_path):
     target = tmp_path / "studio"
     intake.build_intake(output_dir=target)

@@ -226,8 +226,8 @@ def handle(request: dict, ctx: Context) -> dict | None:
 def serve(projects_dir: Path) -> None:
     """stdio transport: one JSON-RPC object per line, one response per request."""
     ctx = Context(projects_dir)
-    for line in sys.stdin:
-        line = line.strip()
+    for raw in sys.stdin:
+        line = raw.strip()
         if not line:
             continue
         try:

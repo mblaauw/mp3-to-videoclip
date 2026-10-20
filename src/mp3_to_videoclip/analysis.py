@@ -307,7 +307,7 @@ def analyze(source: Path, duration: float) -> dict:
             | {float(beats[b]) for b in changes if 0 < b < len(beats) and 0 < beats[b] < duration}
         )
     sections = []
-    for start, end in zip(boundaries, boundaries[1:]):
+    for start, end in zip(boundaries, boundaries[1:], strict=False):
         values = energy[(times >= start) & (times < end)]
         sections.append(
             {

@@ -19,17 +19,18 @@ def import_reference(root: Path, source: Path, *, note: str, permission_confirme
     source = source.resolve(strict=True)
     original = source.read_bytes()
     original_hash = hashlib.sha256(original).hexdigest()
-    with Image.open(io.BytesIO(original)) as image:
-        image.load()
+    with Image.open(io.BytesIO(original)) as opened:
+        opened.load()
+        image = opened
         if box is not None:
             if (
                 len(box) != 4
                 or any(isinstance(v, bool) or not isinstance(v, int) for v in box)
-                or not 0 <= box[0] < box[2] <= image.width
-                or not 0 <= box[1] < box[3] <= image.height
+                or not 0 <= box[0] < box[2] <= opened.width
+                or not 0 <= box[1] < box[3] <= opened.height
             ):
                 raise ValueError("crop must be four integer pixel bounds inside the source")
-            image = image.crop(tuple(box))
+            image = opened.crop(tuple(box))
         data = io.BytesIO()
         image.convert("RGB").save(data, format="PNG")
         size = list(image.size)

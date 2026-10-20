@@ -426,7 +426,7 @@ def _downbeats(envelope, sr: int, hop: int, duration: float, period_s) -> dict:
         {
             "downbeats": [
                 {"time": round(float(time_s), 3), "strength": round(float(strength), 3)}
-                for time_s, strength in zip(times, strengths)
+                for time_s, strength in zip(times, strengths, strict=True)
             ],
             "bar_length_candidates": scores,
             "phase_offset_s": round(
@@ -596,7 +596,7 @@ def _sections(chroma, mfcc, sr: int, hop: int, duration: float) -> dict:
         if 0 < item["time"] < duration
     ]
     spans = []
-    for start, end in zip(boundaries, boundaries[1:] + [{"time": duration}]):
+    for start, end in zip(boundaries, boundaries[1:] + [{"time": duration}], strict=True):
         spans.append(
             {
                 "start": start["time"],

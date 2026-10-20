@@ -746,10 +746,10 @@ def _brand_report(brand: BrandPackage | None, brand_plate: Path | None, project:
 # --------------------------------------------------------------------------- #
 def _thumbnail(path: str, width: int) -> Image.Image:
     try:
-        with Image.open(path) as im:
-            im = im.convert("RGB")
-            height = max(1, round(im.height * (width / im.width)))
-            return im.resize((width, height), Image.Resampling.LANCZOS)
+        with Image.open(path) as opened:
+            image = opened.convert("RGB")
+            height = max(1, round(image.height * (width / image.width)))
+            return image.resize((width, height), Image.Resampling.LANCZOS)
     except (OSError, ValueError):
         placeholder = Image.new("RGB", (width, round(width * 9 / 16)), (32, 32, 32))
         ImageDraw.Draw(placeholder).text((8, 8), "unreadable", fill=(200, 120, 120))

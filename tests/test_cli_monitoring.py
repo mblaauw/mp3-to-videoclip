@@ -234,7 +234,7 @@ def test_adopt_rejects_unknown_shot_and_unreadable_source(tmp_path):
                 ]
             )
         )
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         execute(
             parser().parse_args(
                 [

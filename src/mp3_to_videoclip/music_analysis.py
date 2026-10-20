@@ -350,14 +350,15 @@ def _validated_draft(draft: ListeningDraft, duration: float) -> ListeningDraft:
             raise ValueError("model-estimated passages overlap or are out of order")
         if start - previous_end > ROUNDING_TOLERANCE:
             raise ValueError("model-estimated passages leave an uncovered interval")
+        clamped = passage
         if end > duration:
             notes.append(
                 f"passage {number} end {end:.6f}s overshot the exact {duration:.6f}s recording "
                 "duration by a rounding margin and was clamped; no other timing was repaired"
             )
             end = duration
-            passage = passage.model_copy(update={"end": end})
-        passages.append(passage)
+            clamped = passage.model_copy(update={"end": end})
+        passages.append(clamped)
         previous_end = end
     if previous_end < duration - ROUNDING_TOLERANCE:
         raise ValueError("model-estimated passages do not cover the recording to its end")

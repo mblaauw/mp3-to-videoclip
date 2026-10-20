@@ -58,9 +58,12 @@ def adopt_derivative(
             f"adopt the version on {shot.asset_shot_id} instead"
         )
 
-    with Image.open(source) as image:
-        image.load()
-        size = [image.width, image.height]
+    try:
+        with Image.open(source) as image:
+            image.load()
+            size = [image.width, image.height]
+    except OSError as error:
+        raise ValueError(f"adopt source is not a readable image: {source.name}") from error
 
     sha = file_hash(source)
     assets = read_json(root / "work/assets.json")

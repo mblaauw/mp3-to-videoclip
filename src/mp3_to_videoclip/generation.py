@@ -730,6 +730,8 @@ def transcribe_quote(root: Path, quote_id: str, transcriber=transcribe, *, clien
         cost_basis="duration-rate estimate, not provider invoice",
     )
     write_json(root / "work/tasks.json", journal)
+    # The OpenAI path returns nothing; the CLI derives its payload from work/lyrics.json.
+    return None
 
 
 def resolve_task(root: Path, task_uuid: str, cost: str, note: str):
