@@ -16,7 +16,8 @@ concurrency:
 jobs:
   quality:
     name: quality
-    runs-on: ubuntu-latest
+    # The renderer resolves Avenir Next / documented macOS font fallbacks.
+    runs-on: macos-15
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -28,10 +29,7 @@ jobs:
           enable-cache: true
       - name: Ensure local render tools
         run: |
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install --yes ffmpeg
-          fi
+          brew install ffmpeg
           ffmpeg -version
           ffprobe -version
       - run: uv sync --locked
