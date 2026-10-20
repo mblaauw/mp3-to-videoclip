@@ -83,6 +83,7 @@ def parser() -> argparse.ArgumentParser:
         "events": "Append-only event stream, optionally for one run",
         "reconcile": "Mark runs whose owning process is gone as interrupted",
         "trace": "One run as evidence: steps, waits, output and cost",
+        "resolve": "Record a human decision for one durable wait",
     }.items():
         action = spine_ops.add_parser(name, help=help_text)
         action.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
@@ -93,6 +94,9 @@ def parser() -> argparse.ArgumentParser:
             action.add_argument("--after", type=int, default=0)
         if name == "trace":
             action.add_argument("--run", required=True)
+        if name == "resolve":
+            action.add_argument("--interrupt", required=True)
+            action.add_argument("--note", required=True)
     sync = spine_ops.add_parser("sync", help="Import work/operations receipts as runs")
     sync.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
     sync.add_argument("--projects-dir", type=Path, default=Path("projects"))
@@ -508,6 +512,10 @@ def execute(args):
                 return {"events": spine.event_list(conn, args.run, args.after, args.limit)}
             if args.operation == "trace":
                 return spine.trace(conn, args.run)
+            if args.operation == "resolve":
+                return spine.resolve_human(
+                    conn, args.interrupt, resolution={"note": args.note}
+                )
             if args.operation == "sync":
                 return spine.sync_operations(conn, args.projects_dir)
             return spine.reconcile(conn)

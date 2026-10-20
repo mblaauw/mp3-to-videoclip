@@ -253,15 +253,40 @@ def ask_human(conn, run_id, *, kind, payload=None) -> str:
     return interrupt_id
 
 
-def resolve_human(conn, interrupt_id, *, resolution=None) -> None:
+def resolve_human(conn, interrupt_id, *, resolution=None) -> dict:
+    """Record a human decision. A run is marked ``resolved``, never silently completed."""
+    row = conn.execute("SELECT run_id, status FROM interrupts WHERE id=?", (interrupt_id,)).fetchone()
+    if row is None:
+        raise ValueError(f"unknown interrupt {interrupt_id!r}")
+    if row["status"] != "open":
+        raise ValueError("that wait is already resolved")
     conn.execute(
         "UPDATE interrupts SET status='resolved', resolved_at=?, resolution_json=? WHERE id=?",
         (_now(), json.dumps(resolution or {}, default=str), interrupt_id),
     )
     conn.commit()
-    row = conn.execute("SELECT run_id FROM interrupts WHERE id=?", (interrupt_id,)).fetchone()
-    if row:
-        append_event(conn, row["run_id"], "interrupt.resolved", {"resolution": resolution})
+    append_event(conn, row["run_id"], "interrupt.resolved", {"resolution": resolution})
+    remaining = conn.execute(
+        "SELECT COUNT(*) FROM interrupts WHERE run_id=? AND status='open'", (row["run_id"],)
+    ).fetchone()[0]
+    if remaining == 0:
+        conn.execute(
+            "UPDATE runs SET status='resolved', ended_at=? WHERE id=? AND status='waiting'",
+            (_now(), row["run_id"]),
+        )
+        conn.commit()
+        append_event(
+            conn,
+            row["run_id"],
+            "run.resolved",
+            {"note": "human answered; remaining steps need a new run"},
+        )
+    return {
+        "interrupt": interrupt_id,
+        "run_id": row["run_id"],
+        "remaining_waits": remaining,
+        "next": "run the printed command, then rebuild the plan; a resolution is not an execution",
+    }
 
 
 # --------------------------------------------------------------------------- #

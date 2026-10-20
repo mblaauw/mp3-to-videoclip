@@ -6,6 +6,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 from mp3_to_videoclip import spine
 
 
@@ -164,3 +166,24 @@ def test_trace_rejects_unknown_run(tmp_path):
             assert "unknown run" in str(exc)
         else:
             raise AssertionError("trace accepted an unknown run")
+
+
+def test_human_resolution_is_recorded_and_never_claims_completion(tmp_path):
+    with spine.connect(db(tmp_path)) as conn:
+        run_id = spine.start_run(conn, intent="approve", production="demo")
+        interrupt = spine.ask_human(conn, run_id, kind="approval", payload={"stage": "storyboard"})
+        result = spine.resolve_human(conn, interrupt, resolution={"note": "approved by user"})
+        assert result["remaining_waits"] == 0
+        assert "not an execution" in result["next"]
+        run = spine.run_list(conn)[0]
+        assert run["status"] == "resolved" and run["open_interrupts"] == 0
+        types = [event["type"] for event in spine.event_list(conn, run_id)]
+        assert "run.resolved" in types
+        with pytest.raises(ValueError, match="already resolved"):
+            spine.resolve_human(conn, interrupt, resolution={"note": "twice"})
+
+
+def test_resolving_an_unknown_wait_is_an_error(tmp_path):
+    with spine.connect(db(tmp_path)) as conn:
+        with pytest.raises(ValueError, match="unknown interrupt"):
+            spine.resolve_human(conn, "int-missing", resolution={})
