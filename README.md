@@ -110,10 +110,15 @@ uv run clip serve --port 8765             # read-only SSE studio; prints a token
 ```
 
 `clip serve` binds `127.0.0.1`, requires a per-session token, exposes `GET` only
-(`/api/health`, `/api/status`, `/api/runs`, `/api/events`, `/api/stream`, `/api/studio`)
-and answers every write verb with `405`. The page it serves tails the journal live; it
-cannot approve, select, spend or edit, because those remain CLI commands under the
-project lock.
+(`/api/health`, `/api/status`, `/api/runs`, `/api/events`, `/api/stream`, `/api/studio`,
+`/api/sources`) and answers every write verb with `405` except the parked `/api/create`.
+The `/app` shell is a read-only review surface over the same server:
+`/api/project/<slug>` (status), `/stills`, `/board`, `/approvals`, `/shot/<id>` (contract
+and compiled prompt) and `/thumb/<id>` (path-guarded, re-encoded in memory). It renders a
+verdict-badged still grid, a section/shot timeline, live stage hashes and the run cockpit;
+it cannot approve, select, spend or edit, because those remain CLI commands under the
+project lock. Thumbnail routes resolve the selected version through `work/assets.json`,
+reject any path outside the production and write no cache.
 
 ### Inspecting and answering runs
 
