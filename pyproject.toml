@@ -27,6 +27,8 @@ dev = ["pytest>=8,<10", "ruff>=0.12"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+# Agent instructions and skill docs are prompt material, not project code.
+extend-exclude = [".opencode"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
