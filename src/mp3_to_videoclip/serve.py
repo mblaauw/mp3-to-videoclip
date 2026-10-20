@@ -28,6 +28,15 @@ from . import appdata, sources, spine, studio
 STREAM_INTERVAL = 0.5
 HEARTBEAT_SECONDS = 10.0
 
+JS_HELPERS = """
+function el(tag, cls, text){const n=document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n;}
+function eventPayload(ev){
+  if(ev && ev.payload && typeof ev.payload === 'object') return ev.payload;
+  try { return JSON.parse((ev && ev.payload_json) || '{}') || {}; } catch(e){ return {}; }
+}
+"""
+
+
 PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Studio · live</title>
 <style>
@@ -66,11 +75,7 @@ const token = new URLSearchParams(location.search).get('token') || '';
 const q = token ? ('?token=' + encodeURIComponent(token)) : '';
 const log = document.getElementById('log');
 let last = 0, selected = null;
-function el(tag, cls, text){const n=document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n;}
-function eventPayload(ev){
-  if(ev && ev.payload && typeof ev.payload === 'object') return ev.payload;
-  try { return JSON.parse((ev && ev.payload_json) || '{}') || {}; } catch(e){ return {}; }
-}
+__JS_HELPERS__
 async function refresh(){
   const res = await fetch('/api/runs' + q);
   if(!res.ok) return;
@@ -108,7 +113,7 @@ function stream(){
   es.onerror = () => { es.close(); setTimeout(stream, 2000); };
 }
 refresh(); setInterval(refresh, 5000); stream();
-</script></body></html>"""
+</script></body></html>""".replace("__JS_HELPERS__", JS_HELPERS)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -432,11 +437,7 @@ const q=token?('?token='+encodeURIComponent(token)):'';
 const hdr=token?{'X-Studio-Token':token}:{};
 const view=document.getElementById('view');
 let current=null, tab='overview', stillsData=null, stillFilter=null, cockpitSource=null, cockpitRun=null, viewGen=0;
-function el(t,c,x){const n=document.createElement(t);if(c)n.className=c;if(x!==undefined)n.textContent=x;return n;}
-function eventPayload(ev){
- if(ev&&ev.payload&&typeof ev.payload==='object')return ev.payload;
- try{return JSON.parse((ev&&ev.payload_json)||'{}')||{};}catch(e){return {};}
-}
+__JS_HELPERS__
 function withToken(path){if(!token)return path;return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token);}
 async function api(path){const r=await fetch(withToken(path));const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d;}
 function badge(v){const t=v||'unreviewed';return el('span','badge '+t,t);}
@@ -671,7 +672,7 @@ document.getElementById('create').addEventListener('click',async function(){
  loadProjects();
 });
 loadSources();loadProjects();
-</script></body></html>"""
+</script></body></html>""".replace("__JS_HELPERS__", JS_HELPERS)
 
 
 def _float(query, key):
