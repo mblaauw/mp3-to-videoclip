@@ -101,8 +101,8 @@ selected or spent from the page.
 contract and compiled prompt, and controls that compose `clip shot-edit`, `clip adopt` and
 `clip review` commands — plus an explicit statement of which approvals an edit invalidates.
 
-The **live layer** is deliberately the smallest possible: a loopback server with no
-write endpoints.
+The **live layer** is deliberately the smallest possible: a loopback server that is
+read-only except for one parked create route.
 
 ```sh
 uv run clip spine sync                    # index existing work/operations receipts as runs

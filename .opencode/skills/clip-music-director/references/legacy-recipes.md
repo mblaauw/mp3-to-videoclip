@@ -8,7 +8,7 @@ spend, and no entry here is a golden reference for new films.
 
 ## Pinned upstream (Runware) recipes — unmodified
 
-Installed by `uv run python scripts/bootstrap_skills.py` from the pinned commit
+Installed by `uv run python scripts/bootstrap_production.py` from the pinned commit
 in `.opencode/SOURCES.md`. Their bytes are preserved; do not edit them.
 
 | Skill | Role for this project |

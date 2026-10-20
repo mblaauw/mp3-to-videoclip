@@ -7,13 +7,16 @@
 - `renderers/remotion/`: one pinned project-local visual renderer; Python derives
   its props from the canonical project/storyboard and graphics spec.
 - `tests/`, `scripts/`: engineering checks and bounded maintenance entrypoints.
-- `brand/releases/`: versioned vector masters/exports and manifests. Prior releases
-  remain legitimate historical artwork, not accidental duplicates to remove.
 - `AGENTS.md` → `LOOP.md` → focused stage skill → `PRODUCTION_WORKFLOW_V2.md` is the
   production read order. `RENDERER.md` documents implementation contracts, not
   another approval state. `PLAN.md` and implementation plans are historical.
 
 ## Private / generated
+
+`brand/releases/` holds generated release exports and manifests, written by
+`scripts/package_identity.py` and `scripts/package_filmstrip_identity.py`. It is
+ignored by git because it is reproducible output, not source; the tracked masters
+live in `brand/logo-design/`.
 
 `projects/` holds original media, selected/unselected versions, paid task journals,
 approvals, real review material and final films. `backups/` holds verified archives.

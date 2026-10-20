@@ -1,5 +1,9 @@
 # Approved Remotion migration and v004
 
+> **Historical record.** This document captures a point-in-time decision.
+> Current behaviour is defined by `docs/RENDERER.md`,
+> `docs/PRODUCTION_WORKFLOW_V2.md` and the code.
+
 User approved in Build with “go”, after selecting:
 
 - Remotion as primary visual renderer for v004 and new productions, FFmpeg for
