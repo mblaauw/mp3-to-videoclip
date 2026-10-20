@@ -78,7 +78,9 @@ def project_lock(root: Path):
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def write_versioned_page(directory: Path, prefix: str, name: str | None, text: str, label: str) -> Path:
+def write_versioned_page(
+    directory: Path, prefix: str, name: str | None, text: str, label: str
+) -> Path:
     """Write one generated page under a safe basename; never overwrite a page.
 
     ``label`` names the page kind in error messages (intake, studio). Without an

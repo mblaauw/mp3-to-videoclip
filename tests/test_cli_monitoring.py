@@ -42,13 +42,21 @@ def hold_lock(root: Path):
         (["status"], "approvals"),
         (["progress"], "operations"),
         (["costs"], "currency"),
+        (["context"], "production"),
+        (["dashboard"], "html"),
+        (["studio", "--projects-dir"], "page"),
     ],
 )
-def test_monitoring_and_inspection_work_while_a_writer_holds_the_lock(tmp_path, argv, key):
+def test_monitoring_and_review_pages_work_while_a_writer_holds_the_lock(tmp_path, argv, key):
     root = make_root(tmp_path)
     child = hold_lock(root)
     try:
-        result = execute(parser().parse_args([*argv, str(root)]))
+        # studio indexes the projects directory rather than one project.
+        if argv[0] == "studio":
+            args = parser().parse_args([*argv, str(tmp_path)])
+        else:
+            args = parser().parse_args([*argv, str(root)])
+        result = execute(args)
         assert key in result
     finally:
         child.terminate()

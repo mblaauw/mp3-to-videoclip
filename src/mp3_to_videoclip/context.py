@@ -23,17 +23,30 @@ def build(root: Path, *, stage: str | None = None, shots: int = 0, include_promp
     board = P.load_board(root)
     brief = P.load_brief(root)
     approvals = {}
-    for name in ("analysis", "events", "brief", "storyboard", "proof", "preview", "stills", "graphics"):
+    for name in (
+        "analysis",
+        "events",
+        "brief",
+        "storyboard",
+        "proof",
+        "preview",
+        "stills",
+        "graphics",
+    ):
         try:
             current = P.stage_hash(root, name)
         except (OSError, ValueError, KeyError):
             approvals[name] = "unavailable"
             continue
-        record = (P.read_json(root / "work/approvals.json") or {}).get(name) if (
-            root / "work/approvals.json"
-        ).is_file() else None
-        approvals[name] = "approved" if record and record.get("hash") == current else (
-            "stale" if record else "missing"
+        record = (
+            (P.read_json(root / "work/approvals.json") or {}).get(name)
+            if (root / "work/approvals.json").is_file()
+            else None
+        )
+        approvals[name] = (
+            "approved"
+            if record and record.get("hash") == current
+            else ("stale" if record else "missing")
         )
 
     selected = []
@@ -56,7 +69,9 @@ def build(root: Path, *, stage: str | None = None, shots: int = 0, include_promp
     music = read_optional(music_path, {})
     unknowns = []
     if music_path.is_file() and not music:
-        unknowns.append("music.json exists but could not be read; no tempo or section claim is safe")
+        unknowns.append(
+            "music.json exists but could not be read; no tempo or section claim is safe"
+        )
     if not (root / "work/music-grid.json").is_file():
         unknowns.append("no approved meter/bar grid: do not state BPM, bars or downbeats as fact")
     if not (root / "work/lyrics.json").is_file():

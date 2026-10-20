@@ -15,14 +15,11 @@ def db(tmp_path):
     return tmp_path / "spine.sqlite3"
 
 
-def test_run_command_records_a_replayable_journal(tmp_path):
+def test_run_command_records_a_journal_and_replays_only_on_request(tmp_path):
+    command = [sys.executable, "-c", "print('hello'); print('world')"]
     with spine.connect(db(tmp_path)) as conn:
         first = spine.run_command(
-            conn,
-            [sys.executable, "-c", "print('hello'); print('world')"],
-            production="demo",
-            intent="say hello",
-            cwd=tmp_path,
+            conn, command, production="demo", intent="say hello", cwd=tmp_path
         )
         assert first["returncode"] == 0 and first["replayed"] is False
         assert "hello" in first["output_tail"]
@@ -34,16 +31,23 @@ def test_run_command_records_a_replayable_journal(tmp_path):
         assert types.count("command.output") == 2
         assert types[-1] == "run.succeeded"
 
+        # The same argv is a new deliberate execution, not a replay: a render or
+        # preview must be runnable twice.
         second = spine.run_command(
-            conn,
-            [sys.executable, "-c", "print('hello'); print('world')"],
-            production="demo",
-            intent="say hello",
-            cwd=tmp_path,
+            conn, command, production="demo", intent="say hello", cwd=tmp_path
         )
-        assert second["replayed"] is True and second["run_id"] == first["run_id"]
-        # A replay must not spawn a second process or append a second output event.
-        assert len(spine.event_list(conn, first["run_id"])) == len(events)
+        assert second["replayed"] is False and second["run_id"] != first["run_id"]
+        assert [e["type"] for e in spine.event_list(conn, second["run_id"])].count(
+            "command.output"
+        ) == 2
+
+        # Replay is opt-in through an explicit key, and must not spawn again.
+        third = spine.run_command(conn, command, cwd=tmp_path, idempotency_key="chosen-key")
+        events_after_third = spine.event_list(conn, third["run_id"])
+        fourth = spine.run_command(conn, command, cwd=tmp_path, idempotency_key="chosen-key")
+        assert third["replayed"] is False
+        assert fourth["replayed"] is True and fourth["run_id"] == third["run_id"]
+        assert len(spine.event_list(conn, third["run_id"])) == len(events_after_third)
 
 
 def test_events_are_append_only_and_ordered(tmp_path):

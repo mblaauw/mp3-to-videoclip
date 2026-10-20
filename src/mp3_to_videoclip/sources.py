@@ -51,7 +51,11 @@ def scan(root: Path, *, liked_only=True, limit=400, query=None, min_seconds=None
         if query and query.lower() not in f"{title} {meta.get('tags', '')}".lower():
             continue
         audio = next(
-            (q for q in path.parent.iterdir() if q.is_file() and q.suffix.lower() in AUDIO and q.stem == path.stem),
+            (
+                q
+                for q in path.parent.iterdir()
+                if q.is_file() and q.suffix.lower() in AUDIO and q.stem == path.stem
+            ),
             None,
         )
         if audio is None:

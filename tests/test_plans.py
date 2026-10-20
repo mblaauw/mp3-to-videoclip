@@ -1,7 +1,5 @@
 """Plan objects: proposal-only build, honest stops, idempotent replay."""
 
-import sys
-
 import pytest
 from test_creative_production import make_root
 
@@ -16,11 +14,6 @@ def plan_with(monkeypatch, root, steps):
     built["steps"] = [
         plans._step(command, label, reason, invalidates=()) for label, reason, command in steps
     ]
-    for step in built["steps"]:
-        # Only unclassified synthetic commands borrow the read capability; a real
-        # clip command keeps its own scope so the gates stay under test.
-        if step.get("tool") is None:
-            step["tool"] = "status"
     built["blocked_by"] = [s["label"] for s in built["steps"] if s["human"] or s["needs_input"]]
     built["executable"] = [
         s["label"] for s in built["steps"] if not s["human"] and not s["needs_input"]
@@ -55,7 +48,7 @@ def test_run_executes_concrete_steps_then_waits_for_a_human(tmp_path):
         None,
         root,
         [
-            ("say hello", "harmless", f"{sys.executable} -c \"print('hello')\""),
+            ("say hello", "harmless", f"uv run clip status {root}"),
             (
                 "Approve storyboard",
                 "human gate",
@@ -68,9 +61,10 @@ def test_run_executes_concrete_steps_then_waits_for_a_human(tmp_path):
     assert [step["label"] for step in result["executed"]] == ["say hello"]
     assert result["stopped_at"]["why"] == "human decision"
     assert result["stopped_at"]["interrupt"].startswith("int_")
-    # A second run replays the executed step: no duplicate side effect.
+    # A second run is a new deliberate execution, not a replay of the first.
     again = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
-    assert again["executed"][0]["replayed"] is True
+    assert again["executed"][0]["replayed"] is False
+    assert again["executed"][0]["run_id"] != result["executed"][0]["run_id"]
 
 
 def test_placeholder_commands_stop_for_input(tmp_path):
@@ -112,7 +106,7 @@ def test_edit_steps_need_explicit_delegation(tmp_path):
 def test_failure_stops_the_plan(tmp_path):
     root = make_root(tmp_path)
     built = plan_with(
-        None, root, [("Fail", "nonzero", f'{sys.executable} -c "import sys; sys.exit(4)"')]
+        None, root, [("Fail", "nonzero", f"uv run clip status {tmp_path / 'missing'}")]
     )
     result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
     assert result["status"] == "failed" and result["failed_step"] == "Fail"
@@ -147,7 +141,32 @@ def test_unclassified_commands_are_refused(tmp_path):
     plans.save(root, built)
     result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
     assert result["status"] == "waiting"
-    assert "unclassified command" in result["stopped_at"]["why"]
+    assert "uv run clip" in result["stopped_at"]["why"]
+
+
+def test_a_stored_tool_label_cannot_smuggle_a_command(tmp_path):
+    """The saved capability label is a proposal artefact, never an authority."""
+    root = make_root(tmp_path)
+    built = plans.build(root)
+    marker = tmp_path / "ARBITRARY-COMMAND-RAN"
+    built["steps"] = [
+        {
+            "label": "status",
+            "reason": "claims read capability",
+            "command": f"touch {marker} clip",
+            "tool": "status",
+            "kind": "read",
+            "human": False,
+            "needs_input": False,
+            "invalidates": [],
+            "status": "pending",
+        }
+    ]
+    plans.save(root, built)
+    result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
+    assert result["status"] == "waiting"
+    assert "uv run clip" in result["stopped_at"]["why"]
+    assert not marker.exists()
 
 
 def test_malformed_plans_are_refused_at_save(tmp_path):
@@ -179,3 +198,29 @@ def test_a_built_plan_is_valid(tmp_path):
     built = plans.build(root)
     assert plans.problems(built) == []
     plans.save(root, built)
+
+
+def test_cli_plan_run_actually_reaches_the_runner(tmp_path):
+    """The CLI dispatch, not just plans.run(), must resolve the journal import."""
+    root = make_root(tmp_path)
+    built = execute(parser().parse_args(["plan", "build", str(root), "--intent", "run me"]))
+    result = execute(
+        parser().parse_args(
+            [
+                "plan",
+                "run",
+                str(root),
+                "--id",
+                built["id"],
+                "--db",
+                str(tmp_path / "spine.sqlite3"),
+            ]
+        )
+    )
+    assert result["plan"] == built["id"]
+    assert result["status"] in {"succeeded", "waiting", "failed"}
+
+
+def test_cli_spine_status_uses_the_top_level_import(tmp_path):
+    result = execute(parser().parse_args(["spine", "status", "--db", str(tmp_path / "s.db")]))
+    assert result["runs"] == {}

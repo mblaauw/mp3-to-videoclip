@@ -111,7 +111,16 @@ def build(root: Path, *, intent: str | None = None) -> dict:
     return plan
 
 
-KNOWN_STAGES = ("analysis", "events", "brief", "storyboard", "proof", "preview", "stills", "graphics")
+KNOWN_STAGES = (
+    "analysis",
+    "events",
+    "brief",
+    "storyboard",
+    "proof",
+    "preview",
+    "stills",
+    "graphics",
+)
 
 
 def problems(plan: dict) -> list[str]:
@@ -164,7 +173,13 @@ def load(root: Path, plan_id: str) -> dict:
     path = Path(root) / FOLDER / f"{plan_id}.json"
     if not path.is_file():
         raise ValueError(f"unknown plan {plan_id!r}")
-    return read_json(path)
+    plan = read_json(path)
+    found = problems(plan)
+    if found:
+        # A stored plan is untrusted input: revalidate it instead of trusting the
+        # capability label recorded when it was built.
+        raise ValueError("invalid stored plan: " + "; ".join(found))
+    return plan
 
 
 def history(root: Path) -> list[dict]:
@@ -228,15 +243,19 @@ def run(
                 stopped = {**step, "why": "human decision", "interrupt": interrupt}
                 break
             try:
-                if step.get("tool"):
-                    tools.require(step["tool"], granted)
-                elif "clip" not in step["command"]:
-                    # A plan may only run the validated command surface. Anything else
-                    # (a hand-written shell line, a model suggestion) stops here.
+                # Parse first, then re-derive the capability from argv. The stored
+                # `tool` label is a proposal artefact and must never be trusted at
+                # execution time.
+                argv = _argv(step["command"])
+                if argv is None:
+                    raise PermissionError(f"unparseable command: {step['command']!r}")
+                if argv[:3] != ["uv", "run", "clip"]:
                     raise PermissionError(
-                        "unclassified command: plans may only run clip commands"
+                        "plans may only run 'uv run clip …' commands; nothing else executes"
                     )
-            except PermissionError as exc:
+                tool = tools.classify_argv(argv)
+                tools.require(tool, granted)
+            except (ValueError, PermissionError) as exc:
                 interrupt = spine.ask_human(
                     conn,
                     run_id,
@@ -245,22 +264,15 @@ def run(
                 )
                 stopped = {**step, "why": str(exc), "interrupt": interrupt}
                 break
-            argv = _argv(step["command"])
-            if argv is None:
-                interrupt = spine.ask_human(
-                    conn,
-                    run_id,
-                    kind="input",
-                    payload={"step": index, "command": step["command"]},
-                )
-                stopped = {**step, "why": "unparseable command", "interrupt": interrupt}
-                break
             result = spine.run_command(
                 conn,
                 argv,
                 production=root.name,
                 intent=step["label"],
                 cwd=cwd or Path.cwd(),
+                # Scope replay to this run and step: re-running the plan is a new
+                # deliberate act, not a retry of the previous one.
+                idempotency_key=f"{run_id}:{index}",
             )
             executed.append(
                 {

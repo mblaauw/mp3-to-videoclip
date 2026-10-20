@@ -11,7 +11,7 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
-from . import derivations, generation, operations, production, profiles
+from . import derivations, generation, operations, production, profiles, spine
 from .analysis import analyze
 from .branding import brand_hash, load_brand
 from .models import (
@@ -119,7 +119,9 @@ def parser() -> argparse.ArgumentParser:
         "--allow-edit", action="store_true", help="Delegate canonical edits to this run"
     )
     plan.set_defaults(project=None)
-    context_cmd = commands.add_parser("context", help="Assemble the labelled context pack for a step")
+    context_cmd = commands.add_parser(
+        "context", help="Assemble the labelled context pack for a step"
+    )
     context_cmd.add_argument("project", type=Path)
     context_cmd.add_argument("--stage")
     context_cmd.add_argument("--shots", type=int, default=0)
@@ -452,12 +454,26 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
-#: Commands that only read project artifacts. They run without the exclusive
-#: writer lock so monitoring and inspection keep working during a long render or
-#: paid batch. Every artifact is written atomically (temp file + replace), so a
-#: reader sees either the previous or the next complete document, never a partial
-#: one. Anything that writes must stay out of this set.
-READ_ONLY_COMMANDS = frozenset({"status", "progress", "costs", "locate", "preflight", "prompts"})
+#: Commands that read canonical artifacts, or write only their own derived page.
+#: They run without the exclusive writer lock so monitoring and inspection keep
+#: working during a long render or paid batch. Every artifact is written atomically
+#: (temp file + replace), so a reader sees either the previous or the next complete
+#: document, never a partial one. Anything that writes canon must stay out of this set.
+READ_ONLY_COMMANDS = frozenset(
+    {
+        "status",
+        "progress",
+        "costs",
+        "locate",
+        "preflight",
+        "prompts",
+        "context",
+        "dashboard",
+        "inspect",
+        "sheet",
+        "studio",
+    }
+)
 
 
 @contextlib.contextmanager
@@ -501,8 +517,6 @@ def execute(args):
             "OPENAI_API_KEY_present": bool(os.environ.get("OPENAI_API_KEY")),
         }
     if args.command == "spine":
-        from . import spine
-
         with spine.connect(args.db) as conn:
             if args.operation == "status":
                 return spine.status(conn)
@@ -513,9 +527,7 @@ def execute(args):
             if args.operation == "trace":
                 return spine.trace(conn, args.run)
             if args.operation == "resolve":
-                return spine.resolve_human(
-                    conn, args.interrupt, resolution={"note": args.note}
-                )
+                return spine.resolve_human(conn, args.interrupt, resolution={"note": args.note})
             if args.operation == "sync":
                 return spine.sync_operations(conn, args.projects_dir)
             return spine.reconcile(conn)
@@ -546,7 +558,7 @@ def execute(args):
         mcp.serve(args.projects_dir)
         return None
     if args.command == "serve":
-        from . import serve, spine
+        from . import serve
 
         serve.serve(args.projects_dir, spine.resolve_db(args.db), port=args.port, token=args.token)
         return None

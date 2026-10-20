@@ -255,7 +255,9 @@ def ask_human(conn, run_id, *, kind, payload=None) -> str:
 
 def resolve_human(conn, interrupt_id, *, resolution=None) -> dict:
     """Record a human decision. A run is marked ``resolved``, never silently completed."""
-    row = conn.execute("SELECT run_id, status FROM interrupts WHERE id=?", (interrupt_id,)).fetchone()
+    row = conn.execute(
+        "SELECT run_id, status FROM interrupts WHERE id=?", (interrupt_id,)
+    ).fetchone()
     if row is None:
         raise ValueError(f"unknown interrupt {interrupt_id!r}")
     if row["status"] != "open":
@@ -303,33 +305,36 @@ def run_command(
     env: dict | None = None,
     timeout: float | None = None,
 ) -> dict:
-    """Run one local command as a durable, replayable step.
+    """Run one local command as a durable step.
 
-    The command is executed exactly once per idempotency key. A replay returns the
-    recorded result with ``replayed: True`` and performs no side effect.
+    Replay is opt-in. Pass ``idempotency_key`` to make a retry return the recorded
+    result without a second side effect. Without one, every call is a fresh
+    execution: a render or preview must be runnable twice, so argv alone is not
+    an identity. Within a call the key is scoped to the new run id, which keeps a
+    mid-run retry safe without suppressing the next deliberate run.
     """
     if not isinstance(argv, list) or not argv or not all(isinstance(arg, str) for arg in argv):
         raise ValueError("run_command needs a non-empty argv list of strings")
-    key = (
-        idempotency_key
-        or sha256(
-            json.dumps({"argv": argv, "production": production}, sort_keys=True).encode()
-        ).hexdigest()
-    )
-    prior = conn.execute(
-        "SELECT status, result_json FROM tool_calls WHERE idempotency_key=?", (key,)
-    ).fetchone()
-    if prior and prior["status"] == "succeeded":
-        return {
-            **(json.loads(prior["result_json"]) if prior["result_json"] else {}),
-            "replayed": True,
-        }
+    if idempotency_key:
+        prior = conn.execute(
+            "SELECT status, result_json FROM tool_calls WHERE idempotency_key=?",
+            (idempotency_key,),
+        ).fetchone()
+        if prior and prior["status"] == "succeeded":
+            return {
+                **(json.loads(prior["result_json"]) if prior["result_json"] else {}),
+                "replayed": True,
+            }
 
     run_id = start_run(
         conn,
         intent=intent or " ".join(argv[:3]),
         production=production,
         plan={"argv": argv},
+    )
+    key = (
+        idempotency_key
+        or sha256(json.dumps({"run": run_id, "argv": argv}, sort_keys=True).encode()).hexdigest()
     )
     replay, _ = begin_step(
         conn, run_id, 0, "command", capability="execute-local", args={"argv": argv}, key=key
@@ -561,6 +566,7 @@ def sync_operations(conn, projects_dir: str | Path) -> dict:
         "note": "Receipts stay the writers; the spine only indexes them for one run list.",
     }
 
+
 # --------------------------------------------------------------------------- #
 # trace view
 # --------------------------------------------------------------------------- #
@@ -582,11 +588,15 @@ def trace(conn, run_id: str, *, limit: int = 400) -> dict:
     for event in events:
         if event["type"] in ("step.started", "step.succeeded", "step.failed", "step.replayed"):
             phases.append({"at": event["at"], "type": event["type"], "payload": payload(event)})
-    interrupts = rows(conn, "SELECT * FROM interrupts WHERE run_id=? ORDER BY created_at", (run_id,))
+    interrupts = rows(
+        conn, "SELECT * FROM interrupts WHERE run_id=? ORDER BY created_at", (run_id,)
+    )
     return {
         "run": dict(run),
         "steps": rows(
-            conn, "SELECT idx, name, status, error FROM steps WHERE run_id=? ORDER BY idx", (run_id,)
+            conn,
+            "SELECT idx, name, status, error FROM steps WHERE run_id=? ORDER BY idx",
+            (run_id,),
         ),
         "event_types": sorted({event["type"] for event in events}),
         "events": len(events),
@@ -623,4 +633,3 @@ def render_trace(value: dict) -> str:
         lines.append("output tail:")
         lines.extend(f"  | {line}" for line in value["output_lines"])
     return "\n".join(lines)
-
