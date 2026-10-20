@@ -163,6 +163,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"events": spine.event_list(conn, run, after, limit)})
         if parsed.path == "/api/studio":
             return self._json({"productions": studio.scan(self.server.projects_dir)})
+        if parsed.path.startswith("/api/project/"):
+            slug = parsed.path.rsplit("/", 1)[-1]
+            root = (self.server.projects_dir / slug).resolve()
+            if root.parent != self.server.projects_dir.resolve() or not (
+                root / "project.json"
+            ).is_file():
+                return self._json({"error": "unknown production"}, HTTPStatus.NOT_FOUND)
+            from . import production as P
+
+            return self._json(
+                {"status": P.status(root), "entry": studio.scan_project(root)}
+            )
         if parsed.path == "/api/sources":
             try:
                 return self._json(
@@ -300,7 +312,8 @@ button:disabled{background:#2a3540;color:#7b8b98}
 <button id="create">Create production</button><div id="msg"></div>
 <p class="mono" style="margin-top:12px">Creates via the clip kernel: byte-identical copy, project.json, budget. Nothing is generated or spent.</p>
 </div>
-<div class="panel"><h2>Productions</h2><div id="list">loading…</div></div>
+<div class="panel"><h2>Productions</h2><div id="list">loading…</div>
+<div id="detail" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"></div></div>
 </div></div>
 <script>
 const token=new URLSearchParams(location.search).get('token')||'';
@@ -325,6 +338,19 @@ async function loadProjects(){
   for(const [stage,state] of Object.entries(p.stages)){tags.append(el('span','tag '+(state==='approved'||state==='recorded'?'ok':(state==='stale'?'bad':'')),stage));}
   c.append(tags);
   const n=el('div','meta'); n.textContent='next: '+p.next_step; c.append(n);
+  c.addEventListener('click',async()=>{
+    const dr=await fetch('/api/project/'+p.slug+q); const dd=await dr.json();
+    const d=document.getElementById('detail'); d.textContent='';
+    if(!dr.ok){d.append(el('div','meta',dd.error||'error'));return;}
+    d.append(el('b',null,dd.entry.title));
+    const m=el('div','meta'); m.textContent=(dd.status.duration||0).toFixed(1)+'s · '+(dd.status.shots||[]).length+' shots · next: '+dd.entry.next_step; d.append(m);
+    const tags=el('div','meta');
+    for(const [stage,state] of Object.entries(dd.status.approvals||{})){
+      tags.append(el('span','tag '+(state==='approved'?'ok':(state==='stale'?'bad':'')),stage+': '+state));
+    }
+    d.append(tags);
+    const b=el('div','meta'); b.textContent=(dd.entry.blockers||[]).map(x=>x[1]).join(' · ')||'no blockers'; d.append(b);
+  });
   box.append(c);
  }
  if(!d.productions.length) box.append(el('div','meta','nothing yet'));
