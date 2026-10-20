@@ -185,11 +185,12 @@ def _count_frames(path: Path | str) -> int:
 
 
 def _duration(path: Path | str) -> float:
+    """Seconds of audio in the stream, so a container estimate cannot fake length."""
     info = probe(path)
     try:
-        return float(info["format"]["duration"])
+        return decoded_duration(info)
     except (KeyError, TypeError, ValueError) as e:
-        raise ValueError(f"no container duration for {path}") from e
+        raise ValueError(f"no decodable duration for {path}") from e
 
 
 def _is_faststart(path: Path, window: int = 262_144) -> bool:
