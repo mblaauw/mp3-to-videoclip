@@ -210,3 +210,24 @@ def test_rejected_stills_surface_a_review_action(tmp_path):
     action = next(item for item in entry["actions"] if item["id"] == "review-stills")
     assert "--stage stills" in action["command"]
     assert "1 rejected" in action["reason"]
+
+
+def test_only_the_selected_version_counts_as_a_rejected_still(tmp_path):
+    """A superseded rejection is history; it must not read as current review debt."""
+    root = make_root(tmp_path)
+    write_json(
+        root / "work/reviews.json",
+        [
+            {"shot_id": "s001", "version": 1, "verdict": "reject", "note": "superseded"},
+            {"shot_id": "s001", "version": 2, "verdict": "accept", "note": "kept"},
+        ],
+    )
+    write_json(root / "work/assets.json", {"s001": {"selected": 2, "versions": []}})
+    entry = studio.scan_project(root)
+    assert not [text for _sev, text in entry["blockers"] if "rejected/uncertain" in text]
+
+    write_json(root / "work/assets.json", {"s001": {"selected": 1, "versions": []}})
+    entry = studio.scan_project(root)
+    assert [text for _sev, text in entry["blockers"] if "rejected/uncertain" in text] == [
+        "1 rejected/uncertain still verdict(s)"
+    ]

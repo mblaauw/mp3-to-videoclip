@@ -99,12 +99,22 @@ def scan_project(root: Path, now: float | None = None) -> dict | None:
         pass
 
     reviews = _optional(root / "work/reviews.json") or []
-    # Latest verdict per (shot, version): a superseded rejection is history, not a blocker.
+    # Only the selected version's verdict counts: a superseded rejection is history.
     latest: dict[tuple, str] = {}
     for review in reviews:
         latest[(review.get("shot_id"), review.get("version"))] = review.get("verdict")
+    assets = _optional(root / "work/assets.json") or {}
+    highest: dict[str, int] = {}
+    for shot_id, version in latest:
+        if isinstance(version, int):
+            highest[shot_id] = max(highest.get(shot_id, 0), version)
+    chosen = dict(highest)
+    for shot_id, entry in assets.items():
+        if isinstance(entry, dict) and isinstance(entry.get("selected"), int):
+            chosen[shot_id] = entry["selected"]
     verdicts = {"accept": 0, "reject": 0, "uncertain": 0}
-    for verdict in latest.values():
+    for shot_id, version in chosen.items():
+        verdict = latest.get((shot_id, version))
         if verdict in verdicts:
             verdicts[verdict] += 1
 
