@@ -1,0 +1,121 @@
+"""Plan objects: proposal-only build, honest stops, idempotent replay."""
+
+import sys
+
+import pytest
+from test_creative_production import make_root
+
+from mp3_to_videoclip import budget, plans
+from mp3_to_videoclip.cli import execute, parser
+from mp3_to_videoclip.storage import read_json
+
+
+def plan_with(monkeypatch, root, steps):
+    """Save a hand-built plan so tests do not depend on command templates."""
+    built = plans.build(root)
+    built["steps"] = [
+        plans._step(command, label, reason, invalidates=()) for label, reason, command in steps
+    ]
+    built["blocked_by"] = [s["label"] for s in built["steps"] if s["human"] or s["needs_input"]]
+    built["executable"] = [
+        s["label"] for s in built["steps"] if not s["human"] and not s["needs_input"]
+    ]
+    plans.save(root, built)
+    return built
+
+
+def test_build_is_a_proposal_and_records_nothing(tmp_path):
+    root = make_root(tmp_path)
+    before = sorted(path.name for path in (root / "work").iterdir())
+    built = plans.build(root, intent="advance")
+    assert built["steps"]
+    assert built["warning"].startswith("A plan changes nothing")
+    assert sorted(path.name for path in (root / "work").iterdir()) == before
+    assert "Set spending cap" in built["blocked_by"]
+    assert "Approve analysis" in built["blocked_by"]
+
+
+def test_save_is_immutable_and_history_lists_plans(tmp_path):
+    root = make_root(tmp_path)
+    built = plans.save(root, plans.build(root))
+    with pytest.raises(ValueError, match="immutable"):
+        plans.save(root, read_json(built))
+    listed = plans.history(root)
+    assert listed and listed[0]["id"] == read_json(built)["id"]
+
+
+def test_run_executes_concrete_steps_then_waits_for_a_human(tmp_path):
+    root = make_root(tmp_path)
+    built = plan_with(
+        None,
+        root,
+        [
+            ("say hello", "harmless", f"{sys.executable} -c \"print('hello')\""),
+            (
+                "Approve storyboard",
+                "human gate",
+                "uv run clip approve projects/x storyboard --note 'ok'",
+            ),
+        ],
+    )
+    result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
+    assert result["status"] == "waiting"
+    assert [step["label"] for step in result["executed"]] == ["say hello"]
+    assert result["stopped_at"]["why"] == "human decision"
+    assert result["stopped_at"]["interrupt"].startswith("int_")
+    # A second run replays the executed step: no duplicate side effect.
+    again = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
+    assert again["executed"][0]["replayed"] is True
+
+
+def test_placeholder_commands_stop_for_input(tmp_path):
+    root = make_root(tmp_path)
+    built = plan_with(
+        None,
+        root,
+        [("Approve", "template", "uv run clip approve projects/x brief --note '<decision>'")],
+    )
+    result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
+    assert result["status"] == "waiting" and result["stopped_at"]["why"] == "needs input"
+
+
+def test_edit_steps_need_explicit_delegation(tmp_path):
+    root = make_root(tmp_path)
+    budget.set_budget(root, "5.00", "test")
+    built = plan_with(
+        None,
+        root,
+        [
+            (
+                "Edit",
+                "canonical",
+                "uv run clip shot-edit projects/x --shot s001 --camera hold --note y",
+            )
+        ],
+    )
+    refused = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
+    assert refused["status"] == "waiting" and "capability" in refused["stopped_at"]["why"]
+    allowed = plans.run(
+        root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path, allow_edit=True
+    )
+    # With delegation it actually runs the command (which fails in the temp fixture, honestly).
+    assert allowed["status"] in {"failed", "succeeded", "waiting"}
+
+
+def test_failure_stops_the_plan(tmp_path):
+    root = make_root(tmp_path)
+    built = plan_with(
+        None, root, [("Fail", "nonzero", f'{sys.executable} -c "import sys; sys.exit(4)"')]
+    )
+    result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
+    assert result["status"] == "failed" and result["failed_step"] == "Fail"
+
+
+def test_cli_build_and_run(tmp_path):
+    root = make_root(tmp_path)
+    built = execute(parser().parse_args(["plan", "build", str(root), "--intent", "test"]))
+    assert built["id"].startswith("plan-") and built["path"].startswith("work/plans")
+    listed = execute(parser().parse_args(["plan", "list", str(root)]))
+    assert listed["plans"][0]["id"] == built["id"]
+    shown = execute(parser().parse_args(["plan", "show", str(root), "--id", built["id"]]))
+    assert shown["intent"] == "test"

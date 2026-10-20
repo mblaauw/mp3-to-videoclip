@@ -1,0 +1,22 @@
+{
+  "name": "mp3-to-videoclip-remotion-renderer",
+  "private": true,
+  "type": "module",
+  "description": "Local Remotion renderer module for the mp3-to-videoclip still film (base plates and graphics overlays).",
+  "scripts": {
+    "render": "node render.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "smoke": "node tests/smoke-render.mjs",
+    "studio": "remotion studio src/index.jsx --no-open --browser-executable \"${REMOTION_CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}\""
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.536",
+    "@remotion/renderer": "4.0.536",
+    "remotion": "4.0.536",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@remotion/cli": "4.0.536"
+  }
+}
