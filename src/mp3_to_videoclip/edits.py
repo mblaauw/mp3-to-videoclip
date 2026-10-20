@@ -123,9 +123,7 @@ def edit_shot(
     write_json(root / "work/storyboard.json", rebuilt.model_dump())
     board_hash = file_hash(root / "work/storyboard.json")
 
-    approvals = (
-        read_json(root / "work/approvals.json") if (root / "work/approvals.json").is_file() else {}
-    )
+    approvals = read_json(root / "work/approvals.json")
     invalidated = [stage for stage in INVALIDATED if approvals.get(stage)]
     current = {}
     try:

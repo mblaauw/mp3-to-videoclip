@@ -27,7 +27,7 @@ from PIL import Image
 from . import production as P
 from .markup import esc as _esc
 from .markup import script_json
-from .storage import file_hash, inside, read_json, write_json
+from .storage import file_hash, inside, read_json, read_optional, write_json
 
 STAGES = ("board", "stills", "delivery")
 FOLDER = "work/dashboard"
@@ -51,7 +51,7 @@ APPROVAL_ORDER = (
 # loading
 # --------------------------------------------------------------------------- #
 def _optional(path: Path):
-    return read_json(path) if path.is_file() else None
+    return read_optional(path)
 
 
 def _music_grid(root: Path) -> dict:

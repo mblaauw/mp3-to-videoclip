@@ -17,20 +17,14 @@ from PIL import Image, ImageOps
 from . import production as P
 from . import studio
 from .dashboard import _music_grid
-from .storage import inside, read_json
+from .storage import inside, read_optional
 
 THUMB_WIDTH = 360
 THUMB_QUALITY = 78
 
 
 def _optional(root: Path, relative: str):
-    path = root / relative
-    if not path.is_file():
-        return None
-    try:
-        return read_json(path)
-    except (OSError, ValueError):
-        return None
+    return read_optional(root / relative)
 
 
 def _verdicts(reviews: list[dict]) -> dict[tuple, dict]:

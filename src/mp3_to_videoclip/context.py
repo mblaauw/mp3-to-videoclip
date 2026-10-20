@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import production as P
-from .storage import file_hash
+from .storage import file_hash, read_optional
 
 CHARS_PER_TOKEN = 4
 
@@ -52,8 +52,11 @@ def build(root: Path, *, stage: str | None = None, shots: int = 0, include_promp
             entry["image_prompt"] = shot.image_prompt
         selected.append(entry)
 
-    music = P.read_json(root / "work/music.json") if (root / "work/music.json").is_file() else {}
+    music_path = root / "work/music.json"
+    music = read_optional(music_path, {})
     unknowns = []
+    if music_path.is_file() and not music:
+        unknowns.append("music.json exists but could not be read; no tempo or section claim is safe")
     if not (root / "work/music-grid.json").is_file():
         unknowns.append("no approved meter/bar grid: do not state BPM, bars or downbeats as fact")
     if not (root / "work/lyrics.json").is_file():

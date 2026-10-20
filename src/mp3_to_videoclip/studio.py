@@ -21,7 +21,7 @@ from . import budget as budget_module
 from . import operations
 from . import production as P
 from .markup import esc as _esc
-from .storage import file_hash, read_json, write_json
+from .storage import file_hash, read_optional, write_json
 
 FOLDER = "studio"
 ORDER = ("analysis", "events", "brief", "storyboard", "proof", "preview", "stills", "graphics")
@@ -34,10 +34,7 @@ APPROVE_STAGES = frozenset(ORDER)
 
 
 def _optional(path: Path):
-    try:
-        return read_json(path)
-    except (OSError, ValueError):
-        return None
+    return read_optional(path)
 
 
 def _short(value: str | None, length: int = 10) -> str:

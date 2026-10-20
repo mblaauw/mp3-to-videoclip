@@ -15,7 +15,7 @@ from . import production as P
 from .dashboard import _thumbnail
 from .markup import esc as _esc
 from .markup import script_json
-from .storage import file_hash, read_json, write_json
+from .storage import file_hash, read_optional, write_json
 
 FOLDER = "work/inspector"
 CSS = """
@@ -268,10 +268,8 @@ def build_inspector(root: Path, shot_id: str | None = None) -> dict:
     root = Path(root)
     project = P.load_project(root)
     board = P.load_board(root)
-    assets = read_json(root / "work/assets.json") if (root / "work/assets.json").is_file() else {}
-    reviews = (
-        read_json(root / "work/reviews.json") if (root / "work/reviews.json").is_file() else []
-    )
+    assets = read_optional(root / "work/assets.json", {})
+    reviews = read_optional(root / "work/reviews.json", [])
     verdicts = _latest_verdicts(reviews)
     folder = root / FOLDER
     folder.mkdir(parents=True, exist_ok=True)

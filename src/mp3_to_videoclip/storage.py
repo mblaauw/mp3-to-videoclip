@@ -13,6 +13,22 @@ def read_json(path: Path):
     return json.loads(path.read_text())
 
 
+def read_optional(path: Path, default=None):
+    """Read a JSON file if it exists; a missing, unreadable or corrupt file yields ``default``.
+
+    Views use this so one damaged artifact degrades a panel instead of killing the
+    page. Writers keep using ``read_json`` so corruption during a mutation fails
+    loudly rather than silently overwriting a file that could not be parsed.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return default
+    try:
+        return read_json(path)
+    except (OSError, ValueError):
+        return default
+
+
 def digest(value) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
