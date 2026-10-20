@@ -115,6 +115,28 @@ and answers every write verb with `405`. The page it serves tails the journal li
 cannot approve, select, spend or edit, because those remain CLI commands under the
 project lock.
 
+### Inspecting and answering runs
+
+```sh
+uv run clip spine trace --run RUN_ID          # steps, waits, output tail, cost
+uv run clip spine resolve --interrupt ID --note 'approved after inspection'
+uv run clip eval                              # structural invariants
+uv run clip context PROJECT --stage board --shots 3
+```
+
+A trace is replay evidence, not a quality verdict. Resolving a durable wait records the
+human decision, marks the run `resolved` (never `succeeded`) and states that a resolution
+is not an execution — the human still runs the printed command. `clip context` assembles a
+bounded, hash-bound digest with explicit unknowns; it is the only project state a planning
+step may rely on.
+
+### Agent boundary
+
+`tools.py` classifies every command as `read`, `derive`, `edit`, `spend` or `human`. Plans
+may only contain classified `clip` commands (validated at save, gated again at run);
+`edit` needs explicit delegation, and `approve`, `authorize`, `resolve-task` can never be
+granted to an agent. MCP exposes read/derive tools only.
+
 ### MCP surface
 
 ```sh
