@@ -13,7 +13,6 @@ from the page.
 from __future__ import annotations
 
 import os
-import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,7 +20,7 @@ from . import budget as budget_module
 from . import operations
 from . import production as P
 from .markup import esc as _esc
-from .storage import file_hash, read_optional, write_json
+from .storage import file_hash, read_optional, write_json, write_versioned_page
 
 FOLDER = "studio"
 ORDER = ("analysis", "events", "brief", "storyboard", "proof", "preview", "stills", "graphics")
@@ -555,19 +554,7 @@ def build_studio(
     entries = scan(projects_dir)
     document = render_page(entries, projects_dir, studio_dir)
 
-    studio_dir.mkdir(parents=True, exist_ok=True)
-    if name:
-        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.html", name):
-            raise ValueError("studio name must be a safe lowercase .html basename")
-        target = studio_dir / name
-        if target.exists():
-            raise ValueError(f"{target.name} already exists; studio pages are never overwritten")
-    else:
-        version = 1
-        while (studio_dir / f"studio-v{version:03d}.html").exists():
-            version += 1
-        target = studio_dir / f"studio-v{version:03d}.html"
-    target.write_text(document, encoding="utf-8")
+    target = write_versioned_page(studio_dir, "studio", name, document, "studio")
 
     sidecar = {
         "page": str(target),

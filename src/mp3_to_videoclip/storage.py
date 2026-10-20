@@ -5,6 +5,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 
@@ -75,3 +76,26 @@ def project_lock(root: Path):
             yield
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def write_versioned_page(directory: Path, prefix: str, name: str | None, text: str, label: str) -> Path:
+    """Write one generated page under a safe basename; never overwrite a page.
+
+    ``label`` names the page kind in error messages (intake, studio). Without an
+    explicit ``name`` the next ``prefix-vNNN.html`` is used.
+    """
+    directory = Path(directory).resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    if name:
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.html", name):
+            raise ValueError(f"{label} name must be a safe lowercase .html basename")
+        target = directory / name
+        if target.exists():
+            raise ValueError(f"{target.name} already exists; {label} pages are never overwritten")
+    else:
+        version = 1
+        while (directory / f"{prefix}-v{version:03d}.html").exists():
+            version += 1
+        target = directory / f"{prefix}-v{version:03d}.html"
+    target.write_text(text, encoding="utf-8")
+    return target

@@ -8,11 +8,10 @@ with the 16:9-only signature, or a source that cannot be found.
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .storage import file_hash, write_json
+from .storage import file_hash, write_json, write_versioned_page
 
 FOLDER = "studio"
 CSS = """
@@ -188,19 +187,7 @@ no external fonts, no state.</footer>
 
 def build_intake(*, output_dir: Path | None = None, name: str | None = None) -> dict:
     studio_dir = (Path(output_dir) if output_dir else Path(FOLDER)).resolve()
-    studio_dir.mkdir(parents=True, exist_ok=True)
-    if name:
-        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.html", name):
-            raise ValueError("intake name must be a safe lowercase .html basename")
-        target = studio_dir / name
-        if target.exists():
-            raise ValueError(f"{target.name} already exists; intake pages are never overwritten")
-    else:
-        version = 1
-        while (studio_dir / f"intake-v{version:03d}.html").exists():
-            version += 1
-        target = studio_dir / f"intake-v{version:03d}.html"
-    target.write_text(render_page(), encoding="utf-8")
+    target = write_versioned_page(studio_dir, "intake", name, render_page(), "intake")
     sidecar = {
         "page": str(target),
         "html_sha256": file_hash(target),
