@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import queue
+import re
 import secrets
 import threading
 import time
@@ -20,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import operations, spine, studio
+from . import operations, sources, spine, studio
 
 STREAM_INTERVAL = 0.5
 HEARTBEAT_SECONDS = 10.0
@@ -145,6 +146,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "token required"}, HTTPStatus.UNAUTHORIZED)
         if parsed.path == "/":
             return self._text(PAGE)
+        if parsed.path == "/app":
+            return self._text(APP)
         if parsed.path == "/api/status":
             with spine.connect(self.server.db) as conn:
                 return self._json(spine.status(conn))
@@ -160,12 +163,73 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"events": spine.event_list(conn, run, after, limit)})
         if parsed.path == "/api/studio":
             return self._json({"productions": studio.scan(self.server.projects_dir)})
+        if parsed.path == "/api/sources":
+            try:
+                return self._json(
+                    sources.scan(
+                        self.server.sources_dir,
+                        query=(query.get("q") or [None])[0],
+                        min_seconds=_float(query, "min"),
+                        max_seconds=_float(query, "max"),
+                        limit=int((query.get("limit") or ["200"])[0]),
+                    )
+                )
+            except ValueError as exc:
+                return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         if parsed.path == "/api/stream":
             return self._stream(query)
         return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self):  # noqa: N802
-        self._json({"error": "read-only server: use the clip CLI"}, HTTPStatus.METHOD_NOT_ALLOWED)
+        parsed = urlparse(self.path)
+        query = parse_qs(parsed.query)
+        if not self._authorised(query):
+            return self._json({"error": "token required"}, HTTPStatus.UNAUTHORIZED)
+        if parsed.path != "/api/create":
+            return self._json({"error": "unsupported write: only /api/create"}, HTTPStatus.METHOD_NOT_ALLOWED)
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > 20_000:
+            return self._json({"error": "payload too large"}, HTTPStatus.BAD_REQUEST)
+        try:
+            body = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return self._json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
+        try:
+            return self._json(self._create(body), HTTPStatus.CREATED)
+        except (OSError, ValueError, KeyError) as exc:
+            return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+
+    def _create(self, body: dict) -> dict:
+        """Create a production through the kernel: init copies the audio, then the cap."""
+        from . import production as P
+
+        title = str(body.get("title") or "").strip()
+        audio = Path(str(body.get("audio") or "")).expanduser()
+        if not title or not audio.is_file():
+            raise ValueError("a title and an existing audio file are required")
+        slug = str(body.get("slug") or "").strip() or title.casefold().replace(" ", "-")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", slug):
+            raise ValueError("slug must be lowercase letters, digits and dashes")
+        root = self.server.projects_dir / slug
+        if root.exists():
+            raise ValueError(f"production {slug!r} already exists")
+        P.init_project(
+            root,
+            audio,
+            slug,
+            body.get("aspect") or "16:9",
+            int(body.get("fps") or 24),
+            body.get("music_mode") or "vocal",
+            workflow_version=2,
+            title=title,
+            renderer_backend="remotion",
+        )
+        cap = body.get("cap")
+        if cap:
+            from . import budget
+
+            budget.set_budget(root, str(cap), body.get("note") or "created in studio")
+        return {"created": slug, "title": title, "cap": cap}
 
     do_PUT = do_POST
     do_DELETE = do_POST
@@ -200,8 +264,99 @@ class Handler(BaseHTTPRequestHandler):
             return
 
 
+APP = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Studio</title>
+<style>
+:root{--bg:#0a0f14;--panel:#111a22;--ink:#f2efe6;--muted:#8fa0ae;--gold:#d4ae6a;--teal:#688f9d;--line:#1f2c37;--ok:#6fb585;--bad:#d4655f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:26px 22px 80px}
+.kicker{color:var(--gold);text-transform:uppercase;letter-spacing:.15em;font-size:11px;font-weight:700}
+h1{font-size:30px;margin:4px 0 18px;letter-spacing:-.02em}
+.grid{display:grid;grid-template-columns:400px 1fr;gap:18px}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0 0 12px}
+label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:10px 0 4px}
+input,select{width:100%;background:#0e161d;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}
+button{background:var(--gold);color:#0a0f14;border:0;border-radius:8px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer;margin-top:14px}
+button:disabled{background:#2a3540;color:#7b8b98}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;background:linear-gradient(180deg,#16222c,#111a22);cursor:pointer}
+.card:hover{border-color:var(--gold)}
+.card b{font-size:16px}.meta{color:var(--muted);font-size:12px;margin-top:4px}
+.tag{font-size:10px;text-transform:uppercase;letter-spacing:.06em;border:1px solid var(--line);border-radius:999px;padding:1px 7px;color:var(--muted);margin-right:4px}
+.tag.ok{color:var(--ok);border-color:#2c5240}.tag.warn{color:var(--gold);border-color:#4a3d25}.tag.bad{color:var(--bad);border-color:#5b2f2f}
+#msg{font-size:12px;margin-top:10px;min-height:18px}#msg.err{color:var(--bad)}#msg.ok{color:var(--ok)}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)}
+</style></head><body><div class="wrap">
+<div class="kicker">Studio</div><h1>Create and organise</h1>
+<div class="grid">
+<div class="panel"><h2>New production</h2>
+<label for="src">Source (liked, real tracks)</label><select id="src"></select>
+<label for="title">Film title</label><input id="title" placeholder="Forward Ever">
+<div class="row"><div><label for="aspect">Aspect</label><select id="aspect"><option>16:9</option><option>9:16</option></select></div>
+<div><label for="fps">FPS</label><select id="fps"><option>24</option><option>30</option></select></div></div>
+<div class="row"><div><label for="mode">Mode</label><select id="mode"><option>vocal</option><option>instrumental</option><option>music-led</option></select></div>
+<div><label for="cap">Cap USD</label><input id="cap" type="number" value="5.00" step="0.01" min="0.01"></div></div>
+<button id="create">Create production</button><div id="msg"></div>
+<p class="mono" style="margin-top:12px">Creates via the clip kernel: byte-identical copy, project.json, budget. Nothing is generated or spent.</p>
+</div>
+<div class="panel"><h2>Productions</h2><div id="list">loading…</div></div>
+</div></div>
+<script>
+const token=new URLSearchParams(location.search).get('token')||'';
+const q=token?('?token='+encodeURIComponent(token)):'';
+const hdr=token?{'X-Studio-Token':token}:{};
+const msg=document.getElementById('msg');
+function el(t,c,x){const n=document.createElement(t);if(c)n.className=c;if(x!==undefined)n.textContent=x;return n;}
+async function loadSources(){
+ const r=await fetch('/api/sources'+q); const d=await r.json();
+ const sel=document.getElementById('src'); sel.textContent='';
+ if(!d.tracks||!d.tracks.length){sel.append(el('option',null,'no source tracks found'));return;}
+ for(const t of d.tracks){const o=el('option');o.value=t.audio;o.textContent=t.title+' · '+(t.seconds)+'s';sel.append(o);}
+}
+async function loadProjects(){
+ const r=await fetch('/api/studio'+q); const d=await r.json();
+ const box=document.getElementById('list'); box.textContent='';
+ for(const p of d.productions){
+  const c=el('div','card'); c.append(el('b',null,p.title));
+  const m=el('div','meta'); m.textContent=p.duration.toFixed(0)+'s · '+p.shots+' shots · '+(p.spend.accounted_usd||'—')+' / '+(p.spend.cap_usd||'no cap')+' USD';
+  c.append(m);
+  const tags=el('div','meta');
+  for(const [stage,state] of Object.entries(p.stages)){tags.append(el('span','tag '+(state==='approved'||state==='recorded'?'ok':(state==='stale'?'bad':'')),stage));}
+  c.append(tags);
+  const n=el('div','meta'); n.textContent='next: '+p.next_step; c.append(n);
+  box.append(c);
+ }
+ if(!d.productions.length) box.append(el('div','meta','nothing yet'));
+}
+document.getElementById('create').addEventListener('click',async()=>{
+ const body={audio:document.getElementById('src').value,title:document.getElementById('title').value.trim(),
+  aspect:document.getElementById('aspect').value,fps:Number(document.getElementById('fps').value),
+  music_mode:document.getElementById('mode').value,cap:document.getElementById('cap').value};
+ msg.className='';msg.textContent='creating…';
+ const r=await fetch('/api/create'+q,{method:'POST',headers:{...hdr,'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const d=await r.json();
+ if(!r.ok){msg.className='err';msg.textContent=d.error||('HTTP '+r.status);return;}
+ msg.className='ok';msg.textContent='created '+d.created+' — opening project';
+ setTimeout(()=>{location.href='/?token='+encodeURIComponent(token)+'#projects';},700);
+ loadProjects();
+});
+loadSources();loadProjects();
+</script></body></html>"""
+
+
+def _float(query, key):
+    raw = (query.get(key) or [None])[0]
+    return float(raw) if raw not in (None, "") else None
+
+
 def build_server(
-    projects_dir: str | Path, db: str | Path, *, port: int = 8765, token: str | None = None
+    projects_dir: str | Path,
+    db: str | Path,
+    *,
+    port: int = 8765,
+    token: str | None = None,
+    sources_dir: str | Path | None = None,
 ):
     """Create (but do not start) a loopback server. Returns ``(server, url)``."""
     token = token if token is not None else secrets.token_urlsafe(16)
@@ -210,6 +365,7 @@ def build_server(
     httpd.projects_dir = Path(projects_dir).resolve()
     httpd.db = Path(db)
     httpd.token = token
+    httpd.sources_dir = Path(sources_dir).expanduser() if sources_dir else Path.home() / "Downloads" / "Suno Downloads"
     url = f"http://127.0.0.1:{httpd.server_address[1]}/?token={token}"
     return httpd, url
 

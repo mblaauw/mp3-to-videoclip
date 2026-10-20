@@ -9,6 +9,7 @@ import pytest
 from test_creative_production import make_root
 
 from mp3_to_videoclip import serve, spine, studio, tools
+from mp3_to_videoclip.cli import execute, parser
 from mp3_to_videoclip.storage import write_json
 
 
@@ -179,3 +180,11 @@ def test_classify_argv_and_unknown_command():
         tools.classify_argv(["node", "render.mjs"])
     with pytest.raises(ValueError, match="unclassified"):
         tools.scope_for("does-not-exist")
+
+
+def test_cli_serve_resolves_the_journal_path(tmp_path, monkeypatch):
+    """Regression: the serve branch must resolve the default spine path itself."""
+    calls = {}
+    monkeypatch.setattr(serve, "serve", lambda projects, db, **kw: calls.update(db=str(db), **kw))
+    assert execute(parser().parse_args(["serve", "--projects-dir", str(tmp_path)])) is None
+    assert calls["db"].endswith("studio/spine.sqlite3")

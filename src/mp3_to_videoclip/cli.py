@@ -546,7 +546,7 @@ def execute(args):
         mcp.serve(args.projects_dir)
         return None
     if args.command == "serve":
-        from . import serve
+        from . import serve, spine
 
         serve.serve(args.projects_dir, spine.resolve_db(args.db), port=args.port, token=args.token)
         return None
