@@ -157,7 +157,11 @@ def test_compose_spec_intro_captions_sfx_and_credits(project_root: Path):
         assert changed.mean() < 0.5, f"overlay at {seconds}s looks opaque"
     for seconds in (26.5, 31.5, 44.5):
         difference = frame_diff(read_frame(base, seconds), read_frame(output, seconds))
-        assert difference.mean() < 1.2, f"unexpected overlay at {seconds}s"
+        # Re-encoding drifts every pixel by a level or two, and that drift varies
+        # with the ffmpeg build; an overlay paints ink. Assert ink coverage, not
+        # pixel equality: measured gap drift is ~4e-5 of the frame, while the
+        # smallest real overlay (a caption) covers ~1e-2.
+        assert (difference > 30).mean() < 0.001, f"overlay ink at {seconds}s"
         assert (difference > 12).mean() < 0.02
 
     windows = report["windows"]
