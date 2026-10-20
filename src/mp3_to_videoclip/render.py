@@ -559,7 +559,10 @@ def _validate_output(
         raise ValueError(f"unexpected audio codec {audio.get('codec_name')!r}, want aac")
     audio_duration = float(audio.get("duration") or info["format"]["duration"])
     if audio_duration + tolerance < expected_audio_duration:
-        raise ValueError("rendered audio is shorter than the source music")
+        raise ValueError(
+            f"rendered audio {audio_duration:.4f}s is shorter than the source music "
+            f"{expected_audio_duration:.4f}s beyond the {tolerance:.4f}s tolerance"
+        )
     if not _is_faststart(path):
         raise ValueError("output is not faststart (moov atom is not first)")
 
