@@ -48,6 +48,7 @@ SCOPES: dict[str, dict] = {
     "plan": {"kind": "edit", "note": "propose or run a plan; running edits needs delegation"},
     "mcp": {"kind": "read", "note": "read/derive tool surface over stdio"},
     "eval": {"kind": "read", "note": "structural invariant report"},
+    "context": {"kind": "read", "note": "labelled context pack for a step"},
     # canonical edits (no provider cost)
     "init": {"kind": "edit", "note": "create a production"},
     "analyze": {"kind": "edit", "note": "local measurement"},

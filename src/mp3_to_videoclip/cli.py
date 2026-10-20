@@ -112,6 +112,11 @@ def parser() -> argparse.ArgumentParser:
         "--allow-edit", action="store_true", help="Delegate canonical edits to this run"
     )
     plan.set_defaults(project=None)
+    context_cmd = commands.add_parser("context", help="Assemble the labelled context pack for a step")
+    context_cmd.add_argument("project", type=Path)
+    context_cmd.add_argument("--stage")
+    context_cmd.add_argument("--shots", type=int, default=0)
+    context_cmd.add_argument("--include-prompts", action="store_true")
     eval_cmd = commands.add_parser("eval", help="Run structural invariant checks over the repo")
     eval_cmd.add_argument("--root", type=Path, default=Path("."))
     eval_cmd.set_defaults(project=None)
@@ -724,6 +729,15 @@ def execute(args):
                 embed_images=not args.no_embed_images,
                 embed_audio=args.embed_audio,
                 name=args.name,
+            )
+        if cmd == "context":
+            from .context import build
+
+            return build(
+                root,
+                stage=args.stage,
+                shots=args.shots,
+                include_prompts=args.include_prompts,
             )
         if cmd == "inspect":
             from .inspector import build_inspector
