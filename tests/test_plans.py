@@ -16,6 +16,11 @@ def plan_with(monkeypatch, root, steps):
     built["steps"] = [
         plans._step(command, label, reason, invalidates=()) for label, reason, command in steps
     ]
+    for step in built["steps"]:
+        # Only unclassified synthetic commands borrow the read capability; a real
+        # clip command keeps its own scope so the gates stay under test.
+        if step.get("tool") is None:
+            step["tool"] = "status"
     built["blocked_by"] = [s["label"] for s in built["steps"] if s["human"] or s["needs_input"]]
     built["executable"] = [
         s["label"] for s in built["steps"] if not s["human"] and not s["needs_input"]
@@ -98,8 +103,10 @@ def test_edit_steps_need_explicit_delegation(tmp_path):
     allowed = plans.run(
         root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path, allow_edit=True
     )
-    # With delegation it actually runs the command (which fails in the temp fixture, honestly).
-    assert allowed["status"] in {"failed", "succeeded", "waiting"}
+    # With delegation the capability gate opens: the command really runs, and its own
+    # failure in this fixture is reported as a failed step rather than a blocked plan.
+    assert "capability" not in ((allowed.get("stopped_at") or {}).get("why") or "")
+    assert allowed["status"] in {"failed", "succeeded"}
 
 
 def test_failure_stops_the_plan(tmp_path):
@@ -119,3 +126,25 @@ def test_cli_build_and_run(tmp_path):
     assert listed["plans"][0]["id"] == built["id"]
     shown = execute(parser().parse_args(["plan", "show", str(root), "--id", built["id"]]))
     assert shown["intent"] == "test"
+
+
+def test_unclassified_commands_are_refused(tmp_path):
+    root = make_root(tmp_path)
+    built = plans.build(root)
+    built["steps"] = [
+        {
+            "label": "shell",
+            "reason": "not a clip command",
+            "command": "rm -rf /tmp/whatever",
+            "tool": None,
+            "kind": "edit",
+            "human": False,
+            "needs_input": False,
+            "invalidates": [],
+            "status": "pending",
+        }
+    ]
+    plans.save(root, built)
+    result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
+    assert result["status"] == "waiting"
+    assert "unclassified command" in result["stopped_at"]["why"]

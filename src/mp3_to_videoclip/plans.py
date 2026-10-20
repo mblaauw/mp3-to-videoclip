@@ -192,6 +192,12 @@ def run(
             try:
                 if step.get("tool"):
                     tools.require(step["tool"], granted)
+                elif "clip" not in step["command"]:
+                    # A plan may only run the validated command surface. Anything else
+                    # (a hand-written shell line, a model suggestion) stops here.
+                    raise PermissionError(
+                        "unclassified command: plans may only run clip commands"
+                    )
             except PermissionError as exc:
                 interrupt = spine.ask_human(
                     conn,
