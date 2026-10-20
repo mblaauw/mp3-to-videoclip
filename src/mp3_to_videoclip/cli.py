@@ -112,6 +112,9 @@ def parser() -> argparse.ArgumentParser:
         "--allow-edit", action="store_true", help="Delegate canonical edits to this run"
     )
     plan.set_defaults(project=None)
+    eval_cmd = commands.add_parser("eval", help="Run structural invariant checks over the repo")
+    eval_cmd.add_argument("--root", type=Path, default=Path("."))
+    eval_cmd.set_defaults(project=None)
     mcp_cmd = commands.add_parser("mcp", help="MCP stdio server exposing read/derive tools")
     mcp_cmd.add_argument("--projects-dir", type=Path, default=Path("projects"))
     mcp_cmd.set_defaults(project=None)
@@ -515,6 +518,10 @@ def execute(args):
             db=spine.resolve_db(args.db),
             allow_edit=args.allow_edit,
         )
+    if args.command == "eval":
+        from . import evals
+
+        return evals.run(args.root)
     if args.command == "mcp":
         from . import mcp
 

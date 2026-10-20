@@ -47,6 +47,7 @@ SCOPES: dict[str, dict] = {
     "serve": {"kind": "read", "note": "read-only live layer"},
     "plan": {"kind": "edit", "note": "propose or run a plan; running edits needs delegation"},
     "mcp": {"kind": "read", "note": "read/derive tool surface over stdio"},
+    "eval": {"kind": "read", "note": "structural invariant report"},
     # canonical edits (no provider cost)
     "init": {"kind": "edit", "note": "create a production"},
     "analyze": {"kind": "edit", "note": "local measurement"},
