@@ -13,7 +13,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip.cli import execute, parser
 from mp3_to_videoclip.models import Brief, Lyrics, Project, Segment, Shot, Storyboard
 from mp3_to_videoclip.providers import ProviderError
-from mp3_to_videoclip.render import decoded_duration, probe
+from mp3_to_videoclip.render import audio_seconds
 from mp3_to_videoclip.storage import digest, file_hash, inside, project_lock, read_json, write_json
 
 
@@ -473,6 +473,8 @@ def test_init_preserves_original_and_refuses_existing_directory(tmp_path, monkey
     monkeypatch.setattr(
         P, "probe", lambda _: {"format": {"duration": "1.1"}, "streams": [{"codec_type": "audio"}]}
     )
+    # The fixture is not real audio, so the decode-based length is stubbed too.
+    monkeypatch.setattr(P, "audio_seconds", lambda _: 1.1)
     root = tmp_path / "new"
     before = file_hash(source)
     project = P.init_project(root, source, "demo", "9:16")
@@ -621,7 +623,7 @@ def test_cli_sheet_select_render_versions_and_report_with_real_mp3(production):
         check=True,
     )
     config = read_json(production / "project.json")
-    config.update(source_sha256=file_hash(source), duration=decoded_duration(probe(source)))
+    config.update(source_sha256=file_hash(source), duration=audio_seconds(source))
     write_json(production / "project.json", config)
     music = read_json(production / "work/music.json")
     music["duration"] = config["duration"]

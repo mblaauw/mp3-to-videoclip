@@ -297,7 +297,7 @@ def render_base(
                 str(partial),
             ]
         )
-        facts = R._validate_output(partial, project, audio, R._duration(audio))
+        facts = R._validate_output(partial, project, audio, R.audio_seconds(audio))
         operations.phase("verifying-output", note="frames, fps, dimensions and audio identity")
         if facts["video"]["frames"] != project.total_frames:
             raise ValueError("Remotion mux changed the exact frame count")

@@ -63,6 +63,8 @@ PLATE_PRESET = "veryfast"
 FINAL_PRESET = "medium"
 FINAL_CRF = 18
 AUDIO_BITRATE = "192k"
+#: Sample rate used to count a source's audio; the count is what matters, not fidelity.
+DURATION_SAMPLE_RATE = 8000
 
 _DEFAULT_THREADS_CAP = 4
 _TOLERANT_FRAME_SLACK = 1
@@ -125,29 +127,6 @@ def probe(path: Path | str) -> dict:
     return json.loads(out)
 
 
-def decoded_duration(info: dict) -> float:
-    """Seconds of audio actually in the stream, not the container's estimate.
-
-    An MP3 without a Xing header over-reports ``format.duration`` (a 60 s VBR file
-    probes 0.7 s long). ``duration_ts * time_base`` is the frame/sample-exact length
-    of the stream that gets muxed, so the film's frame count derives from audio
-    that exists.
-    """
-    streams = [s for s in info.get("streams") or [] if s.get("codec_type") == "audio"]
-    for stream in streams:
-        ticks, base = stream.get("duration_ts"), stream.get("time_base")
-        if not isinstance(ticks, int) or not isinstance(base, str) or "/" not in base:
-            continue
-        numerator, _, denominator = base.partition("/")
-        try:
-            seconds = ticks * int(numerator) / int(denominator)
-        except (ValueError, ZeroDivisionError):
-            continue
-        if seconds > 0:
-            return round(seconds, 6)
-    return float(info["format"]["duration"])
-
-
 def _video_stream(info: dict) -> dict:
     for stream in info.get("streams", []):
         if stream.get("codec_type") == "video":
@@ -184,13 +163,42 @@ def _count_frames(path: Path | str) -> int:
         raise ValueError(f"could not read frame count from {path}") from e
 
 
-def _duration(path: Path | str) -> float:
-    """Seconds of audio in the stream, so a container estimate cannot fake length."""
-    info = probe(path)
-    try:
-        return decoded_duration(info)
-    except (KeyError, TypeError, ValueError) as e:
-        raise ValueError(f"no decodable duration for {path}") from e
+def audio_seconds(path: Path | str) -> float:
+    """Exact seconds of decodable audio, counted from decoded PCM.
+
+    ffprobe's ``format.duration`` over-reports a VBR MP3 without a Xing header
+    (a 60 s file probes 0.7 s long), and some builds omit the per-stream
+    ``duration_ts``. Decoding to 8 kHz mono is cheap, gives a sample count that
+    does not depend on container metadata or ffmpeg version, and is the length
+    the mux will actually carry.
+    """
+    process = subprocess.run(
+        [
+            _binary("ffmpeg"),
+            "-nostdin",
+            "-v",
+            "error",
+            "-i",
+            str(path),
+            "-map",
+            "0:a:0",
+            "-f",
+            "s16le",
+            "-acodec",
+            "pcm_s16le",
+            "-ac",
+            "1",
+            "-ar",
+            str(DURATION_SAMPLE_RATE),
+            "pipe:1",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    samples = len(process.stdout) // 2
+    if samples <= 0:
+        raise ValueError(f"no decodable audio in {path}")
+    return round(samples / DURATION_SAMPLE_RATE, 6)
 
 
 def _is_faststart(path: Path, window: int = 262_144) -> bool:
@@ -645,7 +653,7 @@ def render(
     cache.mkdir(parents=True, exist_ok=True)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    source_audio_duration = _duration(audio)
+    source_audio_duration = audio_seconds(audio)
 
     plate_paths: list[Path] = []
     plate_report: list[dict] = []

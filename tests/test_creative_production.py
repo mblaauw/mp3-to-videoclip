@@ -709,6 +709,7 @@ def test_instrumental_init_and_stage_gates(tmp_path, monkeypatch):
     monkeypatch.setattr(
         P, "probe", lambda _: {"format": {"duration": "2.0"}, "streams": [{"codec_type": "audio"}]}
     )
+    monkeypatch.setattr(P, "audio_seconds", lambda _: 2.0)
     root = tmp_path / "instrumental"
     project = P.init_project(root, source, "instrumental", music_mode="instrumental")
     assert project.music_mode == "instrumental"

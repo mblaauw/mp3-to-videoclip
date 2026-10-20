@@ -387,15 +387,27 @@ def test_render_rejects_dissolve_on_the_last_shot(tmp_path):
         R.render(project, shots, audio, tmp_path / "out.mp4", tmp_path / "work")
 
 
-def test_decoded_duration_uses_the_audio_stream_not_the_container():
-    """A VBR MP3 without a Xing header over-reports format.duration."""
-    info = {
-        "format": {"duration": "60.75"},
-        "streams": [
-            {"codec_type": "video", "duration_ts": 30, "time_base": "1/1000"},
-            {"codec_type": "audio", "duration_ts": 2646000, "time_base": "1/44100"},
+def test_audio_seconds_counts_decoded_samples(tmp_path):
+    """Length comes from decoded PCM, not the container's over-reported duration."""
+    source = tmp_path / "tone.mp3"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1.013",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            str(source),
         ],
-    }
-    assert R.decoded_duration(info) == 60.0
-    # No usable stream timing: fall back to the container estimate rather than zero.
-    assert R.decoded_duration({"format": {"duration": "1.056"}, "streams": []}) == 1.056
+        check=True,
+    )
+    assert R.audio_seconds(source) == pytest.approx(1.013, abs=0.002)
+    with pytest.raises((ValueError, subprocess.CalledProcessError)):
+        R.audio_seconds(tmp_path / "missing.mp3")
