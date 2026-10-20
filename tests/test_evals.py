@@ -40,7 +40,7 @@ def test_missing_sidecar_is_detected(tmp_path):
 
 
 def test_loop_length_is_enforced(tmp_path):
-    (tmp_path / "LOOP.md").write_text("\n".join(["line"] * 130))
+    (tmp_path / "LOOP.md").write_text("\n".join(["line"] * 150))
     assert evals.check_loop_length(tmp_path)["ok"] is False
     (tmp_path / "LOOP.md").write_text("\n".join(["line"] * 100))
     assert evals.check_loop_length(tmp_path)["ok"] is True

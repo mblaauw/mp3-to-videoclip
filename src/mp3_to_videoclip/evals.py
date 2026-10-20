@@ -15,7 +15,9 @@ from pathlib import Path
 from . import mcp, tools
 from .storage import file_hash
 
-MAX_LOOP_LINES = 120
+# Headroom is deliberate: the loop document is edited as the crew evolves, and a
+# limit pinned to its current length turns every legitimate addition into a trim.
+MAX_LOOP_LINES = 140
 EXTERNAL = ("http://", "https://", "<script src", "fetch(")
 
 
