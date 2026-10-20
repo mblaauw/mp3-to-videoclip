@@ -535,3 +535,67 @@ def sync_operations(conn, projects_dir: str | Path) -> dict:
         "skipped": skipped,
         "note": "Receipts stay the writers; the spine only indexes them for one run list.",
     }
+
+# --------------------------------------------------------------------------- #
+# trace view
+# --------------------------------------------------------------------------- #
+def trace(conn, run_id: str, *, limit: int = 400) -> dict:
+    """One run as evidence: steps, event types, output lines and timing."""
+    run = conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+    if run is None:
+        raise ValueError(f"unknown run {run_id!r}")
+    events = event_list(conn, run_id, 0, limit)
+
+    def payload(event):
+        try:
+            return json.loads(event.get("payload_json") or "{}")
+        except ValueError:
+            return {}
+
+    outputs = [payload(event) for event in events if event["type"] == "command.output"]
+    phases = []
+    for event in events:
+        if event["type"] in ("step.started", "step.succeeded", "step.failed", "step.replayed"):
+            phases.append({"at": event["at"], "type": event["type"], "payload": payload(event)})
+    interrupts = rows(conn, "SELECT * FROM interrupts WHERE run_id=? ORDER BY created_at", (run_id,))
+    return {
+        "run": dict(run),
+        "steps": rows(
+            conn, "SELECT idx, name, status, error FROM steps WHERE run_id=? ORDER BY idx", (run_id,)
+        ),
+        "event_types": sorted({event["type"] for event in events}),
+        "events": len(events),
+        "output_lines": [line.get("line") for line in outputs][-40:],
+        "phases": phases,
+        "interrupts": interrupts,
+        "cost_usd": next(
+            (
+                row["cost_usd"]
+                for row in rows(conn, "SELECT cost_usd FROM tool_calls WHERE run_id=?", (run_id,))
+                if row["cost_usd"]
+            ),
+            None,
+        ),
+        "limits": "Replay evidence, not a creative review: it shows what ran, not whether it was good.",
+    }
+
+
+def render_trace(value: dict) -> str:
+    run = value["run"]
+    lines = [
+        f"RUN {run['id']} · {run['status']} · {run['intent']}",
+        f"production={run['production']} started={run['created_at']} ended={run['ended_at']}",
+    ]
+    if run.get("error"):
+        lines.append(f"error={run['error']}")
+    for step in value["steps"]:
+        suffix = f" — {step['error']}" if step["error"] else ""
+        lines.append(f"  step {step['idx']} {step['name']} [{step['status']}]{suffix}")
+    for interrupt in value["interrupts"]:
+        lines.append(f"  wait {interrupt['kind']} [{interrupt['status']}]")
+    lines.append(f"events={value['events']} cost_usd={value['cost_usd']}")
+    if value["output_lines"]:
+        lines.append("output tail:")
+        lines.extend(f"  | {line}" for line in value["output_lines"])
+    return "\n".join(lines)
+

@@ -139,3 +139,28 @@ def test_reconcile_never_touches_finished_runs(tmp_path):
         assert spine.reconcile(conn)["interrupted"] == []
         assert [run["status"] for run in before] == ["succeeded"]
         assert Path(result["run_id"]).name  # run id is a plain identifier
+
+
+def test_trace_shows_steps_output_and_cost(tmp_path):
+    with spine.connect(db(tmp_path)) as conn:
+        result = spine.run_command(
+            conn, [sys.executable, "-c", "print('traced')"], production="demo", cwd=tmp_path
+        )
+        value = spine.trace(conn, result["run_id"])
+        assert value["run"]["status"] == "succeeded"
+        assert value["steps"][0]["name"] == "command"
+        assert "traced" in value["output_lines"]
+        assert value["event_types"][0] == "command.output" or "run.started" in value["event_types"]
+        text = spine.render_trace(value)
+        assert "RUN " in text and "| traced" in text
+        assert "Replay evidence" in value["limits"]
+
+
+def test_trace_rejects_unknown_run(tmp_path):
+    with spine.connect(db(tmp_path)) as conn:
+        try:
+            spine.trace(conn, "run-missing")
+        except ValueError as exc:
+            assert "unknown run" in str(exc)
+        else:
+            raise AssertionError("trace accepted an unknown run")
