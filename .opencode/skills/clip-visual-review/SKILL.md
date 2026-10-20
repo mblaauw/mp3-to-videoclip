@@ -41,11 +41,11 @@ role also runs **story** and **board** modes on those drafts. Links:
    unless the approved shot genuinely needs them. Do not impose toe counts or
    readable distant fingers.
 4. Bounded fresh sessions: **at most 15 image occurrences**, practically 6–8,
-   including identity references, detail crops and re-reads, with headroom kept
+    including the style benchmark, identity references, detail crops and re-reads, with headroom kept
    below the ceiling. Inventory and deduplicate first. Return **text-only**
    coverage — never forward images into the coordinating session. A failed or
-   timed-out reviewer is unavailable evidence, not a PASS; no mandatory re-reads
-   and no per-frame review divisions, but coverage stays complete.
+    timed-out reviewer is unavailable evidence, not a PASS. Follow the mode's
+    coverage/report contract in `references/critic-modes.md`; no per-frame sessions.
 5. Record the verdict, bound to exact bytes:
 
 ```sh
@@ -57,6 +57,7 @@ uv run clip review PROJECT --shot s003 --version 2 --verdict accept \
 
 `accept` / `reject` / `uncertain` follow `shot-review.md`. Uncertain asks for one
 targeted crop — it is not a disguised reject or acceptance.
+Output: complete/partial/blocked; exact image versions/hashes, verdicts and inspected/unreadable/not-reviewed coverage. Partial coverage is not approval.
 
 ## Repair discipline
 

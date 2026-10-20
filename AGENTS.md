@@ -1,7 +1,8 @@
 # MP3 to videoclip
 
 This is an agent-operated staged production tool, not an autonomous one-click
-generator. Read README.md and PLAN.md. Use `uv run clip --help`.
+generator. Read README.md; PLAN.md is historical, not a current work queue.
+Use `uv run clip --help`.
 
 ## Production crew
 
@@ -25,6 +26,15 @@ discipline, not a security sandbox, and `runware_run` prompts are not budget
 enforcement — the quote/authorization/reservation record is. `default_agent`
 applies to fresh, unselected sessions only. Engineering work on the tooling
 itself uses the ordinary build workflow with tests, not the film crew.
+
+Engineering milestones use `/deliver` (Build, 160 steps in `.opencode/opencode.json`) and
+`sustained-delivery`: up to 60–90 minutes through approved ready tasks, with
+revision-bound review/checks and progress commentary instead of routine continue
+prompts. Reuse the approved plan; no open-ended backlog or paid work. Use
+`ux-designer` for Studio application flows, not `visual-critic` film reviews.
+Use feature branches/PRs, never default-branch pushes; this private repository
+remains manually merged until protected merging is available. CI `quality` must
+pass, but green CI is not production, creative or spending approval.
 
 Validate or refresh the local bundle with `uv run python
 scripts/bootstrap_production.py --check` (read-only: no clone, install, archive

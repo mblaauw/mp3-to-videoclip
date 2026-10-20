@@ -50,7 +50,7 @@ evidence, consequence, fix and severity, claiming pixel inspection only for imag
 3. Dispatch one bounded owner for it, stating mode and owned files.
 4. Inspect the result creatively *and* technically: tests or a clean preflight are not
    creative acceptance. Commit through the `clip` gates, or name the missing evidence.
-5. Repeat, or stop when the requirement is met.
+5. Continue ready authorized requirements; stop at a real gate, blocker or budget.
 
 Stage skills are capabilities to load as needed, not a strict arrow sequence:
 `clip-music-analysis`, `clip-story`, `clip-storyboard`, `clip-art-direction`,
@@ -115,5 +115,5 @@ it and the director never auto-accepts it.
 - Editing, graphics and render work is local (Remotion for new films, FFmpeg for
   encode/mux/probe and legacy); no paid call belongs in editing or verification.
 
-Engineering mode: this crew makes films. Broken tooling belongs in the ordinary
-build workflow with focused tests, not a crew spawn.
+Engineering mode: use `/deliver` and the ordinary build workflow with focused
+tests, not a crew spawn. Approved task/PR completion is a checkpoint, not a stop.

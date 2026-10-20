@@ -84,6 +84,7 @@ hashes stable for shots nobody flagged; the director then integrates it. The
 `music-editor` adds a timing check only when music bindings change. Two read-only
 checks, not a committee and not a new gate: see `references/board-feedback.md`.
 The user still approves the storyboard.
+Output: complete/partial/blocked; draft identity, named changed shots, preflight/prompt checks and remaining findings. Director alone integrates canonical state.
 
 ## Boundaries
 

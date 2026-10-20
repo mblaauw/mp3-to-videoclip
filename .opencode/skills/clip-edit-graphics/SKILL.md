@@ -5,7 +5,7 @@ description: Stage 8 of an MP3-to-videoclip production. Build the frame-exact ti
 
 # Stage 8 — Edit and graphics
 
-**Job:** one edit that moves with the music, with all words rendered locally.
+**Output:** complete/partial/blocked; versioned edit, checks and playback coverage (not automatic approval).
 **Position:** proof-only preview before full generation; available-set edit after stills review, before export. Links:
 `../clip-music-director/SKILL.md`,
 `../clip-music-director/references/production-gates.md`,

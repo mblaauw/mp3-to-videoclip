@@ -5,8 +5,8 @@ description: Route an MP3-to-videoclip production through nine bounded stages â€
 
 # Music-video direction: stage router
 
-Read `../../../LOOP.md`, `../../../AGENTS.md`, `references/music-first-direction.md`
-and `../../../docs/MUSIC_LED.md`. CLI artifacts and content-bound approvals are
+Reuse loaded project instructions; read `references/music-first-direction.md`
+and `../../../docs/MUSIC_LED.md` as needed. CLI artifacts and content-bound approvals are
 authoritative. This skill is original project guidance; upstream Runware recipes
 neither override approved scope nor authorize spending. Workflow 2 examples:
 `../../../docs/PRODUCTION_WORKFLOW_V2.md`; defaults:

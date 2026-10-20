@@ -290,8 +290,19 @@ def test_real_tree_check_passes_without_writing_or_network():
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["ok"] is True and payload["problems"] == []
-    assert payload["cached_revision"] == bootstrap_module().REVISION
-    assert payload["recipes_missing"] == [] and payload["pending_archive"] == []
+    module = bootstrap_module()
+    if (ROOT / module.VENDOR / "skills").is_dir():
+        assert payload["cached_revision"] == module.REVISION
+    else:
+        # The optional ignored cache is absent in a clean checkout. --check
+        # reports it honestly without cloning/installing recipes or weakening gates.
+        assert payload["cached_revision"] is None
+    assert payload["recipes_missing"] == [
+        name
+        for name in module.SELECTED
+        if not (ROOT / ".opencode/skills" / name / "SKILL.md").is_file()
+    ]
+    assert payload["pending_archive"] == []
     assert snapshot(ROOT / ".opencode/skills") == before
 
 
