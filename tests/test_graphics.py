@@ -339,3 +339,25 @@ def test_optional_subtitle_renders_under_the_title_only_when_present():
     # skipped there so the two can never collide).
     assert tint_pixels(without) == 0
     assert tint_pixels(with_subtitle) > 0
+
+
+def test_bundled_font_keeps_rendering_portable(monkeypatch):
+    """Without the approved local face, the bundled OFL font resolves every weight."""
+    from pathlib import Path as _Path
+
+    monkeypatch.setattr(graphics, "FONT_PATH", _Path("/nonexistent/Avenir Next.ttc"))
+    graphics.resolve_font.cache_clear()
+    graphics._font.cache_clear()
+    try:
+        path, faces, meta = graphics.resolve_font()
+        assert meta["source"] == "bundled-inter"
+        assert path.name == "Inter-Regular.ttf"
+        assert set(faces) == set(graphics.FACES)
+        families = {face: graphics._font(face, 24).getname() for face in graphics.FACES}
+        assert {name[0] for name in families.values()} == {"Inter"}
+        assert families["demi"][1] == "SemiBold"
+        assert families["heavy"][1] == "Bold"
+        assert (graphics.FONT_DIR / "OFL.txt").is_file(), "licence must travel with the font"
+    finally:
+        graphics.resolve_font.cache_clear()
+        graphics._font.cache_clear()

@@ -142,6 +142,15 @@ STAR_RATIO = 0.155 / 0.082
 SFX_MARGIN = 0.022
 
 FONT_PATH = Path("/System/Library/Fonts/Avenir Next.ttc")
+#: Bundled SIL OFL font, so a render is reproducible off this Mac. Chosen only when
+#: the approved local face is absent, which keeps existing macOS output unchanged.
+FONT_DIR = Path(__file__).with_name("fonts")
+BUNDLED_FONTS = {
+    "regular": "Inter-Regular.ttf",
+    "demi": "Inter-SemiBold.ttf",
+    "bold": "Inter-Bold.ttf",
+    "heavy": "Inter-Bold.ttf",
+}
 #: Explicit fallback chain; the chosen face is recorded in the report.
 FONT_FALLBACKS = (
     Path("/Library/Fonts/Arial.ttf"),
@@ -265,6 +274,11 @@ def implementation_revision() -> str:
                 if (here / name).is_file()
             },
             "font_sha256": _file_hash(font),
+            "bundled_fonts": {
+                name: _file_hash(FONT_DIR / name)
+                for name in sorted(set(BUNDLED_FONTS.values()))
+                if (FONT_DIR / name).is_file()
+            },
             "faces": faces,
             "pillow": PIL.__version__,
         }
@@ -340,8 +354,25 @@ def _usable_faces(path: Path) -> dict[str, int]:
 
 @lru_cache(maxsize=1)
 def resolve_font() -> tuple[Path, dict[str, int], dict]:
-    """Local Avenir Next when present, otherwise an explicit recorded fallback."""
-    for candidate in (FONT_PATH, *FONT_FALLBACKS):
+    """The approved local face, else the bundled OFL font, else a documented fallback."""
+    if FONT_PATH.is_file():
+        usable = _usable_faces(FONT_PATH)
+        if usable:
+            anchor = usable.get("regular", min(usable.values()))
+            resolved = {face: usable.get(face, anchor) for face in FACES}
+            return FONT_PATH, resolved, {"source": "local-avenir-next", "path": str(FONT_PATH)}
+    bundled = FONT_DIR / BUNDLED_FONTS["regular"]
+    if bundled.is_file() and _usable_faces(bundled):
+        return (
+            bundled,
+            {face: 0 for face in FACES},
+            {
+                "source": "bundled-inter",
+                "path": str(bundled),
+                "license": "SIL Open Font License 1.1 (fonts/OFL.txt)",
+            },
+        )
+    for candidate in FONT_FALLBACKS:
         if not candidate.is_file():
             continue
         usable = _usable_faces(candidate)
@@ -349,14 +380,15 @@ def resolve_font() -> tuple[Path, dict[str, int], dict]:
             continue
         anchor = usable.get("regular", min(usable.values()))
         resolved = {face: usable.get(face, anchor) for face in FACES}
-        meta = {"source": "local-avenir-next", "path": str(candidate)}
-        if candidate != FONT_PATH:
-            meta = {
+        return (
+            candidate,
+            resolved,
+            {
                 "source": "documented-fallback",
                 "path": str(candidate),
                 "note": f"Avenir Next unavailable; using {candidate.name}",
-            }
-        return candidate, resolved, meta
+            },
+        )
     raise ComposeError("no local font available; refusing to silently substitute")
 
 
@@ -364,8 +396,12 @@ def resolve_font() -> tuple[Path, dict[str, int], dict]:
 def _font(face: str, size: int) -> ImageFont.FreeTypeFont:
     if face not in FACES:
         raise ComposeError(f"unknown font face {face!r}")
-    path, indexes, _meta = resolve_font()
-    return ImageFont.truetype(str(path), size=max(6, int(size)), index=indexes[face])
+    path, indexes, meta = resolve_font()
+    index = indexes.get(face, 0)
+    if meta.get("source") == "bundled-inter":
+        path = FONT_DIR / BUNDLED_FONTS[face]
+        index = 0
+    return ImageFont.truetype(str(path), size=max(6, int(size)), index=index)
 
 
 # --------------------------------------------------------------------------- #
