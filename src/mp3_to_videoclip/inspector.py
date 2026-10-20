@@ -12,7 +12,9 @@ import os
 from pathlib import Path
 
 from . import production as P
-from .dashboard import _esc, _thumbnail
+from .dashboard import _thumbnail
+from .markup import esc as _esc
+from .markup import script_json
 from .storage import file_hash, read_json, write_json
 
 FOLDER = "work/inspector"
@@ -155,9 +157,7 @@ def render_shot(root: Path, shot, entry: dict, versions, verdicts, selected) -> 
         f"<dt>{_esc(key)}</dt><dd>{_esc(value)}</dd>" for key, value in contract_rows
     )
     must = "".join(f"<li>{_esc(item)}</li>" for item in shot.must_show)
-    payload = json.dumps({"id": shot.id, "slug": project.slug}, separators=(",", ":")).replace(
-        "</", "<\\/"
-    )
+    payload = script_json({"id": shot.id, "slug": project.slug})
     alias_note = (
         f'<p class="warn">This shot reuses <code>{_esc(shot.asset_shot_id)}</code>; edit the source '
         "shot so both stay identical.</p>"

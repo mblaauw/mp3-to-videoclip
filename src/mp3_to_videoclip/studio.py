@@ -12,7 +12,6 @@ from the page.
 
 from __future__ import annotations
 
-import html
 import os
 import re
 from datetime import UTC, datetime
@@ -21,6 +20,7 @@ from pathlib import Path
 from . import budget as budget_module
 from . import operations
 from . import production as P
+from .markup import esc as _esc
 from .storage import file_hash, read_json, write_json
 
 FOLDER = "studio"
@@ -421,10 +421,6 @@ def _actions(entry: dict) -> list[dict]:
         }
     )
     return actions
-
-
-def _esc(value) -> str:
-    return html.escape("" if value is None else str(value))
 
 
 def _accent(entry: dict) -> str:

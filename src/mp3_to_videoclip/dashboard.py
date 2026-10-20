@@ -16,9 +16,7 @@ and never overwritten, with a sidecar recording every input hash.
 from __future__ import annotations
 
 import base64
-import html
 import io
-import json
 import os
 import re
 from datetime import UTC, datetime
@@ -27,6 +25,8 @@ from pathlib import Path
 from PIL import Image
 
 from . import production as P
+from .markup import esc as _esc
+from .markup import script_json
 from .storage import file_hash, inside, read_json, write_json
 
 STAGES = ("board", "stills", "delivery")
@@ -484,10 +484,6 @@ def _pct(value: float, total: float) -> str:
     return f"{(100.0 * value / total) if total else 0:.4f}%"
 
 
-def _esc(value) -> str:
-    return html.escape("" if value is None else str(value))
-
-
 def _timeline(rows, sections, music, grid, graphics, project) -> str:
     total = project.duration or 1
     parts = ['<div class="tl" id="tl">']
@@ -915,7 +911,7 @@ def build_dashboard(
         else f"No bar grid: {grid['reason']}. The timeline is seconds and frames only."
     )
 
-    payload = json.dumps(
+    payload = script_json(
         {
             "duration": project.duration,
             "shots": [
@@ -929,9 +925,8 @@ def build_dashboard(
             "sections": [
                 {"id": s["id"], "label": s["label"], "start": s["start_seconds"]} for s in sections
             ],
-        },
-        separators=(",", ":"),
-    ).replace("</", "<\\/")
+        }
+    )
 
     data = {
         "project": project,

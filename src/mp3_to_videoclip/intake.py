@@ -8,7 +8,6 @@ with the 16:9-only signature, or a source that cannot be found.
 
 from __future__ import annotations
 
-import html
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -107,10 +106,6 @@ SCRIPT = """
  update();
 })();
 """
-
-
-def _esc(value) -> str:
-    return html.escape("" if value is None else str(value))
 
 
 def render_page() -> str:
