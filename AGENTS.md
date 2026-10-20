@@ -32,8 +32,8 @@ Engineering milestones use `/deliver` (Build, 160 steps in `.opencode/opencode.j
 revision-bound review/checks and progress commentary instead of routine continue
 prompts. Reuse the approved plan; no open-ended backlog or paid work. Use
 `ux-designer` for Studio application flows, not `visual-critic` film reviews.
-Use feature branches/PRs, never default-branch pushes; this private repository
-remains manually merged until protected merging is available. CI `quality` must
+Use feature branches/PRs, never default-branch pushes; this repository remains
+manually merged until protected auto-merge is separately approved. CI `quality` must
 pass, but green CI is not production, creative or spending approval.
 
 Validate or refresh the local bundle with `uv run python
