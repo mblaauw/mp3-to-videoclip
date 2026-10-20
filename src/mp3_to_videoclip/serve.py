@@ -65,6 +65,10 @@ const q = token ? ('?token=' + encodeURIComponent(token)) : '';
 const log = document.getElementById('log');
 let last = 0, selected = null;
 function el(tag, cls, text){const n=document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n;}
+function eventPayload(ev){
+  if(ev && ev.payload && typeof ev.payload === 'object') return ev.payload;
+  try { return JSON.parse((ev && ev.payload_json) || '{}') || {}; } catch(e){ return {}; }
+}
 async function refresh(){
   const res = await fetch('/api/runs' + q);
   if(!res.ok) return;
@@ -95,7 +99,8 @@ function stream(){
     last = Math.max(last, ev.seq);
     if(ev.run_id && !selected) selected = ev.run_id;
     const line = el('div', ev.type==='command.output'?'out':(ev.type.includes('failed')||ev.type.includes('interrupted')?'err':'ev'));
-    line.textContent = '[' + (ev.type) + '] ' + (ev.payload && ev.payload.line ? ev.payload.line : JSON.stringify(ev.payload||{}));
+    const payload = eventPayload(ev);
+    line.textContent = '[' + (ev.type) + '] ' + (payload.line !== undefined ? payload.line : JSON.stringify(payload));
     log.append(line); log.scrollTop = log.scrollHeight;
   };
   es.onerror = () => { es.close(); setTimeout(stream, 2000); };
@@ -424,8 +429,12 @@ const token=new URLSearchParams(location.search).get('token')||'';
 const q=token?('?token='+encodeURIComponent(token)):'';
 const hdr=token?{'X-Studio-Token':token}:{};
 const view=document.getElementById('view');
-let current=null, tab='overview', stillsData=null, stillFilter=null, cockpitSource=null, cockpitRun=null;
+let current=null, tab='overview', stillsData=null, stillFilter=null, cockpitSource=null, cockpitRun=null, viewGen=0;
 function el(t,c,x){const n=document.createElement(t);if(c)n.className=c;if(x!==undefined)n.textContent=x;return n;}
+function eventPayload(ev){
+ if(ev&&ev.payload&&typeof ev.payload==='object')return ev.payload;
+ try{return JSON.parse((ev&&ev.payload_json)||'{}')||{};}catch(e){return {};}
+}
 function withToken(path){if(!token)return path;return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token);}
 async function api(path){const r=await fetch(withToken(path));const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d;}
 function badge(v){const t=v||'unreviewed';return el('span','badge '+t,t);}
@@ -467,12 +476,13 @@ function openProject(slug,title){
 const loaders={overview:loadOverview,stills:loadStills,board:loadBoard,approvals:loadApprovals,runs:loadRuns};
 function showTab(name){
  if(!current)return;
+ const gen=++viewGen;
  setTab(name); view.textContent='';
  if(name!=='runs')stopCockpit();
- loaders[name]().catch(function(e){view.textContent='';view.append(el('div','empty',e.message));});
+ loaders[name](gen).catch(function(e){if(gen!==viewGen)return;view.textContent='';view.append(el('div','empty',e.message));});
 }
-async function loadOverview(){
- const d=await api('/api/project/'+current.slug); const s=d.status||{}; const e=d.entry||{};
+async function loadOverview(gen){
+ const d=await api('/api/project/'+current.slug); if(gen!==viewGen)return; const s=d.status||{}; const e=d.entry||{};
  clear(view);
  const stats=el('div','stats');
  stats.append(stat((s.duration||0).toFixed(0)+'s','duration'));
@@ -491,8 +501,8 @@ async function loadOverview(){
  go.addEventListener('click',function(){showTab('stills');}); view.append(go);
 }
 async function fetchStills(){stillsData=await api('/api/project/'+current.slug+'/stills');}
-async function loadStills(){
- await fetchStills(); renderStills();
+async function loadStills(gen){
+ await fetchStills(); if(gen!==viewGen)return; renderStills();
 }
 function renderStills(){
  clear(view); const d=stillsData;
@@ -562,8 +572,8 @@ async function showShot(id){
   cols.append(right); panel.append(cols);
  }catch(e){panel.textContent='';panel.append(el('div','empty',e.message));}
 }
-async function loadBoard(){
- const d=await api('/api/project/'+current.slug+'/board'); clear(view);
+async function loadBoard(gen){
+ const d=await api('/api/project/'+current.slug+'/board'); if(gen!==viewGen)return; clear(view);
  if(!d.available){view.append(el('div','empty',d.warning||'no storyboard'));return;}
  const stats=el('div','stats');
  stats.append(stat(d.shots.length,'shots')); stats.append(stat(d.total_frames,'frames'));
@@ -596,8 +606,8 @@ async function loadBoard(){
  }
  scroll.append(table); view.append(scroll);
 }
-async function loadApprovals(){
- const d=await api('/api/project/'+current.slug+'/approvals'); clear(view);
+async function loadApprovals(gen){
+ const d=await api('/api/project/'+current.slug+'/approvals'); if(gen!==viewGen)return; clear(view);
  view.append(el('p','meta',d.current+' of '+d.total+' stages would pass now. Live hashes are recomputed; nothing is approved here.'));
  const scroll=el('div','scroll'); const table=el('table'); const head=el('tr');
  for(const label of ['stage','state','current hash','approved hash','at','would pass','command']){head.append(el('th',null,label));}
@@ -612,9 +622,9 @@ async function loadApprovals(){
  }
  scroll.append(table); view.append(scroll);
 }
-async function loadRuns(){
+async function loadRuns(gen){
  clear(view); stopCockpit();
- const d=await api('/api/runs?limit=20'); const list=el('div',''); const panel=el('div','panel'); panel.style.marginTop='12px';
+ const d=await api('/api/runs?limit=20'); if(gen!==viewGen)return; const list=el('div',''); const panel=el('div','panel'); panel.style.marginTop='12px';
  const head=el('h2',null,'Live events'); const log=el('div'); log.id='log'; panel.append(head,log);
  if(!d.runs.length){view.append(el('div','empty','no runs yet — start one with a clip command'));return;}
  for(const run of d.runs){
@@ -629,6 +639,7 @@ async function loadRuns(){
 async function selectRun(id){
  stopCockpit(); cockpitRun=id;
  const d=await api('/api/events?run='+encodeURIComponent(id)+'&after=0&limit=200');
+ if(cockpitRun!==id)return;
  const log=document.getElementById('log'); if(!log)return; log.textContent='';
  let last=0;
  for(const ev of d.events){last=Math.max(last,ev.seq);appendEvent(ev);}
@@ -639,8 +650,9 @@ async function selectRun(id){
 }
 function appendEvent(ev){
  const log=document.getElementById('log'); if(!log)return;
+ const payload=eventPayload(ev);
  const line=el('div',ev.type==='command.output'?'out':((ev.type.includes('failed')||ev.type.includes('interrupted'))?'err':'ev'));
- line.textContent='['+ev.type+'] '+((ev.payload&&ev.payload.line)||JSON.stringify(ev.payload||{}));
+ line.textContent='['+ev.type+'] '+(payload.line!==undefined?payload.line:JSON.stringify(payload));
  log.append(line); while(log.childNodes.length>400)log.removeChild(log.firstChild); log.scrollTop=log.scrollHeight;
 }
 document.getElementById('tabs').addEventListener('click',function(e){const b=e.target.closest('button.tab');if(b)showTab(b.getAttribute('data-tab'));});

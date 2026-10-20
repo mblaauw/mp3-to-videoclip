@@ -146,6 +146,36 @@ def test_studio_scan_is_shared_with_the_page(tmp_path):
     assert entries and entries[0]["actions"]
 
 
+def test_journal_lines_parse_payload_json_and_stale_tabs_are_dropped(tmp_path):
+    """The cockpit reads payload_json; a loader that lost the tab race renders nothing."""
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    make_root(projects)
+    db = tmp_path / "spine.sqlite3"
+    with spine.connect(db) as conn:
+        run_id = spine.start_run(conn, intent="status", production="production")
+        spine.append_event(conn, run_id, "command.output", {"line": '  "project": "production",'})
+    httpd, url, _thread = serve.start_in_thread(projects, db, token="t")
+    try:
+        base = url.split("?")[0]
+        status, body, _ = get(base + "api/events", token="t")
+        events = json.loads(body)["events"]
+        line = next(event for event in events if event["type"] == "command.output")
+        assert json.loads(line["payload_json"])["line"] == '  "project": "production",'
+        assert "payload" not in line, "the page must parse payload_json itself"
+
+        for path in ("", "app"):
+            page = get(base + path + "?token=t")[1].decode()
+            assert "eventPayload" in page
+            assert "ev.payload.line" not in page
+            assert "payload_json" in page
+        app = get(base + "app?token=t")[1].decode()
+        assert "viewGen" in app
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 # --------------------------------------------------------------------------- #
 # app projections: stills, board, approvals
 # --------------------------------------------------------------------------- #
