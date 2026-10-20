@@ -111,10 +111,48 @@ def build(root: Path, *, intent: str | None = None) -> dict:
     return plan
 
 
+KNOWN_STAGES = ("analysis", "events", "brief", "storyboard", "proof", "preview", "stills", "graphics")
+
+
+def problems(plan: dict) -> list[str]:
+    """Structural validation at proposal time: catch malformed or mistyped plans early."""
+    found = []
+    if not isinstance(plan, dict):
+        return ["a plan must be an object"]
+    if not plan.get("id"):
+        found.append("plan needs an id")
+    if not plan.get("intent"):
+        found.append("plan needs an intent")
+    steps = plan.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return found + ["plan needs at least one step"]
+    for index, step in enumerate(steps):
+        where = f"step {index}"
+        if not isinstance(step, dict):
+            found.append(f"{where}: must be an object")
+            continue
+        for key in ("label", "reason", "command"):
+            if not isinstance(step.get(key), str) or not step[key].strip():
+                found.append(f"{where}: missing {key}")
+        command = step.get("command")
+        if isinstance(command, str) and command.startswith("uv run clip "):
+            try:
+                tools.classify_argv(shlex.split(command))
+            except (ValueError, TypeError):
+                found.append(f"{where}: unknown clip command")
+        stages = step.get("invalidates")
+        if stages is not None and (
+            not isinstance(stages, list) or not set(stages) <= set(KNOWN_STAGES)
+        ):
+            found.append(f"{where}: invalidates must name known stages")
+    return found
+
+
 def save(root: Path, plan: dict) -> Path:
     root = Path(root)
-    if not plan.get("id") or not plan.get("steps"):
-        raise ValueError("a plan needs an id and at least one step")
+    found = problems(plan)
+    if found:
+        raise ValueError("invalid plan: " + "; ".join(found))
     target = root / FOLDER / f"{plan['id']}.json"
     if target.exists():
         raise ValueError("plans are immutable; build a new one")

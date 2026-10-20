@@ -148,3 +148,34 @@ def test_unclassified_commands_are_refused(tmp_path):
     result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", cwd=tmp_path)
     assert result["status"] == "waiting"
     assert "unclassified command" in result["stopped_at"]["why"]
+
+
+def test_malformed_plans_are_refused_at_save(tmp_path):
+    root = make_root(tmp_path)
+    base = plans.build(root)
+    for mutate, message in (
+        (lambda plan: plan.pop("intent"), "needs an intent"),
+        (lambda plan: plan.__setitem__("steps", []), "at least one step"),
+        (
+            lambda plan: plan["steps"][0].__setitem__("command", "uv run clip nonsense"),
+            "unknown clip command",
+        ),
+        (
+            lambda plan: plan["steps"][0].__setitem__("invalidates", ["not-a-stage"]),
+            "known stages",
+        ),
+        (lambda plan: plan["steps"][0].pop("label"), "missing label"),
+    ):
+        import copy
+
+        candidate = copy.deepcopy(base)
+        mutate(candidate)
+        with pytest.raises(ValueError, match=message):
+            plans.save(root, candidate)
+
+
+def test_a_built_plan_is_valid(tmp_path):
+    root = make_root(tmp_path)
+    built = plans.build(root)
+    assert plans.problems(built) == []
+    plans.save(root, built)
