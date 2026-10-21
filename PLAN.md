@@ -40,8 +40,11 @@ No paid calls, uploads, new approval endpoints, legacy deletions or stack swap.
   optional issues, with no remaining P1/P2 in scope; its sandbox could not
   recompute the diff hash or run browser tests. Parent verified unchanged bytes
   and ran runtime checks. Screens inspected locally at desktop and phone widths.
-- Updated local server is running the branch at port 8800. Next: publish feature
-  PR, require green Linux/browser CI, leave merging manual. No default-branch push.
+- Acceptance complete at implementation commit `a7020c4`: Linux CI run
+  `39644165429` passed, including all 16 Chromium regressions. PR #2:
+  https://github.com/mblaauw/mp3-to-videoclip/pull/2 — open for manual merge.
+  Updated local server runs the branch at port 8800. All ready scope is complete;
+  no default-branch push, merge, spending or production-state change performed.
 
 > **Historical record.** This document captures a point-in-time decision.
 > Current behaviour is defined by `docs/STILL_FILM_WORKFLOW.md`,
