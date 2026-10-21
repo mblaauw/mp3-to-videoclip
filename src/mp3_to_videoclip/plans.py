@@ -21,7 +21,6 @@ from . import spine, studio, tools
 from .storage import file_hash, read_json, write_json
 
 FOLDER = "work/plans"
-HUMAN_COMMANDS = frozenset({"approve", "authorize", "resolve-task"})
 
 
 def _id() -> str:
@@ -51,11 +50,7 @@ def _step(command: str, label: str, reason: str, *, invalidates=()) -> dict:
         except ValueError:
             tool = None
     scope = tools.scope_for(tool) if tool else {"kind": "edit"}
-    human = (
-        scope["kind"] == "human"
-        or tool in HUMAN_COMMANDS
-        or (tool == "budget" and "--cap" in (argv or []))
-    )
+    human = bool(argv and tool and tools.human_capability(argv))
     needs_input = argv is None
     return {
         "label": label,
@@ -254,6 +249,8 @@ def run(
                         "plans may only run 'uv run clip …' commands; nothing else executes"
                     )
                 tool = tools.classify_argv(argv)
+                if reason := tools.human_capability(argv):
+                    raise PermissionError(reason)
                 tools.require(tool, granted)
             except (ValueError, PermissionError) as exc:
                 interrupt = spine.ask_human(

@@ -11,6 +11,7 @@ backups/
 style-tests/
 .DS_Store
 .opencode/vendor/
+.opencode/scratch/
 .opencode/skills/*
 !.opencode/skills/clip-music-director/
 !.opencode/skills/clip-music-director/**

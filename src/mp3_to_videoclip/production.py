@@ -676,6 +676,7 @@ def stage_hash(root: Path, stage: str) -> str:
 
 
 def require_approval(root: Path, stage: str):
+    """Check gates; Studio attestations are consistency claims, not proof of human acts."""
     if stage == "lyrics" and load_project(root).music_mode == "instrumental":
         raise ValueError("instrumental projects have no lyrics stage to approve")
     for parent in _required_parents(root, stage):
@@ -691,6 +692,20 @@ def require_approval(root: Path, stage: str):
         ) from exc
     if record["hash"] != current_hash:
         raise ValueError(f"{stage} needs current user approval")
+    if record.get("via") == "studio":
+        complete = record.get("review_confirmed") is True
+        if stage == "preview":
+            complete = complete and record.get("preview_watched") is True
+        if stage == "graphics":
+            complete = complete and record.get("inspected") is True
+        if stage == "lyrics":
+            lyrics = Lyrics.model_validate(read_json(root / STAGE_FILES[stage]))
+            if any(segment.flags for segment in lyrics.segments):
+                complete = complete and record.get("acknowledge_uncertain") is True
+        if not complete:
+            raise ValueError(
+                f"{stage} Studio approval is incomplete; review and decide again in Studio"
+            )
     if stage == "graphics":
         from .signature import validate_review
 
@@ -714,9 +729,24 @@ def _require_reference_permissions(brief: Brief):
             raise ValueError(f"permission to upload/depict {reference.id} is not confirmed")
 
 
-def approve(root: Path, stage: str, note: str, acknowledge_uncertain=False, *, inspected=False):
+def approve(
+    root: Path,
+    stage: str,
+    note: str,
+    acknowledge_uncertain=False,
+    *,
+    inspected=False,
+    expected_hash: str | None = None,
+    via: str | None = None,
+    preview_watched: bool = False,
+    review_confirmed: bool | None = None,
+):
     if not note.strip():
         raise ValueError("record the user's approval decision in --note")
+    if via == "studio" and review_confirmed is not True:
+        raise ValueError("Studio decisions require explicit review confirmation")
+    if via == "studio" and stage == "preview" and preview_watched is not True:
+        raise ValueError("confirm continuous preview playback with the actual music")
     if stage == "lyrics" and load_project(root).music_mode == "instrumental":
         raise ValueError(
             "instrumental projects have no lyrics stage; approve the analysis and events instead"
@@ -796,7 +826,18 @@ def approve(root: Path, stage: str, note: str, acknowledge_uncertain=False, *, i
         )
         require_accepted(root, ids)
     approvals = read_json(root / "work/approvals.json")
-    approvals[stage] = {"hash": stage_hash(root, stage), "at": now(), "note": note}
+    current = stage_hash(root, stage)
+    if expected_hash is not None and current != expected_hash:
+        raise ValueError("stage changed during review; inspect its current artifacts again")
+    approvals[stage] = {"hash": current, "at": now(), "note": note}
+    if via is not None:
+        approvals[stage].update(
+            via=via, inspected=bool(inspected), acknowledge_uncertain=bool(acknowledge_uncertain)
+        )
+        if via == "studio":
+            approvals[stage]["review_confirmed"] = True
+            if stage == "preview":
+                approvals[stage]["preview_watched"] = bool(preview_watched)
     write_json(root / "work/approvals.json", approvals)
 
 

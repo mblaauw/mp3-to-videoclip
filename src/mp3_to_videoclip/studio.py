@@ -393,8 +393,8 @@ def _actions(entry: dict) -> list[dict]:
             {
                 "id": f"approve-{stage}",
                 "label": f"Approve {stage}",
-                "command": f"uv run clip approve {project} {stage} --note '<your decision>'",
-                "reason": f"{stage} is not current; inspect the dashboard before deciding",
+                "command": "uv run clip serve --actions",
+                "reason": f"{stage} is not current; inspect the artifacts and decide in the human Studio",
                 "needs_input": True,
                 "severity": "blocker" if entry["stages"].get(stage) == "stale" else "warn",
             }

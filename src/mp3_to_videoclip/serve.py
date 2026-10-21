@@ -1,9 +1,9 @@
 """Live layer: a loopback server that streams the durable spine, read-only by default.
 
-Deliberately small and boring: no framework and no build step. Every GET is a
-read-only projection; every write verb is refused except the single parked
-``POST /api/create``, which calls the same kernel entry points as ``clip init`` and
-``clip budget`` under the project lock. Nothing here approves, selects or spends.
+Deliberately small and boring: no framework and no build step. GETs are review
+projections. POST /api/create performs local setup. A separately terminal-enabled
+human capability admits two typed content-bound decision routes under the
+project lock; neither can upload, generate, execute commands or charge a provider.
 
 Threat model: loopback only, and a per-session token so another local page cannot
 read the studio. Nothing is served from the project directory except JSON and
@@ -16,6 +16,7 @@ import json
 import queue
 import re
 import secrets
+import sys
 import threading
 import time
 import unicodedata
@@ -25,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import appdata, sources, spine, studio
+from . import appdata, human_actions, human_ui, sources, spine, studio
 
 STREAM_INTERVAL = 0.5
 HEARTBEAT_SECONDS = 10.0
@@ -66,7 +67,7 @@ a{color:var(--gold)}:focus-visible{outline:2px solid var(--gold);outline-offset:
 </style></head><body><main class="wrap">
 <div class="kicker">Studio · live</div><h1>Runs</h1>
 <a id="openStudio" href="/app">Open Studio library</a>
-<p class="mono">Read-only journal · loopback · approvals and paid operations remain CLI-only</p>
+<p class="mono">Read-only journal · loopback · human decisions require a terminal-enabled Studio session</p>
 <div class="grid">
 <div class="panel"><h2>Journal</h2><div id="runs">connecting…</div>
 <h2>Projects</h2><div id="projects" class="mono"></div></div>
@@ -127,6 +128,27 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):  # keep stdout clean for the CLI
         return
+
+    def _host_allowed(self):
+        port = self.server.server_address[1]
+        allowed = {f"127.0.0.1:{port}", f"localhost:{port}"}
+        if port == 80:
+            allowed.update({"127.0.0.1", "localhost"})
+        return self.headers.get("Host") in allowed
+
+    def _action_allowed(self):
+        expected = getattr(self.server, "action_token", None)
+        supplied = self.headers.get("X-Studio-Action", "")
+        if not expected or not secrets.compare_digest(supplied.encode(), expected.encode()):
+            raise human_actions.ActionError(
+                "Human actions require a terminal-enabled Studio session", 401
+            )
+        if self.headers.get("Origin") != f"http://{self.headers.get('Host')}":
+            raise human_actions.ActionError(
+                "Studio actions require the same local browser origin", 403
+            )
+        if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+            raise human_actions.ActionError("Studio actions require application/json", 415)
 
     def end_headers(self):
         self.send_header("Referrer-Policy", "no-referrer")
@@ -203,6 +225,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- routing ---------------------------------------------------------- #
     def do_GET(self):  # noqa: N802 - http.server contract
+        if not self._host_allowed():
+            return self._json({"error": "invalid local Host"}, HTTPStatus.BAD_REQUEST)
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
         if parsed.path == "/api/health":
@@ -210,7 +234,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "read_only": False,
-                    "review_only": True,
+                    "review_only": not bool(self.server.action_token),
                     "setup_write": "POST /api/create",
                 }
             )
@@ -222,6 +246,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._text(PAGE)
         if parsed.path == "/app":
             return self._text(APP)
+        if parsed.path == "/api/session":
+            from .production import UPSTREAM
+
+            return self._json(
+                {"actions_enabled": bool(self.server.action_token), "stages": list(UPSTREAM)}
+            )
         if parsed.path == "/api/status":
             with spine.connect(self.server.db) as conn:
                 return self._json(spine.status(conn))
@@ -263,6 +293,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(appdata.board(root))
             if rest == ["approvals"]:
                 return self._json(appdata.approvals(root))
+            if rest == ["quotes"]:
+                return self._json(human_actions.quotes(root))
+            if len(rest) == 2 and rest[0] in {"approval", "quote"}:
+                try:
+                    value = (
+                        human_actions.review_stage(root, rest[1])
+                        if rest[0] == "approval"
+                        else human_actions.review_quote(root, rest[1])
+                    )
+                    return self._json(value)
+                except human_actions.ActionError as exc:
+                    return self._json({"error": str(exc)}, exc.status)
+                except OSError:
+                    return self._json(
+                        {"error": "Review artifact or quote unavailable; inspect it locally"},
+                        HTTPStatus.CONFLICT,
+                    )
+                except (ValueError, KeyError) as exc:
+                    return self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             if len(rest) == 2 and rest[0] == "shot":
                 try:
                     return self._json(appdata.shot_detail(root, rest[1]))
@@ -302,10 +351,42 @@ class Handler(BaseHTTPRequestHandler):
         return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self):  # noqa: N802
+        if not self._host_allowed():
+            return self._json({"error": "invalid local Host"}, HTTPStatus.BAD_REQUEST)
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
         if not self._authorised(query):
             return self._json({"error": "token required"}, HTTPStatus.UNAUTHORIZED)
+        if parsed.path.startswith("/api/project/"):
+            try:
+                segments = [unquote(part) for part in parsed.path.strip("/").split("/")]
+                if len(segments) != 5 or segments[3] not in {"approve", "authorize"}:
+                    raise human_actions.ActionError("unsupported write route", 405)
+                self._action_allowed()
+                root = self._project_root(segments[2])
+                if root is None:
+                    raise human_actions.ActionError("unknown production", 404)
+                length = int(self.headers.get("Content-Length") or 0)
+                if not 0 < length <= 8192:
+                    raise human_actions.ActionError("decision payload must be 1–8192 bytes", 413)
+                body = json.loads(self.rfile.read(length))
+                value = (
+                    human_actions.approve_stage(root, segments[4], body)
+                    if segments[3] == "approve"
+                    else human_actions.authorize_quote(root, segments[4], body)
+                )
+                return self._json(value)
+            except human_actions.ActionError as exc:
+                return self._json({"error": str(exc)}, exc.status)
+            except OSError:
+                return self._json(
+                    {
+                        "error": "Local review record unavailable. Refresh current records before retrying."
+                    },
+                    HTTPStatus.BAD_REQUEST,
+                )
+            except (ValueError, KeyError) as exc:
+                return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         if parsed.path != "/api/create":
             return self._json(
                 {"error": "unsupported write: only /api/create"}, HTTPStatus.METHOD_NOT_ALLOWED
@@ -376,6 +457,8 @@ class Handler(BaseHTTPRequestHandler):
         return {"created": slug, "title": title, "cap": cap}
 
     def _unsupported_write(self):
+        if not self._host_allowed():
+            return self._json({"error": "invalid local Host"}, HTTPStatus.BAD_REQUEST)
         query = parse_qs(urlparse(self.path).query)
         if not self._authorised(query):
             return self._json({"error": "token required"}, HTTPStatus.UNAUTHORIZED)
@@ -384,6 +467,7 @@ class Handler(BaseHTTPRequestHandler):
     do_PUT = _unsupported_write
     do_DELETE = _unsupported_write
     do_PATCH = _unsupported_write
+    do_OPTIONS = _unsupported_write
 
     # -- server-sent events ----------------------------------------------- #
     def _stream(self, query):
@@ -500,7 +584,7 @@ summary{cursor:pointer;min-height:36px;padding:6px 0;color:var(--gold)}details{m
 @media(max-width:1000px){#list{max-height:300px;overflow:auto}.wrap{padding:20px 16px 40px}}
 </style></head><body><a class="skip" href="#detailTitle">Skip to project</a><main class="wrap">
 <header><div class="kicker">Studio</div><h1>Your productions</h1>
-<p class="notice">Review only — approvals and spending authorization remain in the CLI. Creating a project is local setup, not generation.</p></header>
+<p class="notice">Default is read-only unless a person enables human decisions in their terminal. Creating a project is local setup, not generation.</p></header>
 <div class="grid">
 <aside class="panel" aria-label="Production library">
 <details id="newProduction"><summary>New production</summary><form id="createForm">
@@ -527,7 +611,7 @@ summary{cursor:pointer;min-height:36px;padding:6px 0;color:var(--gold)}details{m
 <button class="tab" id="tab-approvals" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="approvals">Approvals</button>
 <button class="tab" id="tab-runs" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="runs">Runs</button>
 </div>
-<div id="view" role="tabpanel" aria-labelledby="tab-overview"><div class="empty">Choose a production from the library. This page is read-only: it cannot approve, select, spend or edit.</div></div>
+<div id="view" role="tabpanel" aria-labelledby="tab-overview"><div class="empty">Choose a production from the library. No decision or executor is started automatically.</div></div>
 </section>
 </div></main>
 <script>
@@ -634,7 +718,7 @@ async function loadOverview(gen){
  const n=el('h3',null,e.next_step==='delivered'?'Delivery recorded':'Needs your attention: '+(e.next_step||'check state'));view.append(n);
  for(const action of e.actions||[]){
   const box=el('section','decision');box.append(el('h3',null,action.label),el('p','meta',action.reason));
-  if(action.command)box.append(copyCommand(action.command));
+  if(action.command)box.append(copyCommand(action.id.startsWith('approve-')?'uv run clip serve --actions':action.command));
   if(action.id.startsWith('approve-')||action.id==='verify-approvals'){const b=el('button','mini','Inspect approvals');b.onclick=()=>showTab('approvals');box.append(b);}
   if(action.href)box.append(el('p','meta','Local artifact: '+action.href+' — open this file locally; Studio does not serve source files.'));
   view.append(box);
@@ -755,16 +839,17 @@ async function loadBoard(gen){
 async function loadApprovals(gen){
  if(gen!==viewGen)return;const d=currentData.approvals;clear(view);
  view.append(el('p','meta',d.current+' of '+d.total+' stages would pass now. Live hashes are recomputed; nothing is approved here.'));
- const scroll=el('div','scroll');const table=el('table','approval-table');const head=el('tr');const labels=['Stage','State','Decision note','Recorded at','Would pass','Command / technical details'];
+ const scroll=el('div','scroll');const table=el('table','approval-table');const head=el('tr');const labels=['Stage','State','Decision note','Recorded at','Would pass','Technical details'];
  for(const label of labels){const th=el('th',null,label);th.scope='col';head.append(th);}const thead=el('thead');thead.append(head);table.append(thead);const tbody=el('tbody');table.append(tbody);
  for(const s of d.stages){
   const tr=el('tr');
    tr.append(el('td',null,stageNames[s.stage]||s.stage));const state=el('td');state.append(badge(s.state));tr.append(state);
-   const note=el('td',null,s.note||'No decision recorded');if(s.problem)note.append(el('p','warn',s.problem));tr.append(note);tr.append(el('td',null,stamp(s.at)));tr.append(el('td',null,s.would_pass_now?'yes':'no'));
-   const cmd=el('td');const technical=el('details');technical.append(el('summary',null,'Command and hashes'),copyCommand(s.approve_command),el('p','code','Current hash: '+(s.hash||'unavailable')),el('p','code','Approved hash: '+(s.approved_hash||'none')));cmd.append(technical);tr.append(cmd);
+   const note=el('td',null,s.note||'No decision recorded');if(s.problem)note.append(el('p','warn',s.problem));tr.append(note);tr.append(el('td',null,stamp(s.at)+(s.at?' · '+(s.via||'legacy surface'):'')));tr.append(el('td',null,s.would_pass_now?'yes':'no'));
+   const cmd=el('td');const technical=el('details');technical.append(el('summary',null,'Hashes and provenance'),el('p','meta','Human decisions use a terminal-enabled Studio session.'),el('p','code','Current hash: '+(s.hash||'unavailable')),el('p','code','Approved hash: '+(s.approved_hash||'none')));if(s.stage==='preview')technical.append(el('p','meta','Continuous playback attestation: '+(s.preview_watched===true?'recorded':'not recorded (legacy/unspecified)')));cmd.append(technical);tr.append(cmd);
    [...tr.children].forEach((td,i)=>td.dataset.label=labels[i]);tbody.append(tr);
  }
  scroll.append(table); view.append(scroll);
+ humanApprovalPanel(gen);
 }
 async function loadRuns(gen){
  clear(view); stopCockpit();
@@ -831,8 +916,11 @@ async function watchActivity(){
  }catch(e){document.getElementById('freshness').textContent='Live connection unavailable — use Refresh state';setTimeout(watchActivity,3000);}
 }
 window.addEventListener('pagehide',()=>{stopCockpit();if(activitySource)activitySource.close();});
+__HUMAN_UI__
 loadSources();loadProjects().then(applyRoute).catch(e=>errorPanel(document.getElementById('list'),e.message,()=>document.getElementById('refresh').click()));watchActivity();
-</script></body></html>""".replace("__JS_HELPERS__", JS_HELPERS)
+</script></body></html>""".replace("__JS_HELPERS__", JS_HELPERS).replace(
+    "__HUMAN_UI__", human_ui.SCRIPT
+)
 
 
 def _float(query, key):
@@ -847,14 +935,20 @@ def build_server(
     port: int = 8765,
     token: str | None = None,
     sources_dir: str | Path | None = None,
+    action_token: str | None = None,
 ):
-    """Create (but do not start) a loopback server. Returns ``(server, url)``."""
+    """Create a loopback server; internal callers may inject a test action capability.
+
+    The public CLI only enables actions after an interactive terminal confirmation.
+    Returns ``(server, read_url)``; no action capability is returned by the read API.
+    """
     token = token if token is not None else secrets.token_urlsafe(16)
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
     httpd.projects_dir = Path(projects_dir).resolve()
     httpd.db = Path(db)
     httpd.token = token
+    httpd.action_token = action_token
     httpd.sources_dir = (
         Path(sources_dir).expanduser()
         if sources_dir
@@ -871,14 +965,32 @@ def serve(
     port: int = 8765,
     token: str | None = None,
     ready: queue.Queue | None = None,
+    actions: bool = False,
 ) -> None:
-    httpd, url = build_server(projects_dir, db, port=port, token=token)
+    action_token = None
+    if actions:
+        if not sys.stdin.isatty():
+            raise ValueError("Human actions must be enabled by a person in an interactive terminal")
+        if (
+            input(
+                "Enable human approvals and quote authorizations? Type ENABLE HUMAN ACTIONS: "
+            ).strip()
+            != "ENABLE HUMAN ACTIONS"
+        ):
+            raise ValueError("Human actions were not enabled")
+        action_token = secrets.token_urlsafe(32)
+    httpd, url = build_server(projects_dir, db, port=port, token=token, action_token=action_token)
     if ready is not None:
         ready.put(url)
     print(f"Studio live: {url}")
-    print(
-        "Review-only: approvals and paid operations remain CLI-only; /app can create local projects."
-    )
+    if action_token:
+        print(
+            f"Human action session: {url.replace('/?token=', '/app?token=')}#action={action_token}"
+        )
+    else:
+        print(
+            "Review-only session. A person can enable decisions with clip serve --actions in their terminal."
+        )
     try:
         httpd.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:

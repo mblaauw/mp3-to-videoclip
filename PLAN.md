@@ -1,6 +1,13 @@
 # Approved MVP plan
 
-## Active engineering milestone: Studio usability (2026-10-21)
+## Implemented engineering milestone: Human Studio decisions (2026-10-21)
+
+The user selected UI approvals before legacy removal after PR #2 merged.
+The record is `.opencode/tasks/studio-human-approvals.md` under the updated global
+workflow. Local acceptance is complete; the reviewed branch awaits user-operated
+publication/CI/merge. The record includes checks and independent-runtime limits.
+
+## Completed engineering milestone: Studio usability (2026-10-21)
 
 User approved implementation of the GUI review's P1–P3 improvements. Scope:
 truthful stage state, decision support, navigation/create recovery, freshness,
@@ -42,9 +49,9 @@ No paid calls, uploads, new approval endpoints, legacy deletions or stack swap.
   and ran runtime checks. Screens inspected locally at desktop and phone widths.
 - Acceptance complete at implementation commit `a7020c4`: Linux CI run
   `39644165429` passed, including all 16 Chromium regressions. PR #2:
-  https://github.com/mblaauw/mp3-to-videoclip/pull/2 — open for manual merge.
+  https://github.com/mblaauw/mp3-to-videoclip/pull/2 — manually merged at `75f8c95`.
   Updated local server runs the branch at port 8800. All ready scope is complete;
-  no default-branch push, merge, spending or production-state change performed.
+  no default-branch push, spending or production-state change performed.
 
 > **Historical record.** This document captures a point-in-time decision.
 > Current behaviour is defined by `docs/STILL_FILM_WORKFLOW.md`,

@@ -137,6 +137,11 @@ def parser() -> argparse.ArgumentParser:
     serve_cmd.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
     serve_cmd.add_argument("--port", type=int, default=8765)
     serve_cmd.add_argument("--token", help="Session token; generated when omitted")
+    serve_cmd.add_argument(
+        "--actions",
+        action="store_true",
+        help="Interactively enable human Studio decisions (TTY required)",
+    )
     serve_cmd.set_defaults(project=None)
     intake = commands.add_parser("intake", help="Build a static intake wizard that emits commands")
     intake.add_argument("--output-dir", type=Path, help="Where the page is written")
@@ -194,7 +199,7 @@ def parser() -> argparse.ArgumentParser:
     for name, help_text in {
         "analyze": "Local beat/energy/rough section analysis; no upload",
         "status": "Show current approvals and stale/missing shots",
-        "approve": "Record an explicit user decision for a creative stage",
+        "approve": "Moved to human Studio: clip serve --actions",
         "import-lyrics": "Import supplied/corrected timestamped lyrics",
         "skeleton": "Make a beat-snapped timing skeleton, NOT a creative storyboard",
         "events": "Create an empty, editable musical event map (no automatic interpretations)",
@@ -206,7 +211,7 @@ def parser() -> argparse.ArgumentParser:
         "listen": "PAID UPLOAD: execute the authorized musical listening quote",
         "music-map": "Build an unreviewed combined listening/measurement map locally",
         "quote": "Inspect live image schema/pricing and save a scoped spending request",
-        "authorize": "Record spending authorization; does NOT generate/upload",
+        "authorize": "Moved to human Studio: clip serve --actions (never starts generation)",
         "transcribe": "PAID UPLOAD: submit an authorized transcription exactly once",
         "generate": "PAID: execute an authorized image scope with durable tracking",
         "recover": "Recover/download a previously submitted task, never resubmit",
@@ -560,7 +565,13 @@ def execute(args):
     if args.command == "serve":
         from . import serve
 
-        serve.serve(args.projects_dir, spine.resolve_db(args.db), port=args.port, token=args.token)
+        serve.serve(
+            args.projects_dir,
+            spine.resolve_db(args.db),
+            port=args.port,
+            token=args.token,
+            actions=args.actions,
+        )
         return None
     if args.command == "intake":
         from .intake import build_intake
@@ -1130,6 +1141,10 @@ def execute(args):
 def main():
     args = parser().parse_args()
     try:
+        if args.command in {"approve", "authorize"}:
+            raise ValueError(
+                "Human decisions now use Studio. Run `uv run clip serve --actions` in your own interactive terminal, then review and confirm in the browser."
+            )
         result = execute(args)
     except (OSError, ValueError, RuntimeError, KeyError) as e:
         # No raw provider payloads or credential-bearing URLs are printed.

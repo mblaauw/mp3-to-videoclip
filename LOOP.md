@@ -62,6 +62,10 @@ edit the same brief, board or approval file.
 
 ## Gates (each is a user decision)
 
+Ordinary stage/quote decisions use the user's terminal-enabled Studio session
+(`clip serve --actions`). The director prepares evidence and waits for its
+content-bound record; it never mints or uses the human action capability.
+
 - Story and art direction exist and are reviewed **before** brief approval.
 - Board, prompts and deliberate coverage exist **before** storyboard approval.
 - A three-shot proof, then a real local preview on the actual music, then
@@ -79,7 +83,7 @@ edit the same brief, board or approval file.
   renders the cross-project index; `clip adopt` registers a local derivative;
   `clip shot-edit` changes one shot's transition/dissolve/camera/grade and reports the
   approvals it invalidated. All are review aids or validated edits: none approves,
-  uploads or spends. Approve through `clip approve` against the hash the page shows.
+  uploads or spends. Decide in the human Studio against the reviewed content hash.
 - No meter, bar grid or downbeat appears without an approved `work/music-grid.json`;
   measured beats and tempo stay labelled estimates, and an invalid grid fails closed.
 - Long local work writes a receipt under `work/operations/`; `clip progress P

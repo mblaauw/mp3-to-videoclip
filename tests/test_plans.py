@@ -31,6 +31,80 @@ def test_build_is_a_proposal_and_records_nothing(tmp_path):
     assert sorted(path.name for path in (root / "work").iterdir()) == before
     assert "Set spending cap" in built["blocked_by"]
     assert "Approve analysis" in built["blocked_by"]
+    approval = next(step for step in built["steps"] if step["label"] == "Approve analysis")
+    assert approval["command"] == "uv run clip serve --actions"
+    assert approval["human"] is True
+    assert approval["label"] not in built["executable"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "uv run clip serve --actions",
+        "uv run clip serve --act",
+        "uv run clip serve --a",
+        "uv run clip -- serve --actions",
+        "uv run clip -- serve --act",
+        "uv run clip budget projects/x --cap 5.00 --note explicit",
+        "uv run clip budget projects/x --ca 5.00 --note explicit",
+        "uv run clip -- budget projects/x --cap 5.00 --note explicit",
+        "uv run clip -- budget projects/x --ca 5.00 --note explicit",
+    ],
+)
+def test_human_modes_are_rederived_before_execution(tmp_path, monkeypatch, command):
+    root = make_root(tmp_path)
+    proposed = plans._step(command, "Human mode", "Must wait")
+    assert proposed["human"] is True
+    built = plans.build(root)
+    # Stored labels can remove a stop, never grant authority to execute the command.
+    proposed.update(human=False, needs_input=False, kind="read", tool="status")
+    built["steps"] = [proposed]
+    plans.save(root, built)
+    monkeypatch.setattr(
+        plans.spine,
+        "run_command",
+        lambda *args, **kwargs: pytest.fail("human mode must never spawn"),
+    )
+    result = plans.run(root, built["id"], db=tmp_path / "spine.sqlite3", allow_edit=True)
+    assert result["status"] == "waiting"
+    assert result["executed"] == []
+    assert "cannot be delegated" in result["stopped_at"]["why"]
+
+
+def test_read_only_modes_remain_nonhuman_and_parser_is_authoritative(capsys):
+    assert parser().parse_args(["serve", "--act"]).actions is True
+    assert parser().parse_args(["--", "serve", "--actions"]).actions is True
+    assert (
+        parser().parse_args(["budget", "projects/x", "--ca", "5.00", "--note", "test"]).cap
+        == "5.00"
+    )
+    assert (
+        plans._step("uv run clip serve --projects-dir projects", "Review", "Read only")["human"]
+        is False
+    )
+    assert (
+        plans._step("uv run clip budget projects/x", "Budget report", "Read only")["human"] is False
+    )
+    assert plans._step("uv run clip -- serve", "Review", "Read only")["human"] is False
+    assert (
+        plans._step("uv run clip -- budget projects/x", "Budget report", "Read only")["human"]
+        is False
+    )
+    assert (
+        plans._step("uv run clip serve --token=not--actions", "Review", "Literal token")["human"]
+        is False
+    )
+    assert (
+        plans._step("uv run clip serve --port invalid --actions", "Malformed", "Must fail closed")[
+            "human"
+        ]
+        is True
+    )
+    assert (
+        plans._step("uv run clip serve --help --actions", "Help", "Exits before serving")["human"]
+        is False
+    )
+    assert capsys.readouterr().out == ""
 
 
 def test_save_is_immutable_and_history_lists_plans(tmp_path):

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from mp3_to_videoclip.evals import MAX_LOOP_LINES
+
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = json.loads((ROOT / "opencode.json").read_text())
 AGENTS = (
@@ -105,7 +107,7 @@ def run_check(root):
 def test_loop_is_loaded_and_film_director_is_the_project_default():
     assert CONFIG["instructions"] == ["LOOP.md"]
     loop = (ROOT / "LOOP.md").read_text()
-    assert len(loop.splitlines()) <= 120
+    assert len(loop.splitlines()) <= MAX_LOOP_LINES
     assert CONFIG["default_agent"] == "film-director"
     agents = CONFIG["agents"]
     assert set(agents) == set(AGENTS)
