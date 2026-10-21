@@ -63,7 +63,7 @@ def stills(root: Path) -> dict:
     root = Path(root)
     project = P.load_project(root)
     base = {
-        "slug": project.slug,
+        "slug": root.name,
         "title": project.title,
         "fps": project.fps,
         "total_frames": project.total_frames,
@@ -102,7 +102,7 @@ def stills(root: Path) -> dict:
                 "framing": shot.framing or "",
                 "purpose": shot.purpose,
                 "has_image": bool(version) and _readable_image(root, version.get("path")),
-                "thumb": f"/api/project/{project.slug}/thumb/{shot.id}",
+                "thumb": f"/api/project/{root.name}/thumb/{shot.id}",
             }
         )
     return {
@@ -169,7 +169,7 @@ def shot_detail(root: Path, shot_id: str) -> dict:
         },
         "prompt": prompt,
         "prompt_error": prompt_error,
-        "thumb": f"/api/project/{project.slug}/thumb/{shot.id}",
+        "thumb": f"/api/project/{root.name}/thumb/{shot.id}",
     }
 
 
@@ -213,7 +213,7 @@ def board(root: Path) -> dict:
     root = Path(root)
     project = P.load_project(root)
     base = {
-        "slug": project.slug,
+        "slug": root.name,
         "title": project.title,
         "fps": project.fps,
         "duration": project.duration,
@@ -281,14 +281,7 @@ def approvals(root: Path) -> dict:
             current = None
         approval = record.get(stage) or {}
         approved_hash = approval.get("hash")
-        if current is None:
-            state = "unavailable"
-        elif not approval:
-            state = "missing"
-        elif approved_hash == current:
-            state = "approved"
-        else:
-            state = "stale"
+        state, problem = studio.approval_state(root, stage, current, approval)
         stages.append(
             {
                 "stage": stage,
@@ -297,16 +290,15 @@ def approvals(root: Path) -> dict:
                 "approved_hash": approved_hash,
                 "at": approval.get("at"),
                 "note": approval.get("note"),
-                "would_pass_now": bool(approval)
-                and current is not None
-                and approved_hash == current,
+                "problem": problem,
+                "would_pass_now": state == "approved",
                 "approve_command": (
-                    f"uv run clip approve projects/{project.slug} {stage} --note '<your decision>'"
+                    f"uv run clip approve projects/{root.name} {stage} --note '<your decision>'"
                 ),
             }
         )
     return {
-        "slug": project.slug,
+        "slug": root.name,
         "title": project.title,
         "stages": stages,
         "current": sum(1 for stage in stages if stage["would_pass_now"]),

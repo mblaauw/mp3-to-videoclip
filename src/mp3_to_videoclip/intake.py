@@ -97,10 +97,11 @@ SCRIPT = """
      'MUSIC — '+v('music')+'\\nFILM DIRECTION — '+v('direction')+
      '\\nA JOINT MAH\u0041 KALA & VJDJ69 PRODUCTION';
  }
- document.getElementById('copy').addEventListener('click',function(){
+  document.getElementById('copy').addEventListener('click',async function(){
    var text=document.getElementById('commands').textContent;
-   if(navigator.clipboard)navigator.clipboard.writeText(text);
-   this.textContent='Copied';
+    this.setAttribute('aria-live','polite');
+    try{if(!navigator.clipboard)throw new Error('clipboard unavailable');await navigator.clipboard.writeText(text);this.textContent='Copied';}
+    catch(e){this.textContent='Copy unavailable — select commands manually';}
  });
  update();
 })();

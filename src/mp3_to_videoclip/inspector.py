@@ -88,10 +88,11 @@ SCRIPT = """
      " --source '"+adopt.value+"' --operation '<crop|mirror|grade>' --note '<why>' --permission-confirmed");
  });}
  document.querySelectorAll('[data-copy]').forEach(function(btn){
-   btn.addEventListener('click',function(){
+    btn.addEventListener('click',async function(){
      var el=document.getElementById(btn.getAttribute('data-copy'));
-     if(el&&navigator.clipboard)navigator.clipboard.writeText(el.textContent);
-     btn.textContent='Copied';
+      if(!el)return;btn.setAttribute('aria-live','polite');
+      try{if(!navigator.clipboard)throw new Error('clipboard unavailable');await navigator.clipboard.writeText(el.textContent);btn.textContent='Copied';}
+      catch(e){btn.textContent='Copy unavailable — select command manually';el.tabIndex=0;el.focus();}
    });
  });
 })();

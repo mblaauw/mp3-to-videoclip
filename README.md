@@ -106,12 +106,14 @@ read-only except for one parked create route.
 
 ```sh
 uv run clip spine sync                    # index existing work/operations receipts as runs
-uv run clip serve --port 8765             # read-only SSE studio; prints a tokenised URL
+uv run clip serve --port 8765             # review studio; prints a tokenised URL
 ```
 
 `clip serve` binds `127.0.0.1`, requires a per-session token, exposes `GET` only
 (`/api/health`, `/api/status`, `/api/runs`, `/api/events`, `/api/stream`, `/api/studio`,
-`/api/sources`) and answers every write verb with `405` except the parked `/api/create`.
+`/api/sources`) and answers every write verb with `405` except `POST /api/create`
+(local setup through the kernel, not generation). `PUT`, `PATCH` and `DELETE`
+never create projects. The health response declares this setup-write exception.
 The `/app` shell is a read-only review surface over the same server:
 `/api/project/<slug>` (status), `/stills`, `/board`, `/approvals`, `/shot/<id>` (contract
 and compiled prompt) and `/thumb/<id>` (path-guarded, re-encoded in memory). It renders a
@@ -119,6 +121,24 @@ verdict-badged still grid, a section/shot timeline, live stage hashes and the ru
 it cannot approve, select, spend or edit, because those remain CLI commands under the
 project lock. Thumbnail routes resolve the selected version through `work/assets.json`,
 reject any path outside the production and write no cache.
+
+Open Studio from the journal link. Project/view URLs (`/app?token=…#/SLUG/approvals`)
+survive reload and browser back/forward. The library's quick scan does not hash
+large media: **not checked** means a decision is on record, not that its bytes are
+current. Opening a project checks its approvals and updates that card from the
+same snapshot; unchecked media can never imply delivery. Use **Refresh state**
+to recheck, especially after the live activity indicator changes. File edits
+outside the journal may not emit live events; the displayed check time is a
+snapshot, not a promise of continuous freshness. Decision notes are shown before
+technical hashes; command templates still require the user's explicit decision.
+“Would pass” invokes the kernel's full gate checks, including parent approvals,
+accepted image reviews and graphics-review evidence—not just hash equality.
+Create is collapsed local setup and opens the returned project, without a reload.
+No project files, exports or source audio are served by generic file routes.
+
+Browser regression tests run in CI on temporary projects. Locally:
+`uv run --with playwright playwright install chromium`, then
+`uv run --with playwright pytest tests/test_studio_browser.py -q`.
 
 ### Inspecting and answering runs
 

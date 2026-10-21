@@ -469,11 +469,11 @@ SCRIPT = """
    });
  });
  document.querySelectorAll('[data-copy]').forEach(function(btn){
-   btn.addEventListener('click',function(){
+    btn.addEventListener('click',async function(){
      var text=document.getElementById(btn.getAttribute('data-copy')).textContent;
-     if(navigator.clipboard){navigator.clipboard.writeText(text);}
-     btn.textContent='Copied';
-     setTimeout(function(){btn.textContent='Copy command';},1400);
+      btn.setAttribute('aria-live','polite');
+      try{if(!navigator.clipboard)throw new Error('clipboard unavailable');await navigator.clipboard.writeText(text);btn.textContent='Copied';}
+      catch(e){btn.textContent='Copy unavailable — select command manually';}
    });
  });
 })();
