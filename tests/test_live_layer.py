@@ -92,7 +92,8 @@ def test_live_server_is_read_only_and_token_scoped(tmp_path):
     try:
         base = url.split("?")[0]
         status, body, _ = get(base + "api/health")
-        assert status == 200 and json.loads(body)["read_only"] is True
+        assert status == 200 and json.loads(body)["review_only"] is True
+        assert json.loads(body)["read_only"] is False
 
         with pytest.raises(urllib.error.HTTPError) as denied:
             get(base + "api/status")
@@ -136,6 +137,149 @@ def test_live_page_is_self_contained(tmp_path):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_human_auth_recovery_headers_and_refused_write_aliases(tmp_path):
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    httpd, url, thread = serve.start_in_thread(projects, tmp_path / "db.sqlite3", token="secret")
+    try:
+        base = url.split("?")[0]
+        with pytest.raises(urllib.error.HTTPError) as error:
+            get(base + "app")
+        response = error.value
+        assert response.code == 401
+        assert response.headers["Content-Type"].startswith("text/html")
+        assert b"uv run clip serve" in response.read()
+        assert response.headers["Referrer-Policy"] == "no-referrer"
+        assert response.headers["X-Frame-Options"] == "DENY"
+        assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+        for method in ("PUT", "PATCH", "DELETE"):
+            with pytest.raises(urllib.error.HTTPError) as rejected:
+                get(base + "api/create", token="secret", method=method)
+            assert rejected.value.code == 405
+        assert list(projects.iterdir()) == []
+        with pytest.raises(urllib.error.HTTPError) as unknown:
+            get(base + "unknown", token="secret")
+        assert unknown.value.code == 404
+        assert b"This Studio page was not found" in unknown.value.read()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
+
+
+def test_detail_uses_one_verified_stage_snapshot(tmp_path):
+    from test_creative_production import approve_through_proof
+
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    root = make_root(projects)
+    approve_through_proof(root)
+    approvals = read_json(root / "work/approvals.json")
+    approvals["proof"]["hash"] = "old-proof"
+    write_json(root / "work/approvals.json", approvals)
+    httpd, url, thread = serve.start_in_thread(projects, tmp_path / "db.sqlite3", token="t")
+    try:
+        base = url.split("?")[0]
+        summary = json.loads(get(base + "api/studio", token="t")[1])["productions"][0]
+        assert summary["stages"]["proof"] == "recorded"
+        detail = json.loads(get(base + "api/project/production", token="t")[1])
+        assert detail["checked_at"]
+        assert detail["entry"]["stages"] == {
+            row["stage"]: row["state"] for row in detail["approvals"]["stages"]
+        }
+        assert detail["entry"]["stages"]["proof"] == "stale"
+        assert detail["entry"]["next_step"] == "proof approval"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
+
+
+def test_matching_hash_does_not_override_a_rejected_proof_review(tmp_path):
+    from test_creative_production import approve_prerequisites
+    from test_workflow_v2 import accept, strict_root
+
+    root = strict_root(tmp_path)
+    approve_prerequisites(root)
+    P.approve(root, "storyboard", "approved board")
+    ids = P.proof_ids(P.load_board(root), P.load_brief(root))
+    record_stills(root, ids)
+    accept(root, ids)
+    P.approve(root, "proof", "accepted exact versions")
+    proof_hash = P.stage_hash(root, "proof")
+    record_review(root, "s001", 1, "reject", note="new defect", reviewer="test", inspected=True)
+    assert P.stage_hash(root, "proof") == proof_hash
+    with pytest.raises(ValueError, match="accepted review"):
+        P.require_approval(root, "proof")
+    proof = next(s for s in appdata.approvals(root)["stages"] if s["stage"] == "proof")
+    assert proof["hash"] == proof["approved_hash"]
+    assert proof["state"] == "blocked"
+    assert proof["would_pass_now"] is False
+    assert "accepted review" in proof["problem"]
+
+
+@pytest.mark.parametrize("invalid", [{"note": " "}, {"cap": "NaN"}, {"cap": "0"}])
+def test_invalid_setup_does_not_leave_a_project(tmp_path, monkeypatch, invalid):
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"validation must happen before decoding")
+    calls = []
+    monkeypatch.setattr(P, "init_project", lambda *args, **kwargs: calls.append(args))
+    httpd, url, thread = serve.start_in_thread(projects, tmp_path / "db.sqlite3", token="t")
+    try:
+        body = {"title": "Invalid setup", "audio": str(source), "cap": "1.00", **invalid}
+        request = urllib.request.Request(
+            url.split("?")[0] + "api/create?token=t",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request, timeout=5)
+        assert error.value.code == 400
+        assert calls == []
+        assert list(projects.iterdir()) == []
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
+
+
+def test_partial_setup_names_the_created_project(tmp_path, monkeypatch):
+    from mp3_to_videoclip import budget
+
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"fake source; init is stubbed")
+
+    def init(root, *_args, **_kwargs):
+        (root / "work").mkdir(parents=True)
+
+    def fail(*_args, **_kwargs):
+        raise OSError("simulated disk failure")
+
+    monkeypatch.setattr(P, "init_project", init)
+    monkeypatch.setattr(budget, "set_budget", fail)
+    httpd, url, thread = serve.start_in_thread(projects, tmp_path / "db.sqlite3", token="t")
+    try:
+        request = urllib.request.Request(
+            url.split("?")[0] + "api/create?token=t",
+            data=json.dumps({"title": "Partial", "audio": str(source), "cap": "1.00"}).encode(),
+        )
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request, timeout=5)
+        assert error.value.code == 400
+        text = json.loads(error.value.read())["error"]
+        assert "'partial' was created" in text
+        assert "do not create it again" in text
+        assert (projects / "partial").is_dir()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
 
 
 def test_studio_scan_is_shared_with_the_page(tmp_path):

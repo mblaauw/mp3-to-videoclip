@@ -59,7 +59,24 @@ def _stamp(timestamp: float | None) -> str:
     return datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%d %H:%M")
 
 
-def scan_project(root: Path, now: float | None = None) -> dict | None:
+def approval_state(root: Path, stage: str, current: str | None, record) -> tuple[str, str | None]:
+    """A matching hash is necessary, not sufficient: use the actual CLI gate."""
+    if current is None:
+        return "unavailable", "Required review artifacts are missing or invalid"
+    if not isinstance(record, dict) or not record:
+        return "missing", None
+    if record.get("hash") != current:
+        return "stale", "Artifact bytes changed after the recorded decision"
+    try:
+        P.require_approval(root, stage)
+    except (OSError, ValueError, KeyError) as exc:
+        return "blocked", str(exc)
+    return "approved", None
+
+
+def scan_project(
+    root: Path, now: float | None = None, *, verified_stages: list[dict] | None = None
+) -> dict | None:
     """Summarise one production from small artifacts only."""
     now = now or datetime.now(UTC).timestamp()
     config = _optional(root / "project.json")
@@ -80,11 +97,10 @@ def scan_project(root: Path, now: float | None = None) -> dict | None:
         except (OSError, ValueError, KeyError):
             stage_state[stage] = "unavailable"
             continue
-        stage_state[stage] = (
-            "approved"
-            if record and record.get("hash") == current
-            else ("stale" if record else "missing")
-        )
+        stage_state[stage] = approval_state(root, stage, current, record)[0]
+
+    if verified_stages is not None:
+        stage_state = {item["stage"]: item["state"] for item in verified_stages}
 
     spend = {"cap_usd": None, "accounted_usd": None, "remaining_usd": None, "over_cap": None}
     try:
@@ -204,9 +220,13 @@ def scan_project(root: Path, now: float | None = None) -> dict | None:
     if next_stage is None:
         latest = renders[0] if renders else None
         next_step = (
-            "delivered"
-            if latest and latest["exists"] and latest["delivery_ready"]
-            else ("final export" if latest else "render")
+            "verify approvals"
+            if "recorded" in stage_state.values()
+            else (
+                "delivered"
+                if latest and latest["exists"] and latest["delivery_ready"]
+                else ("final export" if latest else "render")
+            )
         )
     else:
         next_step = f"{next_stage} approval"
@@ -224,9 +244,8 @@ def scan_project(root: Path, now: float | None = None) -> dict | None:
         "total_frames": config.get("total_frames"),
         "shots": shots,
         "stages": stage_state,
-        "approved_count": sum(
-            1 for state in stage_state.values() if state in ("approved", "recorded")
-        ),
+        "approved_count": sum(1 for state in stage_state.values() if state == "approved"),
+        "approvals_checked": verified_stages is not None,
         "missing_stages": missing,
         "spend": spend,
         "verdicts": verdicts,
@@ -294,7 +313,7 @@ border:1px solid var(--line);color:var(--muted)}
 .pill.stale{color:var(--bad);border-color:#5b2f2f;background:#221314}
 .pill.recorded{color:var(--gold);border-color:#4a3d25;background:#1d1912}
 .pill.missing{color:var(--muted)}
-.pill.unavailable{color:#5d6b77;border-style:dashed}
+.pill.unavailable{color:var(--muted);border-style:dashed}
 .spend{margin:12px 0 4px}
 .track{height:6px;border-radius:3px;background:#0c141a;border:1px solid var(--line);overflow:hidden}
 .track i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--gold))}
@@ -327,11 +346,12 @@ SCRIPT = """
   });
  });
  document.querySelectorAll('[data-copy]').forEach(function(btn){
-  btn.addEventListener('click',function(){
+   btn.addEventListener('click',async function(){
    var el=document.getElementById(btn.getAttribute('data-copy'));
    if(!el)return;
-   if(navigator.clipboard)navigator.clipboard.writeText(el.textContent);
-   btn.textContent='Copied';
+    btn.setAttribute('aria-live','polite');
+    try{if(!navigator.clipboard)throw new Error('clipboard unavailable');await navigator.clipboard.writeText(el.textContent);btn.textContent='Copied';}
+    catch(e){btn.textContent='Copy unavailable — select command manually';el.style.display='block';el.style.whiteSpace='pre-wrap';el.style.overflowWrap='anywhere';el.tabIndex=0;el.focus();}
   });
  });
 })();
@@ -344,6 +364,18 @@ def _actions(entry: dict) -> list[dict]:
     project = f"projects/{slug}"
     stage = entry["next_step"].split(" ")[0]
     actions: list[dict] = []
+
+    if stage == "verify":
+        actions.append(
+            {
+                "id": "verify-approvals",
+                "label": "Check current approvals",
+                "command": f"uv run clip status {project}",
+                "reason": "media decisions are on record but their current bytes have not been checked",
+                "needs_input": False,
+                "severity": "warn",
+            }
+        )
 
     if entry["spend"].get("cap_usd") is None:
         actions.append(

@@ -1,5 +1,51 @@
 # Approved MVP plan
 
+## Active engineering milestone: Studio usability (2026-10-21)
+
+User approved implementation of the GUI review's P1–P3 improvements. Scope:
+truthful stage state, decision support, navigation/create recovery, freshness,
+keyboard/accessibility, responsive typography, searchable intake, honest errors
+and copy feedback, and refused write aliases/security headers. Preserve the
+vanilla templates, dark palette, CLI decision gates and existing productions.
+No paid calls, uploads, new approval endpoints, legacy deletions or stack swap.
+
+- Authority: local implementation/tests; feature branch and reviewed PR only;
+  manual merge. No production approvals or spending changes.
+- Branch/base: `feat/studio-ux-improvements` / `6d26a1b`.
+- Started: 2026-10-21 16:59 UTC; checkpoint by 18:29 UTC (90-minute ceiling).
+- Ready order: P1 state contract/navigation → P2 decisions/freshness → P3
+  accessibility/polish/headers → independent review + verification.
+- Acceptance: list/detail/approval state agree when verified; recorded media
+  never imply freshness/delivery; URL reload/back preserve project/tab; create
+  opens returned slug; failures offer recovery; keyboard navigation works;
+  approval rationale visible; responsive review works at 390/900/1280px;
+  unsupported write verbs return 405; tests/lint and browser checks pass.
+- Spend cap: zero. Existing media/approval/budget files remain untouched.
+- Status: P1–P3 implemented on the feature branch. Initial frozen revision passed
+  847 tests including Chromium; source review found five defects, now corrected:
+  kernel gate checks beyond hashes, source-search submission, setup-note
+  validation, run-log recovery and the static copy fallback. Also tightened
+  mobile approval notes, async route guards and reconnect feedback.
+- Evidence: initial review session `ses_ea08ae2e8ffeCANExvVBuduYw1` returned
+  source findings (shell unavailable); verifier dispatch was provider-blocked.
+  Focused correction checks: 57 tests passed. New regressions use temporary
+  projects only; no existing production/budget/review artifacts changed.
+- Also verified image URLs/commands use the served project directory identity,
+  not a potentially different imported config slug; added a real thumbnail and
+  board-to-shot browser test.
+- Final local acceptance: 859 tests passed with Chromium enabled; lint,
+  formatting and all six eval invariants passed. Reviewed staged implementation
+  identity: `6b3639b6ec93c7d720954e31aac68d9e299ae3227ba1ef4b55d40d47f4630661`.
+  Focused independent source re-review resolved the five findings and two
+  optional issues, with no remaining P1/P2 in scope; its sandbox could not
+  recompute the diff hash or run browser tests. Parent verified unchanged bytes
+  and ran runtime checks. Screens inspected locally at desktop and phone widths.
+- Acceptance complete at implementation commit `a7020c4`: Linux CI run
+  `39644165429` passed, including all 16 Chromium regressions. PR #2:
+  https://github.com/mblaauw/mp3-to-videoclip/pull/2 — open for manual merge.
+  Updated local server runs the branch at port 8800. All ready scope is complete;
+  no default-branch push, merge, spending or production-state change performed.
+
 > **Historical record.** This document captures a point-in-time decision.
 > Current behaviour is defined by `docs/STILL_FILM_WORKFLOW.md`,
 > `docs/PRODUCTION_WORKFLOW_V2.md` and the code; counts and defaults here

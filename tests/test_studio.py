@@ -34,6 +34,37 @@ def test_scan_project_returns_none_without_project_json(tmp_path):
     assert studio.scan_project(tmp_path / "empty") is None
 
 
+def test_unchecked_media_cannot_claim_delivery(tmp_path):
+    root = make_root(tmp_path)
+    approve_through_proof(root)
+    approvals = read_json(root / "work/approvals.json")
+    for stage in studio.ORDER:
+        if stage in studio.RECORDED_ONLY:
+            approvals[stage] = {"hash": "recorded-not-checked"}
+    write_json(root / "work/approvals.json", approvals)
+    # Every light stage matches; media decisions exist, but are not evidence of
+    # current media bytes, even if a delivery report says the export was ready.
+    (root / "renders").mkdir(exist_ok=True)
+    (root / "renders/final.mp4").write_bytes(b"not a real movie")
+    write_json(root / "renders/final.json", {"output": "final.mp4", "delivery_ready": True})
+    entry = studio.scan_project(root)
+    assert entry["next_step"] == "verify approvals"
+    assert entry["approvals_checked"] is False
+    assert entry["approved_count"] == 4
+    assert any(action["id"] == "verify-approvals" for action in entry["actions"])
+
+
+def test_verified_snapshot_drives_next_gate_and_counts(tmp_path):
+    root = make_root(tmp_path)
+    stages = [{"stage": stage, "state": "approved"} for stage in studio.ORDER]
+    stages[4]["state"] = "stale"
+    entry = studio.scan_project(root, verified_stages=stages)
+    assert entry["next_step"] == "proof approval"
+    assert entry["approved_count"] == 7
+    assert entry["approvals_checked"] is True
+    assert ("warn", "stale approval: proof") in entry["blockers"]
+
+
 def test_image_stages_are_recorded_not_hashed(tmp_path, monkeypatch):
     """An index must never read gigabytes of stills to draw a card."""
     root = make_root(tmp_path)

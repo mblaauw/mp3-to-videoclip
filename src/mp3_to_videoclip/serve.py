@@ -18,6 +18,8 @@ import re
 import secrets
 import threading
 import time
+import unicodedata
+from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -59,9 +61,12 @@ h1{font-size:28px;margin:4px 0 14px}h2{font-size:13px;text-transform:uppercase;l
 #log div{padding:1px 0;border-bottom:1px solid #121c24}
 .ev{color:var(--teal)}.out{color:var(--muted)}.err{color:var(--bad)}.meta{color:var(--gold)}
 footer{margin-top:22px;color:var(--muted);font-size:12px}
-</style></head><body><div class="wrap">
+button.run{display:block;width:100%;text-align:left;color:inherit;background:none;border:0;font:inherit;min-height:32px}
+a{color:var(--gold)}:focus-visible{outline:2px solid var(--gold);outline-offset:3px}#projects a{display:block;padding:6px 0}
+</style></head><body><main class="wrap">
 <div class="kicker">Studio · live</div><h1>Runs</h1>
-<p class="mono">read-only · loopback · token in URL · writes remain CLI-only</p>
+<a id="openStudio" href="/app">Open Studio library</a>
+<p class="mono">Read-only journal · loopback · approvals and paid operations remain CLI-only</p>
 <div class="grid">
 <div class="panel"><h2>Journal</h2><div id="runs">connecting…</div>
 <h2>Projects</h2><div id="projects" class="mono"></div></div>
@@ -69,10 +74,11 @@ footer{margin-top:22px;color:var(--muted);font-size:12px}
 </div>
 <footer>Every mutation goes through <span class="mono">clip</span> under the project lock and a content hash.
 This page cannot approve, select, spend or edit.</footer>
-</div>
+</main>
 <script>
 const token = new URLSearchParams(location.search).get('token') || '';
 const q = token ? ('?token=' + encodeURIComponent(token)) : '';
+document.getElementById('openStudio').href='/app'+q;
 const log = document.getElementById('log');
 let last = 0, selected = null;
 __JS_HELPERS__
@@ -83,7 +89,7 @@ async function refresh(){
   const box = document.getElementById('runs'); box.textContent='';
   if(!data.runs.length) box.append(el('div','mono','no runs yet — start one with a clip command'));
   for(const run of data.runs){
-    const row = el('div','run');
+    const row = el('button','run');
     row.append(el('b',null,run.intent||run.id));
     row.append(document.createTextNode(' '));
     row.append(el('span','tag '+run.status,run.status));
@@ -94,8 +100,8 @@ async function refresh(){
   const p = await fetch('/api/studio' + q);
   if(p.ok){
     const s = await p.json();
-    document.getElementById('projects').textContent =
-      s.productions.map(x=>x.slug+' — '+x.next_step).join('\\n');
+    const projects=document.getElementById('projects');projects.textContent='';
+    for(const x of s.productions){const a=el('a',null,x.title+' — '+x.next_step);a.href='/app'+q+'#/'+encodeURIComponent(x.slug)+'/overview';projects.append(a);}
   }
 }
 function stream(){
@@ -122,13 +128,41 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # keep stdout clean for the CLI
         return
 
+    def end_headers(self):
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        # Inline templates are intentional; no external scripts, frames or services.
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        )
+        super().end_headers()
+
+    def _page_error(self, status, message):
+        return self._text(
+            '<!doctype html><html lang="en"><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            "<title>Studio · link unavailable</title><style>"
+            "body{color-scheme:dark;background:#0a0f14;color:#f2efe6;"
+            "font:16px/1.6 system-ui;padding:8vh 8vw;max-width:50rem}"
+            "h1{color:#d4ae6a}code{overflow-wrap:anywhere}</style><main>"
+            f"<h1>{message}</h1><p>Reopen the local link printed by "
+            "<code>uv run clip serve</code> in your terminal. Keep its session token "
+            "in the URL. If the server restarted, use its new link.</p>"
+            "<p>No production was changed.</p></main></html>",
+            status,
+        )
+
     # -- helpers ---------------------------------------------------------- #
     def _authorised(self, query) -> bool:
         token = getattr(self.server, "token", None)
         if not token:
             return True
         supplied = (query.get("token") or [None])[0] or self.headers.get("X-Studio-Token")
-        return secrets.compare_digest(str(supplied), token)
+        return secrets.compare_digest(str(supplied).encode(), str(token).encode())
 
     def _json(self, payload, status=HTTPStatus.OK):
         body = json.dumps(payload, default=str).encode()
@@ -172,8 +206,17 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
         if parsed.path == "/api/health":
-            return self._json({"ok": True, "read_only": True})
+            return self._json(
+                {
+                    "ok": True,
+                    "read_only": False,
+                    "review_only": True,
+                    "setup_write": "POST /api/create",
+                }
+            )
         if not self._authorised(query):
+            if not parsed.path.startswith("/api/"):
+                return self._page_error(HTTPStatus.UNAUTHORIZED, "Your Studio link needs a token")
             return self._json({"error": "token required"}, HTTPStatus.UNAUTHORIZED)
         if parsed.path == "/":
             return self._text(PAGE)
@@ -205,7 +248,15 @@ class Handler(BaseHTTPRequestHandler):
 
             rest = segments[3:]
             if not rest:
-                return self._json({"status": P.status(root), "entry": studio.scan_project(root)})
+                approval_data = appdata.approvals(root)
+                return self._json(
+                    {
+                        "status": P.status(root),
+                        "entry": studio.scan_project(root, verified_stages=approval_data["stages"]),
+                        "approvals": approval_data,
+                        "checked_at": datetime.now(UTC).isoformat(),
+                    }
+                )
             if rest == ["stills"]:
                 return self._json(appdata.stills(root))
             if rest == ["board"]:
@@ -246,6 +297,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         if parsed.path == "/api/stream":
             return self._stream(query)
+        if not parsed.path.startswith("/api/"):
+            return self._page_error(HTTPStatus.NOT_FOUND, "This Studio page was not found")
         return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self):  # noqa: N802
@@ -257,13 +310,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(
                 {"error": "unsupported write: only /api/create"}, HTTPStatus.METHOD_NOT_ALLOWED
             )
-        length = int(self.headers.get("Content-Length") or 0)
-        if length > 20_000:
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self._json({"error": "invalid content length"}, HTTPStatus.BAD_REQUEST)
+        if length < 0 or length > 20_000:
             return self._json({"error": "payload too large"}, HTTPStatus.BAD_REQUEST)
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
         except ValueError:
             return self._json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
+        if not isinstance(body, dict):
+            return self._json({"error": "payload must be an object"}, HTTPStatus.BAD_REQUEST)
         try:
             return self._json(self._create(body), HTTPStatus.CREATED)
         except (OSError, ValueError, KeyError) as exc:
@@ -271,18 +329,28 @@ class Handler(BaseHTTPRequestHandler):
 
     def _create(self, body: dict) -> dict:
         """Create a production through the kernel: init copies the audio, then the cap."""
+        from . import budget
         from . import production as P
 
         title = str(body.get("title") or "").strip()
         audio = Path(str(body.get("audio") or "")).expanduser()
         if not title or not audio.is_file():
             raise ValueError("a title and an existing audio file are required")
-        slug = str(body.get("slug") or "").strip() or title.casefold().replace(" ", "-")
+        normalized = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
+        derived = re.sub(r"[^a-z0-9]+", "-", normalized.casefold()).strip("-")[:64].rstrip("-")
+        slug = str(body.get("slug") or "").strip() or derived
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", slug):
             raise ValueError("slug must be lowercase letters, digits and dashes")
         root = self.server.projects_dir / slug
         if root.exists():
             raise ValueError(f"production {slug!r} already exists")
+        cap = body.get("cap")
+        if cap is not None and cap != "":
+            if budget.money(cap) <= 0:
+                raise ValueError("spending cap must be positive")
+        note = body.get("note") or "created in studio"
+        if not isinstance(note, str) or not note.strip():
+            raise ValueError("record a non-empty spending authority note")
         P.init_project(
             root,
             audio,
@@ -294,16 +362,28 @@ class Handler(BaseHTTPRequestHandler):
             title=title,
             renderer_backend="remotion",
         )
-        cap = body.get("cap")
-        if cap:
-            from . import budget
+        if cap is not None and cap != "":
+            from .storage import project_lock
 
-            budget.set_budget(root, str(cap), body.get("note") or "created in studio")
+            try:
+                with project_lock(root):
+                    budget.set_budget(root, str(cap), note)
+            except (OSError, ValueError, KeyError) as exc:
+                raise ValueError(
+                    f"Project {slug!r} was created, but its cap could not be recorded. "
+                    "Refresh the library and set its cap with clip budget; do not create it again."
+                ) from exc
         return {"created": slug, "title": title, "cap": cap}
 
-    do_PUT = do_POST
-    do_DELETE = do_POST
-    do_PATCH = do_POST
+    def _unsupported_write(self):
+        query = parse_qs(urlparse(self.path).query)
+        if not self._authorised(query):
+            return self._json({"error": "token required"}, HTTPStatus.UNAUTHORIZED)
+        return self._json({"error": "method not allowed"}, HTTPStatus.METHOD_NOT_ALLOWED)
+
+    do_PUT = _unsupported_write
+    do_DELETE = _unsupported_write
+    do_PATCH = _unsupported_write
 
     # -- server-sent events ----------------------------------------------- #
     def _stream(self, query):
@@ -337,25 +417,25 @@ class Handler(BaseHTTPRequestHandler):
 APP = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Studio</title>
 <style>
-:root{--bg:#0a0f14;--panel:#111a22;--panel2:#16222c;--ink:#f2efe6;--muted:#8fa0ae;--gold:#d4ae6a;
+:root{color-scheme:dark;--bg:#0a0f14;--panel:#111a22;--panel2:#16222c;--ink:#f2efe6;--muted:#8fa0ae;--gold:#d4ae6a;
 --teal:#688f9d;--line:#1f2c37;--ok:#6fb585;--warn:#d9a441;--bad:#d4655f}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .wrap{max-width:1380px;margin:0 auto;padding:26px 22px 80px}
 .kicker{color:var(--gold);text-transform:uppercase;letter-spacing:.15em;font-size:11px;font-weight:700}
 h1{font-size:30px;margin:4px 0 18px;letter-spacing:-.02em}
-h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0 0 12px}
+h2{font-size:20px;color:var(--ink);margin:0 0 12px;overflow-wrap:anywhere}
 h3{font-size:15px;margin:18px 0 8px}
 .grid{display:grid;grid-template-columns:380px 1fr;gap:18px}@media(max-width:1000px){.grid{grid-template-columns:1fr}}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
 label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:10px 0 4px}
-input,select{width:100%;background:#0e161d;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}
+input,select{width:100%;background:#0e161d;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:16px}
 button{background:var(--gold);color:#0a0f14;border:0;border-radius:8px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer;margin-top:14px}
 button:disabled{background:#2a3540;color:#7b8b98}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.card{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;background:linear-gradient(180deg,#16222c,#111a22);cursor:pointer}
+.card{display:block;text-decoration:none;color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;background:linear-gradient(180deg,#16222c,#111a22);cursor:pointer}
 .card:hover,.card.on{border-color:var(--gold)}
 .card b{font-size:16px}.meta{color:var(--muted);font-size:12px;margin-top:4px}
-.tag{font-size:10px;text-transform:uppercase;letter-spacing:.06em;border:1px solid var(--line);border-radius:999px;padding:1px 7px;color:var(--muted);margin-right:4px;display:inline-block}
+.tag{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 7px;color:var(--muted);margin:2px 4px 2px 0;display:inline-block}
 .tag.ok{color:var(--ok);border-color:#2c5240}.tag.warn{color:var(--gold);border-color:#4a3d25}.tag.bad{color:var(--bad);border-color:#5b2f2f}
 #msg{font-size:12px;margin-top:10px;min-height:18px}#msg.err{color:var(--bad)}#msg.ok{color:var(--ok)}
 .mono,.code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)}
@@ -364,22 +444,22 @@ button.tab{background:#0f1820;color:var(--muted);border:1px solid var(--line);bo
 button.tab.on{background:var(--gold);border-color:var(--gold);color:#0a0f14;font-weight:700}
 .stats{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
 .stat{background:#0e161d;border:1px solid var(--line);border-radius:10px;padding:7px 11px;min-width:82px}
-.stat b{display:block;font-size:18px}.stat span{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.09em}
+.stat b{display:block;font-size:20px}.stat span{color:var(--muted);font-size:12px}
 .stillgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px}
 .still{background:#0e161d;border:1px solid var(--line);border-radius:10px;padding:0;margin:0;overflow:hidden;text-align:left;cursor:pointer;font-weight:400;color:var(--ink)}
 .still:hover,.still.on{border-color:var(--gold)}
-.still img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#0b1218}
+.still img{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#0b1218}
 .still .noimg{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;text-align:center;padding:6px}
 .still .cap{padding:7px 8px;font-size:11px;line-height:1.35}
 .still .cap b{font-size:12px}
 .still .cap .p{color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.badge{display:inline-block;font-size:9px;text-transform:uppercase;letter-spacing:.07em;padding:1px 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-left:4px}
+.badge{display:inline-block;font-size:12px;padding:3px 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-left:4px}
 .badge.accept{color:var(--ok);border-color:#2c5240}.badge.reject{color:var(--bad);border-color:#5b2f2f}
 .badge.uncertain{color:var(--warn);border-color:#5b4a2a}.badge.approved{color:var(--ok);border-color:#2c5240}
-.badge.stale{color:var(--bad);border-color:#5b2f2f}.badge.missing{color:var(--muted)}
-.badge.unavailable{color:#5d6b77;border-style:dashed}.badge.recorded{color:var(--gold);border-color:#4a3d25}
+.badge.stale,.badge.blocked{color:var(--bad);border-color:#5b2f2f}.badge.missing{color:var(--muted)}
+.badge.unavailable{color:#8fa0ae;border-style:dashed}.badge.recorded{color:var(--gold);border-color:#4a3d25}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px}
-button.chip{background:#0f1820;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font:inherit;font-size:11px;font-weight:500;margin:0}
+button.chip{background:#0f1820;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 10px;font:inherit;font-size:12px;font-weight:500;margin:0;min-height:32px}
 button.chip.on{background:var(--gold);border-color:var(--gold);color:#0a0f14;font-weight:700}
 .detailbox{border:1px solid var(--line);border-radius:12px;padding:14px;margin:14px 0;background:#0e161d}
 .detailbox .cols{display:grid;grid-template-columns:220px 1fr;gap:14px}@media(max-width:700px){.detailbox .cols{grid-template-columns:1fr}}
@@ -395,117 +475,180 @@ pre{background:#0a1117;border:1px solid var(--line);border-radius:8px;padding:10
 .shotbar.wide{background:#2c4d5e}.shotbar.medium{background:#315a4b}.shotbar.close_up{background:#5a4a31}.shotbar.detail{background:#4a3b5c}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em;position:sticky;top:0;background:var(--panel)}
+th{color:var(--muted);font-size:12px;position:sticky;top:0;background:var(--panel)}
 .scroll{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
-.run{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;cursor:pointer}
+.run{display:flex;width:100%;text-align:left;gap:8px;align-items:center;padding:10px;background:none;color:var(--ink);border-bottom:1px solid var(--line);font-size:14px;cursor:pointer;flex-wrap:wrap}
 .run:last-child{border:0}.run b{font-weight:600}.run.on{color:var(--gold)}
 #log{height:32vh;overflow:auto;background:#0e161d;border:1px solid var(--line);border-radius:9px;padding:9px;font:11px/1.5 ui-monospace,Menlo,monospace}
 #log div{padding:1px 0;border-bottom:1px solid #121c24}
 .ev{color:var(--teal)}.out{color:var(--muted)}.err{color:var(--bad)}.gold{color:var(--gold)}
-button.mini{background:#0f1820;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font:inherit;font-size:10px;font-weight:500;margin:0}
+button.mini{background:#0f1820;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font:inherit;font-size:12px;font-weight:500;margin:0;min-height:32px}
 .empty{color:var(--muted);padding:30px;border:1px dashed var(--line);border-radius:12px;text-align:center}
-</style></head><body><div class="wrap">
-<div class="kicker">Studio</div><h1>Library, stills and runs</h1>
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+a{color:var(--gold)}button:hover{filter:brightness(1.15)}button:disabled{cursor:wait}
+.skip{position:absolute;left:-9999px}.skip:focus{left:20px;top:8px;background:var(--bg);z-index:10}
+summary{cursor:pointer;min-height:36px;padding:6px 0;color:var(--gold)}details{margin:12px 0}
+.notice{color:var(--muted);max-width:85ch}.decision{border-left:3px solid var(--gold);padding:12px 16px;background:#0e161d;margin:12px 0}
+.decision h3{margin:0 0 6px}.decision pre{max-height:none}.blocker,.warn{color:var(--warn)}.note{color:var(--muted)}
+.tag.succeeded{color:var(--ok)}.tag.failed,.tag.interrupted{color:var(--bad)}.tag.running{color:var(--teal)}.tag.waiting{color:var(--warn)}
+.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}.toolbar button{margin:0}
+#detailTitle{font-family:inherit;font-size:22px;color:var(--ink)}#freshness{color:var(--muted);font-size:12px}
+.scroll{max-width:100%}.panel{min-width:0}.meta,.code,dd,td{overflow-wrap:anywhere}.card .meta{font-weight:400}
+.approval-table{table-layout:fixed}.approval-table th,.approval-table td{width:14%}.approval-table th:nth-child(3),.approval-table td:nth-child(3){width:30%}
+@media(max-width:700px){.approval-table thead{display:none}.approval-table,.approval-table tbody,.approval-table tr,.approval-table td{display:block;width:100%!important}.approval-table tr{padding:12px;border-bottom:1px solid var(--line)}.approval-table td{padding:6px 0;border:0}.approval-table td:before{content:attr(data-label);display:block;color:var(--muted);font-weight:600}}
+#list{max-height:calc(100dvh - 340px);overflow-y:auto;padding:3px}.grid>section{align-self:start}
+@media(max-width:1000px){#list{max-height:300px;overflow:auto}.wrap{padding:20px 16px 40px}}
+</style></head><body><a class="skip" href="#detailTitle">Skip to project</a><main class="wrap">
+<header><div class="kicker">Studio</div><h1>Your productions</h1>
+<p class="notice">Review only — approvals and spending authorization remain in the CLI. Creating a project is local setup, not generation.</p></header>
 <div class="grid">
-<div class="panel">
-<h2>New production</h2>
-<label for="src">Source (liked, real tracks)</label><select id="src"></select>
-<label for="title">Film title</label><input id="title" placeholder="Forward Ever">
+<aside class="panel" aria-label="Production library">
+<details id="newProduction"><summary>New production</summary><form id="createForm">
+<label for="sourceSearch">Search source tracks</label><input id="sourceSearch" type="search" placeholder="Title or tags" aria-describedby="sourceHelp">
+<p id="sourceHelp" class="meta">Local liked MP3 tracks only. Search to find more results; nothing is uploaded.</p>
+<label for="src">Source track</label><select id="src" required></select>
+<label for="title">Film title</label><input id="title" required maxlength="120" placeholder="Give your film a title">
 <div class="row"><div><label for="aspect">Aspect</label><select id="aspect"><option>16:9</option><option>9:16</option></select></div>
 <div><label for="fps">FPS</label><select id="fps"><option>24</option><option>30</option></select></div></div>
 <div class="row"><div><label for="mode">Mode</label><select id="mode"><option>vocal</option><option>instrumental</option><option>music-led</option></select></div>
-<div><label for="cap">Cap USD</label><input id="cap" type="number" value="5.00" step="0.01" min="0.01"></div></div>
-<button id="create">Create production</button><div id="msg"></div>
+<div><label for="cap">Spending cap (USD)</label><input id="cap" type="number" required placeholder="Your limit" step="0.01" min="0.01"></div></div>
+<button id="create" type="submit">Create production</button><div id="msg" role="status" aria-live="polite"></div>
 <p class="mono" style="margin-top:12px">Creates via the clip kernel: byte-identical copy, project.json, budget. Nothing is generated or spent.</p>
-<h2 style="margin-top:22px">Productions</h2><div id="list">loading…</div>
+</form></details>
+<h2>Library</h2><p class="meta">Media approvals marked “not checked” need a live check. Open a project to verify them.</p><nav id="list" aria-label="Productions">loading…</nav>
+</aside>
+<section class="panel" aria-labelledby="detailTitle">
+<h2 id="detailTitle" tabindex="-1">Select a production</h2>
+<div class="toolbar"><button id="refresh" class="mini" type="button">Refresh state</button><span id="freshness" role="status" aria-live="polite">Not checked yet</span></div>
+<div class="tabbar" id="tabs" role="tablist" aria-label="Project views">
+<button class="tab on" id="tab-overview" role="tab" aria-selected="true" aria-controls="view" data-tab="overview">Overview</button>
+<button class="tab" id="tab-stills" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="stills">Stills</button>
+<button class="tab" id="tab-board" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="board">Board</button>
+<button class="tab" id="tab-approvals" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="approvals">Approvals</button>
+<button class="tab" id="tab-runs" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="runs">Runs</button>
 </div>
-<div class="panel">
-<div id="detailTitle" class="mono">Select a production</div>
-<div class="tabbar" id="tabs">
-<button class="tab on" data-tab="overview">Overview</button>
-<button class="tab" data-tab="stills">Stills</button>
-<button class="tab" data-tab="board">Board</button>
-<button class="tab" data-tab="approvals">Approvals</button>
-<button class="tab" data-tab="runs">Runs</button>
-</div>
-<div id="view"><div class="empty">Choose a production on the left. This page is read-only: it cannot approve, select, spend or edit.</div></div>
-</div>
-</div></div>
+<div id="view" role="tabpanel" aria-labelledby="tab-overview"><div class="empty">Choose a production from the library. This page is read-only: it cannot approve, select, spend or edit.</div></div>
+</section>
+</div></main>
 <script>
 const token=new URLSearchParams(location.search).get('token')||'';
 const q=token?('?token='+encodeURIComponent(token)):'';
 const hdr=token?{'X-Studio-Token':token}:{};
 const view=document.getElementById('view');
 let current=null, tab='overview', stillsData=null, stillFilter=null, cockpitSource=null, cockpitRun=null, viewGen=0;
+let projects=[], currentData=null, sourceGen=0, shotGen=0, pendingShot=null, sourceTracks=[], activityVersion=0, cockpitEpoch=0, creating=false;
+const verifiedEntries=new Map();
+const stageNames={analysis:'Music analysis',events:'Music events',brief:'Creative brief',storyboard:'Storyboard',proof:'Three-shot proof',preview:'Music preview',stills:'Full still set',graphics:'Titles and credits'};
+const stageHelp={analysis:'Review the recording measurements.',events:'Review the musical edit opportunities.',brief:'Choose the story and visual direction.',storyboard:'Review shot coverage, prompts and timing.',proof:'Review three generated proof images.',preview:'Watch the local preview with the actual music.',stills:'Review every selected image version.',graphics:'Review composited opening and end credits.'};
 __JS_HELPERS__
 function withToken(path){if(!token)return path;return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token);}
 async function api(path){const r=await fetch(withToken(path));const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d;}
+function clock(seconds){const n=Math.round(Number(seconds)||0);return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');}
+function money(value){return value===null||value===undefined?'not recorded':new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(Number(value));}
+function spendText(spend){const used=spend.accounted_usd,cap=spend.cap_usd;if(cap===null||cap===undefined)return money(used)+' spent · no cap recorded';return money(used)+' of '+money(cap)+(Number(cap)>0&&used!==null&&used!==undefined?' ('+Math.round(Number(used)/Number(cap)*100)+'%)':'');}
+function stamp(value){return value?new Date(value).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'No decision recorded';}
+function errorPanel(node,message,retry){clear(node);node.setAttribute('aria-busy','false');const box=el('div','empty');box.setAttribute('role','alert');box.append(el('p',null,message));if(retry){const b=el('button','mini','Try again');b.onclick=retry;box.append(b);}node.append(box);}
+function copyCommand(command){
+ const box=el('div');const pre=el('pre',null,command);pre.tabIndex=0;box.append(pre);
+ const btn=el('button','mini','Copy command');btn.type='button';const feedback=el('span','meta');feedback.setAttribute('role','status');
+ btn.onclick=async function(){try{if(!navigator.clipboard)throw new Error('clipboard unavailable');await navigator.clipboard.writeText(command);feedback.textContent=' Copied';}catch(e){feedback.textContent=' Copy unavailable — select the command above and copy manually.';}};
+ box.append(btn,feedback);return box;
+}
 function badge(v){const t=v||'unreviewed';return el('span','badge '+t,t);}
-function stateTag(state){const cls=(state==='approved'||state==='recorded')?'ok':(state==='stale'?'bad':(state==='missing'?'':'warn'));return el('span','tag '+cls,state);}
+function stateTag(state){const cls=state==='approved'?'ok':(['stale','blocked'].includes(state)?'bad':(state==='recorded'?'warn':''));const n=el('span','tag '+cls,state==='recorded'?'not checked':state);if(state==='recorded')n.title='Approval on record; current media bytes have not been checked.';return n;}
 function clear(node){while(node.firstChild)node.removeChild(node.firstChild);}
 function stat(b,label){const n=el('div','stat');n.append(el('b',null,String(b)));n.append(el('span',null,label));return n;}
-function stopCockpit(){if(cockpitSource){cockpitSource.close();cockpitSource=null;}cockpitRun=null;}
-function setTab(name){tab=name;document.querySelectorAll('button.tab').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-tab')===name);});}
+function stopCockpit(){cockpitEpoch++;if(cockpitSource){cockpitSource.close();cockpitSource=null;}cockpitRun=null;}
+function setTab(name){tab=name;document.querySelectorAll('button.tab').forEach(function(b){const on=b.dataset.tab===name;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});view.setAttribute('aria-labelledby','tab-'+name);}
 async function loadSources(){
- const r=await fetch(withToken('/api/sources')); const d=await r.json();
- const sel=document.getElementById('src'); sel.textContent='';
- if(!d.tracks||!d.tracks.length){sel.append(el('option',null,'no source tracks found'));return;}
- for(const t of d.tracks){const o=el('option');o.value=t.audio;o.textContent=t.title+' · '+(t.seconds)+'s';sel.append(o);}
+ const gen=++sourceGen;const sel=document.getElementById('src');sel.disabled=true;syncCreate();
+ try{const d=await api('/api/sources?q='+encodeURIComponent(document.getElementById('sourceSearch').value));if(gen!==sourceGen)return;
+ sel.textContent='';const prompt=el('option',null,d.tracks&&d.tracks.length?'Choose a source track':'No matching tracks');prompt.value='';sel.append(prompt);
+ sourceTracks=(d.tracks||[]).filter(t=>t.audio.toLowerCase().endsWith('.mp3'));for(const [i,t] of sourceTracks.entries()){const o=el('option');o.value=String(i);o.textContent=t.title+' · '+clock(t.seconds);sel.append(o);}
+ document.getElementById('sourceHelp').textContent=sourceTracks.length+' local MP3 tracks shown. Search to find more; nothing is uploaded.';
+ }catch(e){if(gen!==sourceGen)return;sel.textContent='';const o=el('option',null,'Source list unavailable');o.value='';sel.append(o);document.getElementById('sourceHelp').textContent=e.message+' — edit your search to retry.';}
+ finally{if(gen===sourceGen){sel.disabled=false;syncCreate();}}
 }
+function syncCreate(){const sel=document.getElementById('src');document.getElementById('create').disabled=creating||sel.disabled||sel.value==='';}
 async function loadProjects(){
  const d=await api('/api/studio');
+ projects=d.productions;renderProjects();
+}
+function renderProjects(){
  const box=document.getElementById('list'); box.textContent='';
- for(const p of d.productions){
-  const c=el('div','card'); c.append(el('b',null,p.title));
-  const m=el('div','meta'); m.textContent=p.duration.toFixed(0)+'s · '+p.shots+' shots · '+(p.spend.accounted_usd||'—')+' / '+(p.spend.cap_usd||'no cap')+' USD';
+ for(const summary of projects){
+   const p=verifiedEntries.get(summary.slug)||summary;
+   const c=el('a','card');c.href='#/'+encodeURIComponent(p.slug)+'/overview';c.dataset.slug=p.slug;
+   if(current&&current.slug===p.slug){c.classList.add('on');c.setAttribute('aria-current','page');}
+   c.append(el('b',null,p.title),el('div','meta',p.slug));
+   const m=el('div','meta'); m.textContent=clock(p.duration)+' · '+p.shots+' shots · '+spendText(p.spend);
   c.append(m);
   const tags=el('div','meta');
-  for(const [stage,state] of Object.entries(p.stages)){const t=stateTag(state);t.textContent=stage+' '+t.textContent;tags.append(t);}
-  c.append(tags);
+   for(const [stage,state] of Object.entries(p.stages)){const t=stateTag(state);t.textContent=(stageNames[stage]||stage)+': '+t.textContent;tags.append(t);}
+   c.append(tags);
+   c.append(el('div','meta',p.checked_at?'Checked '+stamp(p.checked_at):'Quick scan — media not checked'));
   const n=el('div','meta'); n.textContent='next: '+p.next_step; c.append(n);
-  c.addEventListener('click',function(){
-   document.querySelectorAll('#list .card').forEach(function(x){x.classList.remove('on');});
-   c.classList.add('on'); openProject(p.slug,p.title);
-  });
-  box.append(c);
+   box.append(c);
  }
- if(!d.productions.length) box.append(el('div','meta','nothing yet'));
+ if(!projects.length) box.append(el('div','meta','No productions yet. Open New production to start a local project.'));
 }
-function openProject(slug,title){
- current={slug:slug,title:title}; stillsData=null; stillFilter=null; stopCockpit();
+function openProject(slug,title,name='overview'){
+ current={slug:slug,title:title};currentData=null;stillsData=null;stillFilter=null;pendingShot=null;shotGen++;stopCockpit();
  document.getElementById('detailTitle').textContent=title+' · '+slug;
- showTab('overview');
+ renderProjects();document.getElementById('detailTitle').focus({preventScroll:true});if(innerWidth<=1000)document.getElementById('detailTitle').scrollIntoView({block:'start'});showTab(name,true);
+}
+function navigate(slug,name){const hash='#/'+encodeURIComponent(slug)+'/'+name;if(location.hash===hash)applyRoute();else location.hash=hash;}
+function applyRoute(){
+ const parts=location.hash.slice(1).split('/');if(parts[0]!==''||!parts[1]){current=null;currentData=null;viewGen++;shotGen++;stopCockpit();setTab('overview');view.setAttribute('aria-busy','false');document.getElementById('detailTitle').textContent='Select a production';clear(view);view.append(el('div','empty','Choose a production from the library.'));document.getElementById('freshness').textContent='Not checked yet';renderProjects();return;}
+ let slug;try{slug=decodeURIComponent(parts[1]);}catch(e){current=null;viewGen++;shotGen++;stopCockpit();document.getElementById('detailTitle').textContent='Invalid project link';errorPanel(view,'Invalid project link. Choose a production from the library.');return;}
+ const name=Object.hasOwn(loaders,parts[2])?parts[2]:'overview';
+ const p=projects.find(x=>x.slug===slug);
+ if(!p){current=null;viewGen++;stopCockpit();errorPanel(view,'This production was not found. Choose one from the library.');return;}
+ if(current&&current.slug===slug)showTab(name,true);else openProject(slug,p.title,name);
 }
 const loaders={overview:loadOverview,stills:loadStills,board:loadBoard,approvals:loadApprovals,runs:loadRuns};
-function showTab(name){
+function showTab(name,fromRoute=false){
  if(!current)return;
+ if(!fromRoute){navigate(current.slug,name);return;}
  const gen=++viewGen;
- setTab(name); view.textContent='';
- if(name!=='runs')stopCockpit();
- loaders[name](gen).catch(function(e){if(gen!==viewGen)return;view.textContent='';view.append(el('div','empty',e.message));});
+ shotGen++;setTab(name);view.textContent='';view.setAttribute('aria-busy','true');view.append(el('p','meta','Checking current project state…'));stopCockpit();
+ loadSnapshot(gen).then(function(ok){if(ok)return loaders[name](gen);}).catch(function(e){if(gen!==viewGen)return;errorPanel(view,e.message,()=>showTab(name,true));document.getElementById('freshness').textContent='Check failed — displayed state may be old';}).finally(function(){if(gen===viewGen)view.setAttribute('aria-busy','false');});
+}
+async function loadSnapshot(gen){
+ const version=activityVersion;const d=await api('/api/project/'+encodeURIComponent(current.slug));if(gen!==viewGen)return false;
+ currentData=d;verifiedEntries.set(current.slug,{...d.entry,checked_at:d.checked_at});renderProjects();
+ document.getElementById('freshness').textContent=version!==activityVersion?'Studio activity detected during this check — refresh again':'Checked '+stamp(d.checked_at)+' · activity '+(d.entry.last_activity_ago||'unknown');return true;
 }
 async function loadOverview(gen){
- const d=await api('/api/project/'+current.slug); if(gen!==viewGen)return; const s=d.status||{}; const e=d.entry||{};
+ if(gen!==viewGen)return;const d=currentData;const s=d.status||{};const e=d.entry||{};
  clear(view);
  const stats=el('div','stats');
- stats.append(stat((s.duration||0).toFixed(0)+'s','duration'));
+ stats.append(stat(clock(s.duration),'duration'));
  stats.append(stat((s.shots||[]).length,'shots'));
  stats.append(stat((s.total_frames||0),'frames'));
- stats.append(stat((e.spend&&e.spend.accounted_usd)||'—','spent'));
+ stats.append(stat(money(e.spend&&e.spend.accounted_usd),'spent'));
  view.append(stats);
  const tags=el('div','');
- for(const [stage,state] of Object.entries(s.approvals||{})){tags.append(el('span','tag '+(state==='approved'?'ok':'bad'),stage+': '+state));}
+ for(const [stage,state] of Object.entries(e.stages||{})){const t=stateTag(state);t.textContent=(stageNames[stage]||stage)+': '+t.textContent;tags.append(t);}
  view.append(tags);
- const n=el('p','meta','next: '+(e.next_step||'—')); view.append(n);
+ const n=el('h3',null,e.next_step==='delivered'?'Delivery recorded':'Needs your attention: '+(e.next_step||'check state'));view.append(n);
+ for(const action of e.actions||[]){
+  const box=el('section','decision');box.append(el('h3',null,action.label),el('p','meta',action.reason));
+  if(action.command)box.append(copyCommand(action.command));
+  if(action.id.startsWith('approve-')||action.id==='verify-approvals'){const b=el('button','mini','Inspect approvals');b.onclick=()=>showTab('approvals');box.append(b);}
+  if(action.href)box.append(el('p','meta','Local artifact: '+action.href+' — open this file locally; Studio does not serve source files.'));
+  view.append(box);
+ }
+ for(const [kind,artifact] of [['Preview',e.preview],['Review dashboard',e.dashboard]]){if(artifact)view.append(el('p','meta',kind+' available locally: '+artifact.name));}
+ const legend=el('details');legend.append(el('summary',null,'Stage guide and state meanings'));const dl=el('dl');for(const [key,label] of Object.entries(stageNames)){dl.append(el('dt',null,label),el('dd',null,stageHelp[key]));}legend.append(dl,el('p','meta','Approved: current bytes and all CLI gate checks pass. Blocked: a parent approval, image verdict or graphics review fails. Stale: bytes changed. Missing: no decision recorded. Unavailable: required artifacts are missing or invalid. Not checked: only a recorded decision was found.'));view.append(legend);
  const blockers=(e.blockers||[]);
  if(blockers.length){const ul=el('ul','');for(const b of blockers){const li=el('li',null,b[1]);li.className=b[0];ul.append(li);}view.append(ul);}
- else view.append(el('p','meta','no blockers'));
+ else view.append(el('p','meta','No budget, task or operation blockers recorded. Stage decisions above still apply.'));
  const go=el('button','mini','Open stills'); go.style.marginTop='14px';
  go.addEventListener('click',function(){showTab('stills');}); view.append(go);
 }
-async function fetchStills(){stillsData=await api('/api/project/'+current.slug+'/stills');}
 async function loadStills(gen){
- await fetchStills(); if(gen!==viewGen)return; renderStills();
+ const data=await api('/api/project/'+encodeURIComponent(current.slug)+'/stills');if(gen!==viewGen)return;stillsData=data;renderStills();if(pendingShot){const id=pendingShot;pendingShot=null;showShot(id);}
 }
 function renderStills(){
  clear(view); const d=stillsData;
@@ -520,12 +663,12 @@ function renderStills(){
  const filters=el('div','filters');
  const choices=[['all','All'],['accept','Accepted'],['reject','Rejected'],['uncertain','Uncertain'],['unreviewed','Unreviewed']];
  for(const pair of choices){
-  const b=el('button','chip'+(stillFilter===pair[0]||(!stillFilter&&pair[0]==='all')?' on':''),pair[1]);
-  b.addEventListener('click',function(){stillFilter=pair[0]==='all'?null:pair[0];renderStills();});
+   const selected=stillFilter===pair[0]||(!stillFilter&&pair[0]==='all');const b=el('button','chip'+(selected?' on':''),pair[1]);b.setAttribute('aria-pressed',String(selected));
+   b.addEventListener('click',function(){shotGen++;stillFilter=pair[0]==='all'?null:pair[0];renderStills();const target=[...view.querySelectorAll('.chip')].find(x=>x.textContent===pair[1]);if(target)target.focus();});
   filters.append(b);
  }
  view.append(filters);
- const panel=el('div','detailbox'); panel.id='shotPanel'; view.append(panel);
+ const panel=el('div','detailbox'); panel.id='shotPanel';panel.hidden=true;view.append(panel);
  const grid=el('div','stillgrid'); view.append(grid);
  let shown=0;
  for(const s of d.shots){
@@ -543,15 +686,15 @@ function renderStills(){
   cap.append(meta);
   if(s.alias_of)cap.append(el('div','mono','reuses '+s.alias_of));
   card.append(cap);
-  card.addEventListener('click',function(){document.querySelectorAll('.still').forEach(function(x){x.classList.remove('on');});card.classList.add('on');showShot(s.id);});
+   card.setAttribute('aria-pressed','false');card.addEventListener('click',function(){document.querySelectorAll('.still').forEach(function(x){x.classList.remove('on');x.setAttribute('aria-pressed','false');});card.classList.add('on');card.setAttribute('aria-pressed','true');showShot(s.id);});
   grid.append(card);
  }
  if(!shown)grid.append(el('div','empty','nothing matches this filter'));
 }
 async function showShot(id){
- const panel=document.getElementById('shotPanel'); panel.textContent='Loading '+id+'…';
+ const panel=document.getElementById('shotPanel');if(!panel||!current)return;const slug=current.slug;const gen=++shotGen;panel.hidden=false;panel.textContent='Loading '+id+'…';panel.setAttribute('aria-busy','true');
  try{
-  const d=await api('/api/project/'+current.slug+'/shot/'+encodeURIComponent(id));
+   const d=await api('/api/project/'+encodeURIComponent(slug)+'/shot/'+encodeURIComponent(id));if(gen!==shotGen||!current||current.slug!==slug||!panel.isConnected)return;
   clear(panel);
   const cols=el('div','cols');
   const left=el('div','');
@@ -572,15 +715,15 @@ async function showShot(id){
   if(d.prompt_error)right.append(el('p','meta','prompt unavailable: '+d.prompt_error));
   const pre=el('pre',null,d.prompt||'no compiled prompt recorded');
   right.append(pre);
-  cols.append(right); panel.append(cols);
- }catch(e){panel.textContent='';panel.append(el('div','empty',e.message));}
+   cols.append(right); panel.append(cols);panel.setAttribute('aria-busy','false');panel.tabIndex=-1;panel.focus({preventScroll:true});panel.scrollIntoView({block:'nearest'});
+ }catch(e){if(gen===shotGen&&panel.isConnected){panel.setAttribute('aria-busy','false');errorPanel(panel,e.message,()=>showShot(id));}}
 }
 async function loadBoard(gen){
  const d=await api('/api/project/'+current.slug+'/board'); if(gen!==viewGen)return; clear(view);
  if(!d.available){view.append(el('div','empty',d.warning||'no storyboard'));return;}
  const stats=el('div','stats');
  stats.append(stat(d.shots.length,'shots')); stats.append(stat(d.total_frames,'frames'));
- stats.append(stat(d.duration.toFixed(0)+'s','duration')); stats.append(stat(d.fps,'fps'));
+ stats.append(stat(clock(d.duration),'duration')); stats.append(stat(d.fps,'fps'));
  view.append(stats);
  view.append(el('p','meta','bar grid: '+(d.grid.enabled?'enabled':'not claimed — '+(d.grid.reason||'no approved grid'))));
  if(d.bands.length){
@@ -592,17 +735,17 @@ async function loadBoard(gen){
   }
   view.append(bands);
  }
- const track=el('div','track');
+ const track=el('div','track');track.setAttribute('aria-hidden','true');
  for(const s of d.shots){
   const bar=el('div','shotbar '+s.framing); bar.title=s.id+' · '+s.start_seconds+'s–'+s.end_seconds+'s · '+s.purpose;
   bar.style.left=(s.start_frame/d.total_frames*100)+'%'; bar.style.width=(s.seconds/d.duration*100)+'%'; track.append(bar);
  }
  view.append(track);
  const scroll=el('div','scroll'); const table=el('table'); const head=el('tr');
- for(const label of ['shot','seconds','frames','framing','transition','purpose']){head.append(el('th',null,label));}
+ for(const label of ['shot','seconds','frames','framing','transition','purpose']){const th=el('th',null,label);th.scope='col';head.append(th);}
  table.append(head);
  for(const s of d.shots){
-  const tr=el('tr'); tr.append(el('td','mono',s.id)); tr.append(el('td',null,s.seconds.toFixed(1)));
+   const tr=el('tr');const cell=el('td');const inspect=el('button','mini',s.id);inspect.setAttribute('aria-label','Inspect shot '+s.id);inspect.onclick=()=>{pendingShot=s.id;showTab('stills');};cell.append(inspect);tr.append(cell);tr.append(el('td',null,s.seconds.toFixed(1)));
   tr.append(el('td','mono',s.start_frame+'–'+s.end_frame)); tr.append(el('td',null,s.framing||'—'));
   tr.append(el('td',null,s.transition+(s.dissolve_frames?(' +'+s.dissolve_frames):''))); tr.append(el('td',null,s.purpose));
   table.append(tr);
@@ -610,18 +753,16 @@ async function loadBoard(gen){
  scroll.append(table); view.append(scroll);
 }
 async function loadApprovals(gen){
- const d=await api('/api/project/'+current.slug+'/approvals'); if(gen!==viewGen)return; clear(view);
+ if(gen!==viewGen)return;const d=currentData.approvals;clear(view);
  view.append(el('p','meta',d.current+' of '+d.total+' stages would pass now. Live hashes are recomputed; nothing is approved here.'));
- const scroll=el('div','scroll'); const table=el('table'); const head=el('tr');
- for(const label of ['stage','state','current hash','approved hash','at','would pass','command']){head.append(el('th',null,label));}
- table.append(head);
+ const scroll=el('div','scroll');const table=el('table','approval-table');const head=el('tr');const labels=['Stage','State','Decision note','Recorded at','Would pass','Command / technical details'];
+ for(const label of labels){const th=el('th',null,label);th.scope='col';head.append(th);}const thead=el('thead');thead.append(head);table.append(thead);const tbody=el('tbody');table.append(tbody);
  for(const s of d.stages){
   const tr=el('tr');
-  tr.append(el('td',null,s.stage)); const state=el('td',''); state.append(el('span','badge '+s.state,s.state)); tr.append(state);
-  tr.append(el('td','mono',(s.hash||'—').slice(0,16))); tr.append(el('td','mono',(s.approved_hash||'—').slice(0,16)));
-  tr.append(el('td','mono',s.at||'—')); tr.append(el('td',null,s.would_pass_now?'yes':'no'));
-  const cmd=el('td',''); const btn=el('button','mini','copy'); btn.addEventListener('click',function(){if(navigator.clipboard)navigator.clipboard.writeText(s.approve_command);btn.textContent='copied';}); cmd.append(btn); tr.append(cmd);
-  table.append(tr);
+   tr.append(el('td',null,stageNames[s.stage]||s.stage));const state=el('td');state.append(badge(s.state));tr.append(state);
+   const note=el('td',null,s.note||'No decision recorded');if(s.problem)note.append(el('p','warn',s.problem));tr.append(note);tr.append(el('td',null,stamp(s.at)));tr.append(el('td',null,s.would_pass_now?'yes':'no'));
+   const cmd=el('td');const technical=el('details');technical.append(el('summary',null,'Command and hashes'),copyCommand(s.approve_command),el('p','code','Current hash: '+(s.hash||'unavailable')),el('p','code','Approved hash: '+(s.approved_hash||'none')));cmd.append(technical);tr.append(cmd);
+   [...tr.children].forEach((td,i)=>td.dataset.label=labels[i]);tbody.append(tr);
  }
  scroll.append(table); view.append(scroll);
 }
@@ -629,49 +770,68 @@ async function loadRuns(gen){
  clear(view); stopCockpit();
  const d=await api('/api/runs?limit=20'); if(gen!==viewGen)return; const list=el('div',''); const panel=el('div','panel'); panel.style.marginTop='12px';
  const head=el('h2',null,'Live events'); const log=el('div'); log.id='log'; panel.append(head,log);
- if(!d.runs.length){view.append(el('div','empty','no runs yet — start one with a clip command'));return;}
- for(const run of d.runs){
-  const row=el('div','run'); row.append(el('b',null,run.intent||run.id)); row.append(el('span','tag '+run.status,run.status));
+ const runs=d.runs.filter(r=>r.production===current.slug);view.append(el('p','meta','Showing this project’s runs from the latest 20 Studio journal entries.'));
+ if(!runs.length){view.append(el('div','empty','No recent runs for this production. Start one with a clip command.'));return;}
+ for(const run of runs){
+   const row=el('button','run');row.type='button';row.append(el('b',null,run.intent||run.id)); row.append(el('span','tag '+run.status,run.status));
   if(run.production)row.append(el('span','mono',run.production));
   row.addEventListener('click',function(){document.querySelectorAll('.run').forEach(function(x){x.classList.remove('on');});row.classList.add('on');selectRun(run.id);});
   list.append(row);
  }
  view.append(list,panel);
- selectRun(d.runs[0].id);
+  selectRun(runs[0].id);
 }
 async function selectRun(id){
- stopCockpit(); cockpitRun=id;
+ stopCockpit(); cockpitRun=id;const epoch=cockpitEpoch;
+ try{
  const d=await api('/api/events?run='+encodeURIComponent(id)+'&after=0&limit=200');
- if(cockpitRun!==id)return;
+ if(cockpitRun!==id||epoch!==cockpitEpoch)return;
  const log=document.getElementById('log'); if(!log)return; log.textContent='';
  let last=0;
  for(const ev of d.events){last=Math.max(last,ev.seq);appendEvent(ev);}
- const url='/api/stream?after='+last+'&run='+encodeURIComponent(id)+(token?'&token='+encodeURIComponent(token):'');
- const es=new EventSource(url); cockpitSource=es;
- es.onmessage=function(m){try{appendEvent(JSON.parse(m.data));}catch(e){}};
- es.onerror=function(){es.close();if(cockpitSource===es)cockpitSource=null;};
+ function connect(){if(epoch!==cockpitEpoch)return;const url='/api/stream?after='+last+'&run='+encodeURIComponent(id)+(token?'&token='+encodeURIComponent(token):'');
+ const es=new EventSource(url);cockpitSource=es;es.onmessage=function(m){if(epoch!==cockpitEpoch)return;try{const ev=JSON.parse(m.data);last=Math.max(last,ev.seq);appendEvent(ev);}catch(e){}};
+ es.onerror=function(){es.close();if(cockpitSource===es){cockpitSource=null;setTimeout(connect,3000);}};}
+ connect();
+ }catch(e){if(epoch===cockpitEpoch){const log=document.getElementById('log');if(log)errorPanel(log,e.message,()=>selectRun(id));}}
 }
 function appendEvent(ev){
  const log=document.getElementById('log'); if(!log)return;
  const payload=eventPayload(ev);
  const line=el('div',ev.type==='command.output'?'out':((ev.type.includes('failed')||ev.type.includes('interrupted'))?'err':'ev'));
- line.textContent='['+ev.type+'] '+(payload.line!==undefined?payload.line:JSON.stringify(payload));
+ line.textContent=ev.type==='command.output'&&payload.line!==undefined?payload.line:'['+ev.type+'] '+JSON.stringify(payload);
  log.append(line); while(log.childNodes.length>400)log.removeChild(log.firstChild); log.scrollTop=log.scrollHeight;
 }
 document.getElementById('tabs').addEventListener('click',function(e){const b=e.target.closest('button.tab');if(b)showTab(b.getAttribute('data-tab'));});
-document.getElementById('create').addEventListener('click',async function(){
- const body={audio:document.getElementById('src').value,title:document.getElementById('title').value.trim(),
+document.getElementById('tabs').addEventListener('keydown',function(e){if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;const buttons=[...document.querySelectorAll('.tab')];const index=buttons.indexOf(document.activeElement);const next=e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;e.preventDefault();buttons[next].focus();showTab(buttons[next].dataset.tab);});
+document.getElementById('createForm').addEventListener('submit',async function(event){
+ event.preventDefault();const button=document.getElementById('create');const sel=document.getElementById('src');if(creating||sel.disabled||sel.value===''||!sourceTracks[Number(sel.value)])return;creating=true;syncCreate();
+ const source=sourceTracks[Number(document.getElementById('src').value)];const body={audio:source&&source.audio,title:document.getElementById('title').value.trim(),
   aspect:document.getElementById('aspect').value,fps:Number(document.getElementById('fps').value),
   music_mode:document.getElementById('mode').value,cap:document.getElementById('cap').value};
  const msg=document.getElementById('msg'); msg.className='';msg.textContent='creating…';
- const r=await fetch(withToken('/api/create'),{method:'POST',headers:Object.assign({},hdr,{'Content-Type':'application/json'}),body:JSON.stringify(body)});
- const d=await r.json();
- if(!r.ok){msg.className='err';msg.textContent=d.error||('HTTP '+r.status);return;}
- msg.className='ok';msg.textContent='created '+d.created+' — opening project';
- setTimeout(function(){location.href='/app?token='+encodeURIComponent(token)+'#projects';},700);
- loadProjects();
+ let created=null;
+ try{const r=await fetch(withToken('/api/create'),{method:'POST',headers:Object.assign({},hdr,{'Content-Type':'application/json'}),body:JSON.stringify(body)});
+ const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));created=d.created;
+ msg.className='ok';msg.textContent='Created '+d.title+'. Opening project…';await loadProjects();navigate(d.created,'overview');document.getElementById('newProduction').open=false;
+ }catch(e){msg.className='err';msg.textContent=created?'Project '+created+' was created, but the library could not refresh. Refresh state before doing anything else.':'Creation could not be confirmed: '+e.message+'. Refresh the library before retrying; do not submit again if the project already exists.';}
+ finally{creating=false;syncCreate();}
 });
-loadSources();loadProjects();
+document.getElementById('src').addEventListener('change',syncCreate);
+let sourceTimer;document.getElementById('sourceSearch').addEventListener('input',()=>{sourceGen++;document.getElementById('src').value='';document.getElementById('src').disabled=true;syncCreate();clearTimeout(sourceTimer);sourceTimer=setTimeout(loadSources,250);});
+window.addEventListener('hashchange',applyRoute);
+document.getElementById('refresh').onclick=async function(){const b=this;b.disabled=true;try{verifiedEntries.clear();await loadProjects();applyRoute();}catch(e){errorPanel(view,e.message,()=>b.click());}finally{b.disabled=false;}};
+let activitySource=null,activityCursor=0,activityReady=false;
+async function watchActivity(){
+ try{if(!activityReady){const s=await api('/api/status');activityCursor=s.latest_seq||0;activityReady=true;}
+ const es=new EventSource(withToken('/api/stream?after='+activityCursor));activitySource=es;
+ es.onopen=function(){const f=document.getElementById('freshness');if(f.textContent.startsWith('Live connection'))f.textContent='Live connection restored — refresh to check current state';};
+ es.onmessage=function(m){try{const ev=JSON.parse(m.data);activityCursor=Math.max(activityCursor,ev.seq);activityVersion++;document.getElementById('freshness').textContent='Studio activity detected — refresh to check current state';}catch(e){}};
+ es.onerror=function(){es.close();if(activitySource===es){activitySource=null;document.getElementById('freshness').textContent='Live connection lost — use Refresh state';setTimeout(watchActivity,3000);}};
+ }catch(e){document.getElementById('freshness').textContent='Live connection unavailable — use Refresh state';setTimeout(watchActivity,3000);}
+}
+window.addEventListener('pagehide',()=>{stopCockpit();if(activitySource)activitySource.close();});
+loadSources();loadProjects().then(applyRoute).catch(e=>errorPanel(document.getElementById('list'),e.message,()=>document.getElementById('refresh').click()));watchActivity();
 </script></body></html>""".replace("__JS_HELPERS__", JS_HELPERS)
 
 
@@ -716,7 +876,9 @@ def serve(
     if ready is not None:
         ready.put(url)
     print(f"Studio live: {url}")
-    print("Read-only: writes still go through `clip` under the project lock.")
+    print(
+        "Review-only: approvals and paid operations remain CLI-only; /app can create local projects."
+    )
     try:
         httpd.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:
