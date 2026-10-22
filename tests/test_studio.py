@@ -195,12 +195,16 @@ def test_actions_are_commands_or_links_never_silent_writes(tmp_path):
             if action.get("command"):
                 assert action["command"].startswith("uv run clip ")
                 # Commands are templates: they must ask for a decision, not assert one.
-                assert "'<" in action["command"] or action["id"] in {
-                    "status",
-                    "review-stills",
-                    "reconcile",
-                    "plan",
-                }
+                if action["id"].startswith("approve-"):
+                    assert action["command"] == "uv run clip serve --actions"
+                    assert action["needs_input"] is True
+                else:
+                    assert "'<" in action["command"] or action["id"] in {
+                        "status",
+                        "review-stills",
+                        "reconcile",
+                        "plan",
+                    }
 
 
 def test_missing_budget_produces_a_cap_action(tmp_path):
@@ -222,7 +226,7 @@ def test_next_gate_action_names_the_stage_and_project(tmp_path):
     entry = studio.scan_project(root)
     stage = entry["next_step"].split(" ")[0]
     action = next(item for item in entry["actions"] if item["id"] == f"approve-{stage}")
-    assert action["command"].startswith("uv run clip approve projects/production ")
+    assert action["command"] == "uv run clip serve --actions"
     assert action["needs_input"] is True
 
 

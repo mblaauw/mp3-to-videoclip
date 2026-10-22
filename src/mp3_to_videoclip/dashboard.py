@@ -6,8 +6,8 @@ what the project actually recorded and marks what it does not know:
 * no meter, bar grid or downbeat is claimed unless an explicitly approved
   ``work/music-grid.json`` exists (fail-closed: an unapproved grid shows nothing);
 * measured values keep their provenance and stay labelled as measurements;
-* approvals are displayed with their live content hash, and the exact
-  ``clip approve`` command is shown for copying. The page never writes anything.
+* approvals use complete kernel gate checks beside their live content hash;
+  human decisions use terminal-enabled Studio. The page never writes anything.
 
 Output is deterministic for fixed inputs (no timestamps, no random ids), versioned
 and never overwritten, with a sidecar recording every input hash.
@@ -28,6 +28,7 @@ from . import production as P
 from .markup import esc as _esc
 from .markup import script_json
 from .storage import file_hash, inside, read_json, read_optional, write_json
+from .studio import approval_state
 
 STAGES = ("board", "stills", "delivery")
 FOLDER = "work/dashboard"
@@ -109,12 +110,8 @@ def _approval_states(root: Path) -> list[dict]:
             continue
         entry["hash"] = current[:16]
         approval = record.get(stage)
-        if not approval:
-            entry["state"] = "missing"
-        elif approval.get("hash") != current:
-            entry["state"] = "stale"
-        else:
-            entry["state"] = "approved"
+        entry["state"], entry["problem"] = approval_state(root, stage, current, approval)
+        if approval:
             entry["approved_at"] = approval.get("at")
         states.append(entry)
     return states
@@ -382,7 +379,7 @@ h3{font-size:15px;margin:0 0 6px}
 .badge.medium{color:var(--warn);border-color:#5b4a2a}
 .badge.low{color:var(--bad);border-color:#5b2f2f}
 .badge.approved{color:var(--ok);border-color:#2f5b42}
-.badge.stale{color:var(--bad);border-color:#5b2f2f}
+.badge.stale,.badge.blocked{color:var(--bad);border-color:#5b2f2f}
 .badge.missing,.badge.unavailable{color:var(--muted)}
 .badge.short,.badge.mediumd{border-color:#2b3d4a}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 14px}
@@ -705,18 +702,20 @@ def _approval_panel(states: list[dict], project, stage: str) -> str:
     for entry in states:
         badge = entry["state"]
         details = entry["hash"] or "no current artifact"
+        if entry.get("problem"):
+            details += " · " + entry["problem"]
         rows.append(
             f'<tr><td class="mono">{_esc(entry["stage"])}</td>'
             f'<td><span class="badge {_esc(badge)}">{_esc(badge)}</span></td>'
             f'<td class="mono">{_esc(details)}</td>'
             f'<td class="note">{_esc(entry["approved_at"] or "")}</td></tr>'
         )
-    command = f"uv run clip approve {project.slug} {stage} --note '<your decision>'"
+    command = "uv run clip serve --actions"
     return (
         '<div class="panel"><table><thead><tr><th>Stage</th><th>State</th><th>Current hash (short)</th>'
         "<th>Approved at</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
-        '<p class="note">Approval is recorded by the CLI against the current artifact hash, not by this page. '
-        "Editing any input marks the stage stale here immediately.</p>"
+        '<p class="note">A person records decisions in a terminal-enabled Studio session, not on this page. '
+        "This generated snapshot must be refreshed after edits; Studio rechecks the reviewed hash.</p>"
         f'<pre id="approve-command">{_esc(command)}</pre>'
         '<button data-copy="approve-command">Copy command</button>'
         "</div>"
@@ -1036,7 +1035,7 @@ def build_dashboard(
         "limits": data["limits"],
         "warning": (
             "Review aid only: this page records no approval, uploads nothing and cannot replace continuous "
-            "playback. Approve through the CLI against the current artifact hash."
+            "playback. Decide in the human Studio against the current artifact hash."
         ),
     }
     write_json(target.with_suffix(".json"), sidecar)

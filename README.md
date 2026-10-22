@@ -101,25 +101,27 @@ selected or spent from the page.
 contract and compiled prompt, and controls that compose `clip shot-edit`, `clip adopt` and
 `clip review` commands — plus an explicit statement of which approvals an edit invalidates.
 
-The **live layer** is deliberately the smallest possible: a loopback server that is
-read-only except for one parked create route.
+The **live layer** is deliberately small: a loopback review server with local
+project setup and separately terminal-enabled human decisions.
 
 ```sh
 uv run clip spine sync                    # index existing work/operations receipts as runs
 uv run clip serve --port 8765             # review studio; prints a tokenised URL
 ```
 
-`clip serve` binds `127.0.0.1`, requires a per-session token, exposes `GET` only
+By default, `clip serve` binds `127.0.0.1`, requires a per-session token, exposes review `GET`s
 (`/api/health`, `/api/status`, `/api/runs`, `/api/events`, `/api/stream`, `/api/studio`,
-`/api/sources`) and answers every write verb with `405` except `POST /api/create`
-(local setup through the kernel, not generation). `PUT`, `PATCH` and `DELETE`
-never create projects. The health response declares this setup-write exception.
-The `/app` shell is a read-only review surface over the same server:
+`/api/sources`) and refuses writes except `POST /api/create` (local setup through
+the kernel, not generation). Decision POSTs require an additional human action
+capability; other write routes return `405`. `PUT`, `PATCH` and `DELETE` never
+create projects. The health response declares the setup-write exception.
+The `/app` shell is a review surface over the same server:
 `/api/project/<slug>` (status), `/stills`, `/board`, `/approvals`, `/shot/<id>` (contract
 and compiled prompt) and `/thumb/<id>` (path-guarded, re-encoded in memory). It renders a
 verdict-badged still grid, a section/shot timeline, live stage hashes and the run cockpit;
-it cannot approve, select, spend or edit, because those remain CLI commands under the
-project lock. Thumbnail routes resolve the selected version through `work/assets.json`,
+it cannot select, generate or edit media. Human approvals and quote authorizations
+require the separate `--actions` session described below; no paid executor runs in
+the UI. Thumbnail routes resolve the selected version through `work/assets.json`,
 reject any path outside the production and write no cache.
 
 Open Studio from the journal link. Project/view URLs (`/app?token=…#/SLUG/approvals`)
@@ -139,6 +141,49 @@ No project files, exports or source audio are served by generic file routes.
 Browser regression tests run in CI on temporary projects. Locally:
 `uv run --with playwright playwright install chromium`, then
 `uv run --with playwright pytest tests/test_studio_browser.py -q`.
+
+### Human approvals and quote authorizations
+
+Normal sessions remain review-only (plus local project setup). A person—not an
+agent running a background server—can enable decision controls from their own
+interactive terminal:
+
+```sh
+uv run clip serve --actions --port 8765
+# Type ENABLE HUMAN ACTIONS, then open the printed Human action session link.
+```
+
+The human link bootstraps a separate per-server action capability from its URL
+fragment into browser session storage and removes that fragment from history.
+The capability is never returned by the read API or sent in request URLs. Do not
+share the human link or automate its confirmation. A restarted server requires
+its new link. `clip approve` and `clip authorize` now redirect to this workflow;
+older command examples/recipes do not grant an alternate CLI decision path.
+
+In **Approvals**, choose a stage (including supporting lyrics/listening/brand
+decisions), load its current artifact, inspect the necessary media, write the
+rationale and explicitly confirm. Preview approval requires watching with audio;
+graphics requires inspecting real composite samples. These attestations never
+replace the existing kernel checks or accepted per-image verdicts. In **Quotes**,
+review the exact model, settings, tasks, reference identities, source hash,
+upload scope and quoted admission amount. External data transfer needs separate
+explicit consent. The UI cannot enlarge the quote or production cap. Authorization
+does not execute, upload, reserve a task or charge anything; a later executor run
+still applies the existing cumulative budget and task gates.
+
+Both action routes require the independent capability, exact same-origin JSON,
+a valid loopback Host, a nonempty note, explicit confirmation and the reviewed
+hash. The project lock and kernel gate checks refuse changed artifacts/quotes.
+Decision records include `via: studio`, explicit review confirmation and applicable
+upload-consent/continuous-preview-watch attestations; no user identity is fabricated. No paid
+provider call occurs in these routes. Style-test approval and individual image
+verdict migration are outside this step.
+
+**Trust boundary:** this is deliberate workflow separation, not a security sandbox
+against another unrestricted process under the same OS account. Such a process
+can inspect browser state, create a PTY or invoke internal Python functions.
+Internal kernel/CLI-dispatch APIs remain callable for integration tests. Strong
+agent-versus-human isolation would require separate OS/service authority.
 
 ### Inspecting and answering runs
 
@@ -347,8 +392,8 @@ uv run clip adopt projects/forward-ever --shot s018 --source work/drafts/crop.pn
 `clip dashboard` writes one versioned, self-contained HTML page and a sidecar of input
 hashes; it never overwrites, never fetches anything and never records an approval. It
 renders the section bands, shot timeline, measured activity, local graphics windows and
-the per-shot contract, then prints the exact `clip approve` command with each stage's
-current hash. **No meter, bar grid or downbeat is shown unless an explicitly approved
+the per-shot contract, then shows full gate state, each stage's current hash and
+the `clip serve --actions` entry point for human decisions. **No meter, bar grid or downbeat is shown unless an explicitly approved
 `work/music-grid.json` exists**; estimated events are drawn distinctly, and an invalid
 grid fails closed with the reason.
 

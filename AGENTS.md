@@ -33,6 +33,16 @@ the deselected motion recipes.
 
 ## Approval authority
 
+Ordinary stage approvals and quote authorizations are human Studio actions:
+the user starts `uv run clip serve --actions` in their own interactive terminal,
+opens its human action link and confirms the reviewed content. Public
+`clip approve` / `clip authorize` commands redirect to Studio. The director
+prepares artifacts/quotes and reads the resulting records; it must not mint an
+action capability, automate confirmation or call internal decision APIs on the
+user's behalf. Older command examples are not an alternative authority path.
+Individual image verdicts and style-test decisions retain their existing flow.
+These rules are workflow discipline, not same-OS process isolation.
+
 - Review music analysis and uncertain lyrics with the user before treatment.
 - Propose 2–3 treatments, then record their selected direction/style in brief.json.
 - Approve brief, then storyboard, then a three-shot proof, then the full still set.

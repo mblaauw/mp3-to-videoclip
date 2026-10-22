@@ -154,6 +154,30 @@ def test_stale_approval_is_reported_as_stale(tmp_path):
     assert states["storyboard"]["state"] == "stale"
 
 
+def test_dashboard_uses_kernel_attestations_and_human_studio_instructions(tmp_path):
+    root = make_root(tmp_path)
+    approve_through_proof(root)
+    approvals = read_json(root / "work/approvals.json")
+    # Same bytes, but an incomplete Studio-originated decision must not look green.
+    original_hash = approvals["analysis"]["hash"]
+    approvals["analysis"].update(via="studio", review_confirmed=False)
+    write_json(root / "work/approvals.json", approvals)
+    states = {row["stage"]: row for row in dashboard._approval_states(root)}
+    assert states["analysis"]["state"] == "blocked"
+    assert "incomplete" in states["analysis"]["problem"]
+    result = build(root)
+    document = (root / result["html"]).read_text()
+    assert "analysis Studio approval is incomplete" in document
+    assert "uv run clip serve --actions" in document
+    assert "uv run clip approve" not in document
+    assert "human Studio" in result["warning"]
+    approvals["analysis"]["review_confirmed"] = True
+    write_json(root / "work/approvals.json", approvals)
+    states = {row["stage"]: row for row in dashboard._approval_states(root)}
+    assert states["analysis"]["state"] == "approved"
+    assert read_json(root / "work/approvals.json")["analysis"]["hash"] == original_hash
+
+
 def test_stage_stills_requires_selected_images_and_reports_missing(tmp_path):
     root = make_root(tmp_path)
     result = build(root, "stills")

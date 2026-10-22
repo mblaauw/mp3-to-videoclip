@@ -27,7 +27,7 @@ def browser():
 
 
 @pytest.fixture
-def studio_page(tmp_path, browser):
+def studio_page(tmp_path, browser, request):
     projects = tmp_path / "projects"
     projects.mkdir()
     root = make_root(projects)
@@ -48,6 +48,8 @@ def studio_page(tmp_path, browser):
     db = tmp_path / "journal.sqlite3"
     httpd, url, thread = serve.start_in_thread(projects, db, token="browser-test")
     httpd.sources_dir = sources
+    if getattr(request, "param", False):
+        httpd.action_token = "browser-human-capability"
     page = browser.new_page(viewport={"width": 1280, "height": 900})
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -111,7 +113,7 @@ def test_verified_card_and_overview_agree_and_notes_are_visible(studio_page):
     page.locator("#tab-approvals").click()
     page.wait_for_selector("#view table")
     assert "Human rationale stays visible" in page.locator("#view").inner_text()
-    assert page.locator("#view summary", has_text="Command and hashes").count() == 8
+    assert page.locator("#view summary", has_text="Hashes and provenance").count() == 8
 
 
 def test_thumbnails_and_board_inspection_use_the_served_project_identity(studio_page):
@@ -289,3 +291,140 @@ def test_long_approval_notes_do_not_hide_other_fields(studio_page, width):
         "document.querySelector('.approval-table').scrollWidth <= document.querySelector('.scroll').clientWidth"
     )
     assert page.locator('.approval-table tbody td[data-label="Recorded at"]').first.is_visible()
+
+
+def open_human_session(page, app):
+    page.goto(app + "#action=browser-human-capability")
+    page.wait_for_selector("#humanStatus >> text=Human action session enabled")
+    assert "action=" not in page.url
+    page.locator('#list a[data-slug="production"]').click()
+    page.locator("#tab-approvals").click()
+    page.wait_for_selector("#humanApproval")
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_human_stage_confirmation_and_capability_bootstrap(studio_page):
+    page, app, root, *_ = studio_page
+    requests = []
+    page.on("request", lambda request: requests.append(request.url))
+    open_human_session(page, app)
+    page.locator("#approvalStage").select_option("analysis")
+    page.get_by_role("button", name="Load current artifact").click()
+    form = page.locator("#humanApproval form")
+    form.locator("textarea").fill("A deliberate browser decision")
+    form.locator('input[type="checkbox"]').first.check()
+    form.get_by_role("button", name="Approve Music analysis", exact=True).click()
+    page.wait_for_selector("#humanStatus >> text=Approved analysis for production")
+    decision = read_json(root / "work/approvals.json")["analysis"]
+    assert decision["note"] == "A deliberate browser decision"
+    assert decision["via"] == "studio"
+    assert not any("browser-human-capability" in url for url in requests)
+    assert read_json(root / "work/tasks.json") == {}
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_human_stale_stage_refuses_and_requires_review_again(studio_page):
+    page, app, root, *_ = studio_page
+    open_human_session(page, app)
+    page.locator("#approvalStage").select_option("analysis")
+    page.get_by_role("button", name="Load current artifact").click()
+    form = page.locator("#humanApproval form")
+    form.locator("textarea").fill("Old snapshot must not approve")
+    form.locator('input[type="checkbox"]').first.check()
+    before = (root / "work/approvals.json").read_bytes()
+    write_json(root / "work/music.json", {"duration": 2, "beats": [0.123]})
+    form.get_by_role("button", name="Approve Music analysis", exact=True).click()
+    page.wait_for_selector("#humanApproval >> text=Stage changed")
+    assert form.get_by_role("button", name="Approve Music analysis", exact=True).is_disabled()
+    assert (root / "work/approvals.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+@pytest.mark.parametrize("amount", ["0.10", "0.0006"])
+def test_human_quote_authorizes_exact_scope_without_execution(studio_page, amount):
+    from test_studio_actions import quote
+
+    from mp3_to_videoclip import budget
+
+    page, app, root, *_ = studio_page
+    budget.set_budget(root, "1.00", "test only")
+    q = quote(root, reserve_total_usd=amount)
+    open_human_session(page, app)
+    page.locator("#tab-quotes").click()
+    page.wait_for_selector("#view >> text=Exact authority")
+    page.locator("#view textarea").fill("Exactly this quote, no automatic generation")
+    page.locator('#view input[type="checkbox"]').check()
+    assert f"Exact authority: {amount} USD" in page.locator("#view").inner_text()
+    page.get_by_role("button", name=f"Authorize {amount} USD", exact=True).click()
+    page.wait_for_selector("text=Nothing was generated, uploaded or spent")
+    auth = read_json(root / "work/authorizations.json")[q["id"]]
+    assert auth["cap_usd"] == amount and auth["via"] == "studio"
+    assert auth["review_confirmed"] is True
+    assert read_json(root / "work/tasks.json") == {}
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_blocked_browser_storage_does_not_break_review_or_in_memory_session(studio_page):
+    page, app, root, *_ = studio_page
+    page.add_init_script(
+        "Object.defineProperty(window, 'sessionStorage', {get(){throw new DOMException('blocked','SecurityError')}})"
+    )
+    open_human_session(page, app)
+    assert "Storage is blocked" in page.locator("#humanStatus").inner_text()
+    assert page.locator("#humanApproval").is_visible()
+    page.locator("#approvalStage").select_option("analysis")
+    page.get_by_role("button", name="Load current artifact").click()
+    form = page.locator("#humanApproval form")
+    form.locator("textarea").fill("Ephemeral test-session decision")
+    form.locator('input[type="checkbox"]').first.check()
+    form.get_by_role("button", name="Approve Music analysis", exact=True).click()
+    page.wait_for_selector("#humanStatus >> text=Approved analysis for production")
+    assert read_json(root / "work/approvals.json")["analysis"]["via"] == "studio"
+    page.reload()
+    page.wait_for_selector("#view table")
+    assert page.locator("#humanApproval").count() == 0
+    page.wait_for_selector("#humanStatus >> text=Read-only session")
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_failed_history_cleanup_discards_capability_and_clears_fragment(studio_page):
+    page, app, *_ = studio_page
+    page.add_init_script(
+        "history.replaceState = () => {throw new DOMException('blocked','SecurityError')}"
+    )
+    page.goto(app + "#action=browser-human-capability")
+    page.wait_for_url(app)
+    page.wait_for_selector("#humanStatus >> text=Read-only session")
+    assert "action=" not in page.url
+    assert page.evaluate("actionCapability") == ""
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_quote_upload_confirmation_and_stale_conflict_are_visible(studio_page):
+    from test_studio_actions import quote
+
+    from mp3_to_videoclip import budget
+
+    page, app, root, *_ = studio_page
+    budget.set_budget(root, "1.00", "test")
+    q = quote(root, kind="transcription", tasks=[], source_hash="a" * 64)
+    open_human_session(page, app)
+    page.locator("#tab-quotes").click()
+    page.locator("#view textarea").fill("Review old quote but no transfer yet")
+    boxes = page.locator('#view input[type="checkbox"]')
+    boxes.nth(0).check()
+    posts = []
+    page.on("request", lambda r: posts.append(r.url) if r.method == "POST" else None)
+    button = page.get_by_role("button", name="Authorize 0.10 USD", exact=True)
+    button.click()
+    assert boxes.nth(1).evaluate("box => box.validity.valueMissing")
+    assert page.locator("#view form").evaluate("form => !form.checkValidity()")
+    assert posts == []
+    assert not (root / "work/authorizations.json").exists()
+    boxes.nth(1).check()
+    q["reserve_total_usd"] = "0.20"
+    write_json(root / f"work/quotes/{q['id']}.json", q)
+    button.click()
+    page.wait_for_selector("#view >> text=Quote changed")
+    assert button.is_disabled()
+    assert not (root / "work/authorizations.json").exists()

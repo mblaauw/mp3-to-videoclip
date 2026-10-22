@@ -62,7 +62,7 @@ def save_quote(root: Path, quote: dict) -> dict:
 
 def read_quote(root: Path, quote_id: str) -> dict:
     quote = read_json(inside(root, f"work/quotes/{quote_id}.json"))
-    if quote["id"] != quote_id:
+    if not isinstance(quote, dict) or quote.get("id") != quote_id:
         raise ValueError("quote identity changed")
     return quote
 
@@ -295,9 +295,36 @@ def quote_transcription(
     )
 
 
-def authorize(root: Path, quote_id: str, cap: str, note: str):
+def quote_uploads_required(quote: dict) -> bool:
+    """Quoted source/reference transfer requires an explicit human attestation."""
+    return quote.get("kind") in {"transcription", "music-analysis"} or any(
+        task.get("references") for task in quote.get("tasks", [])
+    )
+
+
+def authorize(
+    root: Path,
+    quote_id: str,
+    cap: str,
+    note: str,
+    *,
+    expected_quote_hash: str | None = None,
+    via: str | None = None,
+    uploads_confirmed: bool | None = None,
+    review_confirmed: bool | None = None,
+):
     quote = read_quote(root, quote_id)
+    quote_hash = digest(quote)
+    if expected_quote_hash is not None and expected_quote_hash != quote_hash:
+        raise ValueError("quote changed during review; inspect the current quote again")
     ceiling = money(cap)
+    if via == "studio":
+        if review_confirmed is not True or ceiling != money(quote["reserve_total_usd"]):
+            raise ValueError(
+                "Studio authority requires confirmed scope and the exact quoted amount"
+            )
+        if quote_uploads_required(quote) and uploads_confirmed is not True:
+            raise ValueError("Studio authority requires explicit quoted data-transfer consent")
     if ceiling < money(quote["reserve_total_usd"]) or not note.strip():
         raise ValueError("cap must cover reserved scope; record user authorization in --note")
     # Cumulative production admission: all kinds and all already-submitted tasks.
@@ -308,11 +335,17 @@ def authorize(root: Path, quote_id: str, cap: str, note: str):
     path = root / "work/authorizations.json"
     values = read_json(path) if path.exists() else {}
     values[quote_id] = {
-        "quote_hash": digest(quote),
+        "quote_hash": quote_hash,
         "cap_usd": str(ceiling),
         "at": now(),
         "note": note,
     }
+    if via is not None:
+        values[quote_id]["via"] = via
+    if uploads_confirmed is not None:
+        values[quote_id]["uploads_confirmed"] = bool(uploads_confirmed)
+    if review_confirmed is not None:
+        values[quote_id]["review_confirmed"] = bool(review_confirmed)
     write_json(path, values)
 
 
@@ -321,6 +354,12 @@ def authorization(root: Path, quote: dict) -> dict:
     value = read_json(path).get(quote["id"]) if path.exists() else None
     if not value or value["quote_hash"] != digest(quote):
         raise ValueError("quote needs explicit spending authorization")
+    if value.get("via") == "studio" and (
+        value.get("review_confirmed") is not True
+        or (quote_uploads_required(quote) and value.get("uploads_confirmed") is not True)
+        or money(value["cap_usd"]) != money(quote["reserve_total_usd"])
+    ):
+        raise ValueError("Studio authorization has incomplete scope or data-transfer consent")
     return value
 
 

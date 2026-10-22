@@ -290,11 +290,12 @@ def approvals(root: Path) -> dict:
                 "approved_hash": approved_hash,
                 "at": approval.get("at"),
                 "note": approval.get("note"),
+                "via": approval.get("via"),
+                "preview_watched": approval.get("preview_watched"),
+                "review_confirmed": approval.get("review_confirmed"),
                 "problem": problem,
                 "would_pass_now": state == "approved",
-                "approve_command": (
-                    f"uv run clip approve projects/{root.name} {stage} --note '<your decision>'"
-                ),
+                "approve_command": "uv run clip serve --actions",
             }
         )
     return {

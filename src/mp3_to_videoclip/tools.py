@@ -10,6 +10,9 @@ Nothing here executes anything; it is the policy table the runtime and the UI sh
 
 from __future__ import annotations
 
+import io
+from contextlib import redirect_stderr, redirect_stdout
+
 from .cli import parser
 
 #: read    - no writes at all
@@ -113,6 +116,31 @@ def classify_argv(argv: list[str]) -> str:
         if token in SCOPES:
             return token
     raise ValueError("no known clip command in argv")
+
+
+def human_capability(argv: list[str]) -> str | None:
+    """Re-derive human-only modes from the same parser used by execution.
+
+    A read command may have a human-only mode. Stored plan labels are never
+    authority; parser-supported abbreviations must not evade this check.
+    """
+    tool = classify_argv(argv)
+    if scope_for(tool)["kind"] == "human":
+        return f"{tool} is a human decision and cannot be delegated"
+    tail = argv[3:] if argv[:3] == ["uv", "run", "clip"] else argv
+    # A leading `--` before the subcommand is valid; parse the unmodified tail.
+    if tool not in {"serve", "budget"}:
+        return None
+    try:
+        with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+            args, _ = parser().parse_known_args(tail)
+    except SystemExit as exc:
+        return None if exc.code == 0 else "invalid human-capability arguments require review"
+    if args.command == "serve" and args.actions:
+        return "serve --actions opens the human action capability and cannot be delegated"
+    if args.command == "budget" and args.cap is not None:
+        return "budget --cap sets spending authority and cannot be delegated"
+    return None
 
 
 def unclassified() -> list[str]:
