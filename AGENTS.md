@@ -31,6 +31,15 @@ scripts/bootstrap_production.py --check` (read-only: no clone, install, archive
 or network) or without `--check` to install the five pinned recipes and archive
 the deselected motion recipes.
 
+## Delegation bounds
+
+Run at most two concurrent review lanes and at most three subagents per turn.
+Batch frames, stills and files into one contact sheet or one bounded review
+batch; never spawn one subagent per frame, still or file. Reuse a reviewer for a
+second pass on the same bytes instead of opening a new child, and do not
+re-review unchanged bytes. The director remains the only dispatcher; specialists
+never dispatch helpers.
+
 ## Approval authority
 
 Ordinary stage approvals and quote authorizations are human Studio actions:
