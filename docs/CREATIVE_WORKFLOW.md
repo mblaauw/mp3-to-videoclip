@@ -26,7 +26,8 @@ profile examples below illustrate editable contracts, not the current defaults.
 New `clip init` defaults to workflow 2. Its state/reference/QC/budget contracts
 and complete commands are in [PRODUCTION_WORKFLOW_V2.md](PRODUCTION_WORKFLOW_V2.md).
 Those requirements augment the stage sequence below; existing projects are not
-migrated. Use `--workflow-version 1` only for an explicitly legacy new project.
+migrated. Legacy production creation is retired; existing legacy projects remain
+readable and renderable.
 
 New `clip init` productions have `brief.creative` and an empty musical event map.
 Existing productions without that profile retain exact legacy prompts, selected

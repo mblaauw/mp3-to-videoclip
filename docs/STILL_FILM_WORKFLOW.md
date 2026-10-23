@@ -76,8 +76,8 @@ canonical-model quote.
 
 Preflight exposes stored generation controls; changing them changes new-profile
 image input hashes and content-bound approvals. Old projects without these
-fields retain their historical FLUX fallback, not a silent model switch. Use
-`--workflow-version 1` for an explicitly legacy new production.
+fields retain their historical FLUX fallback, not a silent model switch. Legacy
+production creation is retired; existing legacy projects remain readable.
 
 ## Nine focused skills, one director
 

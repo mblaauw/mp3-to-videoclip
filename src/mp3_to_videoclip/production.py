@@ -67,7 +67,6 @@ def init_project(
     aspect="16:9",
     fps=24,
     music_mode="vocal",
-    workflow_version=None,
     *,
     image_model=None,
     image_settings=None,
@@ -75,7 +74,6 @@ def init_project(
     style=None,
     native_size=None,
     title=None,
-    renderer_backend=None,
 ) -> Project:
     if root.exists():
         raise ValueError("project directory already exists; use its existing artifacts")
@@ -85,10 +83,9 @@ def init_project(
         raise ValueError("source has no audio stream")
     duration = audio_seconds(source)
     width, height = (1920, 1080) if aspect == "16:9" else (1080, 1920)
-    new_defaults = workflow_version == 2
-    selected_model = image_model or (profiles.DEFAULT_MODEL if new_defaults else None)
+    selected_model = image_model or profiles.DEFAULT_MODEL
     selected_settings = image_settings
-    if selected_settings is None and new_defaults and selected_model == profiles.DEFAULT_MODEL:
+    if selected_settings is None and selected_model == profiles.DEFAULT_MODEL:
         selected_settings = profiles.default_settings()
     if style is not None and not style.strip():
         raise ValueError("an explicit style override must not be blank")
@@ -96,11 +93,7 @@ def init_project(
         raise ValueError("film title must not be blank")
     project = Project(
         slug=slug,
-        title=title.strip()
-        if title is not None
-        else slug.replace("-", " ").title()
-        if new_defaults
-        else source.stem,
+        title=title.strip() if title is not None else slug.replace("-", " ").title(),
         source_sha256=file_hash(source),
         duration=duration,
         aspect=aspect,
@@ -108,24 +101,16 @@ def init_project(
         width=width,
         height=height,
         music_mode=music_mode,
-        workflow_version=workflow_version,
-        prompt_version=2 if new_defaults else None,
-        signature_required=True if new_defaults else None,
-        source_filename=source.name if new_defaults else None,
-        renderer_backend=renderer_backend,
+        workflow_version=2,
+        prompt_version=2,
+        signature_required=True,
+        source_filename=source.name,
+        renderer_backend="remotion",
         image_model=selected_model,
         image_settings=selected_settings,
         image_seed=image_seed,
-        style_preset=(
-            "custom" if style is not None else profiles.STYLE_PRESET_ID if new_defaults else None
-        ),
-        native_size=(
-            native_size
-            if native_size is not None
-            else profiles.default_size(aspect)
-            if new_defaults
-            else None
-        ),
+        style_preset="custom" if style is not None else profiles.STYLE_PRESET_ID,
+        native_size=native_size if native_size is not None else profiles.default_size(aspect),
     )
     if source.suffix.lower() != ".mp3":
         raise ValueError("MVP input is an MP3; convert other sources explicitly first")
@@ -135,35 +120,33 @@ def init_project(
     # New productions use the explicit creative profile; the event map starts empty
     # and reviewed-by-human. No stage is approved on the user's behalf.
     creative = CreativeProfile(
-        look=style if style is not None else profiles.DEFAULT_STYLE if new_defaults else "",
-        image_rules=list(profiles.DEFAULT_IMAGE_RULES) if new_defaults else [],
+        look=style if style is not None else profiles.DEFAULT_STYLE,
+        image_rules=list(profiles.DEFAULT_IMAGE_RULES),
     )
     write_json(root / "brief.json", Brief(creative=creative).model_dump())
     write_json(root / "work/approvals.json", {})
     write_json(root / "work/assets.json", {})
     write_json(root / "work/tasks.json", {})
     init_events(root)
-    if new_defaults:
-        from .signature import draft_spec
+    from .signature import draft_spec
 
-        spec = draft_spec(project.title)
-        if project.renderer_backend == "remotion":
-            spec["renderer"] = "remotion"
-            spec["design"] = "joint-v1"
-            spec["intro"]["names"] = "MAHA KALA  ◆  VJDJ69"
-            from .models import BrandPackage
+    spec = draft_spec(project.title)
+    spec["renderer"] = "remotion"
+    spec["design"] = "joint-v1"
+    spec["intro"]["names"] = "MAHA KALA  ◆  VJDJ69"
+    from .models import BrandPackage
 
-            write_json(
-                root / "brand.json",
-                BrandPackage(
-                    id="mh-vj-filmstrip",
-                    mark="filmstrip",
-                    plate=False,
-                    name=spec["intro"]["names"],
-                    accent="#D4AE6A",
-                ).model_dump(),
-            )
-        write_json(root / "work/graphics-spec.json", spec)
+    write_json(
+        root / "brand.json",
+        BrandPackage(
+            id="mh-vj-filmstrip",
+            mark="filmstrip",
+            plate=False,
+            name=spec["intro"]["names"],
+            accent="#D4AE6A",
+        ).model_dump(),
+    )
+    write_json(root / "work/graphics-spec.json", spec)
     return project
 
 

@@ -16,11 +16,11 @@ actual composited samples. Inspect them, record `clip approve PROJECT graphics
 The base is not delivery; the graphics approval binds spec, base inputs and sample
 bytes. See README for title derivation and separate `clip style-test` commands.
 
-New CLI productions default to `project.workflow_version: 2`. Existing projects
-are **not migrated**. `clip init ... --workflow-version 1` explicitly retains the
-old contracts for a new legacy-style project. Do not toggle an approved project
-in place: references, prompts and approval bindings will change. The approved
-implementation scope is [WORKFLOW_HARDENING.md](WORKFLOW_HARDENING.md).
+New CLI productions always use `project.workflow_version: 2`; the legacy creation
+switch is retired. Existing projects are **not migrated** and keep their original
+gates. Do not toggle an approved project in place: references, prompts and
+approval bindings will change. The approved implementation scope is
+[WORKFLOW_HARDENING.md](WORKFLOW_HARDENING.md).
 
 ## 1. Spending authority before any upload or inference
 

@@ -439,9 +439,7 @@ class Handler(BaseHTTPRequestHandler):
             body.get("aspect") or "16:9",
             int(body.get("fps") or 24),
             body.get("music_mode") or "vocal",
-            workflow_version=2,
             title=title,
-            renderer_backend="remotion",
         )
         if cap is not None and cap != "":
             from .storage import project_lock

@@ -169,12 +169,7 @@ def parser() -> argparse.ArgumentParser:
     )
     init.add_argument("--aspect", choices=["16:9", "9:16"], default="16:9")
     init.add_argument("--fps", type=int, choices=[24, 30], default=24)
-    init.add_argument(
-        "--renderer",
-        choices=["remotion", "ffmpeg"],
-        default="remotion",
-        help="Visual renderer for this new production; legacy projects remain unchanged",
-    )
+
     init.add_argument(
         "--music-mode", choices=["vocal", "instrumental", "music-led"], default="vocal"
     )
@@ -189,13 +184,7 @@ def parser() -> argparse.ArgumentParser:
     )
     init.add_argument("--image-settings", help="JSON settings object replacing the model defaults")
     init.add_argument("--image-seed", type=int, help="Optional seed, not an identity guarantee")
-    init.add_argument(
-        "--workflow-version",
-        type=int,
-        choices=[1, 2],
-        default=2,
-        help="New productions use strict workflow 2; 1 retains legacy gates",
-    )
+
     for name, help_text in {
         "analyze": "Local beat/energy/rough section analysis; no upload",
         "status": "Show current approvals and stale/missing shots",
@@ -622,14 +611,12 @@ def execute(args):
             args.aspect,
             args.fps,
             args.music_mode,
-            workflow_version=2 if args.workflow_version == 2 else None,
             image_model=args.model,
             image_settings=image_settings,
             image_seed=args.image_seed,
             style=args.style,
             native_size=native_size,
             title=args.title,
-            renderer_backend=args.renderer,
         )
         return project.model_dump()
     if not root.is_dir():

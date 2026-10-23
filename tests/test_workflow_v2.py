@@ -246,7 +246,7 @@ def test_cli_commands_and_new_default(tmp_path):
     args = parser().parse_args(
         ["init", str(tmp_path / "new"), "--slug", "new", "--mp3", "song.mp3"]
     )
-    assert args.workflow_version == 2
+    assert args.command == "init"
     root = strict_root(tmp_path)
     result = execute(parser().parse_args(["locate", str(root), "--frame", "12"]))
     assert result["shot_id"] == "s002"

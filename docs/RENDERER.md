@@ -1,9 +1,10 @@
 # Rendering: one timeline, two compatible backends
 
-New `clip init` defaults to `--renderer remotion`. Existing project JSON that
-omits `renderer_backend` keeps its original FFmpeg path. Explicit `--renderer
-ffmpeg` remains available at intake. Remotion is visual rendering, not generated
-character animation, a paid service or a second production state store.
+New `clip init` productions always use Remotion; the legacy creation switch has
+been retired. Existing project JSON that omits `renderer_backend` keeps its
+original FFmpeg path and remains readable/renderable. Remotion is visual
+rendering, not generated character animation, a paid service or a second
+production state store.
 
 ## Local dependencies
 

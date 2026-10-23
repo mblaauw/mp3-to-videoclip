@@ -478,7 +478,7 @@ def test_init_preserves_original_and_refuses_existing_directory(tmp_path, monkey
     root = tmp_path / "new"
     before = file_hash(source)
     project = P.init_project(root, source, "demo", "9:16")
-    assert project.image_size == (864, 1536)
+    assert project.image_size == (768, 1376)
     assert file_hash(source) == file_hash(root / "media/song.mp3") == before
     with pytest.raises(ValueError, match="already exists"):
         P.init_project(root, source, "demo")

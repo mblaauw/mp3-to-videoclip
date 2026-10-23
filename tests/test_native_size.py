@@ -128,13 +128,50 @@ def test_cli_init_persists_preset_size_when_the_flag_is_absent(tmp_path):
     assert P.load_project(root, verify_source=False).image_size == (1376, 768)
 
 
-def test_cli_explicit_legacy_workflow_preserves_old_shape(tmp_path):
+def test_new_productions_are_always_workflow_2_remotion(tmp_path):
     source = synth_source(tmp_path)
-    root = tmp_path / "explicit-legacy"
-    init(root, source, "--workflow-version", "1")
+    root = tmp_path / "modern"
+    init(root, source)
     stored = json.loads((root / "project.json").read_text())
-    assert "workflow_version" not in stored
-    assert "native_size" not in stored
+    assert stored["workflow_version"] == 2
+    assert stored["prompt_version"] == 2
+    assert stored["renderer_backend"] == "remotion"
+    assert stored["signature_required"] is True
+    assert stored["source_filename"] == "source.mp3"
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [("--workflow-version", "1"), ("--renderer", "ffmpeg")],
+)
+def test_removed_legacy_creation_flags_are_rejected_before_writing(tmp_path, extra):
+    source = synth_source(tmp_path)
+    root = tmp_path / "legacy-refused"
+    with pytest.raises(SystemExit):
+        init(root, source, *extra)
+    assert not root.exists()
+
+
+def test_existing_legacy_projects_remain_readable(tmp_path):
+    """Compatibility readers stay; only new legacy creation is retired."""
+    root = tmp_path / "existing-legacy"
+    (root / "media").mkdir(parents=True)
+    (root / "media/song.mp3").write_bytes(b"existing project")
+    stored = {
+        "slug": "existing",
+        "title": "Existing",
+        "source_sha256": "0" * 64,
+        "duration": 4.0,
+        "aspect": "16:9",
+        "fps": 24,
+        "width": 1920,
+        "height": 1080,
+    }
+    (root / "project.json").write_text(json.dumps(stored))
+    project = P.load_project(root, verify_source=False)
+    assert project.workflow_version is None
+    assert project.renderer_backend is None
+    assert project.image_size == (1536, 864)
 
 
 @pytest.mark.parametrize("value", ["1376*768", "1376 x 768", "1376", "WxH", "0x0", "-1376x768"])

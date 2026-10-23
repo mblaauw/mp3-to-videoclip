@@ -6,6 +6,7 @@ legacy pilot artifacts keep their exact approved hashes.
 """
 
 import copy
+import json
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from test_production import FakeRunware
 
 from mp3_to_videoclip import generation as G
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip import profiles
 from mp3_to_videoclip.models import (
     Brief,
     CreativeProfile,
@@ -712,6 +714,14 @@ def test_instrumental_init_and_stage_gates(tmp_path, monkeypatch):
     monkeypatch.setattr(P, "audio_seconds", lambda _: 2.0)
     root = tmp_path / "instrumental"
     project = P.init_project(root, source, "instrumental", music_mode="instrumental")
+    # Brandless fixture: this test covers instrumental music gates, and the default
+    # identity intro is intentionally longer than the two-second test source.
+    (root / "brand.json").unlink()
+    # Signature approval is a separate gate; this fixture exercises instrumental
+    # music gates only, so keep the required signature from blocking brief approval.
+    stored = json.loads((root / "project.json").read_text())
+    stored["signature_required"] = False
+    write_json(root / "project.json", stored)
     assert project.music_mode == "instrumental"
     assert P.load_project(root).music_mode == "instrumental"
     assert P.load_brief(root).creative is not None
@@ -732,7 +742,9 @@ def test_instrumental_init_and_stage_gates(tmp_path, monkeypatch):
                 "direction": "Instrumental",
                 "style": "Ambient",
                 "treatment": "Abstract",
-                "creative": brief.creative.model_copy(update={"look": "Soft monochrome"}),
+                "creative": brief.creative.model_copy(
+                    update={"look": profiles.DEFAULT_STYLE + "\n\nSoft monochrome"}
+                ),
             }
         ).model_dump(),
     )
