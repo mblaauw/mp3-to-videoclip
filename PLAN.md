@@ -1,5 +1,119 @@
 # Approved MVP plan
 
+## Design review status (2026-10-24)
+
+The independent review of commit `457eb2e` (20 Oct 2026) reproduced ten defects and
+named seven design problems. This section records what is true at `02afceb` on
+`chore/retire-legacy-init`, what remains, and the order it should be taken in. It is
+a status record, not a new approval: nothing here authorises spending, uploads,
+production approvals or publication.
+
+Measured at this revision: 46 modules / 19,709 lines of `src/`, 46 CLI commands,
+~2,200 lines of Remotion source, 892 tests, and ~8,700 words across `AGENTS.md`,
+`LOOP.md`, `README.md` and the inline agent prompts. `uv run pytest` gives 892
+passed, 1 skipped; `uv run ruff check .` and `uv run ruff format --check .` are
+clean (120 files) on macOS. Linux CI is green on `main` at `6d243e8` (run
+`39842506833`, 5m13s); the commits above it are unpushed, so they have no CI
+evidence yet.
+
+### Fixed and verified
+
+| # | Review finding | Evidence at this revision |
+| --- | --- | --- |
+| 1 | `clip plan run` always crashed | `spine` is imported at module top (`cli.py:14`); CLI-level build/list/show/run tests (`tests/test_plans.py:191`, `:280`); commit `5251ba2` |
+| 2 | The journal never re-ran a command | Replay is opt-in and keyed on the new run id, not `argv` alone (`spine.py:310-345`) |
+| 3 | A stored plan could run any command | `plans.py` re-derives the tool from argv, requires `argv[:3] == ["uv","run","clip"]`, rejects human capability and re-runs `problems()` on load (`plans.py:242-254`) |
+| 4 | Tests only passed on this Mac | Inter (OFL) bundled in `src/mp3_to_videoclip/fonts/` and used as the fallback face (`graphics.py:356`); Linux `check.yml` runs ruff, pytest and the 19 browser tests (23 cases) in `tests/test_studio_browser.py`; the vendor-recipe test skips without the ignored checkout (`tests/test_stage_skills.py:195`) |
+| 5 | Length came from container metadata | `init` stores decoded PCM seconds via `audio_seconds()`; commit `04d7c37` |
+| 7 | The "read-only" server wrote | Only `POST /api/create` exists and it routes through the kernel; `PUT`/`PATCH`/`DELETE` return 405 (`serve.py:390-467`) |
+| 8 | Review pages failed during a render | `dashboard`, `inspect`, `context`, `studio`, `sheet`, `progress`, `locate`, `preflight`, `prompts` are in `READ_ONLY_COMMANDS` (`cli.py:456-469`) |
+| 9 | Docs linked into an untracked archive | The four plan docs and `experiments/README.md` now state the archive is untracked; `REPOSITORY_LAYOUT.md` labels `brand/releases/` generated output rather than active source |
+| 10 | The README's own checks failed | `ruff check` and `ruff format --check` clean; type checking was dropped rather than adopted, so the review's 71 `pyright` errors are not gated |
+
+### Still open
+
+**Bug 6 — a Chrome update revokes approvals.** `remotion.implementation_hash()`
+still hashes the desktop Chrome binary, and `REMOTION_CHROME` still defaults to
+`/Applications/Google Chrome.app` (`remotion.py:20-35`, `:81`). Preview and graphics
+approvals bind to that revision (`production.py:608-612`, `graphics.py:525-527`), so a
+browser update invalidates reviewed previews and a machine without desktop Chrome
+cannot satisfy the gate at all.
+
+Design problems, in the review's numbering:
+
+1. **Complexity out of proportion.** Partial. `workflow_version` accepts only `2`
+   (plus `None` for legacy artifacts), the legacy creation switches are gone
+   (`3696359`) and new productions are always Remotion (`production.py:108`), but the
+   CLI still exposes 46 commands and the compatibility branches remain for four
+   finished films.
+2. **Two (or three) of everything.** Open. The FFmpeg plate path is still reachable
+   for productions without `renderer_backend: remotion` (`render.py:626`); Pillow
+   titles and credits (`graphics.py`, 2,572 lines) and `branding.py` (555) coexist
+   with the Remotion equivalents; four analysis modules (1,996 lines) remain;
+   `graphics.py` keeps private `_probe`/`_digest` copies; nothing tests that the
+   Python timing constants and `renderers/remotion/src/timing.mjs` agree.
+3. **Approval hashing is expensive and fragile.** Open. `stage_hash` hashes
+   `model_dump()`-derived values, walks the upstream chain on every call and
+   re-hashes the source MP3; the `Project` serializer still strips `None` fields to
+   keep old hashes stable (`models.py:92-106`).
+4. **Policy lives in prose and is bypassable.** Partial. `clip approve` and
+   `clip authorize` redirect to Studio, and a human decision now needs a review note
+   and the reviewed content hash (`human_actions.py`), but approvals remain plain
+   JSON that any agent with `edit`/`shell` can write, and the rules are still
+   restated in README, AGENTS.md, LOOP.md, the inline prompts and the skills.
+5. **Personal setup is hardcoded.** Open: `PROJECT_VEIL_RUNWARE_API`
+   (`providers.py:38`), `MAHA KALA × VJDJ69` (`signature.py:7-9`), the Chrome path,
+   `~/Downloads/Suno Downloads` (`serve.py:953`) and `/Users/mich`
+   (`intake.py:127`).
+6. **A web app without a decision.** Half-decided in practice. Since PR #3 Studio is
+   the only human decision channel, which answers the review's open question in
+   favour of the UI; but `README.md:3` still opens with "not a web app" and the UI is
+   still Python string literals rather than a frontend.
+7. **A second agent runtime.** Open. `spine.py` (635), `plans.py` (310),
+   `context.py` (140), `evals.py` (151), `mcp.py` (249) and `tools.py` (154) remain.
+   They work now (bugs 1–3 are fixed) and no production workflow needs them.
+
+### Remaining work, in order
+
+Each phase is local engineering with no paid call, no upload and no production
+approval; a phase that changes a renderer or an analysis dependency still needs the
+user's explicit scope before it starts.
+
+- **A. Portability and approval integrity.** Pin Remotion's own headless shell,
+  stop hashing the browser, and bind preview/graphics approvals to the rendered
+  output bytes. Move the Runware key name, Chrome path, Suno folder and signature
+  constants into a user config with per-project overrides. Add `ruff format --check`
+  and a type checker to CI, and add the Python↔`timing.mjs` parity test. Reword the
+  README opening to describe the local review UI honestly. Done when a Chrome update
+  changes no approval, a clean Linux runner passes the same commands the README
+  documents, and no personal path or key name remains in `src/`.
+- **B. One renderer, one graphics engine.** Record which commit re-renders each
+  finished film, then delete the FFmpeg plate path, Pillow titles/credits, the
+  unused brand marks, the duplicated hash/probe helpers and the compatibility
+  branches. Merge the analysis modules. Done when Remotion is the only renderer and
+  the CLI is near 20 commands.
+- **C. Approvals as stored bytes.** Give each artifact an explicit `schema_version`
+  with a migration, hash the canonical bytes of the stored file, record explicit
+  parent hashes, and memoise file hashes per process. Then decide the
+  `spine`/`plans`/`context`/`evals`/`mcp` layer: delete it per the review, or keep it
+  only if Studio needs durable run history. Done when approving a 40-still set no
+  longer re-hashes the song hundreds of times.
+- **D. Better ears.** Add a pretrained beat/downbeat tracker and align the supplied
+  Suno lyrics locally instead of paying to transcribe them, keeping the existing
+  "unreviewed measurement" label. Then trim the guidance that only exists to guard
+  weak estimates and reduce the crew to director plus critic. This phase needs a
+  separately approved scope before any new model dependency is installed.
+
+### Publication state
+
+`chore/retire-legacy-init` is three commits ahead of `origin/main` (`6d243e8`) and is
+the branch to publish: the two implementation commits plus this record. `feat/studio-ux-improvements` is superseded: its
+implementation was squash-merged as PR #2 (`75f8c95`) and its tip only records that
+handoff. `chore/sustained-delivery` is pushed but unmerged and carries a second CI
+workflow (`.github/workflows/ci.yml`) beside `check.yml`; decide which one survives
+before merging it. Push, PR, merge and deploy stay user-operated — agent publication
+is blocked by configuration policy.
+
 ## Implemented engineering milestone: Human Studio decisions (2026-10-21)
 
 The user selected UI approvals before legacy removal after PR #2 merged.
