@@ -60,6 +60,17 @@ Stage skills are capabilities to load as needed, not a strict arrow sequence:
 approval. Only the director writes canonical state, and parallel writers never
 edit the same brief, board or approval file.
 
+## Guided Studio loop (new productions)
+
+`work/guided-flow.json` selects the five-step path: Track → Story → Style check →
+Images → Finish. Music analysis is agent-owned and needs no user approval step; the
+watched preview is optional; the full stills gate is the style check; factual
+credits are confirmed at Finish. Approving brief and storyboard is **one** human
+decision but still validates both kernel gates atomically. Revision notes live in
+`work/feedback.json` (`clip feedback`), are never approval and never spend.
+Recorded productions without the policy file keep their exact v2 gates. See
+[docs/GUIDED_WORKFLOW.md](docs/GUIDED_WORKFLOW.md).
+
 ## Gates (each is a user decision)
 
 Ordinary stage/quote decisions use the user's terminal-enabled Studio session

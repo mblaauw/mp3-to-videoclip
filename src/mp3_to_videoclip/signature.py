@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .storage import digest, file_hash, inside, read_json, write_json
+from .storage import digest, file_hash, inside, read_json, read_optional, write_json
 
 NAMES = "MAHA KALA  ×  VJDJ69"
 FILMSTRIP_NAMES = "MAHA KALA  ◆  VJDJ69"
@@ -31,6 +31,46 @@ def draft_spec(title: str) -> dict:
         "credits": {"cards": [], "lockup": PRODUCTION_LINE},
         "warning": "Draft: record this film's factual credit roles and confirm them before brief approval. Do not reuse randomized demo roles.",
     }
+
+
+def _valid_cards(cards) -> list | None:
+    """Accept only a bounded list of non-empty role/name pairs."""
+    if not isinstance(cards, list) or not cards or len(cards) > 40:
+        return None
+    if not all(
+        isinstance(card, list)
+        and len(card) == 2
+        and all(isinstance(item, str) and item.strip() for item in card)
+        for card in cards
+    ):
+        return None
+    return cards
+
+
+def credits_template(projects_dir: Path) -> list | None:
+    """Most recent factual role/name cards from a sibling production.
+
+    An explicitly saved ``work/credits-template.json`` wins. Without one, a
+    recorded ``work/graphics-spec.json`` is used as a read-only fallback so the
+    current productions can prefill the next film too. New films are prefilled,
+    never auto-confirmed: the user still confirms who actually worked on this
+    film. Invalid or missing sources return ``None``.
+    """
+    best = None
+    for path in Path(projects_dir).glob("*/work/credits-template.json"):
+        value = read_optional(path)
+        cards = _valid_cards(value.get("cards")) if isinstance(value, dict) else None
+        if cards and (best is None or path.stat().st_mtime > best[0]):
+            best = (path.stat().st_mtime, cards)
+    if best:
+        return best[1]
+    for path in Path(projects_dir).glob("*/work/graphics-spec.json"):
+        value = read_optional(path)
+        credits = value.get("credits") if isinstance(value, dict) else None
+        cards = _valid_cards(credits.get("cards")) if isinstance(credits, dict) else None
+        if cards and (best is None or path.stat().st_mtime > best[0]):
+            best = (path.stat().st_mtime, cards)
+    return best[1] if best else None
 
 
 def validate_spec(root: Path, project) -> dict:

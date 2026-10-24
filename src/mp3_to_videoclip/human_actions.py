@@ -9,10 +9,10 @@ import re
 from pathlib import Path
 from uuid import UUID
 
-from . import budget
+from . import budget, flow
 from . import generation as G
 from . import production as P
-from .storage import digest, project_lock, read_json
+from .storage import digest, project_lock, read_json, write_json
 
 
 class ActionError(ValueError):
@@ -108,6 +108,221 @@ def approve_stage(root: Path, stage: str, body: dict):
         )
         record = read_json(root / "work/approvals.json")[stage]
     return {"approved": stage, "record": record, "generated": False}
+
+
+def review_story(root: Path):
+    """One human-readable, hash-bound view of the two story decisions.
+
+    A read-only snapshot deliberately takes no project lock: browsing Studio must
+    not create files. The approval route re-derives and checks this combined hash
+    under the lock before writing either record.
+    """
+    brief_hash = P.stage_hash(root, "brief")
+    board_hash = P.stage_hash(root, "storyboard")
+    return {
+        "brief": {
+            "hash": brief_hash,
+            "artifact": read_json(root / P.STAGE_FILES["brief"]),
+        },
+        "storyboard": {
+            "hash": board_hash,
+            "artifact": read_json(root / P.STAGE_FILES["storyboard"]),
+        },
+        "combined_hash": digest({"brief": brief_hash, "storyboard": board_hash}),
+        "guided": flow.guided(root),
+    }
+
+
+def approve_story(root: Path, body: dict):
+    """Record one human decision for the agreed brief and storyboard.
+
+    This is the guided-flow decision. Recorded v2 productions keep separate
+    brief and storyboard approvals. Both guided gates are still validated and
+    both content hashes are required; the approval file is restored
+    byte-for-byte if the second gate fails, so a single click can never leave a
+    half-approved story.
+    """
+    if not flow.guided(root):
+        raise ActionError(
+            "This production records brief and storyboard as separate decisions.",
+            409,
+        )
+    note = _body(body, {"note", "expected_hash", "confirmed"}, "expected_hash")
+    with project_lock(root):
+        path = root / "work/approvals.json"
+        try:
+            saved = read_json(path)
+        except (OSError, ValueError) as exc:
+            raise ActionError(
+                "saved approval records are unavailable; inspect locally", 409
+            ) from exc
+        if not isinstance(saved, dict) or any(
+            not isinstance(item, dict) for item in saved.values()
+        ):
+            raise ActionError("saved approval records are invalid; inspect them locally", 409)
+        brief_hash = P.stage_hash(root, "brief")
+        board_hash = P.stage_hash(root, "storyboard")
+        combined = digest({"brief": brief_hash, "storyboard": board_hash})
+        if combined != body["expected_hash"]:
+            raise ActionError("Story changed. Review the current brief and storyboard again.", 409)
+        before = path.read_bytes()
+        try:
+            P.approve(
+                root,
+                "brief",
+                note,
+                expected_hash=brief_hash,
+                via="studio",
+                review_confirmed=True,
+            )
+            P.approve(
+                root,
+                "storyboard",
+                note,
+                expected_hash=board_hash,
+                via="studio",
+                review_confirmed=True,
+            )
+        except Exception:
+            path.write_bytes(before)
+            raise
+        saved = read_json(path)
+    return {
+        "approved": ["brief", "storyboard"],
+        "records": {"brief": saved["brief"], "storyboard": saved["storyboard"]},
+        "generated": False,
+    }
+
+
+def record_shot_review(root: Path, body: dict):
+    """Record an exact inspected still verdict; never a generation request."""
+    if set(body) - {"shot_id", "version", "sha256", "verdict", "note", "confirmed"}:
+        raise ActionError("unexpected review fields")
+    if body.get("confirmed") is not True:
+        raise ActionError("explicit inspection confirmation is required")
+    note = _clean_text(body.get("note"), "review note", 2000)
+    shot_id = _clean_text(body.get("shot_id"), "shot", 120)
+    digest_value = body.get("sha256")
+    if not isinstance(digest_value, str) or not re.fullmatch(r"[0-9a-f]{64}", digest_value):
+        raise ActionError("the reviewed image hash is required")
+    version = body.get("version")
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise ActionError("review version must be a positive integer")
+    verdict = body.get("verdict")
+    if verdict not in ("accept", "reject", "uncertain"):
+        raise ActionError("verdict must be accept, reject or uncertain")
+    from .reviews import record_review
+
+    with project_lock(root):
+        board = P.load_board(root)
+        shot = next((item for item in board.shots if item.id == shot_id), None)
+        if shot is None:
+            raise ActionError("unknown review shot", 404)
+        owner = shot.asset_shot_id or shot.id
+        assets = read_json(root / "work/assets.json")
+        entry = assets.get(owner) or {}
+        chosen = next(
+            (item for item in entry.get("versions", []) if item.get("version") == version),
+            None,
+        )
+        if chosen is None or chosen.get("sha256") != digest_value:
+            raise ActionError(
+                "That image version changed. Refresh and inspect the current bytes.", 409
+            )
+        record = record_review(
+            root,
+            shot_id,
+            version,
+            verdict,
+            note=note,
+            reviewer="studio",
+            inspected=True,
+        )
+    return {"review": record, "approved": False, "generated": False}
+
+
+def save_credits(root: Path, body: dict):
+    """Edit late-bound credit cards for a guided production.
+
+    The guided flow deliberately keeps the signature out of the brief hash, so a
+    factual credit correction at the end does not invalidate image approvals.
+    Recorded v2 productions retain their existing coupling and are refused here.
+    """
+    if not flow.guided(root):
+        raise ActionError(
+            "This production records credits inside its brief approval. Ask your agent "
+            "to revise the signature and reapprove the brief.",
+            409,
+        )
+    if set(body) - {
+        "expected_spec_hash",
+        "title",
+        "cards",
+        "confirmed",
+        "note",
+        "use_as_template",
+    }:
+        raise ActionError("unexpected credit fields")
+    if body.get("confirmed") is not True:
+        raise ActionError("confirm that these factual roles are correct for this film")
+    expected = body.get("expected_spec_hash")
+    if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise ActionError("the current graphics specification hash is required")
+    note = _clean_text(body.get("note"), "credit note", 2000)
+    title = _clean_text(body.get("title"), "film title", 120)
+    project = P.load_project(root)
+    if title.casefold() != project.title.casefold():
+        raise ActionError("credits belong to this film; the title must match its project title")
+    raw_cards = body.get("cards")
+    if not isinstance(raw_cards, list) or len(raw_cards) > 40:
+        raise ActionError("credit cards must be a list of at most 40 role/name pairs")
+    cards = []
+    for card in raw_cards:
+        if not isinstance(card, (list, tuple)) or len(card) != 2:
+            raise ActionError("each credit card needs exactly a role and a name")
+        role, name = (_clean_text(value, "credit role/name", 120) for value in card)
+        cards.append([role, name])
+    if not cards:
+        raise ActionError("record at least one factual role/name pair")
+    use_as_template = body.get("use_as_template", False)
+    if type(use_as_template) is not bool:
+        raise ActionError("use_as_template must be a boolean")
+    with project_lock(root):
+        spec = read_json(root / "work/graphics-spec.json")
+        if digest(spec) != expected:
+            raise ActionError(
+                "Credits changed. Reload the current specification before saving.", 409
+            )
+        spec.setdefault("credits", {})
+        spec["credits"]["cards"] = cards
+        spec["credit_roles_confirmed"] = True
+        spec.pop("warning", None)
+        write_json(root / "work/graphics-spec.json", spec)
+        if use_as_template:
+            write_json(
+                root / "work/credits-template.json",
+                {
+                    "cards": cards,
+                    "saved_at": P.now(),
+                    "source_project": root.name,
+                    "note": note,
+                },
+            )
+    return {
+        "spec_hash": digest(spec),
+        "spec": spec,
+        "approved": False,
+        "note": note,
+    }
+
+
+def _clean_text(value, name: str, limit: int) -> str:
+    if not isinstance(value, str):
+        raise ActionError(f"{name} must be text")
+    text = value.strip()
+    if not text or len(text) > limit:
+        raise ActionError(f"{name} must be 1–{limit} characters")
+    return text
 
 
 def _quote(root, identity):

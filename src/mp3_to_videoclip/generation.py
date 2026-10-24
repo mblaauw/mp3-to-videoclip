@@ -129,9 +129,16 @@ def quote_images(
         else [s.id for s in board.shots if s.asset_shot_id is None]
     )
     if scope == "stills":
-        # New creative full sets are gated on the reviewed local preview; legacy
-        # stills keep their three-shot proof gate.
-        require_approval(root, "preview" if brief.creative is not None else "proof")
+        # Guided creative full sets gate on the style check; recorded v2 projects
+        # keep the mandatory watched preview. Legacy stills use the proof gate.
+        from . import flow
+
+        require_approval(
+            root,
+            "preview"
+            if brief.creative is not None and flow.settings(root)["preview_gate"]
+            else "proof",
+        )
     chosen = allowed if ids is None else ids
     if not chosen or len(set(chosen)) != len(chosen) or not set(chosen) <= set(allowed):
         raise ValueError("unknown, duplicate or out-of-scope shot IDs")

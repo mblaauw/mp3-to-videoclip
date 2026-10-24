@@ -15,11 +15,12 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from . import feedback as feedback_module
+from . import flow, studio
 from . import production as P
-from . import studio
 from .dashboard import _music_grid
 from .models import Brief, Project, Storyboard
-from .storage import inside, read_optional
+from .storage import digest, inside, read_optional
 
 THUMB_WIDTH = 360
 THUMB_QUALITY = 78
@@ -78,8 +79,12 @@ def workflow(root: Path) -> dict:
         "music_mode": project.music_mode,
         "artifacts": artifacts,
         "graphics_spec": _workflow_artifact(root, "work/graphics-spec.json"),
+        "graphics_spec_hash": None,
         "preview_review": preview_review,
         "preview_movie": preview_movie,
+        "flow": flow.settings(root),
+        "feedback": [],
+        "feedback_problem": None,
         "proof_shot_ids": [],
         "rollout": {
             "automatic_gate": False,
@@ -92,6 +97,12 @@ def workflow(root: Path) -> dict:
             ),
         },
     }
+    if result["graphics_spec"]["available"]:
+        result["graphics_spec_hash"] = digest(result["graphics_spec"]["artifact"])
+    try:
+        result["feedback"] = feedback_module.requests(root)[-40:]
+    except (OSError, ValueError) as exc:
+        result["feedback_problem"] = str(exc)
     storyboard = _workflow_artifact(root, P.STAGE_FILES["storyboard"])
     try:
         brief = Brief.model_validate(artifacts["brief"]["artifact"])

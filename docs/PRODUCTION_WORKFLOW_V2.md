@@ -3,6 +3,12 @@
 Current new-film defaults and stage skills: [STILL_FILM_WORKFLOW.md](STILL_FILM_WORKFLOW.md).
 Existing productions are not migrated to these new defaults.
 
+New productions also receive the guided Studio policy in
+[GUIDED_WORKFLOW.md](GUIDED_WORKFLOW.md): five human steps, agent-owned music
+analysis, optional watched preview, and late-bound credits at Finish. The policy is
+recorded in `work/guided-flow.json`, outside every artifact hash. Productions
+without that file keep the exact preview and brief-credit coupling described below.
+
 The new `prompt_version: 2` / `photographic-painted-v2` candidate is style-first;
 serialized older films retain their exact prompt order and hashes. Choose a film
 title/folder independently of the MP3. New films also require confirmed factual

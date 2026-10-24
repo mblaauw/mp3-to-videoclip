@@ -214,8 +214,16 @@ def scan_project(
     if rejected:
         blockers.append(("warn", f"{rejected} rejected/uncertain still verdict(s)"))
 
+    from . import flow
+
+    next_order = (
+        tuple(stage for stage in ORDER if stage not in {"analysis", "events", "preview"})
+        if flow.guided(root)
+        else ORDER
+    )
     next_stage = next(
-        (stage for stage in ORDER if stage_state.get(stage) not in ("approved", "recorded")), None
+        (stage for stage in next_order if stage_state.get(stage) not in ("approved", "recorded")),
+        None,
     )
     if next_stage is None:
         latest = renders[0] if renders else None
@@ -240,6 +248,7 @@ def scan_project(
         "width": config.get("width"),
         "height": config.get("height"),
         "renderer": config.get("renderer_backend"),
+        "guided": flow.guided(root),
         "music_mode": config.get("music_mode"),
         "total_frames": config.get("total_frames"),
         "shots": shots,

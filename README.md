@@ -143,26 +143,43 @@ the returned project without a reload. Portrait setup explicitly warns that the
 current signature compositor requires a separate titles/credits plan before spend.
 No project files, exports or source audio are served by generic file routes.
 
-The workspace follows the creative workflow: **Music → Direction → Storyboard →
-Proof → Preview → Full stills → Titles & credits → Delivery**. The compact library
-is searchable; phone/tablet layouts use a project switcher instead of placing the
-whole library above the work. Overview highlights one next requirement, with
-commands and paths under technical details rather than competing primary actions.
-The workflow rail reports current gate state, never an estimated completion
-percentage. Supporting lyrics/listening/brand decisions follow the actual kernel
-dependencies; instrumental tracks skip lyrics. A reviewed small rollout remains an
-explicit checkpoint, not an invented automatic gate.
+The workspace is now five steps: **Track → Story → Style check → Images → Finish**.
+The compact library is searchable; phone/tablet layouts use a project switcher
+instead of placing the whole library above the work. One **Project** menu holds
+budget, decisions, activity and revision history; there is no separate Overview,
+Decisions, Activity or Budget tab. The workflow rail reports the actual gate state,
+never an estimated completion percentage.
 
-Music and direction screens present readable local artifacts through the token-
-scoped, read-only `/api/project/<slug>/workflow` projection. Graphics specifications
-are separate from composite-review evidence. Proof shows only its bound shot IDs;
-full stills retain verdict filters and a closeable shot inspector. Preview review
-names the exact movie in `work/preview-review.json`, never a newer unbound export;
-the playback confirmation names that same target. Missing/stale bindings are
-explicit. Decisions load their exact hash-bound evidence before confirmation. Local preview/composite
-files must be opened in a local player: this redesign does not add media streaming,
-in-browser creative editing, generation, or a new authorization route. Existing
-productions and their recorded decisions are not rewritten.
+**Track** shows the local analysis; the user is not asked to approve technical
+measurements. **Story** combines the concept, editable film style and storyboard,
+with durable revision notes for the agent. On guided productions, brief and
+storyboard can be approved as one human decision without weakening either gate;
+recorded v2 productions keep their separate per-stage decisions. **Style check** is the existing
+proof set with per-image approval/feedback. **Images** shows the full set with
+per-image verdicts and a progress count. **Finish** confirms credits and final
+graphics, then leaves the local render as a separate action.
+
+New productions use the guided policy in `work/guided-flow.json`: the mandatory
+watched preview is optional, full stills depend on the style check, and credits are
+late-bound so a factual correction at Finish does not invalidate image approvals.
+Recorded productions without that file keep their exact v2 hashes and gates,
+including their preview dependency and brief-bound credits. See
+[docs/GUIDED_WORKFLOW.md](docs/GUIDED_WORKFLOW.md) for the artifact/gate mapping,
+feedback and per-image routes, and the guided-vs-v2 table.
+
+Approvals still require the user's terminal-enabled `--actions` session. Per-image
+verdicts, story approval, credits and revision requests all require that capability;
+feedback is a request for the agent, never an approval or a generation trigger.
+The token-scoped `/api/project/<slug>/workflow` and `/story-review` reads are
+lock-free and write nothing. Graphics specifications stay separate from composited-
+sample evidence. Preview review names the exact movie in
+`work/preview-review.json`, never a newer unbound export. Local preview/composite
+files must be opened in a local player: Studio does not stream media, generate,
+upload or spend. Existing productions and their recorded decisions are not rewritten.
+
+The active `projects/` directory now contains only `forward-ever` and
+`stof-en-stilte`. The other six productions were moved, not deleted, to
+`archive/projects-2026-10-24/` (ignored by git and Studio).
 
 Browser regression tests run in CI on temporary projects. Locally:
 `uv run --with playwright playwright install chromium`, then
