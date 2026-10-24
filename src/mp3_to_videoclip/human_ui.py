@@ -13,7 +13,7 @@ if(location.hash.startsWith('#action=')){
 }
 const humanStatus=el('p','notice');humanStatus.id='humanStatus';humanStatus.setAttribute('role','status');
 document.querySelector('header').append(humanStatus);
-const quoteTab=el('button','tab','Budget & quotes');quoteTab.id='tab-quotes';quoteTab.dataset.tab='quotes';quoteTab.setAttribute('role','tab');quoteTab.setAttribute('aria-selected','false');quoteTab.setAttribute('aria-controls','view');quoteTab.tabIndex=-1;document.querySelector('.utility-tabs').append(quoteTab);
+const quoteTab=el('button','tab','Budget & quotes');quoteTab.id='tab-quotes';quoteTab.dataset.tab='quotes';quoteTab.setAttribute('role','tab');quoteTab.setAttribute('aria-selected','false');quoteTab.setAttribute('aria-controls','view');quoteTab.tabIndex=-1;quoteTab.hidden=true;document.querySelector('.utility-tabs').append(quoteTab);
 loaders.quotes=loadQuotes;
 async function sessionInfo(){
  if(!humanSession)humanSession=await api('/api/session');
@@ -54,7 +54,7 @@ async function humanApprovalPanel(gen){
    const submit=el('button',null,'Approve '+(stageNames[stage]||stage));submit.type='submit';form.append(submit);artifact.append(form);feedback.textContent='No decision has been recorded yet.';
    form.onsubmit=async function(e){e.preventDefault();if(!reviewed||submit.disabled)return;submit.disabled=true;
     const body={expected_hash:d.expected_hash,note:note.value,confirmed:confirmation.box.checked};if(stage==='preview')body.preview_watched=confirmation.box.checked;if(inspected)body.inspected=inspected.box.checked;if(uncertain)body.acknowledge_uncertain=uncertain.box.checked;
-    try{await decide('/api/project/'+encodeURIComponent(slug)+'/approve/'+stage,body);humanStatus.textContent='Approved '+stage+' for '+slug+'. No generation was started.';verifiedEntries.clear();await loadProjects();if(gen===viewGen)showTab('approvals',true);}
+    try{await decide('/api/project/'+encodeURIComponent(slug)+'/approve/'+stage,body);humanStatus.textContent='Approved '+stage+' for '+slug+'. No generation was started.';currentData=null;verifiedEntries.clear();await loadProjects();if(gen===viewGen)showTab('approvals');}
     catch(error){feedback.textContent=error.message;if(error.status===409||error.status===401){reviewed=null;feedback.textContent+=' Reload the artifact in a valid human session before deciding again.';}else submit.disabled=false;}
    };
   }catch(error){if(gen===viewGen)feedback.textContent=error.message;}finally{if(gen===viewGen)load.disabled=false;}

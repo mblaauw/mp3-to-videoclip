@@ -143,6 +143,19 @@ def parser() -> argparse.ArgumentParser:
         help="Interactively enable human Studio decisions (TTY required)",
     )
     serve_cmd.set_defaults(project=None)
+    feedback_cmd = commands.add_parser(
+        "feedback", help="Read, record or resolve Studio revision requests"
+    )
+    feedback_cmd.add_argument("project", type=Path)
+    feedback_cmd.add_argument("--stage", choices=["track", "story", "style", "images", "finish"])
+    feedback_cmd.add_argument("--status", choices=["open", "resolved"])
+    feedback_cmd.add_argument("--message", help="Record a new user/agent revision request")
+    feedback_cmd.add_argument("--scope", choices=["whole", "section", "shot"], default="whole")
+    feedback_cmd.add_argument("--target", help="Shot or section ID for a scoped request")
+    feedback_cmd.add_argument("--style", help="Optional replacement film-style text")
+    feedback_cmd.add_argument("--author", default="agent")
+    feedback_cmd.add_argument("--resolve", dest="request_id", help="Resolve an open request ID")
+    feedback_cmd.add_argument("--reply", help="Agent reply recorded when resolving")
     intake = commands.add_parser("intake", help="Build a static intake wizard that emits commands")
     intake.add_argument("--output-dir", type=Path, help="Where the page is written")
     intake.add_argument("--name", help="Explicit safe .html basename; never overwritten")
@@ -624,6 +637,26 @@ def execute(args):
     with _project_scope(root, args.command):
         project = production.load_project(root)
         cmd = args.command
+        if cmd == "feedback":
+            from . import feedback
+
+            if args.request_id:
+                if not args.reply:
+                    raise ValueError("--resolve needs --reply with what changed")
+                return {"resolved": feedback.resolve(root, args.request_id, reply=args.reply)}
+            if args.message:
+                return {
+                    "request": feedback.record(
+                        root,
+                        stage=args.stage or "story",
+                        scope=args.scope,
+                        target=args.target,
+                        message=args.message,
+                        style=args.style,
+                        author=args.author,
+                    )
+                }
+            return {"requests": feedback.requests(root, stage=args.stage, status=args.status)}
         if cmd == "budget":
             from . import budget
 

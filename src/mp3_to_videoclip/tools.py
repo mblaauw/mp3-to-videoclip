@@ -58,6 +58,11 @@ SCOPES: dict[str, dict] = {
     "events": {"kind": "edit", "note": "event map"},
     "skeleton": {"kind": "edit", "note": "timing skeleton"},
     "import-lyrics": {"kind": "edit", "note": "lyrics import"},
+    "feedback": {
+        "kind": "edit",
+        "note": "Studio revision request",
+        "writes": ["work/feedback.json"],
+    },
     "select": {"kind": "edit", "note": "choose a version"},
     "review": {"kind": "edit", "note": "byte-bound verdict"},
     "adopt": {"kind": "edit", "note": "register a derivative"},

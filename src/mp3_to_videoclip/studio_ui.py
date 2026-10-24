@@ -4,6 +4,9 @@ The CSS layer refines the existing review primitives. The script uses the same
 read-only projections and routing as the shell; human decisions remain in human_ui.
 """
 
+from .studio_ui_flow import CSS as FLOW_CSS
+from .studio_ui_flow import SCRIPT as FLOW_SCRIPT
+
 CSS = """
 :root{--bg:#101215;--panel:#181b20;--panel2:#20242b;--ink:#f2f1ee;--muted:#a3aab5;
 --gold:#e2bc80;--teal:#92b8c0;--line:#30353e;--ok:#92d4ad;--warn:#edc584;--bad:#f09e9a;
@@ -87,136 +90,5 @@ fieldset{padding:0;margin:0;border:0;min-width:0}legend{font-size:18px;font-weig
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 """
 
-SCRIPT = r"""
-// All state below is presentation-only. Canonical artifacts and gates stay on disk.
-const stageViews={analysis:'music',lyrics:'music',listening:'music',brand:'direction',events:'music',brief:'direction',storyboard:'board',proof:'proof',preview:'preview',stills:'stills',graphics:'graphics'};
-const workflowGroups={music:['analysis','events'],direction:['brief'],board:['storyboard'],proof:['proof'],preview:['preview'],stills:['stills'],graphics:['graphics']};
-const viewDescriptions={music:['Listen first. Understand the recording.','Review measured music, edit opportunities and any supplied lyrics before choosing a creative direction.'],direction:['Shape the world of your film.','Review the treatment, visual language and sequence arc before approving the creative brief.'],proof:['Prove the difficult shots first.','Review the selected three-shot proof for style, identity and interaction fidelity before expanding the film.'],preview:['Find the rhythm on the actual music.','Watch the exact review-bound preview continuously with audio. Still images and signal checks do not establish a playback review.'],graphics:['Make the finishing details count.','Review the opening identity, factual credits and actual composited samples—not just the graphics specification.'],delivery:['One complete, verified film.','Only the final composite is a deliverable. Check the final sequence with audio and archive the production before handover.']};
-let pendingApprovalStage=null,setupStep=0;
-const initialWelcome=view.firstElementChild.cloneNode(true);
-function actionButton(text,fn,cls='mini'){const b=el('button',cls,text);b.type='button';b.onclick=fn;return b;}
-function heading(title,description){const box=el('div','view-heading'),text=el('div');text.append(el('h2',null,title));if(description)text.append(el('p',null,description));box.append(text);return box;}
-function technical(title,value){const box=el('details','technical');box.append(el('summary',null,title),el('pre',null,JSON.stringify(value,null,2)));return box;}
-function stageReview(stage){const row=el('div','stage-review');const s=[...currentData.approvals.stages,...(currentData.approvals.supporting_stages||[])].find(s=>s.stage===stage);if(s){const state=stateTag(s.state);state.textContent=(stageNames[stage]||stage)+': '+state.textContent;row.append(state);if(s.problem)row.append(el('p','meta',s.problem));}row.append(actionButton('Review decision',()=>{pendingApprovalStage=stage;showTab('approvals');}));return row;}
-function updateWorkflow(){
- document.getElementById('tabs').hidden=!current;
- const e=currentData?.entry;document.getElementById('projectSwitch').value=current?.slug||'';
- if(!e)return;
- document.getElementById('projectEyebrow').textContent='Production · '+e.slug;
- document.getElementById('projectMeta').textContent=clock(e.duration)+' soundtrack · '+e.aspect+' · '+e.fps+' fps · '+(e.shots||0)+' shots';
- for(const [name,stages] of Object.entries(workflowGroups)){
-  const button=document.getElementById('tab-'+name),support=(currentData.approvals.supporting_stages||[]).filter(s=>name==='music'?['lyrics','listening'].includes(s.stage):name==='direction'&&s.stage==='brand'),states=[...stages.map(s=>e.stages[s]),...support.map(s=>s.state)];
-  const state=states.every(s=>s==='approved')?'approved':states.includes('stale')?'stale':states.includes('blocked')?'blocked':states.includes('unavailable')?'unavailable':states.includes('recorded')?'recorded':'missing';
-  button.dataset.state=state;button.querySelector('.step-state').textContent=state==='approved'?'Approved':state==='recorded'?'Not checked':state==='missing'?'Needs review':state==='unavailable'?'Not ready':state==='stale'?'Changed':state==='blocked'?'Blocked':state;
-  button.title=[...stages.map(s=>(stageNames[s]||s)+': '+(e.stages[s]||'unavailable')),...support.map(s=>(stageNames[s.stage]||s.stage)+': '+s.state)].join(' · ');
- }
- document.querySelector('#tab-delivery .step-state').textContent=e.next_step==='delivered'?'Recorded':'Verify export';
-}
-function renderLibrary(){
- const box=document.getElementById('list'),query=document.getElementById('projectSearch').value.trim().toLowerCase();clear(box);
- const picker=document.getElementById('projectSwitch');clear(picker);const prompt=el('option',null,'Choose a production');prompt.value='';picker.append(prompt);
- document.getElementById('projectCount').textContent=projects.length;
- for(const summary of projects){
-  const p=verifiedEntries.get(summary.slug)||summary,option=el('option',null,p.title+' · '+p.slug);option.value=p.slug;picker.append(option);
-  if(query&&!(p.title+' '+p.slug).toLowerCase().includes(query))continue;
-  const card=el('a','card');card.href='#/'+encodeURIComponent(p.slug)+'/overview';card.dataset.slug=p.slug;
-  if(current?.slug===p.slug){card.classList.add('on');card.setAttribute('aria-current','page');}
-  card.append(el('b',null,p.title),el('div','meta',clock(p.duration)+' · '+p.shots+' shots'));
-  if(projects.some(other=>other.slug!==p.slug&&other.title===p.title))card.append(el('div','meta',p.slug));
-  const bad=Object.entries(p.stages).find(([,s])=>['stale','blocked'].includes(s));
-  const stage=bad?.[0]||p.next_step.split(' ')[0],state=p.stages[stage];
-  const next=state?(stageNames[stage]||stage)+': '+(state==='recorded'?'not checked':state):p.next_step==='delivered'?'Delivery recorded':p.next_step==='verify approvals'?'Verify media approvals':p.next_step;
-  card.append(el('div','card-state',next),el('div','card-check',p.checked_at?'Checked '+stamp(p.checked_at):'Media not checked'));box.append(card);
- }
- picker.value=current?.slug||'';
- if(!box.children.length)box.append(el('p','notice',projects.length?'No productions match your search.':'No productions yet. Start with a local track.'));
-}
-document.getElementById('projectSearch').addEventListener('input',renderLibrary);
-document.getElementById('projectSwitch').onchange=function(){if(this.value)navigate(this.value,'overview');else{location.hash='';}};
-function scrollWorkflow(){const selected=document.querySelector('#tabs .tab.on');if(selected?.classList.contains('step')){const rail=selected.parentElement,delta=selected.getBoundingClientRect().left-rail.getBoundingClientRect().left;if(delta<0||delta+selected.offsetWidth>rail.clientWidth)rail.scrollLeft+=delta;}}
-async function workflowData(gen){const d=await api('/api/project/'+encodeURIComponent(current.slug)+'/workflow');return gen===viewGen?d:null;}
-function prettyLabel(value){return String(value).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());}
-function readableValue(node,value,depth=0){
- if(value===null||value===undefined||value==='')return;
- if(typeof value!=='object'){node.append(el('p',null,String(value)));return;}
- if(depth>3){node.append(technical('View complete structure',value));return;}
- if(Array.isArray(value)){const list=el('ul');for(const item of value){const li=el('li');readableValue(li,item,depth+1);list.append(li);}node.append(list);return;}
- const dl=el('dl');for(const [key,item] of Object.entries(value)){if(item===null||item===undefined||item==='')continue;dl.append(el('dt',null,prettyLabel(key)));const dd=el('dd');readableValue(dd,item,depth+1);dl.append(dd);}node.append(dl);
-}
-function renderArtifact(node,stage,artifact){
- const a=artifact||{};
- if(stage==='brief'){
-  for(const [label,value] of [['Treatment',a.treatment],['Direction',a.direction],['Visual style',a.creative?.look||a.style],['Sequence arc',a.creative?.arc],['Image rules',a.creative?.image_rules||a.visual_rules],['Scenes',a.creative?.scenes],['Characters',a.characters]]){
-   if(!value||(Array.isArray(value)&&!value.length))continue;
-   const block=el('section','content-card');block.append(el('h3',null,label));
-   if(label==='Characters'&&Array.isArray(value)){for(const character of value){const identity=el('article','content-card');readableValue(identity,character);block.append(identity);}}
-   else readableValue(block,value);
-   node.append(block);
-  }
- }else if(stage==='analysis'){
-  const info=el('div','callout','Measurements are estimates—not verified meter, genre, hearing or emotional interpretation.');node.append(info);
-  const facts=el('dl');for(const [label,value] of [['Duration',a.duration===undefined?null:clock(a.duration)],['Tempo estimate',a.estimated_tempo_bpm??a.tempo_bpm??a.bpm??a.tempo],['Estimated beats',Array.isArray(a.beats)?a.beats.length:null],['Source',a.provider??a.source]]){if(value!==null&&value!==undefined){facts.append(el('dt',null,label),el('dd',null,String(value)));}}node.append(facts);
- }else if(stage==='events'){
-  const events=Array.isArray(a.events)?a.events:[];if(!events.length)node.append(el('p','notice','No musical edit opportunities have been recorded yet.'));
-  for(const event of events){const card=el('section','content-card');card.append(el('h3',null,event.label||event.id||'Music event'));readableValue(card,Object.fromEntries(Object.entries(event).filter(([k])=>!['label','id'].includes(k))));node.append(card);}
- }else if(stage==='lyrics'){
-  node.append(el('p','notice','Supplied or transcribed words remain drafts until reviewed. Timing may be uncertain.'));
-  for(const segment of Array.isArray(a.segments)?a.segments:[]){const p=el('p');p.append(el('span','mono',clock(segment.start)+'–'+clock(segment.end)+'  '),document.createTextNode(segment.text||''));node.append(p);}
-  if(!Array.isArray(a.segments))readableValue(node,a);
- }else readableValue(node,a);
- node.append(technical('Complete artifact · technical details',a));
-}
-function artifactCard(stage,record){const card=el('section','content-card');card.append(el('h3',null,stageNames[stage]||prettyLabel(stage)));if(record?.available)renderArtifact(card,stage,record.artifact);else{card.append(el('p','notice',record?.problem||'No artifact is available yet.'),el('p','meta','Ask the agent to prepare this artifact, then refresh. Availability alone is not an approval.'));}if(workflowGroups.music.includes(stage)||['brief','graphics'].includes(stage))card.append(stageReview(stage));return card;}
-async function loadHome(gen){
- if(gen!==viewGen)return;clear(view);const e=currentData.entry,s=currentData.status;
- view.append(heading('Production overview'));
- const stats=el('div','stats');stats.append(stat(clock(s.duration),'soundtrack'),stat((s.shots||[]).length,'planned shots'),stat(money(e.spend.accounted_usd),'accounted spend'),stat(money(e.spend.cap_usd),'production allowance'));
- const support=(currentData.approvals.supporting_stages||[]).find(s=>s.state!=='approved');
- const nextStage=e.stages.analysis==='approved'&&support&&e.next_step.split(' ')[0]!=='events'?support.stage:e.next_step.split(' ')[0],action=(e.actions||[]).find(a=>a.severity==='blocker')||(e.actions||[])[0];
- const operational=action?.severity==='blocker'&&!action.id.startsWith('approve-');
- const box=el('section','decision');box.append(el('div','kicker',e.next_step==='delivered'?'Delivery recorded':'Your next step'));
- box.append(el('h3',null,operational?action.label:nextStage in stageViews?'Review '+(stageNames[nextStage]||nextStage):action?.label||'Verify final delivery'));
- box.append(el('p','notice',!operational&&support?.stage===nextStage?'This supporting music or identity decision is required before the creative brief can pass. Review its evidence first.':action?.reason||'Check the finished composite, complete playback review and archive before handover.'));
- if(nextStage in stageViews){const state=stateTag(e.stages[nextStage]||support?.state);state.textContent=(stageNames[nextStage]||nextStage)+': '+state.textContent;box.append(state);}
- const actions=el('div','actions');actions.append(actionButton(operational?'Show required command':nextStage in stageViews?'Open '+(stageNames[nextStage]||nextStage):'Inspect delivery',()=>{if(operational){const technical=view.querySelector('details.technical');technical.open=true;technical.querySelector('summary').focus();technical.scrollIntoView({block:'nearest'});}else showTab(stageViews[nextStage]||'delivery');},''));actions.append(actionButton('Review decisions',()=>{pendingApprovalStage=nextStage in stageViews?nextStage:null;showTab('approvals');}));box.append(actions);view.append(box,stats);
- const summary=el('section','content-card');summary.append(el('h3',null,'What happens next'));
- summary.append(el('p','notice','Music → creative direction → storyboard → three-shot proof → watched music preview → reviewed rollout → full still set → titles & credits → delivery.'));
- summary.append(el('p','meta','Lyrics are skipped for instrumental tracks. The small rollout is a deliberate review checkpoint, not a separate automatic approval. Stage states are checked against the real gates—not an estimated completion percentage.'));view.append(summary);
- if(e.blockers.length){const card=el('section','content-card');card.append(el('h3',null,'Needs attention'));for(const [kind,text] of e.blockers)card.append(el('p',kind,text));view.append(card);}
- const commands=el('details','technical');commands.append(el('summary',null,'Technical commands & local artifacts'));
- for(const a of e.actions||[]){commands.append(el('h3',null,a.label),el('p','meta',a.reason));if(a.command)commands.append(copyCommand(a.id.startsWith('approve-')?'uv run clip serve --actions':a.command));if(a.href)commands.append(el('p','code',a.href+' · open this artifact locally'));}view.append(commands);
-}
-async function loadMusic(gen){const d=await workflowData(gen);if(!d)return;clear(view);view.append(heading(...viewDescriptions.music));view.append(artifactCard('analysis',d.artifacts.analysis),artifactCard('events',d.artifacts.events));if(d.music_mode==='instrumental')view.append(el('div','callout','Instrumental production · lyric review is not required. Music structure still needs review.'));else{const lyrics=artifactCard('lyrics',d.artifacts.lyrics);if(d.music_mode==='music-led')lyrics.append(el('p','meta','Lyrics are optional for music-led productions; supplied intent is not measured evidence.'));lyrics.append(stageReview('lyrics'));view.append(lyrics);}for(const s of currentData.approvals.supporting_stages||[])if(s.stage==='listening'){const card=el('section','content-card');card.append(el('h3',null,'Music listening'),el('p','notice',s.note||'Review the recorded listening evidence in the Decisions screen.'),stageReview(s.stage));view.append(card);}}
-async function loadDirection(gen){const d=await workflowData(gen);if(!d)return;clear(view);view.append(heading(...viewDescriptions.direction),artifactCard('brief',d.artifacts.brief));for(const s of currentData.approvals.supporting_stages||[])if(s.stage==='brand'){const card=el('section','content-card');card.append(el('h3',null,'Brand identity'),el('p','notice',s.note||'A supplied brand package requires review before the creative brief.'),stageReview('brand'));view.append(card);}}
-async function loadGraphics(gen){const d=await workflowData(gen);if(!d)return;clear(view);view.append(heading(...viewDescriptions.graphics),el('div','callout','Inspect actual composited samples locally before confirming. A specification cannot replace reviewing the required output.'));const card=el('section','content-card');card.append(el('h3',null,'Titles and credits specification'));if(d.graphics_spec?.available)renderArtifact(card,'graphics',d.graphics_spec.artifact);else card.append(el('p','notice',d.graphics_spec?.problem||'No graphics specification available.'));if(d.artifacts.graphics?.available)card.append(technical('Recorded composite review evidence',d.artifacts.graphics.artifact));else card.append(el('p','notice','No composite review evidence available. Render and inspect actual samples before approving.'));card.append(stageReview('graphics'));view.append(card);}
-async function loadProof(gen){const d=await workflowData(gen);if(!d)return;stillFilter=null;await loadStills(gen);if(gen!==viewGen)return;const grid=view.querySelector('.stillgrid'),ids=new Set(d.proof_shot_ids);if(grid){for(const child of [...grid.children])if(!ids.has(child.dataset.shot))child.remove();}view.querySelector('.filters')?.remove();view.querySelector('.stats')?.remove();view.prepend(heading(...viewDescriptions.proof));if(!ids.size)view.prepend(el('div','callout',d.proof_problem||'Proof selection is not available.'));view.append(stageReview('proof'));}
-async function loadPreview(gen){
- const d=await workflowData(gen);if(!d)return;clear(view);const e=currentData.entry,movie=d.preview_movie||{},gate=currentData.approvals.stages.find(s=>s.stage==='preview');
- view.append(heading(...viewDescriptions.preview));const card=el('section','content-card');
- card.append(el('h3',null,movie.path?(movie.exists?'Review-bound local preview':'Recorded preview movie is missing'):'No local preview recorded for the approval gate'));
- if(movie.path){const target=el('p','code',movie.path);target.id='previewTarget';card.append(target);card.append(el('p','notice',movie.exists?'Open this exact movie in your local player and watch it with sound. Studio does not stream it.':'Ask the agent to restore or re-render this exact review target. A newer movie is not a substitute.'));}
- else card.append(el('p','notice',movie.problem||'Ask the agent to render and bind the proof-only preview after the proof is accepted.'));
- if(!gate?.hash)card.append(el('p','warn','The preview review binding is missing or invalid. Resolve it and refresh before making a decision.'));
- card.append(el('div','callout','The review-bound preview may include labelled placeholders. It is not the finished film. Approval requires your explicit continuous-playback confirmation for this exact movie.'),stageReview('preview'));
- if(d.preview_review?.available)card.append(technical('Recorded preview binding',d.preview_review.artifact));view.append(card);
- if(e.preview&&(!movie.path||e.preview.name!==movie.path.split('/').pop()))view.append(el('p','notice','Other local preview: '+e.preview.name+' · not the approval target. Newer available-set exports never replace the review-bound movie.'));
- view.append(el('p','notice','After preview approval, review a small, varied rollout before releasing the remaining stills. No paid batch starts from this screen.'));
-}
-async function loadDelivery(gen){if(gen!==viewGen)return;clear(view);const e=currentData.entry;view.append(heading(...viewDescriptions.delivery));const card=el('section','content-card');card.append(el('h3',null,e.next_step==='delivered'?'Delivery recorded':'Delivery is not verified'));
- const dl=el('dl');for(const [label,value] of [['Graphics gate',e.stages.graphics],['Export',e.renders?.[0]?.name||'No export recorded'],['Playback review','Must be confirmed against the actual final movie'],['Archive','Verify the local backup before handing over']])dl.append(el('dt',null,label),el('dd',null,value));card.append(dl);view.append(card);
- view.append(el('div','callout','A render file alone is not delivery evidence. Base-only exports, stale approvals, sampled frames and audio signal checks do not establish a watched final film.'));
- const commands=el('details','technical');commands.append(el('summary',null,'Local verification & archive commands'),copyCommand('uv run clip status projects/'+current.slug),copyCommand('uv run clip backup projects/'+current.slug));view.append(commands);
-}
-// Native dialog supplies Escape, focus containment and return-to-trigger behavior.
-function openSetup(){document.getElementById('createDialog').showModal();showSetupStep(setupStep);}
-document.getElementById('newProduction').onclick=openSetup;document.getElementById('welcomeCreate').onclick=openSetup;
-document.getElementById('closeCreate').onclick=()=>document.getElementById('createDialog').close();
-function validSetupStep(){const step=document.querySelector('[data-setup-step="'+setupStep+'"]');if(setupStep===1){const title=document.getElementById('title');title.setCustomValidity(title.value.trim()?'':'Enter a film title.');}for(const control of step.querySelectorAll('input,select'))if(!control.reportValidity())return false;return setupStep!==0||(!document.getElementById('src').disabled&&document.getElementById('src').value!=='');}
-function showSetupStep(step){setupStep=step;document.querySelectorAll('[data-setup-step]').forEach((e,i)=>e.hidden=i!==step);document.querySelectorAll('.wizard-steps li').forEach((e,i)=>{if(i===step)e.setAttribute('aria-current','step');else e.removeAttribute('aria-current');});document.getElementById('setupBack').hidden=step===0;document.getElementById('setupNext').hidden=step===2;document.getElementById('create').hidden=step!==2;
- const summary=document.getElementById('setupSummary');clear(summary);for(const [label,value] of [['Track',sourceTracks[Number(document.getElementById('src').value)]?.title||'Not selected'],['Film',document.getElementById('title').value||'Not named'],['Format',document.getElementById('aspect').selectedOptions[0].text+' · '+document.getElementById('fps').value+' fps'],['Approach',document.getElementById('mode').selectedOptions[0].text]])summary.append(el('dt',null,label),el('dd',null,value));
- document.querySelector('[data-setup-step="'+step+'"] input, [data-setup-step="'+step+'"] select')?.focus();syncCreate();}
-document.getElementById('setupNext').onclick=()=>{if(validSetupStep())showSetupStep(Math.min(2,setupStep+1));};document.getElementById('setupBack').onclick=()=>showSetupStep(Math.max(0,setupStep-1));
-document.getElementById('aspect').onchange=function(){document.getElementById('aspectHelp').textContent=this.value==='9:16'?'Portrait needs an explicit titles/credits plan before spending. The current signature compositor is landscape-only.':'Landscape supports the complete titles and credits package.';document.getElementById('aspectHelp').className=this.value==='9:16'?'warn':'meta';};
-document.getElementById('createForm').noValidate=true;
-document.getElementById('title').addEventListener('input',function(){this.setCustomValidity('');});
-"""
+CSS = CSS + FLOW_CSS
+SCRIPT = FLOW_SCRIPT

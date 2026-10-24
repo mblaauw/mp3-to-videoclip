@@ -204,6 +204,21 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _read_body(self, limit: int) -> dict:
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError as exc:
+            raise human_actions.ActionError("invalid content length") from exc
+        if not 0 < length <= limit:
+            raise human_actions.ActionError(f"payload must be 1–{limit} bytes", 413)
+        try:
+            body = json.loads(self.rfile.read(length))
+        except ValueError as exc:
+            raise human_actions.ActionError("invalid JSON") from exc
+        if not isinstance(body, dict):
+            raise human_actions.ActionError("payload must be an object")
+        return body
+
     def _bytes(self, body: bytes, content_type: str, status=HTTPStatus.OK):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -293,6 +308,31 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(appdata.board(root))
             if rest == ["workflow"]:
                 return self._json(appdata.workflow(root))
+            if rest == ["story-review"]:
+                try:
+                    return self._json(human_actions.review_story(root))
+                except OSError:
+                    return self._json(
+                        {"error": "Brief or storyboard unavailable; inspect locally"},
+                        HTTPStatus.CONFLICT,
+                    )
+                except (ValueError, KeyError) as exc:
+                    return self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            if rest == ["feedback"]:
+                from . import feedback
+
+                try:
+                    return self._json(
+                        {
+                            "requests": feedback.requests(
+                                root,
+                                stage=(query.get("stage") or [None])[0],
+                                status=(query.get("status") or [None])[0],
+                            )
+                        }
+                    )
+                except ValueError as exc:
+                    return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             if rest == ["approvals"]:
                 return self._json(appdata.approvals(root))
             if rest == ["quotes"]:
@@ -362,21 +402,56 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/project/"):
             try:
                 segments = [unquote(part) for part in parsed.path.strip("/").split("/")]
-                if len(segments) != 5 or segments[3] not in {"approve", "authorize"}:
+                supported = (len(segments) == 5 and segments[3] in {"approve", "authorize"}) or (
+                    len(segments) == 4
+                    and segments[3] in {"feedback", "review", "approve-story", "credits"}
+                )
+                if not supported:
                     raise human_actions.ActionError("unsupported write route", 405)
+                if len(segments) < 3:
+                    raise human_actions.ActionError("unknown production", 404)
                 self._action_allowed()
                 root = self._project_root(segments[2])
                 if root is None:
                     raise human_actions.ActionError("unknown production", 404)
-                length = int(self.headers.get("Content-Length") or 0)
-                if not 0 < length <= 8192:
-                    raise human_actions.ActionError("decision payload must be 1–8192 bytes", 413)
-                body = json.loads(self.rfile.read(length))
-                value = (
-                    human_actions.approve_stage(root, segments[4], body)
-                    if segments[3] == "approve"
-                    else human_actions.authorize_quote(root, segments[4], body)
-                )
+                if len(segments) == 5 and segments[3] in {"approve", "authorize"}:
+                    body = self._read_body(8192)
+                    value = (
+                        human_actions.approve_stage(root, segments[4], body)
+                        if segments[3] == "approve"
+                        else human_actions.authorize_quote(root, segments[4], body)
+                    )
+                elif len(segments) == 4 and segments[3] == "feedback":
+                    from . import feedback
+                    from .storage import project_lock
+
+                    body = self._read_body(64000)
+                    if set(body) - {"stage", "scope", "target", "message", "style", "confirmed"}:
+                        raise human_actions.ActionError("unexpected feedback fields")
+                    if body.get("confirmed") is not True:
+                        raise human_actions.ActionError(
+                            "confirm that this instruction should revise the production"
+                        )
+                    with project_lock(root):
+                        value = {
+                            "request": feedback.record(
+                                root,
+                                stage=body.get("stage"),
+                                scope=body.get("scope", "whole"),
+                                target=body.get("target"),
+                                message=body.get("message"),
+                                style=body.get("style"),
+                                author="studio",
+                            )
+                        }
+                elif len(segments) == 4 and segments[3] == "review":
+                    value = human_actions.record_shot_review(root, self._read_body(8192))
+                elif len(segments) == 4 and segments[3] == "approve-story":
+                    value = human_actions.approve_story(root, self._read_body(8192))
+                elif len(segments) == 4 and segments[3] == "credits":
+                    value = human_actions.save_credits(root, self._read_body(64000))
+                else:
+                    raise human_actions.ActionError("unsupported write route", 405)
                 return self._json(value)
             except human_actions.ActionError as exc:
                 return self._json({"error": str(exc)}, exc.status)
@@ -599,21 +674,16 @@ summary{cursor:pointer;min-height:36px;padding:6px 0;color:var(--gold)}details{m
 <div class="toolbar"><button id="refresh" class="mini" type="button">↻ Refresh state</button><span id="freshness" role="status" aria-live="polite">Not checked yet</span></div></div>
 <div id="tabs" role="tablist" aria-label="Production workflow" hidden>
 <div class="utility-tabs" role="presentation">
-<button class="tab on" id="tab-overview" role="tab" aria-selected="true" aria-controls="view" data-tab="overview">Overview</button>
-<button class="tab" id="tab-approvals" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="approvals">Decisions</button>
-<button class="tab" id="tab-runs" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="runs">Activity</button>
+<button class="tab" id="tab-project" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="project">Project</button>
 </div>
 <div class="workflow-tabs" role="presentation">
-<button class="tab step" id="tab-music" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="music"><span class="step-number">01</span><span>Music<span class="step-state"></span></span></button>
-<button class="tab step" id="tab-direction" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="direction"><span class="step-number">02</span><span>Direction<span class="step-state"></span></span></button>
-<button class="tab step" id="tab-board" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="board"><span class="step-number">03</span><span>Storyboard<span class="step-state"></span></span></button>
-<button class="tab step" id="tab-proof" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="proof"><span class="step-number">04</span><span>Proof<span class="step-state"></span></span></button>
-<button class="tab step" id="tab-preview" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="preview"><span class="step-number">05</span><span>Preview<span class="step-state"></span></span></button>
-<button class="tab step" id="tab-stills" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="stills"><span class="step-number">06</span><span>Full stills<span class="step-state"></span></span></button>
-<button class="tab step" id="tab-graphics" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="graphics"><span class="step-number">07</span><span>Titles & credits<span class="step-state"></span></span></button>
-<button class="tab step" id="tab-delivery" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="delivery"><span class="step-number">08</span><span>Delivery<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-track" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="track"><span class="step-number">01</span><span>Track<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-story" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="story"><span class="step-number">02</span><span>Story<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-style" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="style"><span class="step-number">03</span><span>Style check<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-images" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="images"><span class="step-number">04</span><span>Images<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-finish" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="finish"><span class="step-number">05</span><span>Finish<span class="step-state"></span></span></button>
 </div></div>
-<div id="view" role="tabpanel" aria-labelledby="tab-overview"><div class="welcome"><span class="welcome-icon" aria-hidden="true">▷</span><div class="kicker">A considered process. A better film.</div><h2>Bring your music into focus.</h2><p>Choose a production from the library, or start with a local track. Review the music, shape the direction, and build your film one deliberate step at a time.</p><button type="button" id="welcomeCreate">Start a production</button><p class="meta">Setup is local. Nothing is uploaded, generated or spent.</p></div></div>
+<div id="view" role="tabpanel" aria-labelledby="tab-project"><div class="welcome"><span class="welcome-icon" aria-hidden="true">▷</span><div class="kicker">A considered process. A better film.</div><h2>Bring your music into focus.</h2><p>Choose a production from the library, or start with a local track. Analyse the music, agree the story and style, review the images, then finish the film.</p><button type="button" id="welcomeCreate">Start a production</button><p class="meta">Setup is local. Nothing is uploaded, generated or spent.</p></div></div>
 </section>
 </div>
 <dialog id="createDialog" aria-labelledby="createTitle"><div class="dialog-heading"><div><div class="kicker">A new beginning</div><h2 id="createTitle">New production</h2></div><button id="closeCreate" class="mini" type="button" aria-label="Close new production">✕</button></div>
@@ -698,13 +768,14 @@ function applyRoute(){
   if(!p){current=null;currentData=null;viewGen++;shotGen++;stopCockpit();document.getElementById('tabs').hidden=true;document.getElementById('detailTitle').textContent='Production not found';document.getElementById('projectMeta').textContent='';renderProjects();errorPanel(view,'This production was not found. Choose one from the library.');return;}
  if(current&&current.slug===slug)showTab(name,true);else openProject(slug,p.title,name);
 }
- const loaders={overview:loadHome,music:loadMusic,direction:loadDirection,proof:loadProof,preview:loadPreview,graphics:loadGraphics,delivery:loadDelivery,stills:loadStills,board:loadBoard,approvals:loadApprovals,runs:loadRuns};
+ const loaders={stills:loadStills,board:loadBoard,approvals:loadApprovals,runs:loadRuns};
 function showTab(name,fromRoute=false){
  if(!current)return;
  if(!fromRoute){navigate(current.slug,name);return;}
  const gen=++viewGen;
- shotGen++;setTab(name);view.textContent='';view.setAttribute('aria-busy','true');view.append(el('p','meta','Checking current project state…'));stopCockpit();
- loadSnapshot(gen).then(function(ok){if(ok)return loaders[name](gen);}).catch(function(e){if(gen!==viewGen)return;errorPanel(view,e.message,()=>showTab(name,true));document.getElementById('freshness').textContent='Check failed — displayed state may be old';}).finally(function(){if(gen===viewGen)view.setAttribute('aria-busy','false');});
+ shotGen++;setTab(name);view.textContent='';view.setAttribute('aria-busy','true');view.append(el('p','meta',currentData?'Loading…':'Checking current project state…'));stopCockpit();
+ const snapshot=currentData?Promise.resolve(true):loadSnapshot(gen);
+ snapshot.then(function(ok){if(ok)return loaders[name](gen);}).catch(function(e){if(gen!==viewGen)return;errorPanel(view,e.message,()=>showTab(name,true));document.getElementById('freshness').textContent='Check failed — displayed state may be old';}).finally(function(){if(gen===viewGen)view.setAttribute('aria-busy','false');});
 }
 async function loadSnapshot(gen){
  const version=activityVersion;const d=await api('/api/project/'+encodeURIComponent(current.slug));if(gen!==viewGen)return false;
@@ -890,7 +961,7 @@ document.getElementById('createForm').addEventListener('submit',async function(e
 document.getElementById('src').addEventListener('change',syncCreate);
 let sourceTimer;document.getElementById('sourceSearch').addEventListener('input',()=>{sourceGen++;document.getElementById('src').value='';document.getElementById('src').disabled=true;syncCreate();clearTimeout(sourceTimer);sourceTimer=setTimeout(loadSources,250);});
 window.addEventListener('hashchange',applyRoute);
-document.getElementById('refresh').onclick=async function(){const b=this;b.disabled=true;try{verifiedEntries.clear();await loadProjects();applyRoute();}catch(e){errorPanel(view,e.message,()=>b.click());}finally{b.disabled=false;}};
+document.getElementById('refresh').onclick=async function(){const b=this;b.disabled=true;try{currentData=null;verifiedEntries.clear();await loadProjects();applyRoute();}catch(e){errorPanel(view,e.message,()=>b.click());}finally{b.disabled=false;}};
 let activitySource=null,activityCursor=0,activityReady=false;
 async function watchActivity(){
  try{if(!activityReady){const s=await api('/api/status');activityCursor=s.latest_seq||0;activityReady=true;}

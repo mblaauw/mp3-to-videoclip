@@ -26,6 +26,14 @@ enforcement — the quote/authorization/reservation record is. `default_agent`
 applies to fresh, unselected sessions only. Engineering work on the tooling
 itself uses the ordinary build workflow with tests, not the film crew.
 
+New productions use the guided Studio flow: **Track → Story → Style check →
+Images → Finish** (`work/guided-flow.json`). Music analysis is agent-owned, the
+watched preview is optional, full stills gate on the style check, and factual
+credits are confirmed at Finish. Story approval is one human decision that still
+validates brief and storyboard as two gates. `work/feedback.json` / `clip feedback`
+carries durable revision notes, not approval or spend. Recorded productions without
+the policy file keep their exact v2 gates. See docs/GUIDED_WORKFLOW.md.
+
 Validate or refresh the local bundle with `uv run python
 scripts/bootstrap_production.py --check` (read-only: no clone, install, archive
 or network) or without `--check` to install the five pinned recipes and archive

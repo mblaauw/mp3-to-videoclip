@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import profiles
+from . import flow, profiles
 from .branding import brand_hash, load_brand
 from .models import (
     Brief,
@@ -20,7 +20,7 @@ from .models import (
     Storyboard,
 )
 from .render import audio_seconds, probe
-from .storage import digest, file_hash, inside, read_json, write_json
+from .storage import digest, file_hash, inside, read_json, read_optional, write_json
 
 STAGE_FILES = {
     "analysis": "work/music.json",
@@ -60,6 +60,38 @@ def now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def style_template(projects_dir: Path) -> str | None:
+    """Most recent sibling film-style text, for prefilling a new production.
+
+    An approved brief is preferred over a newer unapproved draft. This is a
+    read-only starting point, never an approval: the user can edit the style in
+    the Story step before any still is generated. Malformed or empty sibling
+    briefs are skipped rather than failing project creation.
+    """
+    best = None
+    approved = None
+    for path in Path(projects_dir).glob("*/brief.json"):
+        value = read_optional(path)
+        if not isinstance(value, dict):
+            continue
+        creative = value.get("creative")
+        look = creative.get("look") if isinstance(creative, dict) else None
+        if not isinstance(look, str) or not look.strip():
+            look = value.get("style")
+        if not isinstance(look, str) or not look.strip():
+            continue
+        look = look.strip()
+        stamp = path.stat().st_mtime
+        if best is None or stamp > best[0]:
+            best = (stamp, look)
+        records = read_optional(path.parent / "work/approvals.json")
+        if isinstance(records, dict) and isinstance(records.get("brief"), dict):
+            if approved is None or stamp > approved[0]:
+                approved = (stamp, look)
+    chosen = approved or best
+    return chosen[1] if chosen else None
+
+
 def init_project(
     root: Path,
     source: Path,
@@ -91,6 +123,12 @@ def init_project(
         raise ValueError("an explicit style override must not be blank")
     if title is not None and not title.strip():
         raise ValueError("film title must not be blank")
+    inherited = style_template(root.parent) if style is None else None
+    look = style if style is not None else (inherited or profiles.DEFAULT_STYLE)
+    default_look = look == profiles.DEFAULT_STYLE or look.startswith(
+        profiles.DEFAULT_STYLE + "\n\n"
+    )
+    preset = "custom" if style is not None or not default_look else profiles.STYLE_PRESET_ID
     project = Project(
         slug=slug,
         title=title.strip() if title is not None else slug.replace("-", " ").title(),
@@ -109,7 +147,7 @@ def init_project(
         image_model=selected_model,
         image_settings=selected_settings,
         image_seed=image_seed,
-        style_preset="custom" if style is not None else profiles.STYLE_PRESET_ID,
+        style_preset=preset,
         native_size=native_size if native_size is not None else profiles.default_size(aspect),
     )
     if source.suffix.lower() != ".mp3":
@@ -120,7 +158,7 @@ def init_project(
     # New productions use the explicit creative profile; the event map starts empty
     # and reviewed-by-human. No stage is approved on the user's behalf.
     creative = CreativeProfile(
-        look=style if style is not None else profiles.DEFAULT_STYLE,
+        look=look,
         image_rules=list(profiles.DEFAULT_IMAGE_RULES),
     )
     write_json(root / "brief.json", Brief(creative=creative).model_dump())
@@ -128,9 +166,12 @@ def init_project(
     write_json(root / "work/assets.json", {})
     write_json(root / "work/tasks.json", {})
     init_events(root)
-    from .signature import draft_spec
+    from .signature import credits_template, draft_spec
 
     spec = draft_spec(project.title)
+    template = credits_template(root.parent)
+    if template:
+        spec["credits"]["cards"] = template
     spec["renderer"] = "remotion"
     spec["design"] = "joint-v1"
     spec["intro"]["names"] = "MAHA KALA  ◆  VJDJ69"
@@ -147,6 +188,7 @@ def init_project(
         ).model_dump(),
     )
     write_json(root / "work/graphics-spec.json", spec)
+    flow.mark(root)
     return project
 
 
@@ -533,12 +575,18 @@ def effective_upstream(root: Path, stage: str) -> str | None:
     """Instrumental briefs do not depend on lyrics; creative stills depend on preview."""
     if stage == "brief" and load_project(root).music_mode in ("instrumental", "music-led"):
         return "analysis"
-    if stage == "stills" and is_creative(root):
+    if stage == "stills" and is_creative(root) and flow.settings(root)["preview_gate"]:
         return "preview"
     return UPSTREAM[stage]
 
 
 def _required_parents(root: Path, stage: str) -> list[str]:
+    # Guided productions treat music analysis, events and the brand package as
+    # agent-owned evidence: their bytes still bind into the brief hash, but the
+    # user is not asked to certify tempo, meter or section estimates before
+    # agreeing the story. Recorded v2 productions keep every upstream gate.
+    if stage == "brief" and flow.settings(root)["guided"]:
+        return []
     upstream = effective_upstream(root, stage)
     parents = [upstream] if upstream else []
     if stage == "brief" and (root / STAGE_FILES["events"]).exists() and is_creative(root):
@@ -638,7 +686,7 @@ def stage_hash(root: Path, stage: str) -> str:
         if stage == "brief":
             brief = Brief.model_validate(value)
             value = {"brief": value, "references": brief_references(root, brief)}
-            if project.signature_required:
+            if project.signature_required and not flow.settings(root)["late_credits"]:
                 value["signature"] = digest(read_json(root / "work/graphics-spec.json"))
             if (root / STAGE_FILES["events"]).exists():
                 value["events"] = digest(read_json(root / STAGE_FILES["events"]))
@@ -749,7 +797,7 @@ def approve(
     elif stage == "brief":
         brief = load_brief(root)
         _require_default_style_core(load_project(root), brief)
-        if load_project(root).signature_required:
+        if load_project(root).signature_required and not flow.settings(root)["late_credits"]:
             from .signature import validate_spec
 
             validate_spec(root, load_project(root))

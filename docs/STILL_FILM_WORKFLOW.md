@@ -4,6 +4,13 @@ This is the default for **new** productions unless the user explicitly chooses
 otherwise. Existing productions, approvals, paid requests and selected images are
 not migrated. Approved scope: [STILL_FILM_DEFAULTS_PLAN.md](STILL_FILM_DEFAULTS_PLAN.md).
 
+New productions also carry the guided Studio policy
+([GUIDED_WORKFLOW.md](GUIDED_WORKFLOW.md)): the local music analysis does not need
+a user approval step, the proof is presented as a style check, full stills gate on
+that style check rather than a mandatory watched preview, and factual credits are
+confirmed at Finish without changing image approvals. Productions without
+`work/guided-flow.json` retain the recorded v2 preview/credit rules below.
+
 ## Locked creative baseline, explicit overrides
 
 `src/mp3_to_videoclip/profiles.py` is the executable source of truth:
