@@ -118,6 +118,6 @@ findings and resolutions:
 
 ## Publication
 
-Frozen after the checks above; commit/push/PR/merge to `main` follow this record.
-The commit contains the five-step Studio, guided policy, feedback store, per-image
-review, late credits, archive documentation and tests.
+Merged to `main` as `1646ddd` (PR #5, branch `guided-studio-flow`) after the CI
+`check` job passed. The merge contains the five-step Studio, guided policy,
+feedback store, per-image review, late credits, archive documentation and tests.
