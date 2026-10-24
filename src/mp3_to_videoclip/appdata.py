@@ -9,6 +9,7 @@ are encoded in memory and no cache directory is created.
 from __future__ import annotations
 
 import io
+import json
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from PIL import Image, ImageOps
 from . import production as P
 from . import studio
 from .dashboard import _music_grid
+from .models import Brief, Project, Storyboard
 from .storage import inside, read_optional
 
 THUMB_WIDTH = 360
@@ -25,6 +27,79 @@ THUMB_QUALITY = 78
 
 def _optional(root: Path, relative: str):
     return read_optional(root / relative)
+
+
+def _workflow_artifact(root: Path, relative: str) -> dict:
+    """Readable JSON object, not schema validation or evidence of approval."""
+    try:
+        path = inside(root, relative)
+        if not path.is_file():
+            return {"available": False, "artifact": None, "problem": "Artifact is missing."}
+        value = read_optional(path)
+        if isinstance(value, dict):
+            # Python's JSON reader also accepts NaN/Infinity, which browsers do not.
+            json.dumps(value, allow_nan=False)
+            return {"available": True, "artifact": value}
+    except (OSError, ValueError):
+        pass
+    return {
+        "available": False,
+        "artifact": None,
+        "problem": "Artifact is unreadable or invalid; expected a JSON object.",
+    }
+
+
+def workflow(root: Path) -> dict:
+    """Small stage artifacts for review, without locks, hashes or media reads.
+
+    Availability means readable JSON only. Use the separate approvals projection
+    for gate state and the human review endpoint for a decision-bound snapshot.
+    """
+    root = Path(root)
+    project = Project.model_validate(read_optional(inside(root, "project.json")))
+    stages = ["analysis", "events", "brief", "graphics"]
+    if project.music_mode != "instrumental":
+        stages.append("lyrics")
+    artifacts = {stage: _workflow_artifact(root, P.STAGE_FILES[stage]) for stage in stages}
+    preview_review = _workflow_artifact(root, P.STAGE_FILES["preview"])
+    preview_movie = {"path": None, "exists": False}
+    if preview_review["available"]:
+        relative = preview_review["artifact"].get("movie")
+        try:
+            if not isinstance(relative, str) or not relative:
+                raise ValueError("missing movie path")
+            movie = inside(root, relative)
+            preview_movie = {"path": relative, "exists": movie.is_file()}
+        except (OSError, ValueError):
+            preview_movie["problem"] = "The recorded preview movie path is missing or invalid."
+    result = {
+        "slug": root.name,
+        "title": project.title,
+        "music_mode": project.music_mode,
+        "artifacts": artifacts,
+        "graphics_spec": _workflow_artifact(root, "work/graphics-spec.json"),
+        "preview_review": preview_review,
+        "preview_movie": preview_movie,
+        "proof_shot_ids": [],
+        "rollout": {
+            "automatic_gate": False,
+            "completion": None,
+            "recommended_shots": {"min": 6, "max": 8},
+            "guidance": (
+                "After accepted proof and approved, watched proof-only preview, review a "
+                "diverse 6–8-shot subset before releasing the remainder. No separate rollout "
+                "completion record exists; selection and review counts do not prove this step."
+            ),
+        },
+    }
+    storyboard = _workflow_artifact(root, P.STAGE_FILES["storyboard"])
+    try:
+        brief = Brief.model_validate(artifacts["brief"]["artifact"])
+        board = Storyboard.model_validate(storyboard["artifact"])
+        result["proof_shot_ids"] = P.proof_ids(board, brief)
+    except (ValueError, KeyError, IndexError):
+        result["proof_problem"] = "Proof selection is missing or invalid in the brief/storyboard."
+    return result
 
 
 def _verdicts(reviews: list[dict]) -> dict[tuple, dict]:
@@ -274,7 +349,14 @@ def approvals(root: Path) -> dict:
     record = _optional(root, "work/approvals.json")
     record = record if isinstance(record, dict) else {}
     stages = []
-    for stage in studio.ORDER:
+    supporting = []
+    if P.effective_upstream(root, "brief") == "lyrics":
+        supporting.append("lyrics")
+    if project.music_mode == "music-led" and (root / P.STAGE_FILES["listening"]).is_file():
+        supporting.append("listening")
+    if (root / P.STAGE_FILES["brand"]).is_file():
+        supporting.append("brand")
+    for stage in (*studio.ORDER, *supporting):
         try:
             current = P.stage_hash(root, stage)
         except (OSError, ValueError, KeyError):
@@ -301,9 +383,10 @@ def approvals(root: Path) -> dict:
     return {
         "slug": root.name,
         "title": project.title,
-        "stages": stages,
-        "current": sum(1 for stage in stages if stage["would_pass_now"]),
-        "total": len(stages),
+        "stages": stages[: len(studio.ORDER)],
+        "supporting_stages": stages[len(studio.ORDER) :],
+        "current": sum(1 for stage in stages[: len(studio.ORDER)] if stage["would_pass_now"]),
+        "total": len(studio.ORDER),
     }
 
 

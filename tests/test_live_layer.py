@@ -496,10 +496,10 @@ def test_app_shell_exposes_read_only_review_views(tmp_path):
         status, body, _ = get(base + "app?token=t")
         assert status == 200
         page = body.decode()
-        for label in ("Stills", "Board", "Approvals", "Runs", "Compiled prompt"):
+        for label in ("Full stills", "Storyboard", "Decisions", "Activity", "Compiled prompt"):
             assert label in page
         assert "EventSource" in page
-        assert "read-only" in page
+        assert "Read-only session" in page
         assert "http://" not in page.replace("http://127.0.0.1", "")
         assert "https://" not in page
     finally:
