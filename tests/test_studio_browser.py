@@ -77,7 +77,7 @@ def test_routes_reload_back_forward_and_keyboard_tabs(studio_page):
     select_project(page, app)
     card = page.locator('#list a[data-slug="production"]')
     assert card.get_attribute("aria-current") == "page"
-    page.locator("#tab-overview").focus()
+    page.locator("#tab-preview").focus()
     page.keyboard.press("ArrowRight")
     page.wait_for_url("**#/production/stills")
     playwright.expect(page.locator("#tab-stills")).to_have_attribute("aria-selected", "true")
@@ -91,7 +91,7 @@ def test_routes_reload_back_forward_and_keyboard_tabs(studio_page):
     page.locator('#list a[data-slug="second"]').focus()
     page.keyboard.press("Enter")
     page.wait_for_url("**#/second/overview")
-    playwright.expect(page.locator("#detailTitle")).to_contain_text("second")
+    playwright.expect(page.locator("#projectEyebrow")).to_contain_text("second")
 
 
 def test_verified_card_and_overview_agree_and_notes_are_visible(studio_page):
@@ -109,7 +109,7 @@ def test_verified_card_and_overview_agree_and_notes_are_visible(studio_page):
     page.wait_for_selector("#view .decision")
     assert "Three-shot proof: stale" in card.inner_text()
     assert "Three-shot proof: stale" in page.locator("#view").inner_text()
-    assert "Approve proof" in page.locator("#view").inner_text()
+    assert "Review decisions" in page.locator("#view").inner_text()
     page.locator("#tab-approvals").click()
     page.wait_for_selector("#view table")
     assert "Human rationale stays visible" in page.locator("#view").inner_text()
@@ -131,12 +131,14 @@ def test_thumbnails_and_board_inspection_use_the_served_project_identity(studio_
 def test_create_opens_returned_project_without_reload(studio_page):
     page, app, root, *_ = studio_page
     page.goto(app)
-    page.locator("#newProduction summary").click()
+    page.locator("#newProduction").click()
     page.wait_for_function("() => document.querySelector('#src').options.length > 1")
     assert page.locator("#src option").nth(1).get_attribute("value") == "0"
     assert page.locator("#cap").input_value() == ""
     page.locator("#src").select_option("0")
+    page.locator("#setupNext").click()
     page.locator("#title").fill("Café — Browser Test!")
+    page.locator("#setupNext").click()
     page.locator("#cap").fill("1.00")
     page.evaluate("window.testNoReload = 'present'")
     with page.expect_response(lambda r: "/api/create" in r.url) as response:
@@ -158,6 +160,7 @@ def test_failed_copy_is_honest_and_command_stays_selectable(studio_page):
     page.evaluate(
         "Object.defineProperty(navigator, 'clipboard', {value: {writeText: async () => {throw new Error('denied')}}})"
     )
+    page.get_by_text("Technical commands & local artifacts", exact=True).click()
     page.get_by_role("button", name="Copy command").first.click()
     page.wait_for_selector("text=Copy unavailable")
     assert "Copied" not in page.locator("#view").inner_text()
@@ -191,7 +194,7 @@ def test_responsive_layout_and_targets(studio_page, width):
     )
     assert facts == {
         "overflow": False,
-        "title": 22,
+        "title": 22 if width <= 600 else 26,
         "inputs": True,
         "tabs": True,
         "landmarks": True,
@@ -212,11 +215,9 @@ def test_auth_error_has_human_recovery_and_api_stays_json(studio_page):
 def test_source_search_blocks_creation_until_a_new_track_is_chosen(studio_page):
     page, app, *_ = studio_page
     page.goto(app)
-    page.locator("#newProduction summary").click()
+    page.locator("#newProduction").click()
     page.wait_for_function("() => sourceTracks.length > 0")
     page.locator("#src").select_option("0")
-    page.locator("#title").fill("Must not create")
-    page.locator("#cap").fill("1.00")
     pending = []
     writes = []
     page.on("request", lambda request: writes.append(request) if request.method == "POST" else None)
@@ -428,3 +429,260 @@ def test_quote_upload_confirmation_and_stale_conflict_are_visible(studio_page):
     page.wait_for_selector("#view >> text=Quote changed")
     assert button.is_disabled()
     assert not (root / "work/authorizations.json").exists()
+
+
+@pytest.mark.parametrize("width", [390, 900, 1280])
+def test_workflow_workspace_is_visible_without_scrolling_past_library(studio_page, width):
+    page, app, *_ = studio_page
+    page.set_viewport_size({"width": width, "height": 900})
+    select_project(page, app)
+    assert page.locator(".workflow-tabs .step").count() == 8
+    assert page.locator("#view .decision").count() == 1
+    assert not page.locator("#view .technical").get_attribute("open")
+    assert page.locator("#detailTitle").bounding_box()["y"] < 450
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if width <= 1000:
+        assert page.locator("aside").is_hidden()
+        page.locator("#projectSwitch").select_option("second")
+        page.wait_for_url("**#/second/overview")
+        playwright.expect(page.locator("#projectEyebrow")).to_contain_text("second")
+
+
+def test_library_search_is_compact_and_preserves_project_navigation(studio_page):
+    page, app, *_ = studio_page
+    select_project(page, app)
+    assert page.locator("#list .tag").count() == 0
+    page.locator("#projectSearch").fill("second")
+    assert page.locator("#list .card").count() == 1
+    page.locator("#list .card").click()
+    page.wait_for_url("**#/second/overview")
+    page.locator("#projectSearch").fill("no-such-production")
+    assert "No productions match" in page.locator("#list").inner_text()
+    assert page.locator("#view .decision").is_visible()
+
+
+def test_music_and_direction_are_readable_without_human_actions_or_writes(studio_page):
+    page, app, root, *_ = studio_page
+    before = {str(p): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    writes = []
+    page.on("request", lambda r: writes.append(r.url) if r.method == "POST" else None)
+    select_project(page, app, tab="music")
+    assert "Measurements are estimates" in page.locator("#view").inner_text()
+    assert "Reviewed line" in page.locator("#view").inner_text()
+    assert not page.locator("#view .technical").first.get_attribute("open")
+    page.locator("#tab-direction").click()
+    page.wait_for_selector("#view h3 >> text=Treatment")
+    assert "TREATMENT-SECRET" in page.locator("#view").inner_text()
+    assert "LOOK: muted teal" in page.locator("#view").inner_text()
+    assert page.locator("#view pre:visible").count() == 0
+    assert writes == []
+    assert {str(p): p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
+
+
+def test_workflow_route_failure_has_retry_and_late_response_cannot_replace_view(studio_page):
+    page, app, *_ = studio_page
+    page.route(
+        "**/api/project/production/workflow?*",
+        lambda route: route.fulfill(status=500, json={"error": "Review evidence unavailable"}),
+    )
+    page.goto(app + "#/production/direction")
+    page.wait_for_selector("#view [role=alert]")
+    assert "Review evidence unavailable" in page.locator("#view").inner_text()
+    page.unroute("**/api/project/production/workflow?*")
+    page.get_by_role("button", name="Try again", exact=True).click()
+    page.wait_for_selector("#view h3 >> text=Treatment")
+    pending = []
+    page.route("**/api/project/production/workflow?*", lambda route: pending.append(route))
+    page.expose_function("heldWorkflowCount", lambda: len(pending))
+    with page.expect_request("**/api/project/production/workflow?*"):
+        page.locator("#tab-music").click()
+    # Playwright emits request before dispatching the route handler. Wait for the
+    # actual hold, not just aria-busy or the request event, before navigating away.
+    page.wait_for_function("async () => (await window.heldWorkflowCount()) === 1")
+    assert len(pending) == 1
+    page.locator("#tab-overview").click()
+    page.wait_for_selector("#view .decision")
+    for route in pending:
+        route.fulfill(json={"artifacts": {}, "music_mode": "vocal"})
+    assert page.locator("#tab-overview").get_attribute("aria-selected") == "true"
+    assert page.locator("#view .decision").count() == 1
+
+
+def test_proof_view_shows_only_bound_proof_ids_and_clears_old_filter(studio_page):
+    page, app, *_ = studio_page
+    select_project(page, app, tab="stills")
+    page.get_by_role("button", name="Rejected", exact=True).click()
+    assert page.locator(".still").count() == 0
+    page.locator("#tab-proof").click()
+    page.wait_for_selector("#view h2 >> text=Prove the difficult shots first")
+    assert page.locator(".still").evaluate_all("cards => cards.map(c => c.dataset.shot)") == [
+        "s001",
+        "s002",
+        "s004",
+    ]
+    assert page.locator("#view .filters").count() == 0
+    page.locator('.still[data-shot="s001"]').click()
+    page.wait_for_selector("#shotPanel >> text=Contract")
+    assert page.locator("#shotPanel pre:visible").count() == 0
+    page.get_by_role("button", name="Close inspection", exact=True).click()
+    assert page.locator("#shotPanel").is_hidden()
+    assert page.locator('.still[data-shot="s001"]').evaluate("e => e === document.activeElement")
+
+
+def test_graphics_specification_is_not_mistaken_for_reviewed_composite(studio_page):
+    page, app, root, *_ = studio_page
+    write_json(
+        root / "work/graphics-spec.json", {"title": "A film title", "credits": "Actual roles"}
+    )
+    select_project(page, app, tab="graphics")
+    assert "A film title" in page.locator("#view").inner_text()
+    assert "No composite review evidence" in page.locator("#view").inner_text()
+    assert page.locator("#tab-graphics").get_attribute("data-state") != "approved"
+    page.locator("#tab-preview").click()
+    page.wait_for_selector("#view >> text=No local preview recorded")
+    assert "continuous-playback confirmation" in page.locator("#view").inner_text()
+    page.locator("#tab-delivery").click()
+    page.wait_for_selector("#view >> text=Delivery is not verified")
+    assert "A render file alone is not delivery evidence" in page.locator("#view").inner_text()
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_stage_review_targets_exact_stage_and_human_evidence_is_readable(studio_page):
+    page, app, root, *_ = studio_page
+    open_human_session(page, app)
+    page.locator("#tab-direction").click()
+    page.wait_for_selector("#view h3 >> text=Treatment")
+    page.get_by_role("button", name="Review decision", exact=True).click()
+    page.wait_for_selector("#humanApproval")
+    assert page.locator("#approvalStage").input_value() == "brief"
+    page.get_by_role("button", name="Load current artifact", exact=True).click()
+    page.wait_for_selector("#humanApproval h3 >> text=Treatment")
+    assert "TREATMENT-SECRET" in page.locator("#humanApproval").inner_text()
+    assert page.locator("#humanApproval pre:visible").count() == 0
+    assert read_json(root / "work/tasks.json") == {}
+
+
+def test_setup_dialog_validates_steps_preserves_back_navigation_and_escape(studio_page):
+    page, app, *_ = studio_page
+    page.goto(app)
+    page.locator("#newProduction").click()
+    assert page.locator("#createDialog").is_visible()
+    assert page.locator("#setupNext").is_disabled()
+    page.wait_for_function("() => sourceTracks.length > 0")
+    page.locator("#src").select_option("0")
+    page.locator("#setupNext").click()
+    playwright.expect(page.locator("#title")).to_be_focused()
+    page.locator("#setupNext").click()
+    assert page.locator("#title").evaluate("e => e.validity.valueMissing")
+    page.locator("#title").fill("Draft title")
+    page.locator("#aspect").select_option("9:16")
+    assert "landscape-only" in page.locator("#aspectHelp").inner_text()
+    page.locator("#setupNext").click()
+    assert "Draft title" in page.locator("#setupSummary").inner_text()
+    assert page.locator("#cap").input_value() == ""
+    page.locator("#create").click()
+    assert page.locator("#cap").evaluate("e => e.validity.valueMissing")
+    page.locator("#setupBack").click()
+    assert page.locator("#title").input_value() == "Draft title"
+    page.keyboard.press("Escape")
+    assert page.locator("#createDialog").is_hidden()
+    playwright.expect(page.locator("#newProduction")).to_be_focused()
+
+
+def test_setup_single_flight_and_failed_submit_offer_honest_recovery(studio_page):
+    page, app, *_ = studio_page
+    page.goto(app)
+    page.locator("#newProduction").click()
+    page.wait_for_function("() => sourceTracks.length > 0")
+    page.locator("#src").select_option("0")
+    page.locator("#setupNext").click()
+    page.locator("#title").fill("Network test")
+    page.locator("#setupNext").click()
+    page.locator("#cap").fill("1.00")
+    pending = []
+    page.route("**/api/create?*", lambda route: pending.append(route))
+    with page.expect_request("**/api/create?*"):
+        page.locator("#create").click()
+    assert page.locator("#create").is_disabled()
+    page.evaluate(
+        "document.querySelector('#createForm').dispatchEvent(new Event('submit',{cancelable:true}))"
+    )
+    assert len(pending) == 1
+    pending[0].fulfill(status=500, json={"error": "Temporary setup error"})
+    page.wait_for_selector("#msg >> text=Creation could not be confirmed")
+    assert "Refresh the library before retrying" in page.locator("#msg").inner_text()
+    assert page.locator("#title").input_value() == "Network test"
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_canonical_music_and_character_fields_are_readable_in_decision_evidence(studio_page):
+    page, app, root, *_ = studio_page
+    music = read_json(root / "work/music.json")
+    music["estimated_tempo_bpm"] = 123.45
+    write_json(root / "work/music.json", music)
+    brief = read_json(root / "brief.json")
+    brief["characters"] = [
+        {
+            "id": "lead",
+            "identity": "Unique test identity",
+            "permission_confirmed": True,
+            "default_state": "night",
+            "states": {
+                "night": {
+                    "description": "Night wardrobe",
+                    "attributes": {"coat": "Crimson test coat"},
+                }
+            },
+        }
+    ]
+    write_json(root / "brief.json", brief)
+    open_human_session(page, app)
+    page.locator("#tab-music").click()
+    page.wait_for_selector("#view dt >> text=Tempo estimate")
+    assert "123.45" in page.locator("#view").inner_text()
+    page.locator("#tab-direction").click()
+    page.wait_for_selector("#view h3 >> text=Characters")
+    for text in ("Unique test identity", "Night wardrobe", "Crimson test coat"):
+        assert text in page.locator("#view").inner_text()
+    page.get_by_role("button", name="Review decision", exact=True).click()
+    page.wait_for_selector("#humanApproval")
+    page.get_by_role("button", name="Load current artifact", exact=True).click()
+    page.wait_for_selector("#humanApproval h3 >> text=Characters")
+    assert "Crimson test coat" in page.locator("#humanApproval").inner_text()
+    page.locator("#approvalStage").select_option("analysis")
+    page.get_by_role("button", name="Load current artifact", exact=True).click()
+    page.wait_for_selector("#humanApproval dt >> text=Tempo estimate")
+    assert "123.45" in page.locator("#humanApproval").inner_text()
+    assert page.locator("#humanApproval pre:visible").count() == 0
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_preview_playback_and_confirmation_target_the_bound_movie_not_the_newest(studio_page):
+    import os
+
+    from test_creative_production import write_preview_report
+
+    page, app, root, *_ = studio_page
+    report = write_preview_report(root, "previews/review-bound-v001.mp4")
+    latest = root / "previews/newer-unbound-v002.mp4"
+    latest.write_bytes(b"unbound available-set preview")
+    newer = (root / report["movie"]).stat().st_mtime + 10
+    os.utime(latest, (newer, newer))
+    open_human_session(page, app)
+    page.locator("#tab-preview").click()
+    page.wait_for_selector("#previewTarget")
+    assert page.locator("#previewTarget").inner_text() == report["movie"]
+    assert "newer-unbound-v002.mp4 · not the approval target" in page.locator("#view").inner_text()
+    page.get_by_role("button", name="Review decision", exact=True).click()
+    page.wait_for_selector("#humanApproval")
+    assert page.locator("#approvalStage").input_value() == "preview"
+    page.get_by_role("button", name="Load current artifact", exact=True).click()
+    page.wait_for_selector("#humanApproval form")
+    confirmation = page.locator("#humanApproval .confirmation")
+    assert report["movie"] in confirmation.inner_text()
+    assert "newer-unbound" not in confirmation.inner_text()
+    (root / report["movie"]).unlink()
+    page.locator("#tab-preview").click()
+    page.wait_for_selector("#view h3 >> text=Recorded preview movie is missing")
+    assert "binding is missing or invalid" in page.locator("#view").inner_text()
+    assert page.locator("#previewTarget").inner_text() == report["movie"]

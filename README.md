@@ -124,7 +124,8 @@ require the separate `--actions` session described below; no paid executor runs 
 the UI. Thumbnail routes resolve the selected version through `work/assets.json`,
 reject any path outside the production and write no cache.
 
-Open Studio from the journal link. Project/view URLs (`/app?token=…#/SLUG/approvals`)
+The printed Studio link opens the production workspace directly; the original
+read-only journal remains at `/`. Project/view URLs (`/app?token=…#/SLUG/approvals`)
 survive reload and browser back/forward. The library's quick scan does not hash
 large media: **not checked** means a decision is on record, not that its bytes are
 current. Opening a project checks its approvals and updates that card from the
@@ -135,8 +136,33 @@ snapshot, not a promise of continuous freshness. Decision notes are shown before
 technical hashes; command templates still require the user's explicit decision.
 “Would pass” invokes the kernel's full gate checks, including parent approvals,
 accepted image reviews and graphics-review evidence—not just hash equality.
-Create is collapsed local setup and opens the returned project, without a reload.
+**New production** opens a keyboard-accessible setup dialog: choose a local track,
+set the film title/format/music approach, then enter an overall allowance and
+confirm. Back preserves the draft, Escape closes the dialog, and creation opens
+the returned project without a reload. Portrait setup explicitly warns that the
+current signature compositor requires a separate titles/credits plan before spend.
 No project files, exports or source audio are served by generic file routes.
+
+The workspace follows the creative workflow: **Music → Direction → Storyboard →
+Proof → Preview → Full stills → Titles & credits → Delivery**. The compact library
+is searchable; phone/tablet layouts use a project switcher instead of placing the
+whole library above the work. Overview highlights one next requirement, with
+commands and paths under technical details rather than competing primary actions.
+The workflow rail reports current gate state, never an estimated completion
+percentage. Supporting lyrics/listening/brand decisions follow the actual kernel
+dependencies; instrumental tracks skip lyrics. A reviewed small rollout remains an
+explicit checkpoint, not an invented automatic gate.
+
+Music and direction screens present readable local artifacts through the token-
+scoped, read-only `/api/project/<slug>/workflow` projection. Graphics specifications
+are separate from composite-review evidence. Proof shows only its bound shot IDs;
+full stills retain verdict filters and a closeable shot inspector. Preview review
+names the exact movie in `work/preview-review.json`, never a newer unbound export;
+the playback confirmation names that same target. Missing/stale bindings are
+explicit. Decisions load their exact hash-bound evidence before confirmation. Local preview/composite
+files must be opened in a local player: this redesign does not add media streaming,
+in-browser creative editing, generation, or a new authorization route. Existing
+productions and their recorded decisions are not rewritten.
 
 Browser regression tests run in CI on temporary projects. Locally:
 `uv run --with playwright playwright install chromium`, then

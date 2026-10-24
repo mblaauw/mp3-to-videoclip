@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import appdata, human_actions, human_ui, sources, spine, studio
+from . import appdata, human_actions, human_ui, sources, spine, studio, studio_ui
 
 STREAM_INTERVAL = 0.5
 HEARTBEAT_SECONDS = 10.0
@@ -291,6 +291,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(appdata.stills(root))
             if rest == ["board"]:
                 return self._json(appdata.board(root))
+            if rest == ["workflow"]:
+                return self._json(appdata.workflow(root))
             if rest == ["approvals"]:
                 return self._json(appdata.approvals(root))
             if rest == ["quotes"]:
@@ -496,7 +498,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
 
-APP = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+APP = (
+    """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Studio</title>
 <style>
 :root{color-scheme:dark;--bg:#0a0f14;--panel:#111a22;--panel2:#16222c;--ink:#f2efe6;--muted:#8fa0ae;--gold:#d4ae6a;
@@ -580,38 +583,64 @@ summary{cursor:pointer;min-height:36px;padding:6px 0;color:var(--gold)}details{m
 @media(max-width:700px){.approval-table thead{display:none}.approval-table,.approval-table tbody,.approval-table tr,.approval-table td{display:block;width:100%!important}.approval-table tr{padding:12px;border-bottom:1px solid var(--line)}.approval-table td{padding:6px 0;border:0}.approval-table td:before{content:attr(data-label);display:block;color:var(--muted);font-weight:600}}
 #list{max-height:calc(100dvh - 340px);overflow-y:auto;padding:3px}.grid>section{align-self:start}
 @media(max-width:1000px){#list{max-height:300px;overflow:auto}.wrap{padding:20px 16px 40px}}
-</style></head><body><a class="skip" href="#detailTitle">Skip to project</a><main class="wrap">
-<header><div class="kicker">Studio</div><h1>Your productions</h1>
-<p class="notice">Default is read-only unless a person enables human decisions in their terminal. Creating a project is local setup, not generation.</p></header>
+</style><style>__STUDIO_CSS__</style></head><body><a class="skip" href="#detailTitle">Skip to project</a><main class="wrap">
+<header class="app-header"><div class="brand"><span class="brand-mark" aria-hidden="true">S</span><div><div class="kicker">Music to film</div><h1>Production Studio</h1></div></div>
+<button id="newProduction" type="button">＋ New production</button></header>
+<div class="mobile-projects"><label for="projectSwitch">Your production</label><select id="projectSwitch"><option value="">Choose a production</option></select></div>
 <div class="grid">
 <aside class="panel" aria-label="Production library">
-<details id="newProduction"><summary>New production</summary><form id="createForm">
+<div class="library-heading"><h2>Library</h2><span id="projectCount" class="meta"></span></div>
+<label class="sr-only" for="projectSearch">Search productions</label><input id="projectSearch" type="search" placeholder="Search productions…">
+<nav id="list" aria-label="Productions" aria-live="polite">Loading productions…</nav>
+<p class="library-foot">Your workspace, from first listen to final film.<br>Media is verified when you open a project.</p>
+</aside>
+<section class="panel workspace" aria-labelledby="detailTitle">
+<div class="project-heading"><div><div class="kicker" id="projectEyebrow">Your workspace</div><h2 id="detailTitle" tabindex="-1">Choose your next film</h2><p id="projectMeta" class="meta"></p></div>
+<div class="toolbar"><button id="refresh" class="mini" type="button">↻ Refresh state</button><span id="freshness" role="status" aria-live="polite">Not checked yet</span></div></div>
+<div id="tabs" role="tablist" aria-label="Production workflow" hidden>
+<div class="utility-tabs" role="presentation">
+<button class="tab on" id="tab-overview" role="tab" aria-selected="true" aria-controls="view" data-tab="overview">Overview</button>
+<button class="tab" id="tab-approvals" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="approvals">Decisions</button>
+<button class="tab" id="tab-runs" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="runs">Activity</button>
+</div>
+<div class="workflow-tabs" role="presentation">
+<button class="tab step" id="tab-music" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="music"><span class="step-number">01</span><span>Music<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-direction" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="direction"><span class="step-number">02</span><span>Direction<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-board" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="board"><span class="step-number">03</span><span>Storyboard<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-proof" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="proof"><span class="step-number">04</span><span>Proof<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-preview" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="preview"><span class="step-number">05</span><span>Preview<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-stills" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="stills"><span class="step-number">06</span><span>Full stills<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-graphics" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="graphics"><span class="step-number">07</span><span>Titles & credits<span class="step-state"></span></span></button>
+<button class="tab step" id="tab-delivery" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="delivery"><span class="step-number">08</span><span>Delivery<span class="step-state"></span></span></button>
+</div></div>
+<div id="view" role="tabpanel" aria-labelledby="tab-overview"><div class="welcome"><span class="welcome-icon" aria-hidden="true">▷</span><div class="kicker">A considered process. A better film.</div><h2>Bring your music into focus.</h2><p>Choose a production from the library, or start with a local track. Review the music, shape the direction, and build your film one deliberate step at a time.</p><button type="button" id="welcomeCreate">Start a production</button><p class="meta">Setup is local. Nothing is uploaded, generated or spent.</p></div></div>
+</section>
+</div>
+<dialog id="createDialog" aria-labelledby="createTitle"><div class="dialog-heading"><div><div class="kicker">A new beginning</div><h2 id="createTitle">New production</h2></div><button id="closeCreate" class="mini" type="button" aria-label="Close new production">✕</button></div>
+<ol class="wizard-steps" aria-label="Setup progress"><li aria-current="step">1 · Track</li><li>2 · Film settings</li><li>3 · Budget & confirm</li></ol>
+<form id="createForm">
+<fieldset data-setup-step="0"><legend>Choose your track</legend><p class="notice">Start with a liked MP3 from your local music library. Your original stays untouched.</p>
 <label for="sourceSearch">Search source tracks</label><input id="sourceSearch" type="search" placeholder="Title or tags" aria-describedby="sourceHelp">
 <p id="sourceHelp" class="meta">Local liked MP3 tracks only. Search to find more results; nothing is uploaded.</p>
 <label for="src">Source track</label><select id="src" required></select>
+</fieldset>
+<fieldset data-setup-step="1" hidden><legend>Give your film a direction</legend>
 <label for="title">Film title</label><input id="title" required maxlength="120" placeholder="Give your film a title">
-<div class="row"><div><label for="aspect">Aspect</label><select id="aspect"><option>16:9</option><option>9:16</option></select></div>
-<div><label for="fps">FPS</label><select id="fps"><option>24</option><option>30</option></select></div></div>
-<div class="row"><div><label for="mode">Mode</label><select id="mode"><option>vocal</option><option>instrumental</option><option>music-led</option></select></div>
-<div><label for="cap">Spending cap (USD)</label><input id="cap" type="number" required placeholder="Your limit" step="0.01" min="0.01"></div></div>
-<button id="create" type="submit">Create production</button><div id="msg" role="status" aria-live="polite"></div>
-<p class="mono" style="margin-top:12px">Creates via the clip kernel: byte-identical copy, project.json, budget. Nothing is generated or spent.</p>
-</form></details>
-<h2>Library</h2><p class="meta">Media approvals marked “not checked” need a live check. Open a project to verify them.</p><nav id="list" aria-label="Productions">loading…</nav>
-</aside>
-<section class="panel" aria-labelledby="detailTitle">
-<h2 id="detailTitle" tabindex="-1">Select a production</h2>
-<div class="toolbar"><button id="refresh" class="mini" type="button">Refresh state</button><span id="freshness" role="status" aria-live="polite">Not checked yet</span></div>
-<div class="tabbar" id="tabs" role="tablist" aria-label="Project views">
-<button class="tab on" id="tab-overview" role="tab" aria-selected="true" aria-controls="view" data-tab="overview">Overview</button>
-<button class="tab" id="tab-stills" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="stills">Stills</button>
-<button class="tab" id="tab-board" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="board">Board</button>
-<button class="tab" id="tab-approvals" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="approvals">Approvals</button>
-<button class="tab" id="tab-runs" role="tab" aria-selected="false" aria-controls="view" tabindex="-1" data-tab="runs">Runs</button>
-</div>
-<div id="view" role="tabpanel" aria-labelledby="tab-overview"><div class="empty">Choose a production from the library. No decision or executor is started automatically.</div></div>
-</section>
-</div></main>
+<div class="row"><div><label for="aspect">Frame format</label><select id="aspect" aria-describedby="aspectHelp"><option value="16:9">Landscape · 16:9</option><option value="9:16">Portrait · 9:16</option></select></div>
+<div><label for="fps">Frame rate</label><select id="fps"><option value="24">24 fps · cinematic</option><option value="30">30 fps</option></select></div></div>
+<p id="aspectHelp" class="meta">Landscape supports the complete titles and credits package.</p>
+<label for="mode">Music approach</label><select id="mode" aria-describedby="modeHelp"><option value="vocal">Vocal · with sung lyrics</option><option value="instrumental">Instrumental · no lyrics</option><option value="music-led">Music-led · mixed or DJ track</option></select>
+<p id="modeHelp" class="meta">Vocal includes lyric review. Instrumental skips lyrics, not music review. Music-led keeps supplied intent separate from measured evidence.</p>
+</fieldset>
+<fieldset data-setup-step="2" hidden><legend>Set your budget. Stay in control.</legend>
+<label for="cap">Total production allowance (USD)</label><input id="cap" type="number" required placeholder="Enter your limit" step="0.01" min="0.01" aria-describedby="budgetHelp">
+<p id="budgetHelp" class="notice">An overall allowance, not a charge. Every paid batch still needs a separate quote and your authorization.</p>
+<dl id="setupSummary" class="setup-summary"></dl>
+<div class="callout">Creates a local production and records your allowance. No upload, generation or spending starts here.</div>
+</fieldset>
+<div id="msg" role="status" aria-live="polite"></div>
+<div class="wizard-actions"><button id="setupBack" type="button" class="mini" hidden>Back</button><button id="setupNext" type="button">Continue</button><button id="create" type="submit" hidden>Create production</button></div>
+</form></dialog></main>
 <script>
 const token=new URLSearchParams(location.search).get('token')||'';
 const q=token?('?token='+encodeURIComponent(token)):'';
@@ -620,14 +649,12 @@ const view=document.getElementById('view');
 let current=null, tab='overview', stillsData=null, stillFilter=null, cockpitSource=null, cockpitRun=null, viewGen=0;
 let projects=[], currentData=null, sourceGen=0, shotGen=0, pendingShot=null, sourceTracks=[], activityVersion=0, cockpitEpoch=0, creating=false;
 const verifiedEntries=new Map();
-const stageNames={analysis:'Music analysis',events:'Music events',brief:'Creative brief',storyboard:'Storyboard',proof:'Three-shot proof',preview:'Music preview',stills:'Full still set',graphics:'Titles and credits'};
-const stageHelp={analysis:'Review the recording measurements.',events:'Review the musical edit opportunities.',brief:'Choose the story and visual direction.',storyboard:'Review shot coverage, prompts and timing.',proof:'Review three generated proof images.',preview:'Watch the local preview with the actual music.',stills:'Review every selected image version.',graphics:'Review composited opening and end credits.'};
+const stageNames={analysis:'Music analysis',lyrics:'Lyrics',listening:'Music listening',brand:'Brand identity',events:'Music events',brief:'Creative brief',storyboard:'Storyboard',proof:'Three-shot proof',preview:'Music preview',stills:'Full still set',graphics:'Titles and credits'};
 __JS_HELPERS__
 function withToken(path){if(!token)return path;return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token);}
 async function api(path){const r=await fetch(withToken(path));const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d;}
 function clock(seconds){const n=Math.round(Number(seconds)||0);return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');}
-function money(value){return value===null||value===undefined?'not recorded':new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(Number(value));}
-function spendText(spend){const used=spend.accounted_usd,cap=spend.cap_usd;if(cap===null||cap===undefined)return money(used)+' spent · no cap recorded';return money(used)+' of '+money(cap)+(Number(cap)>0&&used!==null&&used!==undefined?' ('+Math.round(Number(used)/Number(cap)*100)+'%)':'');}
+function money(value){return value===null||value===undefined?'not recorded':new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:6}).format(Number(value));}
 function stamp(value){return value?new Date(value).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'No decision recorded';}
 function errorPanel(node,message,retry){clear(node);node.setAttribute('aria-busy','false');const box=el('div','empty');box.setAttribute('role','alert');box.append(el('p',null,message));if(retry){const b=el('button','mini','Try again');b.onclick=retry;box.append(b);}node.append(box);}
 function copyCommand(command){
@@ -641,7 +668,7 @@ function stateTag(state){const cls=state==='approved'?'ok':(['stale','blocked'].
 function clear(node){while(node.firstChild)node.removeChild(node.firstChild);}
 function stat(b,label){const n=el('div','stat');n.append(el('b',null,String(b)));n.append(el('span',null,label));return n;}
 function stopCockpit(){cockpitEpoch++;if(cockpitSource){cockpitSource.close();cockpitSource=null;}cockpitRun=null;}
-function setTab(name){tab=name;document.querySelectorAll('button.tab').forEach(function(b){const on=b.dataset.tab===name;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});view.setAttribute('aria-labelledby','tab-'+name);}
+function setTab(name){tab=name;document.querySelectorAll('button.tab').forEach(function(b){const on=b.dataset.tab===name;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});view.setAttribute('aria-labelledby','tab-'+name);scrollWorkflow();}
 async function loadSources(){
  const gen=++sourceGen;const sel=document.getElementById('src');sel.disabled=true;syncCreate();
  try{const d=await api('/api/sources?q='+encodeURIComponent(document.getElementById('sourceSearch').value));if(gen!==sourceGen)return;
@@ -651,44 +678,27 @@ async function loadSources(){
  }catch(e){if(gen!==sourceGen)return;sel.textContent='';const o=el('option',null,'Source list unavailable');o.value='';sel.append(o);document.getElementById('sourceHelp').textContent=e.message+' — edit your search to retry.';}
  finally{if(gen===sourceGen){sel.disabled=false;syncCreate();}}
 }
-function syncCreate(){const sel=document.getElementById('src');document.getElementById('create').disabled=creating||sel.disabled||sel.value==='';}
+function syncCreate(){const sel=document.getElementById('src'),submit=document.getElementById('create');submit.disabled=creating||sel.disabled||sel.value==='';submit.textContent=creating?'Creating production…':'Create production';document.getElementById('setupNext').disabled=creating||(setupStep===0&&(sel.disabled||sel.value===''));document.getElementById('setupBack').disabled=creating;document.querySelectorAll('#createForm fieldset').forEach(f=>f.disabled=creating);}
 async function loadProjects(){
  const d=await api('/api/studio');
  projects=d.productions;renderProjects();
 }
-function renderProjects(){
- const box=document.getElementById('list'); box.textContent='';
- for(const summary of projects){
-   const p=verifiedEntries.get(summary.slug)||summary;
-   const c=el('a','card');c.href='#/'+encodeURIComponent(p.slug)+'/overview';c.dataset.slug=p.slug;
-   if(current&&current.slug===p.slug){c.classList.add('on');c.setAttribute('aria-current','page');}
-   c.append(el('b',null,p.title),el('div','meta',p.slug));
-   const m=el('div','meta'); m.textContent=clock(p.duration)+' · '+p.shots+' shots · '+spendText(p.spend);
-  c.append(m);
-  const tags=el('div','meta');
-   for(const [stage,state] of Object.entries(p.stages)){const t=stateTag(state);t.textContent=(stageNames[stage]||stage)+': '+t.textContent;tags.append(t);}
-   c.append(tags);
-   c.append(el('div','meta',p.checked_at?'Checked '+stamp(p.checked_at):'Quick scan — media not checked'));
-  const n=el('div','meta'); n.textContent='next: '+p.next_step; c.append(n);
-   box.append(c);
- }
- if(!projects.length) box.append(el('div','meta','No productions yet. Open New production to start a local project.'));
-}
+function renderProjects(){renderLibrary();}
 function openProject(slug,title,name='overview'){
  current={slug:slug,title:title};currentData=null;stillsData=null;stillFilter=null;pendingShot=null;shotGen++;stopCockpit();
- document.getElementById('detailTitle').textContent=title+' · '+slug;
- renderProjects();document.getElementById('detailTitle').focus({preventScroll:true});if(innerWidth<=1000)document.getElementById('detailTitle').scrollIntoView({block:'start'});showTab(name,true);
+  document.getElementById('detailTitle').textContent=title;
+  renderProjects();document.getElementById('detailTitle').focus({preventScroll:true});document.getElementById('tabs').hidden=false;showTab(name,true);
 }
 function navigate(slug,name){const hash='#/'+encodeURIComponent(slug)+'/'+name;if(location.hash===hash)applyRoute();else location.hash=hash;}
 function applyRoute(){
- const parts=location.hash.slice(1).split('/');if(parts[0]!==''||!parts[1]){current=null;currentData=null;viewGen++;shotGen++;stopCockpit();setTab('overview');view.setAttribute('aria-busy','false');document.getElementById('detailTitle').textContent='Select a production';clear(view);view.append(el('div','empty','Choose a production from the library.'));document.getElementById('freshness').textContent='Not checked yet';renderProjects();return;}
- let slug;try{slug=decodeURIComponent(parts[1]);}catch(e){current=null;viewGen++;shotGen++;stopCockpit();document.getElementById('detailTitle').textContent='Invalid project link';errorPanel(view,'Invalid project link. Choose a production from the library.');return;}
+  const parts=location.hash.slice(1).split('/');if(parts[0]!==''||!parts[1]){current=null;currentData=null;viewGen++;shotGen++;stopCockpit();setTab('overview');view.setAttribute('aria-busy','false');document.getElementById('tabs').hidden=true;document.getElementById('detailTitle').textContent='Choose your next film';document.getElementById('projectEyebrow').textContent='Your workspace';document.getElementById('projectMeta').textContent='';clear(view);view.append(initialWelcome.cloneNode(true));document.getElementById('welcomeCreate').onclick=openSetup;document.getElementById('freshness').textContent='Not checked yet';renderProjects();return;}
+  let slug;try{slug=decodeURIComponent(parts[1]);}catch(e){current=null;currentData=null;viewGen++;shotGen++;stopCockpit();document.getElementById('tabs').hidden=true;document.getElementById('detailTitle').textContent='Invalid project link';document.getElementById('projectMeta').textContent='';renderProjects();errorPanel(view,'Invalid project link. Choose a production from the library.');return;}
  const name=Object.hasOwn(loaders,parts[2])?parts[2]:'overview';
  const p=projects.find(x=>x.slug===slug);
- if(!p){current=null;viewGen++;stopCockpit();errorPanel(view,'This production was not found. Choose one from the library.');return;}
+  if(!p){current=null;currentData=null;viewGen++;shotGen++;stopCockpit();document.getElementById('tabs').hidden=true;document.getElementById('detailTitle').textContent='Production not found';document.getElementById('projectMeta').textContent='';renderProjects();errorPanel(view,'This production was not found. Choose one from the library.');return;}
  if(current&&current.slug===slug)showTab(name,true);else openProject(slug,p.title,name);
 }
-const loaders={overview:loadOverview,stills:loadStills,board:loadBoard,approvals:loadApprovals,runs:loadRuns};
+ const loaders={overview:loadHome,music:loadMusic,direction:loadDirection,proof:loadProof,preview:loadPreview,graphics:loadGraphics,delivery:loadDelivery,stills:loadStills,board:loadBoard,approvals:loadApprovals,runs:loadRuns};
 function showTab(name,fromRoute=false){
  if(!current)return;
  if(!fromRoute){navigate(current.slug,name);return;}
@@ -698,43 +708,16 @@ function showTab(name,fromRoute=false){
 }
 async function loadSnapshot(gen){
  const version=activityVersion;const d=await api('/api/project/'+encodeURIComponent(current.slug));if(gen!==viewGen)return false;
- currentData=d;verifiedEntries.set(current.slug,{...d.entry,checked_at:d.checked_at});renderProjects();
- document.getElementById('freshness').textContent=version!==activityVersion?'Studio activity detected during this check — refresh again':'Checked '+stamp(d.checked_at)+' · activity '+(d.entry.last_activity_ago||'unknown');return true;
-}
-async function loadOverview(gen){
- if(gen!==viewGen)return;const d=currentData;const s=d.status||{};const e=d.entry||{};
- clear(view);
- const stats=el('div','stats');
- stats.append(stat(clock(s.duration),'duration'));
- stats.append(stat((s.shots||[]).length,'shots'));
- stats.append(stat((s.total_frames||0),'frames'));
- stats.append(stat(money(e.spend&&e.spend.accounted_usd),'spent'));
- view.append(stats);
- const tags=el('div','');
- for(const [stage,state] of Object.entries(e.stages||{})){const t=stateTag(state);t.textContent=(stageNames[stage]||stage)+': '+t.textContent;tags.append(t);}
- view.append(tags);
- const n=el('h3',null,e.next_step==='delivered'?'Delivery recorded':'Needs your attention: '+(e.next_step||'check state'));view.append(n);
- for(const action of e.actions||[]){
-  const box=el('section','decision');box.append(el('h3',null,action.label),el('p','meta',action.reason));
-  if(action.command)box.append(copyCommand(action.id.startsWith('approve-')?'uv run clip serve --actions':action.command));
-  if(action.id.startsWith('approve-')||action.id==='verify-approvals'){const b=el('button','mini','Inspect approvals');b.onclick=()=>showTab('approvals');box.append(b);}
-  if(action.href)box.append(el('p','meta','Local artifact: '+action.href+' — open this file locally; Studio does not serve source files.'));
-  view.append(box);
- }
- for(const [kind,artifact] of [['Preview',e.preview],['Review dashboard',e.dashboard]]){if(artifact)view.append(el('p','meta',kind+' available locally: '+artifact.name));}
- const legend=el('details');legend.append(el('summary',null,'Stage guide and state meanings'));const dl=el('dl');for(const [key,label] of Object.entries(stageNames)){dl.append(el('dt',null,label),el('dd',null,stageHelp[key]));}legend.append(dl,el('p','meta','Approved: current bytes and all CLI gate checks pass. Blocked: a parent approval, image verdict or graphics review fails. Stale: bytes changed. Missing: no decision recorded. Unavailable: required artifacts are missing or invalid. Not checked: only a recorded decision was found.'));view.append(legend);
- const blockers=(e.blockers||[]);
- if(blockers.length){const ul=el('ul','');for(const b of blockers){const li=el('li',null,b[1]);li.className=b[0];ul.append(li);}view.append(ul);}
- else view.append(el('p','meta','No budget, task or operation blockers recorded. Stage decisions above still apply.'));
- const go=el('button','mini','Open stills'); go.style.marginTop='14px';
- go.addEventListener('click',function(){showTab('stills');}); view.append(go);
+  currentData=d;verifiedEntries.set(current.slug,{...d.entry,checked_at:d.checked_at});renderProjects();updateWorkflow();
+  const freshness=document.getElementById('freshness');freshness.title='Checked '+stamp(d.checked_at)+' · last activity '+(d.entry.last_activity_ago||'unknown');freshness.textContent=version!==activityVersion?'Studio activity detected during this check — refresh again':'Checked '+new Date(d.checked_at).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})+' · snapshot';return true;
 }
 async function loadStills(gen){
  const data=await api('/api/project/'+encodeURIComponent(current.slug)+'/stills');if(gen!==viewGen)return;stillsData=data;renderStills();if(pendingShot){const id=pendingShot;pendingShot=null;showShot(id);}
 }
 function renderStills(){
- clear(view); const d=stillsData;
- if(!d.available){view.append(el('div','empty',d.warning||'no storyboard'));return;}
+  clear(view); const d=stillsData;
+  if(!d.available){view.append(el('div','empty',d.warning||'no storyboard'));return;}
+  if(tab==='stills')view.append(heading('Review the full visual sequence.','Inspect each selected image against its purpose, music context and neighboring shots. Selecting a tile opens its contract; it does not record a verdict.'));
  const stats=el('div','stats');
  stats.append(stat(d.shots.length,'shots'));
  stats.append(stat(d.counts.accept||0,'accepted'));
@@ -757,7 +740,7 @@ function renderStills(){
   const verdict=s.verdict||'unreviewed';
   if(stillFilter&&verdict!==stillFilter)continue;
   shown++;
-  const card=el('button','still');
+   const card=el('button','still');card.dataset.shot=s.id;
   if(s.has_image){
    const img=document.createElement('img'); img.loading='lazy'; img.alt=s.id+' still'; img.src=withToken(s.thumb);
    img.addEventListener('error',function(){img.replaceWith(el('div','noimg','image unreadable'));});
@@ -777,7 +760,8 @@ async function showShot(id){
  const panel=document.getElementById('shotPanel');if(!panel||!current)return;const slug=current.slug;const gen=++shotGen;panel.hidden=false;panel.textContent='Loading '+id+'…';panel.setAttribute('aria-busy','true');
  try{
    const d=await api('/api/project/'+encodeURIComponent(slug)+'/shot/'+encodeURIComponent(id));if(gen!==shotGen||!current||current.slug!==slug||!panel.isConnected)return;
-  clear(panel);
+   clear(panel);
+   const controls=el('div','detail-actions');controls.append(el('b',null,'Shot inspection'),actionButton('Close inspection',()=>{panel.hidden=true;const selected=[...document.querySelectorAll('.still')].find(c=>c.dataset.shot===id);selected?.focus({preventScroll:true});}));panel.append(controls);
   const cols=el('div','cols');
   const left=el('div','');
   if(d.version){const img=document.createElement('img');img.alt=d.id+' selected still';img.src=withToken(d.thumb);left.append(img);}
@@ -793,27 +777,28 @@ async function showShot(id){
   const rows=[['purpose',c.purpose],['framing',c.framing||'—'],['camera',c.camera||'—'],['transition',c.transition||'cut'],['dissolve',(c.dissolve_frames||0)+' frames'],['scene',c.scene||'—'],['characters',(c.characters||[]).join(', ')||'—'],['references',(c.references||[]).join(', ')||'—'],['must show',(c.must_show||[]).join('; ')||'—'],['music',c.music_context||'—']];
   for(const pair of rows){dl.append(el('dt',null,pair[0]));dl.append(el('dd',null,String(pair[1])));}
   right.append(dl);
-  right.append(el('h3',null,'Compiled prompt'));
-  if(d.prompt_error)right.append(el('p','meta','prompt unavailable: '+d.prompt_error));
-  const pre=el('pre',null,d.prompt||'no compiled prompt recorded');
-  right.append(pre);
+   const promptDetails=el('details');promptDetails.append(el('summary',null,'Compiled prompt · technical details'));
+   if(d.prompt_error)right.append(el('p','meta','prompt unavailable: '+d.prompt_error));
+   const pre=el('pre',null,d.prompt||'no compiled prompt recorded');
+   promptDetails.append(pre);right.append(promptDetails);
    cols.append(right); panel.append(cols);panel.setAttribute('aria-busy','false');panel.tabIndex=-1;panel.focus({preventScroll:true});panel.scrollIntoView({block:'nearest'});
  }catch(e){if(gen===shotGen&&panel.isConnected){panel.setAttribute('aria-busy','false');errorPanel(panel,e.message,()=>showShot(id));}}
 }
 async function loadBoard(gen){
  const d=await api('/api/project/'+current.slug+'/board'); if(gen!==viewGen)return; clear(view);
  if(!d.available){view.append(el('div','empty',d.warning||'no storyboard'));return;}
- const stats=el('div','stats');
+  view.append(heading('Build the sequence, not just a shot list.','Review timing, musical binding and coverage. Open a shot to inspect its selected still, contract and compiled prompt.'));
+  const stats=el('div','stats');
  stats.append(stat(d.shots.length,'shots')); stats.append(stat(d.total_frames,'frames'));
  stats.append(stat(clock(d.duration),'duration')); stats.append(stat(d.fps,'fps'));
  view.append(stats);
  view.append(el('p','meta','bar grid: '+(d.grid.enabled?'enabled':'not claimed — '+(d.grid.reason||'no approved grid'))));
  if(d.bands.length){
-  const bands=el('div','bands');
-  for(const b of d.bands){
-   const seg=el('div','band '+b.kind,b.label+' · '+(b.timing_basis==='estimated'?'est.':'manual'));
-   seg.title=b.label+' · '+b.start_seconds+'s–'+b.end_seconds+'s · '+b.confidence;
-   seg.style.flex=String(Math.max(0.01,b.end_seconds-b.start_seconds)); bands.append(seg);
+   const bands=el('div','section-list');bands.setAttribute('aria-label','Musical sections');
+   for(const b of d.bands){
+    const seg=el('div','section-item',b.label);seg.append(el('span',null,clock(b.start_seconds)+'–'+clock(b.end_seconds)+' · '+(b.timing_basis||'unknown timing basis')));
+    seg.title=b.label+' · '+b.start_seconds+'s–'+b.end_seconds+'s · '+b.confidence;
+    bands.append(seg);
   }
   view.append(bands);
  }
@@ -823,30 +808,32 @@ async function loadBoard(gen){
   bar.style.left=(s.start_frame/d.total_frames*100)+'%'; bar.style.width=(s.seconds/d.duration*100)+'%'; track.append(bar);
  }
  view.append(track);
- const scroll=el('div','scroll'); const table=el('table'); const head=el('tr');
- for(const label of ['shot','seconds','frames','framing','transition','purpose']){const th=el('th',null,label);th.scope='col';head.append(th);}
- table.append(head);
+  const scroll=el('div','scroll');scroll.tabIndex=0;scroll.setAttribute('aria-label','Storyboard shots, scroll for more'); const table=el('table','board-table'); const head=el('tr');
+  for(const label of ['Shot','Timing','Framing & edit','Purpose & music']){const th=el('th',null,label);th.scope='col';head.append(th);}
+  const thead=el('thead');thead.append(head);table.append(thead);const tbody=el('tbody');table.append(tbody);
  for(const s of d.shots){
-   const tr=el('tr');const cell=el('td');const inspect=el('button','mini',s.id);inspect.setAttribute('aria-label','Inspect shot '+s.id);inspect.onclick=()=>{pendingShot=s.id;showTab('stills');};cell.append(inspect);tr.append(cell);tr.append(el('td',null,s.seconds.toFixed(1)));
-  tr.append(el('td','mono',s.start_frame+'–'+s.end_frame)); tr.append(el('td',null,s.framing||'—'));
-  tr.append(el('td',null,s.transition+(s.dissolve_frames?(' +'+s.dissolve_frames):''))); tr.append(el('td',null,s.purpose));
-  table.append(tr);
+    const tr=el('tr');const cell=el('td');const inspect=el('button','mini',s.id);inspect.setAttribute('aria-label','Inspect shot '+s.id);inspect.onclick=()=>{pendingShot=s.id;showTab('stills');};cell.append(inspect);tr.append(cell);
+   const timing=el('td',null,s.seconds.toFixed(1)+'s');timing.append(el('div','meta',clock(s.start_seconds)+'–'+clock(s.end_seconds)),el('div','mono',s.start_frame+'–'+s.end_frame+'f'));tr.append(timing);
+   const edit=el('td',null,(s.framing||'—').replaceAll('_',' '));edit.append(el('div','meta',s.transition+(s.dissolve_frames?' · '+s.dissolve_frames+'f dissolve':'')));tr.append(edit);
+   const purpose=el('td','shot-purpose',s.purpose);if(s.event_ids?.length)purpose.append(el('div','meta','Music: '+s.event_ids.join(', ')));tr.append(purpose);tbody.append(tr);
  }
- scroll.append(table); view.append(scroll);
+  scroll.append(table); view.append(scroll,stageReview('storyboard'));
 }
 async function loadApprovals(gen){
  if(gen!==viewGen)return;const d=currentData.approvals;clear(view);
- view.append(el('p','meta',d.current+' of '+d.total+' stages would pass now. Live hashes are recomputed; nothing is approved here.'));
+  view.append(heading('Review decisions with the evidence in view.','Approval records stay bound to the exact content you reviewed. Changed artifacts require a fresh decision.'));
+  view.append(el('p','meta',d.current+' of '+d.total+' stages would pass now. These checks are not new approvals.'));
  const scroll=el('div','scroll');const table=el('table','approval-table');const head=el('tr');const labels=['Stage','State','Decision note','Recorded at','Would pass','Technical details'];
  for(const label of labels){const th=el('th',null,label);th.scope='col';head.append(th);}const thead=el('thead');thead.append(head);table.append(thead);const tbody=el('tbody');table.append(tbody);
- for(const s of d.stages){
+  for(const s of d.stages){
   const tr=el('tr');
    tr.append(el('td',null,stageNames[s.stage]||s.stage));const state=el('td');state.append(badge(s.state));tr.append(state);
-   const note=el('td',null,s.note||'No decision recorded');if(s.problem)note.append(el('p','warn',s.problem));tr.append(note);tr.append(el('td',null,stamp(s.at)+(s.at?' · '+(s.via||'legacy surface'):'')));tr.append(el('td',null,s.would_pass_now?'yes':'no'));
+    const note=el('td');note.append(el('div','decision-note',s.note||'No decision recorded'));if(s.note?.length>240){const full=el('details','full-note');full.append(el('summary',null,'Read full decision'),el('p',null,s.note));note.append(full);}if(s.problem)note.append(el('p','warn',s.problem));tr.append(note);tr.append(el('td',null,stamp(s.at)+(s.at?' · '+(s.via||'legacy surface'):'')));tr.append(el('td',null,s.would_pass_now?'yes':'no'));
    const cmd=el('td');const technical=el('details');technical.append(el('summary',null,'Hashes and provenance'),el('p','meta','Human decisions use a terminal-enabled Studio session.'),el('p','code','Current hash: '+(s.hash||'unavailable')),el('p','code','Approved hash: '+(s.approved_hash||'none')));if(s.stage==='preview')technical.append(el('p','meta','Continuous playback attestation: '+(s.preview_watched===true?'recorded':'not recorded (legacy/unspecified)')));cmd.append(technical);tr.append(cmd);
    [...tr.children].forEach((td,i)=>td.dataset.label=labels[i]);tbody.append(tr);
  }
- scroll.append(table); view.append(scroll);
+  scroll.append(table); view.append(scroll);
+  for(const s of d.supporting_stages||[]){const card=el('section','content-card');card.append(el('h3',null,stageNames[s.stage]||s.stage),badge(s.state),el('p','notice',s.note||'No decision recorded'));if(s.problem)card.append(el('p','warn',s.problem));card.append(actionButton('Review '+(stageNames[s.stage]||s.stage),()=>{pendingApprovalStage=s.stage;showTab('approvals');}));view.append(card);}
  humanApprovalPanel(gen);
 }
 async function loadRuns(gen){
@@ -888,7 +875,7 @@ function appendEvent(ev){
 document.getElementById('tabs').addEventListener('click',function(e){const b=e.target.closest('button.tab');if(b)showTab(b.getAttribute('data-tab'));});
 document.getElementById('tabs').addEventListener('keydown',function(e){if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;const buttons=[...document.querySelectorAll('.tab')];const index=buttons.indexOf(document.activeElement);const next=e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;e.preventDefault();buttons[next].focus();showTab(buttons[next].dataset.tab);});
 document.getElementById('createForm').addEventListener('submit',async function(event){
- event.preventDefault();const button=document.getElementById('create');const sel=document.getElementById('src');if(creating||sel.disabled||sel.value===''||!sourceTracks[Number(sel.value)])return;creating=true;syncCreate();
+ event.preventDefault();if(setupStep!==2){if(validSetupStep())showSetupStep(setupStep+1);return;}const sel=document.getElementById('src');if(creating||sel.disabled||sel.value===''||!sourceTracks[Number(sel.value)]||!validSetupStep())return;creating=true;syncCreate();
  const source=sourceTracks[Number(document.getElementById('src').value)];const body={audio:source&&source.audio,title:document.getElementById('title').value.trim(),
   aspect:document.getElementById('aspect').value,fps:Number(document.getElementById('fps').value),
   music_mode:document.getElementById('mode').value,cap:document.getElementById('cap').value};
@@ -896,7 +883,7 @@ document.getElementById('createForm').addEventListener('submit',async function(e
  let created=null;
  try{const r=await fetch(withToken('/api/create'),{method:'POST',headers:Object.assign({},hdr,{'Content-Type':'application/json'}),body:JSON.stringify(body)});
  const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));created=d.created;
- msg.className='ok';msg.textContent='Created '+d.title+'. Opening project…';await loadProjects();navigate(d.created,'overview');document.getElementById('newProduction').open=false;
+ msg.className='ok';msg.textContent='Created '+d.title+'. Opening project…';await loadProjects();navigate(d.created,'overview');document.getElementById('createDialog').close();this.reset();showSetupStep(0);
  }catch(e){msg.className='err';msg.textContent=created?'Project '+created+' was created, but the library could not refresh. Refresh state before doing anything else.':'Creation could not be confirmed: '+e.message+'. Refresh the library before retrying; do not submit again if the project already exists.';}
  finally{creating=false;syncCreate();}
 });
@@ -914,10 +901,13 @@ async function watchActivity(){
  }catch(e){document.getElementById('freshness').textContent='Live connection unavailable — use Refresh state';setTimeout(watchActivity,3000);}
 }
 window.addEventListener('pagehide',()=>{stopCockpit();if(activitySource)activitySource.close();});
+__WORKFLOW_UI__
 __HUMAN_UI__
 loadSources();loadProjects().then(applyRoute).catch(e=>errorPanel(document.getElementById('list'),e.message,()=>document.getElementById('refresh').click()));watchActivity();
-</script></body></html>""".replace("__JS_HELPERS__", JS_HELPERS).replace(
-    "__HUMAN_UI__", human_ui.SCRIPT
+</script></body></html>""".replace("__JS_HELPERS__", JS_HELPERS)
+    .replace("__STUDIO_CSS__", studio_ui.CSS)
+    .replace("__WORKFLOW_UI__", studio_ui.SCRIPT)
+    .replace("__HUMAN_UI__", human_ui.SCRIPT)
 )
 
 
@@ -978,13 +968,12 @@ def serve(
             raise ValueError("Human actions were not enabled")
         action_token = secrets.token_urlsafe(32)
     httpd, url = build_server(projects_dir, db, port=port, token=token, action_token=action_token)
+    app_url = url.replace("/?token=", "/app?token=")
     if ready is not None:
-        ready.put(url)
-    print(f"Studio live: {url}")
+        ready.put(app_url)
+    print(f"Studio live: {app_url}")
     if action_token:
-        print(
-            f"Human action session: {url.replace('/?token=', '/app?token=')}#action={action_token}"
-        )
+        print(f"Human action session: {app_url}#action={action_token}")
     else:
         print(
             "Review-only session. A person can enable decisions with clip serve --actions in their terminal."
