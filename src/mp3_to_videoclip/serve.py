@@ -30,6 +30,7 @@ from . import appdata, human_actions, human_ui, sources, spine, studio, studio_u
 
 STREAM_INTERVAL = 0.5
 HEARTBEAT_SECONDS = 10.0
+MAX_UPLOAD_BYTES = 250 * 1024 * 1024
 
 JS_HELPERS = """
 function el(tag, cls, text){const n=document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n;}
@@ -399,6 +400,13 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         if not self._authorised(query):
             return self._json({"error": "token required"}, HTTPStatus.UNAUTHORIZED)
+        if parsed.path == "/api/source":
+            try:
+                return self._json(self._upload_source(query), HTTPStatus.CREATED)
+            except human_actions.ActionError as exc:
+                return self._json({"error": str(exc)}, exc.status)
+            except (OSError, ValueError) as exc:
+                return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         if parsed.path.startswith("/api/project/"):
             try:
                 segments = [unquote(part) for part in parsed.path.strip("/").split("/")]
@@ -485,6 +493,72 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError, KeyError) as exc:
             return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
 
+    def _upload_source(self, query) -> dict:
+        """Copy a browser-selected MP3 into the local upload area.
+
+        The browser cannot expose a filesystem path, so the file bytes are streamed
+        to this loopback route. The returned path is a server-owned temporary copy;
+        ``/api/create`` copies it into the production and the upload is removed.
+        """
+        from uuid import uuid4
+
+        from .render import audio_seconds, probe
+
+        raw = (query.get("name") or [""])[0]
+        name = Path(raw).name.strip()
+        if not name.lower().endswith(".mp3"):
+            raise human_actions.ActionError("choose an MP3 file", 400)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError as exc:
+            raise human_actions.ActionError("invalid content length", 400) from exc
+        if not 0 < length <= MAX_UPLOAD_BYTES:
+            raise human_actions.ActionError(
+                f"MP3 must be between 1 byte and {MAX_UPLOAD_BYTES // (1024 * 1024)} MB",
+                413,
+            )
+        uploads = Path(self.server.upload_dir)
+        uploads.mkdir(parents=True, exist_ok=True)
+        target = uploads / f"{uuid4().hex}.mp3"
+        part = uploads / f".{target.name}.part"
+        try:
+            remaining = length
+            with part.open("wb") as handle:
+                while remaining:
+                    chunk = self.rfile.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        raise human_actions.ActionError(
+                            "upload ended before the file was complete", 400
+                        )
+                    handle.write(chunk)
+                    remaining -= len(chunk)
+            part.replace(target)
+            try:
+                info = probe(target)
+                if not any(
+                    stream.get("codec_type") == "audio" for stream in info.get("streams", [])
+                ):
+                    raise human_actions.ActionError("the file has no audio stream", 400)
+                seconds = audio_seconds(target)
+            except human_actions.ActionError:
+                raise
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise human_actions.ActionError("could not read this MP3", 400) from exc
+            if seconds <= 0:
+                raise human_actions.ActionError("the file has no decodable audio", 400)
+        except Exception:
+            part.unlink(missing_ok=True)
+            target.unlink(missing_ok=True)
+            raise
+        title = re.sub(r"[_-]+", " ", Path(name).stem).strip() or "Untitled track"
+        return {
+            "path": str(target),
+            "name": name,
+            "title": title[:120],
+            "seconds": round(seconds, 3),
+            "bytes": length,
+        }
+
     def _create(self, body: dict) -> dict:
         """Create a production through the kernel: init copies the audio, then the cap."""
         from . import budget
@@ -518,6 +592,8 @@ class Handler(BaseHTTPRequestHandler):
             body.get("music_mode") or "vocal",
             title=title,
         )
+        if audio.resolve().parent == Path(self.server.upload_dir).resolve():
+            audio.unlink(missing_ok=True)
         if cap is not None and cap != "":
             from .storage import project_lock
 
@@ -689,10 +765,10 @@ summary{cursor:pointer;min-height:36px;padding:6px 0;color:var(--gold)}details{m
 <dialog id="createDialog" aria-labelledby="createTitle"><div class="dialog-heading"><div><div class="kicker">A new beginning</div><h2 id="createTitle">New production</h2></div><button id="closeCreate" class="mini" type="button" aria-label="Close new production">✕</button></div>
 <ol class="wizard-steps" aria-label="Setup progress"><li aria-current="step">1 · Track</li><li>2 · Film settings</li><li>3 · Budget & confirm</li></ol>
 <form id="createForm">
-<fieldset data-setup-step="0"><legend>Choose your track</legend><p class="notice">Start with a liked MP3 from your local music library. Your original stays untouched.</p>
-<label for="sourceSearch">Search source tracks</label><input id="sourceSearch" type="search" placeholder="Title or tags" aria-describedby="sourceHelp">
-<p id="sourceHelp" class="meta">Local liked MP3 tracks only. Search to find more results; nothing is uploaded.</p>
-<label for="src">Source track</label><select id="src" required></select>
+<fieldset data-setup-step="0"><legend>Choose your track</legend><p class="notice">Browse for an MP3 on this Mac. The chosen file is copied into this local production; nothing is uploaded to a provider.</p>
+<label for="sourceFile">Song file</label><input id="sourceFile" type="file" accept=".mp3,audio/mpeg" required aria-describedby="sourceHelp">
+<p id="sourceHelp" class="meta">MP3 only, up to 250 MB. Your original file stays untouched.</p>
+<p id="sourceStatus" class="meta" role="status" aria-live="polite"></p>
 </fieldset>
 <fieldset data-setup-step="1" hidden><legend>Give your film a direction</legend>
 <label for="title">Film title</label><input id="title" required maxlength="120" placeholder="Give your film a title">
@@ -717,7 +793,7 @@ const q=token?('?token='+encodeURIComponent(token)):'';
 const hdr=token?{'X-Studio-Token':token}:{};
 const view=document.getElementById('view');
 let current=null, tab='overview', stillsData=null, stillFilter=null, cockpitSource=null, cockpitRun=null, viewGen=0;
-let projects=[], currentData=null, sourceGen=0, shotGen=0, pendingShot=null, sourceTracks=[], activityVersion=0, cockpitEpoch=0, creating=false;
+let projects=[], currentData=null, sourceGen=0, shotGen=0, pendingShot=null, selectedSource=null, uploading=false, activityVersion=0, cockpitEpoch=0, creating=false;
 const verifiedEntries=new Map();
 const stageNames={analysis:'Music analysis',lyrics:'Lyrics',listening:'Music listening',brand:'Brand identity',events:'Music events',brief:'Creative brief',storyboard:'Storyboard',proof:'Three-shot proof',preview:'Music preview',stills:'Full still set',graphics:'Titles and credits'};
 __JS_HELPERS__
@@ -739,19 +815,17 @@ function clear(node){while(node.firstChild)node.removeChild(node.firstChild);}
 function stat(b,label){const n=el('div','stat');n.append(el('b',null,String(b)));n.append(el('span',null,label));return n;}
 function stopCockpit(){cockpitEpoch++;if(cockpitSource){cockpitSource.close();cockpitSource=null;}cockpitRun=null;}
 function setTab(name){tab=name;document.querySelectorAll('button.tab').forEach(function(b){const on=b.dataset.tab===name;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;});view.setAttribute('aria-labelledby','tab-'+name);scrollWorkflow();}
-async function loadSources(){
- const gen=++sourceGen;const sel=document.getElementById('src');sel.disabled=true;syncCreate();
- try{const d=await api('/api/sources?q='+encodeURIComponent(document.getElementById('sourceSearch').value));if(gen!==sourceGen)return;
- sel.textContent='';const prompt=el('option',null,d.tracks&&d.tracks.length?'Choose a source track':'No matching tracks');prompt.value='';sel.append(prompt);
- sourceTracks=(d.tracks||[]).filter(t=>t.audio.toLowerCase().endsWith('.mp3'));for(const [i,t] of sourceTracks.entries()){const o=el('option');o.value=String(i);o.textContent=t.title+' · '+clock(t.seconds);sel.append(o);}
- document.getElementById('sourceHelp').textContent=sourceTracks.length+' local MP3 tracks shown. Search to find more; nothing is uploaded.';
- }catch(e){if(gen!==sourceGen)return;sel.textContent='';const o=el('option',null,'Source list unavailable');o.value='';sel.append(o);document.getElementById('sourceHelp').textContent=e.message+' — edit your search to retry.';}
- finally{if(gen===sourceGen){sel.disabled=false;syncCreate();}}
-}
-function syncCreate(){const sel=document.getElementById('src'),submit=document.getElementById('create');submit.disabled=creating||sel.disabled||sel.value==='';submit.textContent=creating?'Creating production…':'Create production';document.getElementById('setupNext').disabled=creating||(setupStep===0&&(sel.disabled||sel.value===''));document.getElementById('setupBack').disabled=creating;document.querySelectorAll('#createForm fieldset').forEach(f=>f.disabled=creating);}
 async function loadProjects(){
  const d=await api('/api/studio');
  projects=d.productions;renderProjects();
+}
+function syncCreate(){
+ const submit=document.getElementById('create');
+ submit.disabled=creating||uploading||!selectedSource;
+ submit.textContent=creating?'Creating production…':'Create production';
+ document.getElementById('setupNext').disabled=creating||uploading||!selectedSource;
+ document.getElementById('setupBack').disabled=creating;
+ document.querySelectorAll('#createForm fieldset').forEach(f=>f.disabled=creating||uploading);
 }
 function renderProjects(){renderLibrary();}
 function openProject(slug,title,name='overview'){
@@ -945,21 +1019,42 @@ function appendEvent(ev){
 }
 document.getElementById('tabs').addEventListener('click',function(e){const b=e.target.closest('button.tab');if(b)showTab(b.getAttribute('data-tab'));});
 document.getElementById('tabs').addEventListener('keydown',function(e){if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;const buttons=[...document.querySelectorAll('.tab')];const index=buttons.indexOf(document.activeElement);const next=e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;e.preventDefault();buttons[next].focus();showTab(buttons[next].dataset.tab);});
+async function uploadSource(file){
+ const gen=++sourceGen;selectedSource=null;uploading=true;
+ const status=document.getElementById('sourceStatus');
+ status.className='meta';status.textContent='Copying '+file.name+' locally…';syncCreate();
+ try{
+  const r=await fetch(withToken('/api/source?name='+encodeURIComponent(file.name)),{method:'POST',headers:Object.assign({},hdr,{'Content-Type':'application/octet-stream'}),body:file});
+  const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+  if(gen!==sourceGen)return;
+  selectedSource=d;
+  status.className='ok';status.textContent=d.name+' · '+clock(d.seconds)+' · '+((Number(d.bytes)||0)/1048576).toFixed(1)+' MB';
+ }catch(e){
+  if(gen!==sourceGen)return;selectedSource=null;status.className='warn';status.textContent=e.message;
+  const input=document.getElementById('sourceFile');if(input)input.value='';
+ }finally{if(gen===sourceGen){uploading=false;syncCreate();}}
+}
+function chooseSource(file){
+ const input=document.getElementById('sourceFile'),status=document.getElementById('sourceStatus');
+ if(!file){sourceGen++;selectedSource=null;uploading=false;status.textContent='';syncCreate();return;}
+ if(!/\\.mp3$/i.test(file.name)){sourceGen++;selectedSource=null;input.value='';status.className='warn';status.textContent='Choose an MP3 file.';syncCreate();return;}
+ if(file.size>250*1024*1024){sourceGen++;selectedSource=null;input.value='';status.className='warn';status.textContent='That MP3 is larger than 250 MB.';syncCreate();return;}
+ uploadSource(file);
+}
 document.getElementById('createForm').addEventListener('submit',async function(event){
- event.preventDefault();if(setupStep!==2){if(validSetupStep())showSetupStep(setupStep+1);return;}const sel=document.getElementById('src');if(creating||sel.disabled||sel.value===''||!sourceTracks[Number(sel.value)]||!validSetupStep())return;creating=true;syncCreate();
- const source=sourceTracks[Number(document.getElementById('src').value)];const body={audio:source&&source.audio,title:document.getElementById('title').value.trim(),
+ event.preventDefault();if(setupStep!==2){if(validSetupStep())showSetupStep(setupStep+1);return;}const source=selectedSource;if(creating||uploading||!source||!validSetupStep())return;creating=true;syncCreate();
+ const body={audio:source.path,title:document.getElementById('title').value.trim(),
   aspect:document.getElementById('aspect').value,fps:Number(document.getElementById('fps').value),
   music_mode:document.getElementById('mode').value,cap:document.getElementById('cap').value};
  const msg=document.getElementById('msg'); msg.className='';msg.textContent='creating…';
  let created=null;
  try{const r=await fetch(withToken('/api/create'),{method:'POST',headers:Object.assign({},hdr,{'Content-Type':'application/json'}),body:JSON.stringify(body)});
  const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));created=d.created;
- msg.className='ok';msg.textContent='Created '+d.title+'. Opening project…';await loadProjects();navigate(d.created,'overview');document.getElementById('createDialog').close();this.reset();showSetupStep(0);
+ msg.className='ok';msg.textContent='Created '+d.title+'. Opening project…';await loadProjects();navigate(d.created,'overview');document.getElementById('createDialog').close();this.reset();selectedSource=null;uploading=false;sourceGen++;document.getElementById('sourceStatus').textContent='';showSetupStep(0);
  }catch(e){msg.className='err';msg.textContent=created?'Project '+created+' was created, but the library could not refresh. Refresh state before doing anything else.':'Creation could not be confirmed: '+e.message+'. Refresh the library before retrying; do not submit again if the project already exists.';}
  finally{creating=false;syncCreate();}
 });
-document.getElementById('src').addEventListener('change',syncCreate);
-let sourceTimer;document.getElementById('sourceSearch').addEventListener('input',()=>{sourceGen++;document.getElementById('src').value='';document.getElementById('src').disabled=true;syncCreate();clearTimeout(sourceTimer);sourceTimer=setTimeout(loadSources,250);});
+document.getElementById('sourceFile').addEventListener('change',event=>chooseSource(event.target.files[0]));
 window.addEventListener('hashchange',applyRoute);
 document.getElementById('refresh').onclick=async function(){const b=this;b.disabled=true;try{currentData=null;verifiedEntries.clear();await loadProjects();applyRoute();}catch(e){errorPanel(view,e.message,()=>b.click());}finally{b.disabled=false;}};
 let activitySource=null,activityCursor=0,activityReady=false;
@@ -974,7 +1069,7 @@ async function watchActivity(){
 window.addEventListener('pagehide',()=>{stopCockpit();if(activitySource)activitySource.close();});
 __WORKFLOW_UI__
 __HUMAN_UI__
-loadSources();loadProjects().then(applyRoute).catch(e=>errorPanel(document.getElementById('list'),e.message,()=>document.getElementById('refresh').click()));watchActivity();
+loadProjects().then(applyRoute).catch(e=>errorPanel(document.getElementById('list'),e.message,()=>document.getElementById('refresh').click()));watchActivity();
 </script></body></html>""".replace("__JS_HELPERS__", JS_HELPERS)
     .replace("__STUDIO_CSS__", studio_ui.CSS)
     .replace("__WORKFLOW_UI__", studio_ui.SCRIPT)
@@ -1013,6 +1108,7 @@ def build_server(
         if sources_dir
         else Path.home() / "Downloads" / "Suno Downloads"
     )
+    httpd.upload_dir = httpd.projects_dir.parent / "studio" / "uploads"
     url = f"http://127.0.0.1:{httpd.server_address[1]}/?token={token}"
     return httpd, url
 

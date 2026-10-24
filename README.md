@@ -112,9 +112,11 @@ uv run clip serve --port 8765             # review studio; prints a tokenised UR
 By default, `clip serve` binds `127.0.0.1`, requires a per-session token, exposes review `GET`s
 (`/api/health`, `/api/status`, `/api/runs`, `/api/events`, `/api/stream`, `/api/studio`,
 `/api/sources`) and refuses writes except `POST /api/create` (local setup through
-the kernel, not generation). Decision POSTs require an additional human action
-capability; other write routes return `405`. `PUT`, `PATCH` and `DELETE` never
-create projects. The health response declares the setup-write exception.
+the kernel, not generation) and `POST /api/source` (a browser-selected MP3 copied
+into a local staging folder; nothing leaves the machine). Decision POSTs require
+an additional human action capability; other write routes return `405`. `PUT`,
+`PATCH` and `DELETE` never create projects. The health response declares the
+setup-write exception.
 The `/app` shell is a review surface over the same server:
 `/api/project/<slug>` (status), `/stills`, `/board`, `/approvals`, `/shot/<id>` (contract
 and compiled prompt) and `/thumb/<id>` (path-guarded, re-encoded in memory). It renders a
@@ -136,12 +138,14 @@ snapshot, not a promise of continuous freshness. Decision notes are shown before
 technical hashes; command templates still require the user's explicit decision.
 “Would pass” invokes the kernel's full gate checks, including parent approvals,
 accepted image reviews and graphics-review evidence—not just hash equality.
-**New production** opens a keyboard-accessible setup dialog: choose a local track,
-set the film title/format/music approach, then enter an overall allowance and
-confirm. Back preserves the draft, Escape closes the dialog, and creation opens
-the returned project without a reload. Portrait setup explicitly warns that the
-current signature compositor requires a separate titles/credits plan before spend.
-No project files, exports or source audio are served by generic file routes.
+**New production** opens a keyboard-accessible setup dialog: browse for a local
+MP3, set the film title/format/music approach, then enter an overall allowance and
+confirm. The browser copies only that chosen file to a local staging folder; the
+old preloaded source list is no longer queried. Back preserves the draft, Escape
+closes the dialog, and creation opens the returned project without a reload.
+Portrait setup explicitly warns that the current signature compositor requires a
+separate titles/credits plan before spend. No project files, exports or source
+audio are served by generic file routes.
 
 The workspace is now five steps: **Track → Story → Style check → Images → Finish**.
 The compact library is searchable; phone/tablet layouts use a project switcher
