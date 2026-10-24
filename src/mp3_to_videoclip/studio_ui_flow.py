@@ -242,9 +242,10 @@ function readable(node,value,depth=0){
 }
 async function refreshStudio(){currentData=null;verifiedEntries.clear();await loadProjects();}
 async function approveStage(stage,note,extra={}){
-  const current=await api('/api/project/'+encodeURIComponent(current.slug)+'/approval/'+encodeURIComponent(stage));
-  if(!current?.expected_hash)throw new Error('Current content hash is unavailable; refresh first.');
-  return decide('/api/project/'+encodeURIComponent(current.slug)+'/approve/'+encodeURIComponent(stage),{expected_hash:current.expected_hash,note,confirmed:true,...extra});
+  const slug=current.slug;
+  const snapshot=await api('/api/project/'+encodeURIComponent(slug)+'/approval/'+encodeURIComponent(stage));
+  if(!snapshot?.expected_hash)throw new Error('Current content hash is unavailable; refresh first.');
+  return decide('/api/project/'+encodeURIComponent(slug)+'/approve/'+encodeURIComponent(stage),{expected_hash:snapshot.expected_hash,note,confirmed:true,...extra});
 }
 async function workflow(gen){
   const d=await api('/api/project/'+encodeURIComponent(current.slug)+'/workflow');

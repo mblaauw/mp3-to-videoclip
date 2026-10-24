@@ -547,6 +547,39 @@ def test_style_and_images_expose_per_shot_human_review(studio_page):
 
 
 @pytest.mark.parametrize("studio_page", [True], indirect=True)
+def test_style_gate_records_proof_without_script_error(studio_page):
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.reviews import record_review
+
+    page, app, root, *_ = studio_page
+    approvals = read_json(root / "work/approvals.json")
+    approvals.pop("proof", None)
+    write_json(root / "work/approvals.json", approvals)
+    for shot_id in P.proof_ids(P.load_board(root), P.load_brief(root)):
+        record_review(
+            root,
+            shot_id,
+            1,
+            "accept",
+            note="Pre-accepted for the gate test",
+            reviewer="test",
+            inspected=True,
+        )
+    open_human_session(page, app)
+    page.locator("#tab-style").click()
+    page.wait_for_selector("#view h2 >> text=Style check")
+    form = page.locator("form", has=page.get_by_role("button", name="Approve style check"))
+    form.locator("textarea").fill("The proof samples hold the direction")
+    form.locator('input[type="checkbox"]').check()
+    form.get_by_role("button", name="Approve style check").click()
+    page.wait_for_selector("#view h2 >> text=Images")
+    recorded = read_json(root / "work/approvals.json")
+    assert recorded["proof"]["via"] == "studio"
+    assert recorded["proof"]["note"] == "The proof samples hold the direction"
+    assert read_json(root / "work/tasks.json") == {}
+
+
+@pytest.mark.parametrize("studio_page", [True], indirect=True)
 def test_story_feedback_request_and_composite_approval_are_separate_actions(studio_page):
     from mp3_to_videoclip import flow
 
