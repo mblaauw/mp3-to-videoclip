@@ -104,15 +104,32 @@ user's explicit scope before it starts.
   weak estimates and reduce the crew to director plus critic. This phase needs a
   separately approved scope before any new model dependency is installed.
 
+### Legacy cleanup (2026-10-24)
+
+Annotated tag `legacy-v0` marks `6d243e8` as the pre-cleanup checkpoint. The
+inventory found no dead module: all 46 modules are imported, and the remaining
+"legacy" branches are compatibility readers/renderers required by the finished
+films (hashes, image specs, captions, profiles, old quotes). Historical plan docs
+are already pointers into the local, untracked `archive/2026-10-remotion/` tree,
+which stays because those pointers depend on it. The only safe retirement was
+new-production legacy creation (`3696359`): `clip init` no longer accepts
+`--workflow-version` or `--renderer`. Compatibility code stays.
+
+PR #1 (`chore/sustained-delivery`) was closed unmerged on 2026-10-24. It merged
+cleanly in Git but conflicted with current design: a duplicate macOS CI workflow
+beside `check.yml`, a Build-160 override in `.opencode/opencode.json` rather than
+the active root `opencode.json`, and policy text predating the V2 agent directory.
+Its local branch and worktree are removed; the remote branch awaits user deletion
+because agent push is policy-blocked. Build headroom is not currently configured
+in the root file and should be added deliberately if wanted.
+
 ### Publication state
 
 `chore/retire-legacy-init` is three commits ahead of `origin/main` (`6d243e8`) and is
-the branch to publish: the two implementation commits plus this record. `feat/studio-ux-improvements` is superseded: its
-implementation was squash-merged as PR #2 (`75f8c95`) and its tip only records that
-handoff. `chore/sustained-delivery` is pushed but unmerged and carries a second CI
-workflow (`.github/workflows/ci.yml`) beside `check.yml`; decide which one survives
-before merging it. Push, PR, merge and deploy stay user-operated — agent publication
-is blocked by configuration policy.
+the branch to publish: the two implementation commits plus this record. Push, PR,
+merge and deploy stay user-operated — agent publication is blocked by configuration
+policy. `feat/studio-ux-improvements` was squash-merged as PR #2 (`75f8c95`); its
+local and remote branch are now cleanup leftovers, not work.
 
 ## Implemented engineering milestone: Human Studio decisions (2026-10-21)
 
