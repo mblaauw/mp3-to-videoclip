@@ -116,6 +116,23 @@ findings and resolutions:
   bookmarks/tests but are not in the five-step menu.
 - Archive location is local and ignored; no remote backup was created by this task.
 
+## Follow-up: browse for the song (2026-10-24)
+
+The New production dialog no longer preloads or queries the source library. Step 1
+is a native MP3 picker. The browser sends only the chosen file to
+`POST /api/source`; the server validates it with ffprobe, stores it under the
+git-ignored local `studio/uploads/` staging folder, and returns its path, name,
+duration and size. `/api/create` uses that path, then deletes the staging copy.
+The old `/api/sources` read route remains for compatibility but is not called by
+the dialog.
+
+Evidence: browser tests use a real generated MP3 through the file input; direct
+HTTP tests cover missing token, non-MP3 rejection, successful upload and creation
+from the uploaded path. Full suite **930 passed, 2 skipped**; Chromium **33
+passed**; ruff and `clip eval` clean. The dialog was visually inspected at
+1440×1000: file picker visible, no source list, Continue disabled until a valid
+upload.
+
 ## Publication
 
 Merged to `main` as `1646ddd` (PR #5, branch `guided-studio-flow`) after the CI

@@ -4,6 +4,7 @@ import json
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 from test_creative_production import jpeg, make_root, record_stills
@@ -518,6 +519,59 @@ def test_app_shell_exposes_read_only_review_views(tmp_path):
 # --------------------------------------------------------------------------- #
 # capability registry
 # --------------------------------------------------------------------------- #
+def test_source_upload_copies_browser_file_and_create_uses_it(tmp_path):
+    from test_native_size import synth_source
+
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    source = synth_source(tmp_path)
+    httpd, url, thread = serve.start_in_thread(projects, tmp_path / "db.sqlite3", token="t")
+    base = url.split("?")[0]
+
+    def post(target, data, headers):
+        request = urllib.request.Request(target, data=data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    try:
+        status, _ = post(base + "api/source?name=song.mp3", b"x", {})
+        assert status == 401
+        status, body = post(
+            base + "api/source?token=t&name=" + quote("My Song.mp3"),
+            source.read_bytes(),
+            {"X-Studio-Token": "t", "Content-Type": "application/octet-stream"},
+        )
+        assert status == 201
+        uploaded = Path(body["path"])
+        assert uploaded.is_file()
+        assert uploaded.parent == httpd.upload_dir
+        assert body["title"] == "My Song"
+        assert body["seconds"] > 0
+        status, _ = post(
+            base + "api/source?token=t&name=notes.txt",
+            b"x",
+            {"X-Studio-Token": "t"},
+        )
+        assert status == 400
+
+        status, created = post(
+            base + "api/create?token=t",
+            json.dumps({"title": "Uploaded", "audio": str(uploaded), "cap": "1.00"}).encode(),
+            {"X-Studio-Token": "t", "Content-Type": "application/json"},
+        )
+        assert status == 201
+        assert created["created"] == "uploaded"
+        assert (projects / "uploaded/media/song.mp3").is_file()
+        assert not uploaded.exists()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
+
+
 def test_every_command_is_classified():
     assert tools.unclassified() == []
     described = {item["tool"] for item in tools.describe()}

@@ -55,7 +55,7 @@ def studio_page(tmp_path, browser, request):
     page.on("pageerror", lambda error: errors.append(str(error)))
     base = url.split("?")[0]
     app = base + "app?token=browser-test"
-    yield page, app, root, second, db
+    yield page, app, root, second, db, audio
     page.unroute_all(behavior="ignoreErrors")
     page.close()
     httpd.shutdown()
@@ -70,6 +70,11 @@ def select_project(page, app, slug="production", tab="overview"):
         "() => document.querySelector('#view').getAttribute('aria-busy') === 'false'"
     )
     assert page.locator("#view .empty[role=alert]").count() == 0
+
+
+def choose_audio(page, audio):
+    page.locator("#sourceFile").set_input_files(str(audio))
+    page.wait_for_function("() => selectedSource && selectedSource.path")
 
 
 def test_routes_reload_back_forward_and_keyboard_tabs(studio_page):
@@ -129,13 +134,13 @@ def test_thumbnails_and_board_inspection_use_the_served_project_identity(studio_
 
 
 def test_create_opens_returned_project_without_reload(studio_page):
-    page, app, root, *_ = studio_page
+    page, app, root, _second, _db, audio = studio_page
     page.goto(app)
     page.locator("#newProduction").click()
-    page.wait_for_function("() => document.querySelector('#src').options.length > 1")
-    assert page.locator("#src option").nth(1).get_attribute("value") == "0"
+    assert page.locator("#sourceFile").is_visible()
+    assert page.locator("#src").count() == 0
+    choose_audio(page, audio)
     assert page.locator("#cap").input_value() == ""
-    page.locator("#src").select_option("0")
     page.locator("#setupNext").click()
     page.locator("#title").fill("Café — Browser Test!")
     page.locator("#setupNext").click()
@@ -152,6 +157,8 @@ def test_create_opens_returned_project_without_reload(studio_page):
         read_json(root.parent / "cafe-browser-test/work/production-budget.json")["cap_usd"]
         == "1.00"
     )
+    # The browser copy is temporary; the project keeps its own media/song.mp3.
+    assert list((root.parent.parent / "studio/uploads").glob("*.mp3")) == []
 
 
 def test_failed_copy_is_honest_and_command_stays_selectable(studio_page):
@@ -169,7 +176,7 @@ def test_failed_copy_is_honest_and_command_stays_selectable(studio_page):
 
 
 def test_live_activity_marks_snapshot_dirty_outside_runs(studio_page):
-    page, app, root, _second, db = studio_page
+    page, app, root, _second, db, *_ = studio_page
     select_project(page, app, tab="story")
     page.wait_for_function("() => activitySource && activitySource.readyState === 1")
     with spine.connect(db) as conn:
@@ -190,32 +197,35 @@ def test_auth_error_has_human_recovery_and_api_stays_json(studio_page):
     assert json.loads(api.text())["error"] == "token required"
 
 
-def test_source_search_blocks_creation_until_a_new_track_is_chosen(studio_page):
-    page, app, *_ = studio_page
+def test_new_production_browses_for_a_file_without_preloading_songs(studio_page):
+    page, app, _root, _second, _db, audio = studio_page
+    requests = []
+    page.on("request", lambda request: requests.append(request.url))
     page.goto(app)
     page.locator("#newProduction").click()
-    page.wait_for_function("() => sourceTracks.length > 0")
-    page.locator("#src").select_option("0")
-    pending = []
-    writes = []
-    page.on("request", lambda request: writes.append(request) if request.method == "POST" else None)
-    page.route("**/api/sources?q=delayed*", lambda route: pending.append(route))
-    with page.expect_request("**/api/sources?q=delayed*"):
-        page.locator("#sourceSearch").fill("delayed")
-    assert page.locator("#src").is_disabled()
-    assert page.locator("#create").is_disabled()
-    page.evaluate(
-        "document.querySelector('#createForm').dispatchEvent(new Event('submit', {cancelable:true}))"
+    assert page.locator("#sourceFile").is_visible()
+    assert page.locator("#src").count() == 0
+    assert page.locator("#sourceSearch").count() == 0
+    assert page.locator("#setupNext").is_disabled()
+    assert not any("/api/sources" in url for url in requests)
+
+    page.locator("#sourceFile").set_input_files(
+        [{"name": "notes.txt", "mimeType": "text/plain", "buffer": b"not audio"}]
     )
-    assert writes == []
-    pending[0].fulfill(json={"tracks": []})
-    page.wait_for_function("() => !document.querySelector('#src').disabled")
-    assert page.locator("#src").input_value() == ""
-    assert page.locator("#create").is_disabled()
+    page.wait_for_selector("#sourceStatus >> text=Choose an MP3")
+    assert page.locator("#setupNext").is_disabled()
+    assert not any("/api/source?" in url for url in requests)
+
+    page.locator("#sourceFile").set_input_files(str(audio))
+    page.wait_for_function("() => selectedSource && selectedSource.path")
+    assert page.locator("#setupNext").is_enabled()
+    assert "track" in page.locator("#sourceStatus").inner_text()
+    assert any("/api/source?name=track.mp3" in url for url in requests)
+    assert not any("/api/sources" in url for url in requests)
 
 
 def test_run_event_failure_has_a_working_retry(studio_page):
-    page, app, root, _second, db = studio_page
+    page, app, root, _second, db, *_ = studio_page
     with spine.connect(db) as conn:
         spine.start_run(conn, intent="show events", production=root.name)
     page.route(
@@ -540,7 +550,7 @@ def test_style_and_images_expose_per_shot_human_review(studio_page):
 def test_story_feedback_request_and_composite_approval_are_separate_actions(studio_page):
     from mp3_to_videoclip import flow
 
-    page, app, _root, second, _db = studio_page
+    page, app, _root, second, _db, *_ = studio_page
     flow.mark(second)
     open_human_session(page, app)
     page.goto(app + "#/second/story")
@@ -571,7 +581,7 @@ def test_story_feedback_request_and_composite_approval_are_separate_actions(stud
 def test_finish_credits_are_editable_only_for_guided_projects(studio_page):
     from mp3_to_videoclip import flow, signature
 
-    page, app, root, second, _db = studio_page
+    page, app, root, second, _db, *_ = studio_page
     select_project(page, app, tab="finish")
     assert "predates guided credits" in page.locator("#view").inner_text()
     assert page.locator(".credit-row").count() == 0
@@ -680,13 +690,12 @@ def test_preview_playback_and_confirmation_target_the_bound_movie_not_the_newest
 
 
 def test_setup_dialog_validates_steps_preserves_back_navigation_and_escape(studio_page):
-    page, app, *_ = studio_page
+    page, app, _root, _second, _db, audio = studio_page
     page.goto(app)
     page.locator("#newProduction").click()
     assert page.locator("#createDialog").is_visible()
     assert page.locator("#setupNext").is_disabled()
-    page.wait_for_function("() => sourceTracks.length > 0")
-    page.locator("#src").select_option("0")
+    choose_audio(page, audio)
     page.locator("#setupNext").click()
     playwright.expect(page.locator("#title")).to_be_focused()
     page.locator("#setupNext").click()
@@ -707,11 +716,10 @@ def test_setup_dialog_validates_steps_preserves_back_navigation_and_escape(studi
 
 
 def test_setup_single_flight_and_failed_submit_offer_honest_recovery(studio_page):
-    page, app, *_ = studio_page
+    page, app, _root, _second, _db, audio = studio_page
     page.goto(app)
     page.locator("#newProduction").click()
-    page.wait_for_function("() => sourceTracks.length > 0")
-    page.locator("#src").select_option("0")
+    choose_audio(page, audio)
     page.locator("#setupNext").click()
     page.locator("#title").fill("Network test")
     page.locator("#setupNext").click()

@@ -23,6 +23,9 @@ CSS = """
 .credit-row{display:grid;grid-template-columns:1fr 1.4fr auto;gap:8px;margin:8px 0;align-items:center}
 .credit-row input{min-height:38px}
 .confirmation input{width:20px;min-height:20px;height:20px}
+input[type=file]{padding:9px;background:var(--surface);border:1px solid var(--line);border-radius:8px;width:100%}
+input[type=file]::file-selector-button{margin-right:10px;padding:7px 11px;border:0;border-radius:6px;background:var(--gold);color:#1a1408;font:600 12px/1.2 inherit;cursor:pointer}
+#sourceStatus.ok{color:var(--ok)}#sourceStatus.warn{color:var(--warn)}
 .content-card details{border:0;padding:0;margin:8px 0}
 .content-card details summary{min-height:28px}
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0}
@@ -486,9 +489,9 @@ async function loadFinish(gen){
 // --- local setup wizard -------------------------------------------------- //
 let setupStep=0;
 function scrollWorkflow(){const selected=document.querySelector('#tabs .tab.on');if(selected?.classList.contains('step')){const rail=selected.parentElement,delta=selected.getBoundingClientRect().left-rail.getBoundingClientRect().left;if(delta<0||delta+selected.offsetWidth>rail.clientWidth)rail.scrollLeft+=delta;}}
-function validSetupStep(){const step=document.querySelector('[data-setup-step="'+setupStep+'"]');if(!step)return false;if(setupStep===1){const title=document.getElementById('title');title.setCustomValidity(title.value.trim()?'':'Enter a film title.');}for(const control of step.querySelectorAll('input,select'))if(!control.reportValidity())return false;return setupStep!==0||(!document.getElementById('src').disabled&&document.getElementById('src').value!=='');}
+function validSetupStep(){const step=document.querySelector('[data-setup-step="'+setupStep+'"]');if(!step)return false;if(setupStep===1){const title=document.getElementById('title');title.setCustomValidity(title.value.trim()?'':'Enter a film title.');}if(setupStep===0&&(uploading||!selectedSource))return false;for(const control of step.querySelectorAll('input,select'))if(!control.reportValidity())return false;return true;}
 function showSetupStep(step){setupStep=step;document.querySelectorAll('[data-setup-step]').forEach((node,index)=>node.hidden=index!==step);document.querySelectorAll('.wizard-steps li').forEach((node,index)=>{if(index===step)node.setAttribute('aria-current','step');else node.removeAttribute('aria-current');});const back=document.getElementById('setupBack'),next=document.getElementById('setupNext'),create=document.getElementById('create');if(back)back.hidden=step===0;if(next)next.hidden=step===2;if(create)create.hidden=step!==2;
- const summary=document.getElementById('setupSummary');if(summary){clear(summary);for(const [label,value] of [['Track',sourceTracks[Number(document.getElementById('src').value)]?.title||'Not selected'],['Film',document.getElementById('title').value||'Not named'],['Format',document.getElementById('aspect').selectedOptions[0].text+' · '+document.getElementById('fps').value+' fps'],['Approach',document.getElementById('mode').selectedOptions[0].text]])summary.append(el('dt',null,label),el('dd',null,value));}
+ const summary=document.getElementById('setupSummary');if(summary){clear(summary);for(const [label,value] of [['Track',selectedSource?.title||'Not selected'],['Film',document.getElementById('title').value||'Not named'],['Format',document.getElementById('aspect').selectedOptions[0].text+' · '+document.getElementById('fps').value+' fps'],['Approach',document.getElementById('mode').selectedOptions[0].text]])summary.append(el('dt',null,label),el('dd',null,value));}
  document.querySelector('[data-setup-step="'+step+'"] input, [data-setup-step="'+step+'"] select')?.focus();syncCreate();}
 function openSetup(){document.getElementById('createDialog').showModal();showSetupStep(setupStep);}
 document.getElementById('newProduction').onclick=openSetup;
@@ -499,8 +502,6 @@ document.getElementById('setupBack').onclick=()=>showSetupStep(Math.max(0,setupS
 document.getElementById('aspect').onchange=function(){document.getElementById('aspectHelp').textContent=this.value==='9:16'?'Portrait needs an explicit titles/credits plan before spending. The current signature compositor is landscape-only.':'Landscape supports the complete titles and credits package.';document.getElementById('aspectHelp').className=this.value==='9:16'?'warn':'meta';};
 document.getElementById('createForm').noValidate=true;
 document.getElementById('title').addEventListener('input',function(){this.setCustomValidity('');});
-const baseSyncCreate=syncCreate;
-syncCreate=function(){baseSyncCreate();const next=document.getElementById('setupNext'),back=document.getElementById('setupBack'),source=document.getElementById('src');if(next)next.disabled=creating||(setupStep===0&&(source.disabled||!source.value));if(back)back.disabled=creating;};
 
 // Keep the old routes available for bookmarks, but the five steps are the path.
 Object.assign(loaders,{
