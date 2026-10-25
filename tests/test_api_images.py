@@ -327,3 +327,44 @@ def test_reviews_unlock_the_proof_approval(client, project):
             == 200
         )
     assert approve("proof").status_code == 200
+
+    for shot in P.load_board(project).shots:
+        if shot.id in proof:
+            continue
+        assert (
+            client.post(
+                "/api/projects/production/images/review",
+                json={
+                    "shot_id": shot.id,
+                    "version": 1,
+                    "verdict": "accept",
+                    "note": "Inspected this exact still",
+                    "inspected": True,
+                },
+            ).status_code
+            == 200
+        )
+    assert approve("stills").status_code == 200
+
+
+def test_alias_review_records_the_shared_asset_owner(client, project):
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.storage import read_json, write_json
+
+    add_assets(project)
+    board = read_json(project / P.STAGE_FILES["storyboard"])
+    board["shots"][1]["asset_shot_id"] = "s001"
+    write_json(project / P.STAGE_FILES["storyboard"], board)
+    response = client.post(
+        "/api/projects/production/images/review",
+        json={
+            "shot_id": "s002",
+            "version": 1,
+            "verdict": "accept",
+            "note": "The alias points at the inspected shared asset",
+            "inspected": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["review"]["shot_id"] == "s001"
+    assert response.json()["review"]["verdict"] == "accept"

@@ -44,12 +44,15 @@ quote is scoped and hashed, authorization is user-owned, a submission is recorde
 before it is sent, recovery is by UUID, and an unreported cost keeps its
 reservation. Rendering, analysis and verification are local and free.
 
-## Presentation (being replaced)
+## Presentation
 
-`serve.py` is a hand-written `ThreadingHTTPServer` that serves a review UI built
-from Python string literals (`studio_ui*.py`, `human_*.py`), with content-hashed
-approval stages and a terminal-enabled action capability. It is deliberately left
-running until its replacement lands.
+`app.py` is the FastAPI factory; `api/` exposes the five stages, approvals,
+library, jobs and settings; `frontend/` is the Vite/React Studio; `jobs/` runs
+local work with per-project serialisation. `launcher.py` is `uv run studio`.
+
+The old hand-written `ThreadingHTTPServer` and its Python-string UI were removed
+in the Phase 4 cleanup. `cli.py` remains for engine tasks that do not have a GUI
+yet: transcription, the listening pass, backups, signing and render maintenance.
 
 ## Target
 

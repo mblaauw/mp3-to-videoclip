@@ -33,6 +33,12 @@ def test_health_and_frontend_are_served(client):
     assert "mp3-to-videoclip Studio" in home.text
 
 
+def test_project_slugs_cannot_escape_the_library(client):
+    for path in ("/api/projects/%2e%2e", "/api/projects/..", "/api/projects/UPPER"):
+        response = client.get(path)
+        assert response.status_code == 404, path
+
+
 def test_projects_list_and_detail(client):
     rows = client.get("/api/projects").json()
     assert [row["slug"] for row in rows] == ["production"]

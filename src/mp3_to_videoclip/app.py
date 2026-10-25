@@ -1,8 +1,7 @@
 """FastAPI application factory for the Studio.
 
-Phase 2 skeleton: a health check, the static frontend mount and the loopback/Origin
-guards from D8. Routers and the job runner land in the following commits; the
-interim ``serve.py`` stays available until the frontend replaces it.
+One loopback process owns the library, the five stages, the director, the job
+runner and the static frontend. The engine stays importable without this layer.
 """
 
 from __future__ import annotations
