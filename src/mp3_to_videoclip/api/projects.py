@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import valid_slug
 from mp3_to_videoclip.domain import archive
+from mp3_to_videoclip.storage import read_json
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -37,7 +38,11 @@ async def list_projects(request: Request):
         return []
     result: list[ProjectSummary] = []
     for entry in sorted(root.iterdir()):
-        if not entry.is_dir() or not (entry / "project.json").is_file():
+        if (
+            not entry.is_dir()
+            or not valid_slug(entry.name)
+            or not (entry / "project.json").is_file()
+        ):
             continue
         if archive.is_archived(entry):
             film = archive.read(entry)
@@ -54,12 +59,21 @@ async def list_projects(request: Request):
             continue
         try:
             project = P.load_project(entry)
+            assets_path = entry / "work" / "assets.json"
+            assets = read_json(assets_path) if assets_path.is_file() else {}
             result.append(
                 ProjectSummary(
-                    slug=project.slug,
+                    # Routes are folder-based; never advertise an internal slug
+                    # that does not open the production the card represents.
+                    slug=entry.name,
                     title=project.title,
                     duration=project.duration,
                     archived=False,
+                    still_count=sum(
+                        1
+                        for item in assets.values()
+                        if isinstance(item, dict) and item.get("selected") is not None
+                    ),
                 )
             )
         except Exception:
@@ -155,8 +169,6 @@ async def get_project(slug: str, request: Request, verify: bool = False):
             "stills": [str(p) for p in film.stills],
         }
     project = P.load_project(root)
-    from mp3_to_videoclip.storage import read_json
-
     board_path = root / "work" / "storyboard.json"
     board = P.load_board(root) if board_path.is_file() else None
     assets_path = root / "work" / "assets.json"
@@ -164,7 +176,7 @@ async def get_project(slug: str, request: Request, verify: bool = False):
     approvals_path = root / "work" / "approvals.json"
     approvals = read_json(approvals_path) if approvals_path.is_file() else {}
     result = {
-        "slug": project.slug,
+        "slug": root.name,
         "title": project.title,
         "duration": project.duration,
         "fps": project.fps,

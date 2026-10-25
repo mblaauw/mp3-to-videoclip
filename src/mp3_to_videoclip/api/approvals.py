@@ -33,6 +33,19 @@ def _approval(root, stage: str) -> dict:
     record = read_json(root / "work" / "approvals.json").get(stage)
     try:
         current = P.stage_hash(root, stage)
+    except FileNotFoundError:
+        message = (
+            "graphics review has not been prepared; render a current base and record the review"
+            if stage == "graphics"
+            else f"{stage} is not ready; its artifact has not been created"
+        )
+        return {
+            "stage": stage,
+            "state": "unavailable",
+            "error": message,
+            "at": (record or {}).get("at"),
+            "note": (record or {}).get("note"),
+        }
     except Exception as exc:  # noqa: BLE001
         return {
             "stage": stage,

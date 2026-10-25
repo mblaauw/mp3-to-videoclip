@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from api_support import api_client, make_api_project
+from api_support import add_assets, api_client, make_api_project
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.config import Settings, load_settings
@@ -54,6 +54,20 @@ def test_projects_list_and_detail(client):
     verified = client.get("/api/projects/production?verify=true").json()
     assert "status" in verified
     assert client.get("/api/projects/missing").status_code == 404
+
+
+def test_library_identity_and_still_count_follow_the_folder(client, project):
+    add_assets(project)
+    rows = client.get("/api/projects").json()
+    assert rows[0]["slug"] == "production"
+    assert rows[0]["still_count"] == 4
+
+    stored = read_json(project / "project.json")
+    stored["slug"] = "internal-name"
+    write_json(project / "project.json", stored)
+    rows = client.get("/api/projects").json()
+    assert rows[0]["slug"] == "production"
+    assert client.get("/api/projects/production").json()["slug"] == "production"
 
 
 def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
