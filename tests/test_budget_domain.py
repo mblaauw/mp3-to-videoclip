@@ -68,3 +68,33 @@ def test_adding_budget_appends_history(tmp_path):
     assert entry["cap_usd"] == "3.00"
     assert len(budget.history(root)) == 2
     assert budget.cap(root) == budget.money("3.00")
+
+
+def test_engine_reads_the_schema_three_cap(tmp_path):
+    """The engine admission path must see the cap in project.json, not only the UI."""
+    import pytest
+
+    from mp3_to_videoclip import budget as engine
+
+    root = _root(tmp_path)
+    record = engine.read_budget(root)
+    assert record["cap_usd"] == "5.00"
+    assert record["max_corrections"] == 1
+    assert engine.check_capacity(root, "1.00")
+    with pytest.raises(ValueError):
+        engine.check_capacity(root, "6.00")
+
+
+def test_schema_three_without_a_cap_refuses_paid_admission(tmp_path):
+    import json
+
+    import pytest
+
+    from mp3_to_videoclip import budget as engine
+
+    root = _root(tmp_path)
+    data = json.loads((root / "project.json").read_text())
+    data["budget"] = []
+    (root / "project.json").write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        engine.check_capacity(root, "1.00")

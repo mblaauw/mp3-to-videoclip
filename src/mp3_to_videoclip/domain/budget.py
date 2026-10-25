@@ -11,13 +11,18 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from mp3_to_videoclip import budget as engine_budget
 from mp3_to_videoclip.storage import read_json, write_json
 
 from .models import BudgetEntry, Project
 
 
 def money(value) -> Decimal:
-    return Decimal(str(value)).quantize(Decimal("0.01"))
+    return Decimal(str(value))
+
+
+def fmt(value) -> str:
+    return str(money(value).quantize(Decimal("0.01")))
 
 
 def _project(root: Path) -> Project:
@@ -36,26 +41,22 @@ def history(root: Path) -> list[dict]:
 def add_budget(root: Path, amount, reason: str) -> dict:
     """Append a cap entry; the newest cap is the active one."""
     project = _project(root)
+    previous = project.budget[-1].max_corrections if project.budget else None
     project.budget.append(
-        BudgetEntry(at=datetime.now(UTC).isoformat(), cap_usd=str(money(amount)), reason=reason)
+        BudgetEntry(
+            at=datetime.now(UTC).isoformat(),
+            cap_usd=str(money(amount)),
+            reason=reason,
+            max_corrections=previous,
+        )
     )
     write_json(root / "project.json", project.model_dump())
     return project.budget[-1].model_dump()
 
 
 def committed(root: Path) -> Decimal:
-    """Costs plus unresolved reservations from the task journal."""
-    journal = (
-        read_json(root / "work" / "tasks.json") if (root / "work" / "tasks.json").exists() else {}
-    )
-    total = Decimal("0")
-    for task in journal.values():
-        status = task.get("status")
-        if status in ("ready", "resolved"):
-            total += money(task.get("cost_usd") or 0)
-        elif status not in ("invalid", "conflict", "stale"):
-            total += money(task.get("reserve_usd") or 0)
-    return total
+    """Costs plus unresolved reservations; the engine's admission model is canonical."""
+    return engine_budget.commitment(root)
 
 
 def remaining(root: Path) -> Decimal | None:
@@ -69,11 +70,16 @@ def check(root: Path, additional) -> dict:
     amount = money(additional)
     spent = committed(root)
     if current is None:
-        return {"ok": False, "needs_budget": True, "remaining": None, "suggested_usd": str(amount)}
+        return {
+            "ok": False,
+            "needs_budget": True,
+            "remaining": None,
+            "suggested_usd": fmt(amount),
+        }
     room = current - spent
     if amount <= room:
         return {"ok": True, "needs_budget": False, "remaining": str(room), "cap_usd": str(current)}
-    suggestion = (amount - room) + (amount * Decimal("0.20"))
+    suggestion = ((amount - room) + (amount * Decimal("0.20"))).quantize(Decimal("0.01"))
     return {
         "ok": False,
         "needs_budget": True,

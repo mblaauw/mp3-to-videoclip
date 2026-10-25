@@ -123,3 +123,35 @@ def test_migrated_project_loads_in_the_engine(tmp_path):
     project = P.load_project(root, verify_source=False)
     assert project.schema_version == 3
     assert project.budget[0]["cap_usd"] == "5"
+
+
+def test_migration_keeps_the_correction_policy_and_engine_sees_the_cap(tmp_path):
+    from mp3_to_videoclip import budget as engine
+
+    root = _legacy(tmp_path / "projects" / "demo")
+    migrate(root)
+    stored = json.loads((root / "project.json").read_text())
+    assert stored["budget"][0]["max_corrections"] == 1
+    record = engine.read_budget(root)
+    assert record["cap_usd"] == "5"
+    assert record["max_corrections"] == 1
+
+
+def test_migration_keeps_workflow_two_prompt_semantics(tmp_path):
+    """Schema 3 keeps the v2 prompt layout; otherwise every still input hash changes."""
+    from test_creative_production import make_root
+
+    from mp3_to_videoclip import production as P
+
+    root = make_root(tmp_path / "work", name="prompted")
+    data = json.loads((root / "project.json").read_text())
+    data["workflow_version"] = 2
+    data["prompt_version"] = 2
+    (root / "project.json").write_text(json.dumps(data))
+    shot = P.load_board(root).shots[0]
+    before = P.image_spec(root, shot)
+
+    migrate(root)
+
+    after = P.image_spec(root, shot)
+    assert after == before

@@ -40,6 +40,7 @@ class BudgetEntry(BaseModel):
     at: str
     cap_usd: str
     reason: str = ""
+    max_corrections: int | None = None
 
 
 class Project(BaseModel):

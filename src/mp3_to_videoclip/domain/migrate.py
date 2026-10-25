@@ -41,6 +41,7 @@ def _budget_entries(root: Path) -> list[BudgetEntry]:
             at=str(record.get("at") or datetime.now(UTC).isoformat()),
             cap_usd=str(record.get("cap_usd")),
             reason=str(record.get("note") or "migrated from schema 1"),
+            max_corrections=record.get("max_corrections"),
         )
     ]
 

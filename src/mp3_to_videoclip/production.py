@@ -199,12 +199,30 @@ def load_project(root: Path, verify_source=True) -> Project:
     return project
 
 
+def creative_workflow(project: Project) -> bool:
+    """The guided creative workflow, whether recorded as v2 or as schema 3.
+
+    Schema 3 is the migrated/native form of workflow 2: creative profile, resolved
+    character state, bound references, accepted image reviews. Schema-1 projects
+    without the v2 marker keep their historical legacy behaviour.
+    """
+    return project.workflow_version == 2 or project.schema_version == 3
+
+
+def prompt_look_first(project: Project) -> bool:
+    """The v2 prompt layout puts the global look before the shot text."""
+    return project.prompt_version == 2 or project.schema_version == 3
+
+
 def project_payload(project: Project) -> dict:
     """Legacy projects never serialized ``music_mode``; keep their hashes stable."""
     value = project.model_dump()
     # Backend choice cannot change measured music or generation inputs. Render
     # receipts/previews bind it explicitly with the implementation revision.
     value.pop("renderer_backend", None)
+    # The cap and its top-up history are administrative: adding budget must not
+    # invalidate a creative approval.
+    value.pop("budget", None)
     if value.get("music_mode") is None:
         value.pop("music_mode", None)
     return value
@@ -428,14 +446,14 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
             continue
         identity = character.identity or character.description
         characters.append(
-            f"{character.id} identity: {identity}" if project.workflow_version == 2 else identity
+            f"{character.id} identity: {identity}" if creative_workflow(project) else identity
         )
         state_id = shot.character_states.get(character.id, character.default_state)
         if state_id:
             characters.append(
                 f"{character.id} state ({state_id}): {character.states[state_id].description}"
             )
-    if project.workflow_version == 2:
+    if creative_workflow(project):
         # State the role of each supplied image rather than inviting the model to
         # copy its incidental background, pose or costume into every new shot.
         roles = []
@@ -459,14 +477,14 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
         filter(
             None,
             [
-                creative.look if project.prompt_version == 2 else "",
+                creative.look if prompt_look_first(project) else "",
                 shot.image_prompt,
                 "Framing: " + FRAMING_TEXT[shot.framing] if shot.framing else "",
                 "Must show: " + "; ".join(shot.must_show) if shot.must_show else "",
                 scene.description if scene else "",
                 *[by_id[i].description for i in bound_ids],
                 *characters,
-                creative.look if project.prompt_version != 2 else "",
+                creative.look if not prompt_look_first(project) else "",
                 *creative.image_rules,
                 "Avoid: " + "; ".join(brief.avoid) if brief.avoid else "",
             ],
@@ -489,8 +507,8 @@ def image_spec(root: Path, shot: Shot) -> dict:
     project = load_project(root)
     brief = load_brief(root)
     if brief.creative is None:
-        if project.workflow_version == 2:
-            raise ValueError("workflow 2 requires a creative profile for resolved state prompts")
+        if creative_workflow(project):
+            raise ValueError("the creative workflow requires a creative profile for state prompts")
         spec = _legacy_image_spec(root, project, brief, shot)
     else:
         spec = _creative_image_spec(root, project, brief, shot)
@@ -609,7 +627,7 @@ def preview_board_hash(root: Path):
     but cannot change a movie which never displayed that future image.
     """
     value = read_json(root / STAGE_FILES["storyboard"])
-    if load_project(root).workflow_version != 2:
+    if not creative_workflow(load_project(root)):
         return digest(value)
     keys = (
         "id",
@@ -673,7 +691,7 @@ def stage_hash(root: Path, stage: str) -> str:
     # not on a generation-only correction to an unseen placeholder.
     parent = (
         None
-        if stage == "proof" and project.workflow_version == 2
+        if stage == "proof" and creative_workflow(project)
         else (stage_hash(root, upstream) if upstream else None)
     )
     if stage == "preview":
@@ -698,7 +716,7 @@ def stage_hash(root: Path, stage: str) -> str:
         board = load_board(root)
         shots = resolved_assets(root, _current_proof_ids(root, board) if stage == "proof" else None)
         value = [{"id": s.shot.id, "image": file_hash(Path(s.image))} for s in shots]
-        if stage == "proof" and project.workflow_version == 2:
+        if stage == "proof" and creative_workflow(project):
             value = [
                 {**item, "input_hash": digest(image_spec(root, rs.shot))}
                 for item, rs in zip(value, shots, strict=True)
@@ -741,7 +759,7 @@ def require_approval(root: Path, stage: str):
         from .signature import validate_review
 
         validate_review(root, load_project(root))
-    if stage in ("proof", "stills") and load_project(root).workflow_version == 2:
+    if stage in ("proof", "stills") and creative_workflow(load_project(root)):
         from .reviews import require_accepted
 
         board = load_board(root)
@@ -802,13 +820,13 @@ def approve(
 
             validate_spec(root, load_project(root))
         _require_reference_permissions(brief)
-        if load_project(root).workflow_version == 2 and brief.creative is None:
-            raise ValueError("workflow 2 requires a creative profile")
+        if creative_workflow(load_project(root)) and brief.creative is None:
+            raise ValueError("the creative workflow requires a creative profile")
         if not all(x.strip() for x in [brief.direction, brief.style, brief.treatment]):
             raise ValueError("choose a treatment, direction and style before approval")
         if brief.creative is not None and not brief.creative.look.strip():
             raise ValueError("define creative.look (global appearance only) before approval")
-        if load_project(root).workflow_version == 2:
+        if creative_workflow(load_project(root)):
             from .references import validate_import
 
             for character in brief.characters:
@@ -822,7 +840,7 @@ def approve(
             raise ValueError("finish storyboard placeholders before approval")
         # A creative profile must name its own explicit proof selection.
         proof_ids(board, load_brief(root))
-        if load_project(root).workflow_version == 2:
+        if creative_workflow(load_project(root)):
             from .preflight import validate_before_spend
 
             validate_before_spend(root, [s.id for s in board.shots])
@@ -848,7 +866,7 @@ def approve(
                 "inspect the actual composited graphics samples, then approve graphics with --inspected"
             )
         validate_review(root, load_project(root))
-    if stage in ("proof", "stills") and load_project(root).workflow_version == 2:
+    if stage in ("proof", "stills") and creative_workflow(load_project(root)):
         from .reviews import require_accepted
 
         board = load_board(root)
@@ -885,7 +903,7 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
     if (root / STAGE_FILES["storyboard"]).exists():
         raise ValueError("storyboard already exists; edit it rather than overwrite")
     project = load_project(root)
-    new_film = project.prompt_version == 2
+    new_film = creative_workflow(project)
     if timing is None:
         timing = "adaptive" if project.image_model is not None else "beats"
     if timing not in ("adaptive", "beats", "events", "free"):
