@@ -42,9 +42,9 @@ ever read.
 
 ## Rework state
 
-Phase 0 (safety net) is merged. Phase 1 (delete and migrate) is in progress on
-`gui-rework/phase-1-delete-migrate`: the agent runtime and the dead static
-surfaces are gone, the interim Studio still runs, the archive reader exists.
-Remaining: CLI-only logic moved into domain functions, `cli.py` deleted, legacy
-model branches removed, the zero-bars schema-3 importer (Phase 2), and the
-FastAPI app that replaces the Studio in Phase 4.
+Phases 0–2 and the Phase 4 Studio are merged. `uv run studio` owns intake, the
+five stages, the director, paid generation and rendering; the interim
+`serve.py`/`studio_ui*`/`human_*` server and its tests were removed in the Phase 4
+cleanup. `cli.py` remains only for engine tasks without a GUI yet. Remaining: the
+director compaction/fake-provider probe (Phase 3), legacy model branches, Phase 5
+render cleanup and the Phase 6 fresh-clone path.

@@ -7,10 +7,10 @@ film. Money, source audio and generated stills stay on this machine.
 **Current state (25 Oct 2026): the new Studio is live.** `uv run studio` opens the
 library, creates a schema-3 production from an MP3, measures it locally, and takes
 it through Track, Story, Storyboard, Images and Film with content-bound approvals
-and a job tray. The waveform timeline, the Remotion Player preview and the error
-tray are live. The interim Studio and the old CLI surface still exist; deleting the
-old server and UI is the next tracked slice, and the engine CLI stays for the
-tasks that have no GUI yet. The phase plan, decisions and acceptance criteria
+and a job tray. The waveform timeline, the Remotion Player preview, the error tray,
+image reviews and the preview/stills/graphics attestations are live. The old
+interim server and its Python UI are gone; `clip` remains only for engine tasks
+that have no GUI yet (transcription, listening, backups, signing, maintenance). The phase plan, decisions and acceptance criteria
 live in `.opencode/tasks/gui-rework.md`.
 
 ## What works today
@@ -30,6 +30,8 @@ live in `.opencode/tasks/gui-rework.md`.
 - A measured waveform under the storyboard; drag a boundary (or use the arrow
   keys) and both adjacent shots resize without moving later cuts.
 - Read-only archive view of frozen productions (`domain/archive.py`).
+- Image reviews bound to exact versions and bytes, plus content-bound brief,
+  storyboard, proof, preview, stills and graphics approvals in the Studio.
 
 ## Setup
 
@@ -85,7 +87,7 @@ commit. No test makes a paid call.
 ## Repository
 
 ```text
-src/mp3_to_videoclip/    engine: models, timing, generation, renderer, interim Studio
+src/mp3_to_videoclip/    engine: models, timing, generation, renderer, CLI
 renderers/remotion/      pinned Remotion renderer (render.mjs)
 projects/                productions (gitignored, never deleted, never rewritten in place)
 backups/                 metadata snapshots and private archives (gitignored)
@@ -97,6 +99,6 @@ docs/ARCHITECTURE.md     how the pieces fit and where the rework is going
 
 One FastAPI process, one job runner, one event stream and a Vite/React frontend;
 the in-app director owns the LLM turn, the paid batch and the render, and the user
-moves freely between Track, Story, Storyboard, Images and Film. The interim
-Studio, the CLI surface and the approval machinery are deleted once their
-replacements land. See `docs/ARCHITECTURE.md` and the task record.
+moves freely between Track, Story, Storyboard, Images and Film. The old server
+and its UI are deleted; `cli.py` stays only for engine tasks without a GUI yet.
+See `docs/ARCHITECTURE.md` and the task record.

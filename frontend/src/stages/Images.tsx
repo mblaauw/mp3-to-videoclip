@@ -17,6 +17,13 @@ export function ImagesStage({ slug }: { slug: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const [reviewDrafts, setReviewDrafts] = useState<
+    Record<
+      string,
+      { verdict: "accept" | "reject" | "uncertain"; note: string; inspected: boolean }
+    >
+  >({});
   const [revision, setRevision] = useState(0);
   const initialized = useRef(false);
 
@@ -45,9 +52,53 @@ export function ImagesStage({ slug }: { slug: string }) {
     setDecision(null);
     setMessage(null);
     setError(null);
+    setReviewDrafts({});
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  const draftFor = (id: string) =>
+    reviewDrafts[id] || { verdict: "accept" as const, note: "", inspected: false };
+
+  const setDraft = (
+    id: string,
+    patch: Partial<{ verdict: "accept" | "reject" | "uncertain"; note: string; inspected: boolean }>,
+  ) => {
+    setReviewDrafts((current) => ({
+      ...current,
+      [id]: { ...draftFor(id), ...patch },
+    }));
+  };
+
+  const saveReview = async (shot: ImageShot) => {
+    const version = shot.selected;
+    const draft = draftFor(shot.id);
+    if (version === null) {
+      setError("Select a version before reviewing it.");
+      return;
+    }
+    if (!draft.note.trim() || !draft.inspected) {
+      setError("Record what you inspected and confirm the exact bytes before saving a review.");
+      return;
+    }
+    setReviewing(shot.id);
+    setError(null);
+    try {
+      await api.reviewImage(slug, {
+        shot_id: shot.id,
+        version,
+        verdict: draft.verdict,
+        note: draft.note.trim(),
+        inspected: true,
+      });
+      setDraft(shot.id, { note: "", inspected: false });
+      load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setReviewing(null);
+    }
+  };
 
   const clearQuote = () => {
     setEstimate(null);
@@ -143,7 +194,10 @@ export function ImagesStage({ slug }: { slug: string }) {
   return (
     <>
       <h2>Images</h2>
-      <p className="sub">Versions per shot. Select the one to render.</p>
+      <p className="sub">
+        Versions per shot. Select the one to render, then record an accepted review of the
+        exact bytes; proof and stills approvals require them.
+      </p>
       {error && <p className="error">{error}</p>}
       {message && <p className="message">{message}</p>}
 
@@ -155,7 +209,7 @@ export function ImagesStage({ slug }: { slug: string }) {
         </div>
       </div>
 
-      <ApprovalBar slug={slug} stages={["proof"]} refresh={revision} />
+      <ApprovalBar slug={slug} stages={["proof", "stills"]} refresh={revision} />
 
       <div className="card">
         <h3>Generate ({selected.size} selected)</h3>
@@ -247,6 +301,11 @@ export function ImagesStage({ slug }: { slug: string }) {
               </label>{" "}
               · {s.versions.length} version{s.versions.length === 1 ? "" : "s"}
             </h3>
+            <p className="meta">
+              {s.review
+                ? `Last review: ${s.review.verdict} v${s.review.version}`
+                : "No review of this shot yet."}
+            </p>
             <div className="versions">
               {s.versions.length ? (
                 s.versions.map((v) => (
@@ -277,6 +336,52 @@ export function ImagesStage({ slug }: { slug: string }) {
                 "No versions yet."
               )}
             </div>
+            {s.versions.length > 0 && (
+              <div className="review">
+                <div className="review-controls">
+                  <select
+                    aria-label={`Review verdict for ${s.id}`}
+                    value={draftFor(s.id).verdict}
+                    onChange={(e) =>
+                      setDraft(s.id, {
+                        verdict: e.target.value as "accept" | "reject" | "uncertain",
+                      })
+                    }
+                  >
+                    <option value="accept">accept</option>
+                    <option value="reject">reject</option>
+                    <option value="uncertain">uncertain</option>
+                  </select>
+                  <input
+                    aria-label={`Review note for ${s.id}`}
+                    value={draftFor(s.id).note}
+                    onChange={(e) => setDraft(s.id, { note: e.target.value })}
+                    placeholder="what did you inspect, and why this verdict?"
+                  />
+                  <label className="inline">
+                    <input
+                      type="checkbox"
+                      checked={draftFor(s.id).inspected}
+                      onChange={(e) => setDraft(s.id, { inspected: e.target.checked })}
+                    />
+                    inspected the exact bytes
+                  </label>
+                  <button
+                    onClick={() => saveReview(s)}
+                    disabled={
+                      reviewing === s.id ||
+                      s.selected === null ||
+                      !draftFor(s.id).note.trim() ||
+                      !draftFor(s.id).inspected
+                    }
+                  >
+                    {reviewing === s.id
+                      ? "Saving…"
+                      : `Save review of v${s.selected ?? "—"}`}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))
       ) : (

@@ -44,20 +44,19 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 - Phase 1 deletes only what nothing else imports: the agent runtime, the second agent
   runtime (`spine/plans/context/evals/mcp/tools`), the static page generators and the
   dead one-off modules.
-- `serve.py` and the approval paths stay, working, until the commit in Phase 4 that lands
-  the new frontend. That frontend is now merged (PR #10); deleting the old server and
-  its UI is the next slice. Phase 1's ≤ 11,000-line target is measured after that
-  deletion, not at Phase 1 merge.
+- `serve.py` and the approval paths stayed, working, until the new frontend landed
+  (PR #10). The Phase 4 cleanup then deleted the old server, its Python UI and the
+  decision helpers the Studio no longer uses.
 
 ## Status
 
 | Phase | State |
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
-| 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. Remaining modules (`flow`, `operations`, `sources`, `human_*`, `studio`, `studio_ui*`, `reviews`, `appdata`, `backup`, `signature`) are imported by the interim Studio/CLI and cannot be deleted until their replacements land in Phases 2-4 (recorded deviation). Legacy model branches move with them. `src/` 21,124 -> 17,371. |
+| 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. The interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`, `studio.py`, `appdata.py`, `human_actions.py`) was deleted in the Phase 4 cleanup. Remaining for Phase 5: `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py`. `src/` 21,124 -> 17,371 before that cleanup; re-measure after Phase 5. |
 | 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
-| 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026). Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. This branch adds MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. Remaining, as the next slice: delete the interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`) and port the approval metadata still imported by `api/approvals.py` from `human_actions`; `operations`, `flow`, `reviews`, `signature` and `backup` stay until their Phase 5 replacements. |
+| 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026) and **cleaned up on `gui-rework/phase-4-cleanup`.** Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. Phase 4 added MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. The cleanup added image reviews, preview/stills/graphics attestations and the final-render stills gate, then deleted the interim server and its old-surface tests. |
 | 5 · render cleanup | not started |
 | 6 · polish | not started |
 
@@ -154,33 +153,54 @@ settings file; a live Track-stage chat turn answered correctly.
   unreadable-upload domain/API tests cover the new backend edges; the frontend is
   pinned by `npm run build` plus the browser sweep.
 
-## Next slice: delete the interim Studio (not started)
+## Phase 4 closure: reviews and attestations (25 Oct 2026)
 
-The new app is the working replacement, but the old server is still imported by
-its own surface and by the approval metadata path. Do this as one branch with the
-suite green at every step:
+Found while planning the deletion: the new GUI could select a still but could
+not record the accepted review `proof`/`stills` approval requires, and the
+approval bar had no way to send `preview_watched`/`inspected`, so a new film
+could never pass those gates.
 
-1. Port the still-needed decision contract out of `human_actions`: `_body`,
-   `stage_name` and `approve_stage` move to `domain/approvals.py` (or the API
-   router); `api/approvals.py` stops importing `human_actions`.
-2. Move `studio.ORDER` / `studio.approval_state` (used by `appdata.approvals`) to
-   the domain, or retire `appdata.approvals` together with the old projection.
-3. Delete `serve.py`, `studio_ui.py`, `studio_ui_flow.py`, `human_ui.py`,
-   `sources.py` and `studio.py`; remove `clip serve` / `clip studio` and the
-   `--actions` redirect text from `cli.py`.
-4. Triage the old-surface tests before deleting them:
-   `test_studio_browser.py`, `test_studio_actions.py`, `test_studio.py`,
-   `test_live_layer.py`, `test_workflow_projection.py`. Port the still-true
-   engine assertions first: guided policy/marker rules, atomic story approval,
-   artifact path guards, quote authorization/cap/upload consent, preview-watched
-   and graphics attestations. `test_guided_flow.py` keeps its non-HTTP tests.
-5. Keep `flow.py`, `operations.py`, `reviews.py`, `signature.py` and `backup.py`
-   until their Phase 5 replacements; keep `cli.py` for the engine commands that
-   have no GUI yet (transcribe, listen, backup, sign, render maintenance).
+- `POST /images/review` records a verdict, note and inspection acknowledgement
+  against the exact version; `GET /images` returns the selected version's latest
+  review. Stale input hashes are refused, alias shots resolve their owner, and
+  the UI shows a verdict badge plus per-shot accept/reject/uncertain controls.
+- `proof` and `stills` approval bars now appear on Images; a reviewed proof set
+  and a reviewed full set both pass end to end in the browser.
+- The approval bar sends `preview_watched` (preview), `inspected` (graphics) and
+  `acknowledge_uncertain` (lyrics); preview/graphics Approve stays disabled until
+  the matching box is checked. Verified preview approval in the browser.
+- Engine validation errors from an approval now return HTTP 400 instead of a 200
+  body with `error`, so the stage shows a toast and keeps the decision visible.
+- A final render now requires the `stills` approval in both the API pre-check and
+  `services.render.render_final`; the Film card says where that approval lives.
 
-Acceptance: no import of a deleted module; `uv run studio` starts and the five
-stages still approve/authorize; `uv run clip serve` is gone; suite green; the
-project count and hashes are unchanged.
+## Phase 4 cleanup (25 Oct 2026)
+
+Done on `gui-rework/phase-4-cleanup`:
+
+1. `domain/approvals.py` now owns `stage_name`, `_body` and `approve_stage`;
+   `api/approvals.py` no longer imports `human_actions`. Engine validation errors
+   return 400, not a 200 error body.
+2. `studio.ORDER` / `studio.approval_state` went with `appdata` and the old
+   projection; the new API computes approval state directly.
+3. Deleted `serve.py`, `studio_ui.py`, `studio_ui_flow.py`, `human_ui.py`,
+   `sources.py`, `studio.py`, `appdata.py` and `human_actions.py`; removed the
+   `clip serve` / `clip studio` commands and updated the approve/authorize redirect
+   to `uv run studio`.
+4. Deleted the old-surface tests (`test_studio_browser.py`,
+   `test_studio_actions.py`, `test_studio.py`, `test_live_layer.py`,
+   `test_workflow_projection.py`). Kept the guided-policy tests in
+   `test_guided_flow.py` and moved the still-true review coverage to
+   `test_api_images.py` (full proof chain, full stills set, alias owner, stale
+   inputs) and `test_api_approvals.py` (preview watch attestation). Added a
+   project-slug path guard and its test.
+5. Kept `flow.py`, `operations.py`, `reviews.py`, `signature.py`, `backup.py` and
+   the engine-only `cli.py` for Phase 5.
+
+Evidence: full suite green after the deletion; `uv run studio` starts and serves;
+`uv run clip` no longer offers `serve` or `studio`; no import of a deleted module;
+the zero-bars approvals and assets were not touched (the live Player check was
+read-only).
 
 ## Acceptance per phase
 
@@ -190,7 +210,7 @@ project count and hashes are unchanged.
 - **2:** every route tested; zero-bars opens < 150 ms; B4/B6/B7 regression tests.
 - **3:** probe recorded; fake-provider session import → board → mocked batch → one
   regeneration; Stop < 1 s.
-- **4:** every route zero console errors; 390/900/1280; keyboard-only path; Player spike. ✅ (measured above; interim-Studio deletion tracked separately)
+- **4:** every route zero console errors; 390/900/1280; keyboard-only path; Player spike. ✅
 - **5:** no Chrome read; preview + final on a clean runner; `timing.mjs` parity.
 - **6:** fresh clone → `uv sync` → `uv run studio` → film, no terminal.
 

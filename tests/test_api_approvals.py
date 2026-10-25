@@ -112,3 +112,54 @@ def test_approvals_can_be_scoped_to_the_stages_on_screen(tmp_path):
     with client:
         payload = client.get("/api/projects/production/approvals?stages=brief,proof").json()
         assert [item["stage"] for item in payload["stages"]] == ["brief", "proof"]
+
+
+def test_preview_requires_a_continuous_watch_attestation(tmp_path):
+    from api_support import add_assets
+    from test_creative_production import write_preview_report
+
+    from mp3_to_videoclip import production as P
+
+    root = make_api_project(tmp_path)
+    add_assets(root)
+    with api_client(tmp_path) as client:
+
+        def approve(stage, **extra):
+            states = client.get("/api/projects/production/approvals").json()["stages"]
+            item = next(state for state in states if state["stage"] == stage)
+            return client.post(
+                f"/api/projects/production/approvals/{stage}",
+                json={
+                    "expected_hash": item["expected_hash"],
+                    "note": f"Reviewed {stage}",
+                    "confirmed": True,
+                    **extra,
+                },
+            )
+
+        assert approve("brief").status_code == 200
+        assert approve("storyboard").status_code == 200
+        proof = P.proof_ids(P.load_board(root), P.load_brief(root))
+        for shot_id in proof:
+            assert (
+                client.post(
+                    "/api/projects/production/images/review",
+                    json={
+                        "shot_id": shot_id,
+                        "version": 1,
+                        "verdict": "accept",
+                        "note": "Inspected the exact proof image",
+                        "inspected": True,
+                    },
+                ).status_code
+                == 200
+            )
+        assert approve("proof").status_code == 200
+        write_preview_report(root)
+
+        without_watch = approve("preview")
+        assert without_watch.status_code == 400
+        assert "continuous preview playback" in without_watch.text
+        watched = approve("preview", preview_watched=True)
+        assert watched.status_code == 200, watched.text
+        assert watched.json()["record"]["preview_watched"] is True

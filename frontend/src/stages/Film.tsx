@@ -222,6 +222,9 @@ export function FilmStage({ slug }: { slug: string }) {
         <button onClick={() => render("final")} disabled={busy !== null}>
           {busy === "final" ? "Queueing…" : "Render final"}
         </button>
+        <p className="meta">
+          A final render needs the stills approval from Images; a preview stays free.
+        </p>
       </div>
 
       <ApprovalBar slug={slug} stages={["preview", "graphics"]} />

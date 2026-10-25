@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip.api._helpers import valid_slug
 from mp3_to_videoclip.domain import archive
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -138,6 +139,8 @@ async def create_project(
 
 @router.get("/{slug}")
 async def get_project(slug: str, request: Request, verify: bool = False):
+    if not valid_slug(slug):
+        raise HTTPException(status_code=404, detail="project not found")
     root = _projects_dir(request) / slug
     if not root.is_dir() or not (root / "project.json").is_file():
         raise HTTPException(status_code=404, detail="project not found")

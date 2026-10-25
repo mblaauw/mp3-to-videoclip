@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip import services
+from mp3_to_videoclip import reviews, services
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.domain import budget
 from mp3_to_videoclip.storage import inside
@@ -36,12 +36,17 @@ async def get_images(slug: str, request: Request):
         for shot in board.shots:
             owner = shot.asset_shot_id or shot.id
             entry = assets.get(owner, {})
+            try:
+                review = reviews.verdict_for(root, shot.id)
+            except (OSError, ValueError):
+                review = None
             shots.append(
                 {
                     "id": shot.id,
                     "owner": owner,
                     "selected": entry.get("selected"),
                     "versions": entry.get("versions", []),
+                    "review": review,
                 }
             )
     return {"shots": shots}
@@ -63,6 +68,41 @@ async def get_image_file(slug: str, owner: str, version: int, request: Request):
     if not target.is_file():
         raise HTTPException(status_code=404, detail="image file is missing")
     return FileResponse(target)
+
+
+@router.post("/images/review")
+async def review_image(slug: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    shot_id = payload.get("shot_id")
+    version = payload.get("version")
+    verdict = payload.get("verdict")
+    note = payload.get("note")
+    inspected = payload.get("inspected")
+    if not isinstance(shot_id, str) or not shot_id:
+        raise HTTPException(status_code=400, detail="choose a shot")
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise HTTPException(status_code=400, detail="choose a valid image version")
+    if verdict not in ("accept", "reject", "uncertain"):
+        raise HTTPException(status_code=400, detail="verdict must be accept, reject or uncertain")
+    if not isinstance(note, str) or not 1 <= len(note.strip()) <= 2000:
+        raise HTTPException(status_code=400, detail="record a review note (1-2000 characters)")
+    if inspected is not True:
+        raise HTTPException(
+            status_code=400, detail="confirm that you inspected the exact image bytes"
+        )
+    try:
+        record = reviews.record_review(
+            root,
+            shot_id,
+            version,
+            verdict,
+            note=note.strip(),
+            reviewer="studio",
+            inspected=True,
+        )
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"review": record}
 
 
 @router.post("/images/estimate")

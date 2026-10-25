@@ -19,6 +19,7 @@ export function ApprovalBar({
 }) {
   const [items, setItems] = useState<ApprovalState[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [attested, setAttested] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const keys = stages.join(",");
@@ -46,8 +47,12 @@ export function ApprovalBar({
         expected_hash: item.expected_hash,
         note,
         confirmed: true,
+        ...(item.stage === "preview" ? { preview_watched: !!attested[item.stage] } : {}),
+        ...(item.stage === "graphics" ? { inspected: !!attested[item.stage] } : {}),
+        ...(item.stage === "lyrics" ? { acknowledge_uncertain: !!attested[item.stage] } : {}),
       });
       setNotes((n) => ({ ...n, [item.stage]: "" }));
+      setAttested((current) => ({ ...current, [item.stage]: false }));
       load();
     } catch (e) {
       setError(String(e));
@@ -75,6 +80,22 @@ export function ApprovalBar({
           </div>
           {item.state !== "approved" && item.expected_hash && (
             <div className="approve">
+              {["preview", "graphics", "lyrics"].includes(item.stage) && (
+                <label className="attest">
+                  <input
+                    type="checkbox"
+                    checked={!!attested[item.stage]}
+                    onChange={(e) =>
+                      setAttested((current) => ({ ...current, [item.stage]: e.target.checked }))
+                    }
+                  />
+                  {item.stage === "preview"
+                    ? "I watched the preview continuously with the actual music"
+                    : item.stage === "graphics"
+                      ? "I inspected the composited graphics samples"
+                      : "I reviewed the flagged lyric lines"}
+                </label>
+              )}
               <input
                 value={notes[item.stage] || ""}
                 onChange={(e) =>
@@ -84,7 +105,12 @@ export function ApprovalBar({
               />
               <button
                 onClick={() => approve(item)}
-                disabled={busy === item.stage || !(notes[item.stage] || "").trim()}
+                disabled={
+                  busy === item.stage ||
+                  !(notes[item.stage] || "").trim() ||
+                  ((item.stage === "preview" || item.stage === "graphics") &&
+                    !attested[item.stage])
+                }
               >
                 {busy === item.stage ? "…" : "Approve"}
               </button>

@@ -33,6 +33,12 @@ def test_health_and_frontend_are_served(client):
     assert "mp3-to-videoclip Studio" in home.text
 
 
+def test_project_slugs_cannot_escape_the_library(client):
+    for path in ("/api/projects/%2e%2e", "/api/projects/..", "/api/projects/UPPER"):
+        response = client.get(path)
+        assert response.status_code == 404, path
+
+
 def test_projects_list_and_detail(client):
     rows = client.get("/api/projects").json()
     assert [row["slug"] for row in rows] == ["production"]
@@ -248,6 +254,10 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
     assert queued.json() == {"job_id": "job-1", "kind": "preview", "status": "queued"}
     assert submitted == [("render", "production")]
     assert client.post("/api/projects/production/render", json={"kind": "warp"}).status_code == 400
+    blocked = client.post("/api/projects/production/render", json={"kind": "final"})
+    assert blocked.status_code == 400
+    assert "needs current user approval" in blocked.text
+    assert submitted == [("render", "production")]
 
     (project / "renders").mkdir()
     (project / "renders" / "a.mp4").write_bytes(b"x")

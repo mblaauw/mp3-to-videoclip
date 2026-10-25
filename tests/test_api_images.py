@@ -183,3 +183,188 @@ def test_generate_reports_a_stale_or_unknown_quote(client, monkeypatch):
         "/api/projects/production/images/generate", json={"quote_id": "quote-x"}
     ).json()
     assert body["error"] == "quote needs explicit spending authorization"
+
+
+def test_review_records_a_verdict_on_the_exact_version(client, project):
+    add_assets(project)
+    first = client.get("/api/projects/production/images").json()["shots"][0]
+    assert first["review"] is None
+
+    rejected = client.post(
+        "/api/projects/production/images/review",
+        json={
+            "shot_id": first["id"],
+            "version": 1,
+            "verdict": "reject",
+            "note": "The face is wrong",
+            "inspected": True,
+        },
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["review"]["verdict"] == "reject"
+    assert rejected.json()["review"]["shot_id"] == first["id"]
+
+    accepted = client.post(
+        "/api/projects/production/images/review",
+        json={
+            "shot_id": first["id"],
+            "version": 1,
+            "verdict": "accept",
+            "note": "Inspected the current bytes; this one is right",
+            "inspected": True,
+        },
+    )
+    assert accepted.status_code == 200
+    listed = client.get("/api/projects/production/images").json()["shots"][0]
+    assert listed["review"]["verdict"] == "accept"
+    assert listed["review"]["version"] == 1
+
+    assert (
+        client.post(
+            "/api/projects/production/images/review",
+            json={
+                "shot_id": first["id"],
+                "version": 1,
+                "verdict": "accept",
+                "note": "no inspection",
+                "inspected": False,
+            },
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            "/api/projects/production/images/review",
+            json={
+                "shot_id": first["id"],
+                "version": 9,
+                "verdict": "accept",
+                "note": "missing version",
+                "inspected": True,
+            },
+        ).status_code
+        == 400
+    )
+
+
+def test_review_refuses_stale_inputs_and_accepts_the_proof_set(client, project):
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip import reviews
+
+    add_assets(project)
+    board = P.load_board(project)
+    proof = P.proof_ids(board, P.load_brief(project))
+    for shot_id in proof:
+        response = client.post(
+            "/api/projects/production/images/review",
+            json={
+                "shot_id": shot_id,
+                "version": 1,
+                "verdict": "accept",
+                "note": "Inspected this exact proof image",
+                "inspected": True,
+            },
+        )
+        assert response.status_code == 200, response.text
+    reviews.require_accepted(project, proof)
+
+    brief = client.get("/api/projects/production/brief").json()
+    brief["creative"]["look"] = brief["creative"]["look"] + " with more grain"
+    from mp3_to_videoclip.storage import write_json
+
+    write_json(project / "brief.json", brief)
+    assert (
+        client.post(
+            "/api/projects/production/images/review",
+            json={
+                "shot_id": proof[0],
+                "version": 1,
+                "verdict": "accept",
+                "note": "stale prompt",
+                "inspected": True,
+            },
+        ).status_code
+        == 400
+    )
+
+
+def test_reviews_unlock_the_proof_approval(client, project):
+    from mp3_to_videoclip import production as P
+
+    add_assets(project)
+
+    def approve(stage: str):
+        states = client.get("/api/projects/production/approvals").json()["stages"]
+        item = next(state for state in states if state["stage"] == stage)
+        return client.post(
+            f"/api/projects/production/approvals/{stage}",
+            json={
+                "expected_hash": item["expected_hash"],
+                "note": f"Reviewed {stage}",
+                "confirmed": True,
+            },
+        )
+
+    assert approve("brief").status_code == 200
+    assert approve("storyboard").status_code == 200
+    blocked = approve("proof")
+    assert blocked.status_code == 400
+    assert "accepted review" in blocked.text
+
+    proof = P.proof_ids(P.load_board(project), P.load_brief(project))
+    for shot_id in proof:
+        assert (
+            client.post(
+                "/api/projects/production/images/review",
+                json={
+                    "shot_id": shot_id,
+                    "version": 1,
+                    "verdict": "accept",
+                    "note": "Inspected the exact proof image",
+                    "inspected": True,
+                },
+            ).status_code
+            == 200
+        )
+    assert approve("proof").status_code == 200
+
+    for shot in P.load_board(project).shots:
+        if shot.id in proof:
+            continue
+        assert (
+            client.post(
+                "/api/projects/production/images/review",
+                json={
+                    "shot_id": shot.id,
+                    "version": 1,
+                    "verdict": "accept",
+                    "note": "Inspected this exact still",
+                    "inspected": True,
+                },
+            ).status_code
+            == 200
+        )
+    assert approve("stills").status_code == 200
+
+
+def test_alias_review_records_the_shared_asset_owner(client, project):
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.storage import read_json, write_json
+
+    add_assets(project)
+    board = read_json(project / P.STAGE_FILES["storyboard"])
+    board["shots"][1]["asset_shot_id"] = "s001"
+    write_json(project / P.STAGE_FILES["storyboard"], board)
+    response = client.post(
+        "/api/projects/production/images/review",
+        json={
+            "shot_id": "s002",
+            "version": 1,
+            "verdict": "accept",
+            "note": "The alias points at the inspected shared asset",
+            "inspected": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["review"]["shot_id"] == "s001"
+    assert response.json()["review"]["verdict"] == "accept"

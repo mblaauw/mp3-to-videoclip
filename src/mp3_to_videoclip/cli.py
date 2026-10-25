@@ -54,25 +54,6 @@ def parser() -> argparse.ArgumentParser:
         "kind", choices=["brief", "lyrics", "storyboard", "events", "brand", "listening"]
     )
     schema.set_defaults(project=None)
-    serve_cmd = commands.add_parser("serve", help="Read-only live studio over loopback + SSE")
-    serve_cmd.add_argument("--projects-dir", type=Path, default=Path("projects"))
-    serve_cmd.add_argument("--port", type=int, default=8765)
-    serve_cmd.add_argument("--token", help="Session token; generated when omitted")
-    serve_cmd.add_argument(
-        "--actions",
-        action="store_true",
-        help="Interactively enable human Studio decisions (TTY required)",
-    )
-    serve_cmd.set_defaults(project=None)
-    studio = commands.add_parser(
-        "studio", help="Build one static index page for every production on disk"
-    )
-    studio.add_argument(
-        "--projects-dir", type=Path, default=Path("projects"), help="Folder containing productions"
-    )
-    studio.add_argument("--output-dir", type=Path, help="Where the page is written")
-    studio.add_argument("--name", help="Explicit safe .html basename; never overwritten")
-    studio.set_defaults(project=None)
     init = commands.add_parser("init", help="Copy an MP3 into a new production")
     init.add_argument("project", type=Path)
     init.add_argument("--mp3", type=Path, required=True)
@@ -102,7 +83,7 @@ def parser() -> argparse.ArgumentParser:
     for name, help_text in {
         "analyze": "Local beat/energy/rough section analysis; no upload",
         "status": "Show current approvals and stale/missing shots",
-        "approve": "Moved to human Studio: clip serve --actions",
+        "approve": "Moved to the Studio: use `uv run studio`",
         "import-lyrics": "Import supplied/corrected timestamped lyrics",
         "skeleton": "Make a beat-snapped timing skeleton, NOT a creative storyboard",
         "events": "Create an empty, editable musical event map (no automatic interpretations)",
@@ -114,7 +95,7 @@ def parser() -> argparse.ArgumentParser:
         "listen": "PAID UPLOAD: execute the authorized musical listening quote",
         "music-map": "Build an unreviewed combined listening/measurement map locally",
         "quote": "Inspect live image schema/pricing and save a scoped spending request",
-        "authorize": "Moved to human Studio: clip serve --actions (never starts generation)",
+        "authorize": "Moved to the Studio: use `uv run studio` (never starts generation)",
         "transcribe": "PAID UPLOAD: submit an authorized transcription exactly once",
         "generate": "PAID: execute an authorized image scope with durable tracking",
         "recover": "Recover/download a previously submitted task, never resubmit",
@@ -333,7 +314,6 @@ READ_ONLY_COMMANDS = frozenset(
         "preflight",
         "prompts",
         "sheet",
-        "studio",
     }
 )
 
@@ -368,20 +348,6 @@ def execute(args):
             "shared_RUNWARE_API_KEY_ignored": bool(os.environ.get("RUNWARE_API_KEY")),
             "OPENAI_API_KEY_present": bool(os.environ.get("OPENAI_API_KEY")),
         }
-    if args.command == "serve":
-        from . import serve
-
-        serve.serve(
-            args.projects_dir,
-            port=args.port,
-            token=args.token,
-            actions=args.actions,
-        )
-        return None
-    if args.command == "studio":
-        from .studio import build_studio
-
-        return build_studio(args.projects_dir, output_dir=args.output_dir, name=args.name)
     if args.command == "schema":
         return {
             "brief": Brief,
@@ -907,7 +873,7 @@ def main():
     try:
         if args.command in {"approve", "authorize"}:
             raise ValueError(
-                "Human decisions now use Studio. Run `uv run clip serve --actions` in your own interactive terminal, then review and confirm in the browser."
+                "Human decisions now use the Studio. Run `uv run studio` and review and confirm in the browser."
             )
         result = execute(args)
     except (OSError, ValueError, RuntimeError, KeyError) as e:

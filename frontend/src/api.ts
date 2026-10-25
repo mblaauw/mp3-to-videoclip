@@ -89,11 +89,24 @@ export type ImageVersion = {
   input_hash: string;
 };
 
+export type ImageReview = {
+  shot_id: string;
+  version: number;
+  sha256: string;
+  input_hash: string;
+  verdict: "accept" | "reject" | "uncertain";
+  note: string;
+  reviewer: string;
+  inspected: boolean;
+  at: string;
+};
+
 export type ImageShot = {
   id: string;
   owner: string;
   selected: number | null;
   versions: ImageVersion[];
+  review: ImageReview | null;
 };
 
 export type Job = {
@@ -239,6 +252,20 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ changes }),
     }),
+  reviewImage: (
+    slug: string,
+    body: {
+      shot_id: string;
+      version: number;
+      verdict: "accept" | "reject" | "uncertain";
+      note: string;
+      inspected: boolean;
+    },
+  ) =>
+    request<{ review: ImageReview }>(`/api/projects/${slug}/images/review`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   selectImage: (slug: string, shot_id: string, version: number) =>
     request<unknown>(`/api/projects/${slug}/images/select`, {
       method: "POST",
@@ -275,7 +302,14 @@ export const api = {
   approve: (
     slug: string,
     stage: string,
-    body: { expected_hash: string; note: string; confirmed: true },
+    body: {
+      expected_hash: string;
+      note: string;
+      confirmed: true;
+      preview_watched?: boolean;
+      inspected?: boolean;
+      acknowledge_uncertain?: boolean;
+    },
   ) =>
     request<{ approved: string }>(`/api/projects/${slug}/approvals/${stage}`, {
       method: "POST",
