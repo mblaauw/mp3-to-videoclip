@@ -155,6 +155,16 @@ def test_story_brief_and_treatments(client, project):
     patched = client.patch("/api/projects/production/brief", json={"treatment": "A new treatment"})
     assert patched.status_code == 200
     assert patched.json()["treatment"] == "A new treatment"
+    assert patched.json()["creative"]["image_rules"] == brief["creative"]["image_rules"]
+    assert patched.json()["creative"]["proof_shot_ids"] == brief["creative"]["proof_shot_ids"]
+
+    look = client.patch(
+        "/api/projects/production/brief", json={"creative": {"look": "A revised look"}}
+    )
+    assert look.status_code == 200
+    assert look.json()["creative"]["look"] == "A revised look"
+    assert look.json()["creative"]["scenes"] == brief["creative"]["scenes"]
+    assert look.json()["creative"]["references"] == brief["creative"]["references"]
 
     bad = client.patch("/api/projects/production/brief", json={"creative": {"look": 123}})
     assert bad.status_code == 400
@@ -181,6 +191,15 @@ def test_storyboard_patch_validates_before_writing(client):
         json={"changes": [{"id": shot_id, "camera": "warp"}]},
     )
     assert bad.status_code == 400
+    assert (
+        client.get("/api/projects/production/storyboard").json()["shots"][0]["camera"] == "zoom_in"
+    )
+
+    unknown = client.patch(
+        "/api/projects/production/storyboard/shots",
+        json={"changes": [{"id": "missing", "purpose": "Nowhere"}]},
+    )
+    assert unknown.status_code == 400
     assert (
         client.get("/api/projects/production/storyboard").json()["shots"][0]["camera"] == "zoom_in"
     )

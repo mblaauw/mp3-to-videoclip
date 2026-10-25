@@ -7,11 +7,25 @@ than inventing a charge.
 
 from __future__ import annotations
 
+import base64
+import io
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mp3_to_videoclip.storage import read_json, write_json
+from mp3_to_videoclip.storage import read_json, read_optional, write_json
+
+MAX_TOOL_IMAGES = 8
+THUMBNAIL_PIXELS = 512
+
+
+@dataclass(frozen=True)
+class ToolResult:
+    """A text result plus optional image parts for the next model call."""
+
+    text: str
+    images: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _tool(
@@ -43,14 +57,23 @@ TOOLS: list[dict] = [
     ),
     _tool("get_lyrics", "Read the lyrics.", {"slug": {"type": "string"}}, ["slug"]),
     _tool(
+        "get_images",
+        "Inspect up to eight selected stills as thumbnails. Use this before reviewing images.",
+        {
+            "slug": {"type": "string"},
+            "shot_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
+        },
+        ["slug", "shot_ids"],
+    ),
+    _tool(
         "update_brief",
-        "Patch the brief with a JSON merge. Returns the new brief.",
+        "Patch the brief with an RFC 7396 JSON merge. Returns the new brief.",
         {"slug": {"type": "string"}, "patch": {"type": "object"}},
         ["slug", "patch"],
     ),
     _tool(
         "update_shots",
-        "Edit fields of named shots. Returns the new storyboard.",
+        "Edit fields of named shots. Returns the changed IDs and the new storyboard.",
         {"slug": {"type": "string"}, "changes": {"type": "array", "items": {"type": "object"}}},
         ["slug", "changes"],
     ),
@@ -113,10 +136,13 @@ async def dispatch(
     arguments: dict[str, Any],
     runner=None,
     projects_dir: Path | None = None,
-) -> str:
-    """Dispatch a tool call. Returns a JSON string result."""
+) -> str | ToolResult:
+    """Dispatch a tool call. Returns JSON text or a text+images result."""
     try:
-        return json.dumps(_dispatch(name, arguments, runner, projects_dir), ensure_ascii=False)
+        value = _dispatch(name, arguments, runner, projects_dir)
+        if isinstance(value, ToolResult):
+            return value
+        return json.dumps(value, ensure_ascii=False)
     except Exception as exc:  # noqa: BLE001
         return json.dumps({"error": str(exc)})
 
@@ -156,29 +182,15 @@ def _dispatch(
         path = root / "work" / "lyrics.json"
         return read_json(path) if path.is_file() else {"available": False}
 
-    if name == "update_brief":
-        from mp3_to_videoclip.models import Brief
+    if name == "get_images":
+        return _get_images(root, arguments.get("shot_ids") or [])
 
-        brief = P.load_brief(root)
-        merged = brief.model_dump()
-        merged.update(arguments.get("patch") or {})
-        new_brief = Brief.model_validate(merged)
-        write_json(root / "brief.json", new_brief.model_dump())
-        return new_brief.model_dump()
+    if name == "update_brief":
+        return P.update_brief(root, arguments.get("patch") or {}).model_dump()
 
     if name == "update_shots":
-        board = P.load_board(root)
-        by_id = {s.id: s for s in board.shots}
-        for change in arguments.get("changes") or []:
-            shot_id = change.get("id")
-            if shot_id not in by_id:
-                continue
-            shot = by_id[shot_id]
-            for key, value in change.items():
-                if key != "id" and hasattr(shot, key):
-                    setattr(shot, key, value)
-        write_json(root / "work" / "storyboard.json", board.model_dump())
-        return board.model_dump()
+        board, changed = P.update_shots(root, arguments.get("changes") or [])
+        return {"changed": changed, "storyboard": board.model_dump()}
 
     if name == "create_storyboard":
         board = P.skeleton(
@@ -205,6 +217,73 @@ def _dispatch(
         return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}
 
     raise ValueError(f"unknown tool: {name}")
+
+
+def _thumbnail(path: Path) -> tuple[str, int, int]:
+    from PIL import Image
+
+    with Image.open(path) as source:
+        source.load()
+        if source.mode in ("RGBA", "LA", "P"):
+            rgba = source.convert("RGBA")
+            background = Image.new("RGB", rgba.size, (255, 255, 255))
+            background.paste(rgba, mask=rgba.getchannel("A"))
+            image = background
+        else:
+            image = source.convert("RGB")
+        image.thumbnail((THUMBNAIL_PIXELS, THUMBNAIL_PIXELS))
+        width, height = image.size
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=88, optimize=True)
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}", width, height
+
+
+def _get_images(root: Path, shot_ids) -> ToolResult:
+    from mp3_to_videoclip import production as P
+
+    if not isinstance(shot_ids, list) or not all(isinstance(value, str) for value in shot_ids):
+        return ToolResult(json.dumps({"error": "shot_ids must be a list of shot IDs"}))
+    requested = list(dict.fromkeys(shot_ids))
+    if not requested:
+        return ToolResult(json.dumps({"error": "choose at least one shot"}))
+    if len(requested) > MAX_TOOL_IMAGES:
+        return ToolResult(
+            json.dumps({"error": f"ask for at most {MAX_TOOL_IMAGES} shots per call"})
+        )
+    assets = read_optional(root / "work/assets.json", {})
+    if not isinstance(assets, dict):
+        assets = {}
+    images: list[str] = []
+    entries: list[dict] = []
+    errors: list[str] = []
+    for shot_id in requested:
+        try:
+            resolved = P.resolved_assets(root, [shot_id])[0]
+            owner = resolved.shot.asset_shot_id or resolved.shot.id
+            entry = assets.get(owner, {})
+            data_url, width, height = _thumbnail(Path(resolved.image))
+            images.append(data_url)
+            entries.append(
+                {
+                    "shot_id": shot_id,
+                    "owner": owner,
+                    "version": entry.get("selected"),
+                    "width": width,
+                    "height": height,
+                }
+            )
+        except (OSError, ValueError, KeyError, IndexError) as exc:
+            errors.append(f"{shot_id}: {exc}")
+    text = json.dumps(
+        {
+            "images": entries,
+            "errors": errors,
+            "image_count": len(images),
+            "note": "Thumbnails are attached for review; no image bytes are stored in chat history.",
+        }
+    )
+    return ToolResult(text=text, images=tuple(images))
 
 
 def _generate_images(root, arguments, runner):

@@ -1,26 +1,192 @@
-"""Build the per-turn project context for the director."""
+"""Build the per-turn project context for the director.
+
+This is a snapshot for the model, not a gate check: it reads the project, brief,
+board, selected still metadata and recorded approvals without re-hashing the
+source MP3 or running every approval chain. The expensive authoritative checks
+stay in the stage routes and jobs.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from mp3_to_videoclip.storage import digest, read_optional
 
-def build_context(slug: str, projects_dir: Path | None = None) -> str:
+
+def _clip(value, limit: int = 240) -> str:
+    text = " ".join(str(value or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _approvals(root: Path) -> str:
+    recorded = read_optional(root / "work" / "approvals.json", {})
+    if not isinstance(recorded, dict) or not recorded:
+        return "none recorded"
+    parts = []
+    for stage, value in recorded.items():
+        if not isinstance(value, dict):
+            continue
+        at = str(value.get("at") or "")
+        note = _clip(value.get("note"), 80)
+        parts.append(f"{stage} at {at}" + (f" ({note})" if note else ""))
+    return "; ".join(parts) or "none recorded"
+
+
+def _budget(root: Path) -> str:
+    try:
+        from mp3_to_videoclip.domain import budget
+
+        cap = budget.cap(root)
+        committed = budget.committed(root)
+        remaining = budget.remaining(root)
+        return (
+            f"cap {('$' + budget.fmt(cap)) if cap is not None else 'unset'}; "
+            f"committed ${budget.fmt(committed)}; "
+            f"remaining {('$' + budget.fmt(remaining)) if remaining is not None else 'unbounded'}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        return f"unavailable ({exc})"
+
+
+def _still_status(root: Path, shot, assets: dict) -> str:
+    from mp3_to_videoclip import production as P
+
+    owner = shot.asset_shot_id or shot.id
+    entry = assets.get(owner, {}) if isinstance(assets, dict) else {}
+    versions = entry.get("versions", []) if isinstance(entry, dict) else []
+    selected = entry.get("selected") if isinstance(entry, dict) else None
+    chosen = next((version for version in versions if version.get("version") == selected), None)
+    if not chosen:
+        return "missing (no selected still)"
+    relative = chosen.get("path")
+    if not isinstance(relative, str) or not relative:
+        return "missing (no stored path)"
+    try:
+        from mp3_to_videoclip.storage import inside
+
+        path = inside(root, relative)
+    except ValueError:
+        return "unreadable (path outside project)"
+    if not path.is_file():
+        return "missing (selected file)"
+    try:
+        current = digest(P.image_spec(root, shot, verify_source=False))
+    except Exception as exc:  # noqa: BLE001
+        return f"unreadable ({_clip(exc, 80)})"
+    if current != chosen.get("input_hash"):
+        return f"stale (inputs changed), selected v{selected}"
+    return f"current v{selected}"
+
+
+def _music(root: Path) -> str:
+    music = read_optional(root / "work" / "music.json")
+    if not isinstance(music, dict):
+        return "not analysed"
+    sections = music.get("sections") or []
+    labels = []
+    try:
+        labels = [
+            f"{item.get('label')} {float(item.get('start', 0)):.0f}-{float(item.get('end', 0)):.0f}s"
+            for item in sections
+            if isinstance(item, dict) and item.get("label")
+        ]
+    except (TypeError, ValueError):
+        labels = []
+    tempo = music.get("estimated_tempo_bpm")
+    text = f"tempo {tempo if tempo is not None else 'unknown'} BPM"
+    if labels:
+        text += "; sections: " + ", ".join(labels[:12])
+    warnings = music.get("warnings") or []
+    if warnings:
+        text += "; warnings: " + _clip("; ".join(str(w) for w in warnings), 180)
+    return text
+
+
+def build_context(slug: str, projects_dir: Path | None = None, stage: str | None = None) -> str:
     """Compact project snapshot for the director's system prompt."""
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.models import Storyboard
+
     root = (projects_dir or Path("projects")) / slug
     if not root.is_dir():
         return f"Project {slug} not found."
     try:
-        from mp3_to_videoclip import production as P
-
-        project = P.load_project(root)
-        status = P.status(root)
+        project = P.load_project(root, verify_source=False)
+        brief = P.load_brief(root)
+        board_value = (
+            read_optional(root / "work" / "storyboard.json")
+            if (root / "work" / "storyboard.json").is_file()
+            else None
+        )
+        board = Storyboard.model_validate(board_value) if isinstance(board_value, dict) else None
+        assets = read_optional(root / "work" / "assets.json", {})
+        if not isinstance(assets, dict):
+            assets = {}
         lines = [
-            f"Project: {project.title} ({project.slug})",
-            f"Duration: {project.duration:.1f}s, {project.total_frames} frames at {project.fps}fps",
-            f"Music mode: {project.music_mode}",
-            f"Status: {status}",
+            f"# Project snapshot: {project.title} ({root.name})",
+            f"- Schema {project.schema_version}; {project.duration:.1f}s; "
+            f"{project.total_frames} frames at {project.fps}fps; {project.aspect}.",
+            f"- Music: {_music(root)}",
+            f"- Budget: {_budget(root)}",
+            f"- Recorded approvals (not revalidated): {_approvals(root)}",
+            "- Still status checks the recorded input hash and file presence; "
+            "exact bytes are verified when a stage loads them.",
         ]
+        if stage:
+            lines.append(f"- Current stage: {stage}")
+        lines.append("")
+        lines.append("## Brief")
+        lines.append(f"- Direction: {_clip(brief.direction)}")
+        lines.append(f"- Style: {_clip(brief.style)}")
+        lines.append(f"- Treatment: {_clip(brief.treatment, 420)}")
+        creative = brief.creative
+        if creative is not None:
+            lines.append(f"- Look: {_clip(creative.look, 360)}")
+            lines.append(
+                f"- World: {len(creative.scenes)} scenes, {len(creative.references)} visual "
+                f"references, {len(creative.image_rules)} image rules; "
+                f"proof {', '.join(creative.proof_shot_ids) or 'unset'}."
+            )
+        else:
+            lines.append("- Creative profile: none (legacy brief).")
+        if brief.characters:
+            lines.append(
+                "- Characters: "
+                + "; ".join(
+                    f"{character.id} ({_clip(character.identity or character.description, 90)})"
+                    for character in brief.characters
+                )
+            )
+        else:
+            lines.append("- Characters: none.")
+        lines.append("")
+        if board is None:
+            lines.append("## Shots\nNo storyboard yet.")
+            return "\n".join(lines)
+        statuses = []
+        placeholders = 0
+        shot_lines = []
+        for shot in board.shots:
+            status = _still_status(root, shot, assets)
+            statuses.append(status)
+            if P.has_placeholders(shot):
+                placeholders += 1
+            start = shot.start_frame / project.fps
+            end = (shot.start_frame + shot.duration_frames) / project.fps
+            alias = f" (reprise of {shot.asset_shot_id})" if shot.asset_shot_id else ""
+            shot_lines.append(
+                f"- {shot.id}{alias} {start:.1f}-{end:.1f}s "
+                f"{shot.framing or 'framing unset'} | {status} | {_clip(shot.purpose, 100)}"
+            )
+        current = sum(1 for value in statuses if value.startswith("current"))
+        missing = sum(1 for value in statuses if value.startswith("missing"))
+        stale = sum(1 for value in statuses if value.startswith("stale"))
+        unreadable = sum(1 for value in statuses if value.startswith("unreadable"))
+        lines.append(
+            f"## Shots ({len(board.shots)}: {current} current, {missing} missing, "
+            f"{stale} stale, {unreadable} unreadable; {placeholders} marked placeholders)"
+        )
+        lines.extend(shot_lines)
         return "\n".join(lines)
     except Exception as exc:  # noqa: BLE001
         return f"Project {slug}: {exc}"

@@ -36,8 +36,9 @@ one successful recipe (weather, lens, rooftop) into every shot.
   consider the rest of the set.
 - Offer one bounded repair round on rejected shots. Reject a version; keep the
   accepted one. A new image is always a new version.
-- Never describe an image you have not been shown. The user sees the pixels in
-  this stage; ask them what is wrong before changing a prompt.
+- Use `get_images(shot_ids)` to inspect up to eight selected stills. Never
+  describe an image you have not been shown; if a still is missing or stale,
+  say so and ask the user before changing the prompt.
 
 ## How to work
 
@@ -45,8 +46,9 @@ one successful recipe (weather, lens, rooftop) into every shot.
 2. For the selected shots, write or fix `image_prompt` through `update_shots`,
    then ask the user to estimate in this stage and confirm the spend.
 3. Queue the batch only after that confirmation.
-4. When results arrive, ask the user to pick versions. Record their choice; do
-   not pick for them.
+4. When results arrive, inspect the selected versions with `get_images`; judge
+   each against the shot's job, framing and must-show. Ask the user to pick
+   versions; do not pick for them.
 
 ## Boundaries
 

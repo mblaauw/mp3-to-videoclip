@@ -254,6 +254,41 @@ def load_brief(root: Path) -> Brief:
     return Brief.model_validate(read_json(root / "brief.json"))
 
 
+def _merge_patch(target, patch):
+    """RFC 7396 JSON Merge Patch; ``None`` removes a key, objects merge deeply."""
+    if not isinstance(patch, dict):
+        return patch
+    result = dict(target) if isinstance(target, dict) else {}
+    for key, value in patch.items():
+        if value is None:
+            result.pop(key, None)
+        elif isinstance(value, dict):
+            result[key] = _merge_patch(result.get(key), value)
+        else:
+            result[key] = value
+    return result
+
+
+def update_brief(root: Path, patch: dict) -> Brief:
+    """Apply one validated merge patch and keep the previous brief in history."""
+    if not isinstance(patch, dict):
+        raise ValueError("brief patch must be a JSON object")
+    previous = load_brief(root)
+    previous_value = previous.model_dump()
+    merged = _merge_patch(previous_value, patch)
+    try:
+        brief = Brief.model_validate(merged)
+    except ValueError as exc:
+        raise ValueError(f"brief patch is invalid: {exc}") from exc
+    if brief.model_dump() == previous_value:
+        return previous
+    history = root / f"work/brief-history/{digest(previous_value)}.json"
+    if not history.exists():
+        write_json(history, previous_value)
+    write_json(root / "brief.json", brief.model_dump())
+    return brief
+
+
 def is_creative(root: Path) -> bool:
     return load_brief(root).creative is not None
 
@@ -280,9 +315,18 @@ def init_events(root: Path) -> EventMap:
     return events
 
 
-def load_board(root: Path) -> Storyboard:
+def load_board(root: Path, *, verify_source: bool = True) -> Storyboard:
     board = Storyboard.model_validate(read_json(root / STAGE_FILES["storyboard"]))
-    board.check_project(load_project(root))
+    return validate_board(root, board, verify_source=verify_source)
+
+
+def validate_board(root: Path, board: Storyboard, *, verify_source: bool = True) -> Storyboard:
+    """Validate a candidate board against the project, brief and event map.
+
+    Kept separate from ``load_board`` so writers can validate a board before it
+    reaches disk, and so read-only snapshots can skip re-hashing the source MP3.
+    """
+    board.check_project(load_project(root, verify_source=verify_source))
     brief = load_brief(root)
     creative = brief.creative
     characters = {c.id for c in brief.characters}
@@ -317,6 +361,36 @@ def load_board(root: Path) -> Storyboard:
                     "reused image must name a different, existing source shot (no chains/cycles)"
                 )
     return board
+
+
+def update_shots(root: Path, changes: list[dict]) -> tuple[Storyboard, list[str]]:
+    """Apply named shot edits atomically after validating the whole board."""
+    if not isinstance(changes, list):
+        raise ValueError("shot changes must be a list")
+    board = load_board(root)
+    raw = board.model_dump()
+    by_id = {shot["id"]: shot for shot in raw["shots"]}
+    changed: list[str] = []
+    for change in changes:
+        if not isinstance(change, dict):
+            raise ValueError("each shot change must be an object")
+        shot_id = change.get("id")
+        if not isinstance(shot_id, str) or shot_id not in by_id:
+            raise ValueError(f"unknown shot ID: {shot_id!r}")
+        unknown = set(change) - set(Shot.model_fields)
+        if unknown:
+            raise ValueError(f"unknown shot field(s): {', '.join(sorted(unknown))}")
+        merged = {**by_id[shot_id], **{key: value for key, value in change.items() if key != "id"}}
+        by_id[shot_id] = Shot.model_validate(merged).model_dump()
+        if shot_id not in changed:
+            changed.append(shot_id)
+    candidate = Storyboard.model_validate(
+        {**raw, "shots": [by_id[shot["id"]] for shot in raw["shots"]]}
+    )
+    updated = validate_board(root, candidate)
+    if changed:
+        write_json(root / STAGE_FILES["storyboard"], updated.model_dump())
+    return updated, changed
 
 
 def _reference_cap(project: Project) -> int:
@@ -516,12 +590,12 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
     }
 
 
-def image_spec(root: Path, shot: Shot) -> dict:
+def image_spec(root: Path, shot: Shot, *, verify_source: bool = True) -> dict:
     if shot.asset_shot_id is not None:
-        board = load_board(root)
+        board = load_board(root, verify_source=verify_source)
         source = next(s for s in board.shots if s.id == shot.asset_shot_id)
-        return image_spec(root, source)
-    project = load_project(root)
+        return image_spec(root, source, verify_source=verify_source)
+    project = load_project(root, verify_source=verify_source)
     brief = load_brief(root)
     if brief.creative is None:
         if creative_workflow(project):

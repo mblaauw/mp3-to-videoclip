@@ -14,7 +14,7 @@ from typing import Any
 
 from .conversation import append_message, compact_messages, load_messages
 from .llm import DirectorLLM, TextDelta, ToolCall, TurnResult
-from .tools import TOOLS, dispatch
+from .tools import TOOLS, ToolResult, dispatch
 
 MAX_TOOL_CALLS = 25
 
@@ -84,6 +84,8 @@ async def run_turn(
                 ],
             }
         )
+        pending_images: list[str] = []
+        image_tool = ""
         for tc in pending:
             tool_calls += 1
             yield TurnEvent(kind="tool", tool=tc.name, arguments=tc.arguments)
@@ -96,11 +98,37 @@ async def run_turn(
                 append_message(root, {"role": "assistant", "content": args.get("question", "")})
                 return
             tool_result = await dispatch(tc.name, args, runner, projects_dir)
-            yield TurnEvent(kind="tool", tool=tc.name, result=tool_result)
-            messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result})
+            if isinstance(tool_result, ToolResult):
+                result_text = tool_result.text
+                images = tool_result.images
+            else:
+                result_text = tool_result
+                images = ()
+            yield TurnEvent(kind="tool", tool=tc.name, result=result_text)
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_text})
             append_message(
                 root,
-                {"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": tool_result},
+                {"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": result_text},
             )
+            if images:
+                pending_images.extend(images)
+                image_tool = tc.name
+        if pending_images:
+            content: list[dict[str, Any]] = [
+                {
+                    "type": "text",
+                    "text": (
+                        f"{len(pending_images)} image thumbnails returned by {image_tool}. "
+                        "Inspect them and continue; ask again for a different set."
+                    ),
+                }
+            ]
+            content.extend(
+                {"type": "image_url", "image_url": {"url": url, "detail": "low"}}
+                for url in pending_images
+            )
+            # In-memory only, after every tool result for this assistant turn:
+            # chat.jsonl keeps bounded text, never base64 image bytes.
+            messages.append({"role": "user", "content": content})
 
     yield TurnEvent(kind="done", text="Stopped after the tool-call limit.")
