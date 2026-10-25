@@ -302,7 +302,7 @@ read-only).
   card says so. Pinning Remotion's headless shell remains an open portability
   decision, not a hidden download.
 
-## Post-phase polish (25 Oct 2026)
+## Post-phase polish (25 Oct 2026, PR #16)
 
 - The library now lists the folder slug that routes actually open, never the
   independent `project.json` slug. A copied or renamed production can no longer
