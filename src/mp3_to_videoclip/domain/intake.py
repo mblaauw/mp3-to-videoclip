@@ -20,11 +20,17 @@ MAX_SOURCE_BYTES = 25_000_000
 MAX_TITLE_LENGTH = 120
 
 
-def slug_for(title: str, projects_dir: Path) -> str:
+def _slug_base(title: str) -> str:
     normalized = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
     base = re.sub(r"[^a-z0-9]+", "-", normalized.casefold()).strip("-")[:64].rstrip("-")
     if not base:
         raise ValueError("the title needs at least one letter or digit")
+    return base
+
+
+def slug_for(title: str, projects_dir: Path) -> str:
+    """The next free slug without creating anything (read-only helper)."""
+    base = _slug_base(title)
     candidate = base
     counter = 2
     while (projects_dir / candidate).exists():
@@ -34,6 +40,25 @@ def slug_for(title: str, projects_dir: Path) -> str:
         if counter > 100:
             raise ValueError("too many productions share this title")
     return candidate
+
+
+def reserve_slug(title: str, projects_dir: Path) -> tuple[str, Path]:
+    """Atomically reserve one production folder and return its slug and root.
+
+    ``mkdir`` is the reservation: two concurrent uploads with the same title can
+    never both own one folder, so a failed intake cannot delete the other's work.
+    """
+    base = _slug_base(title)
+    for counter in range(1, 101):
+        suffix = "" if counter == 1 else f"-{counter}"
+        candidate = base[: 64 - len(suffix)].rstrip("-") + suffix
+        root = projects_dir / candidate
+        try:
+            root.mkdir()
+        except FileExistsError:
+            continue
+        return candidate, root
+    raise ValueError("too many productions share this title")
 
 
 def create_from_upload(
@@ -66,12 +91,11 @@ def create_from_upload(
         raise ValueError("the starting budget must be a positive USD amount")
 
     projects_dir.mkdir(parents=True, exist_ok=True)
-    slug = slug_for(title, projects_dir)
-    root = projects_dir / slug
+    slug, root = reserve_slug(title, projects_dir)
     from mp3_to_videoclip import production as P
 
-    # A failed intake must not leave a half-production; only remove the directory
-    # this call created, never an existing production.
+    # The reserved empty folder is ours alone. Clean up only this root on failure;
+    # a concurrent upload owns a different slug.
     try:
         try:
             P.init_project(

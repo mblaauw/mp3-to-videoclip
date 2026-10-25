@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { api, type Budget } from "../api";
+import { api, type Budget, type GraphicsReview } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
@@ -25,6 +25,7 @@ export function FilmStage({ slug }: { slug: string }) {
   const [live, setLive] = useState<LiveState | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
+  const [graphics, setGraphics] = useState<GraphicsReview | null>(null);
   const [rendererReady, setRendererReady] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -55,6 +56,10 @@ export function FilmStage({ slug }: { slug: string }) {
       .budget(slug)
       .then(setBudget)
       .catch(() => setBudget(null));
+    api
+      .graphicsReview(slug)
+      .then(setGraphics)
+      .catch(() => setGraphics(null));
   };
 
   useEffect(() => {
@@ -105,10 +110,12 @@ export function FilmStage({ slug }: { slug: string }) {
     };
   }, [slug]);
 
-  const render = async (kind: "preview" | "final") => {
+  const render = async (kind: "preview" | "base" | "final") => {
     setBusy(kind);
     setError(null);
-    setMessage(`${kind === "final" ? "Final" : "Preview"} queued; it appears here when the job finishes.`);
+    setMessage(
+      `${kind === "final" ? "Final" : kind === "base" ? "Base" : "Preview"} queued; it appears here when the job finishes.`,
+    );
     try {
       await api.render(slug, kind);
       load();
@@ -214,6 +221,29 @@ export function FilmStage({ slug }: { slug: string }) {
 
       <RendererSetup onReady={setRendererReady} />
 
+      {graphics?.available && (
+        <div className="card">
+          <h3>Graphics review</h3>
+          <p className="meta">
+            {graphics.current
+              ? "These preflight frames are current. Inspect every sample, then approve graphics."
+              : graphics.reason || "The graphics review is stale; render a current base."}
+          </p>
+          {graphics.warning && <p className="meta">{graphics.warning}</p>}
+          <div className="versions">
+            {(graphics.samples || []).map((sample) => (
+              <figure className="version" key={sample.name}>
+                <a href={sample.url} target="_blank" rel="noreferrer">
+                  <img src={sample.url} alt={`Graphics preflight ${sample.name}`} loading="lazy" />
+                </a>
+                <figcaption className="meta">{sample.name}</figcaption>
+              </figure>
+            ))}
+          </div>
+          {!graphics.samples?.length && <p className="empty">No reviewed samples are present.</p>}
+        </div>
+      )}
+
       <div className="card">
         <h3>Render</h3>
         <button
@@ -223,13 +253,21 @@ export function FilmStage({ slug }: { slug: string }) {
           {busy === "preview" ? "Queueing…" : "Render preview"}
         </button>{" "}
         <button
+          onClick={() => render("base")}
+          disabled={busy !== null || rendererReady === false}
+        >
+          {busy === "base" ? "Queueing…" : "Render base"}
+        </button>{" "}
+        <button
           onClick={() => render("final")}
           disabled={busy !== null || rendererReady === false}
         >
           {busy === "final" ? "Queueing…" : "Render final"}
         </button>
         <p className="meta">
-          A final render needs the stills approval from Images; a preview stays free.
+          Preview is free and marked. A base carries the stills edit without graphics and
+          creates the review samples above. A final composes the approved graphics onto that
+          base and needs both the stills and graphics approvals.
         </p>
       </div>
 

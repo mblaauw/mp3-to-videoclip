@@ -35,6 +35,14 @@ def test_selected_veil_key_is_used_and_doctor_never_displays_values(monkeypatch)
     assert "mock-unrelated-secret" not in str(report)
 
 
+def test_settings_file_key_is_used_without_an_environment_key(tmp_path, monkeypatch):
+    path = tmp_path / "settings.toml"
+    path.write_text('[settings]\nrunware_api_key = "file-secret"\n')
+    monkeypatch.setattr("mp3_to_videoclip.config.settings_path", lambda: path)
+    monkeypatch.delenv(RUNWARE_KEY_ENV, raising=False)
+    assert runware_api_key() == "file-secret"
+
+
 def test_audio_factory_uses_selected_key_without_network(monkeypatch):
     monkeypatch.setenv(RUNWARE_KEY_ENV, "mock-selected-key")
     monkeypatch.setenv("RUNWARE_API_KEY", "mock-wrong-key")

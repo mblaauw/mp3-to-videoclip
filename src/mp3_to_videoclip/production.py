@@ -107,7 +107,10 @@ def init_project(
     native_size=None,
     title=None,
 ) -> Project:
-    if root.exists():
+    # An empty directory is a reservation made by intake: the caller owns it and
+    # must clean it up on failure. A directory with any entry is an existing
+    # production and must never be reused.
+    if root.exists() and (not root.is_dir() or any(root.iterdir())):
         raise ValueError("project directory already exists; use its existing artifacts")
     source = source.resolve(strict=True)
     info = probe(source)
@@ -208,6 +211,19 @@ def creative_workflow(project: Project) -> bool:
     without the v2 marker keep their historical legacy behaviour.
     """
     return project.workflow_version == 2 or project.schema_version == 3
+
+
+def requires_signature(root: Path, project: Project | None = None) -> bool:
+    """Whether delivery needs the graphics signature pass.
+
+    The recorded flag is authoritative. A migrated schema-3 production may have
+    lost it; its graphics spec proves the film was authored with a signature, so
+    a missing flag must never silently turn a base into a delivery render.
+    """
+    project = project or load_project(root)
+    if project.signature_required is not None:
+        return project.signature_required
+    return project.schema_version == 3 and (root / "work" / "graphics-spec.json").is_file()
 
 
 def prompt_look_first(project: Project) -> bool:
@@ -721,7 +737,7 @@ def stage_hash(root: Path, stage: str) -> str:
         if stage == "brief":
             brief = Brief.model_validate(value)
             value = {"brief": value, "references": brief_references(root, brief)}
-            if project.signature_required and not flow.settings(root)["late_credits"]:
+            if requires_signature(root, project) and not flow.settings(root)["late_credits"]:
                 value["signature"] = digest(read_json(root / "work/graphics-spec.json"))
             if (root / STAGE_FILES["events"]).exists():
                 value["events"] = digest(read_json(root / STAGE_FILES["events"]))
@@ -832,7 +848,7 @@ def approve(
     elif stage == "brief":
         brief = load_brief(root)
         _require_default_style_core(load_project(root), brief)
-        if load_project(root).signature_required and not flow.settings(root)["late_credits"]:
+        if requires_signature(root) and not flow.settings(root)["late_credits"]:
             from .signature import validate_spec
 
             validate_spec(root, load_project(root))
@@ -1027,10 +1043,13 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
 
 
 def select_asset(root: Path, shot_id: str, version: int):
+    board = load_board(root)
+    shot = next((s for s in board.shots if s.id == shot_id), None)
+    owner = (shot.asset_shot_id or shot.id) if shot else shot_id
     assets = read_json(root / "work/assets.json")
-    if not any(v["version"] == version for v in assets.get(shot_id, {}).get("versions", [])):
+    if not any(v["version"] == version for v in assets.get(owner, {}).get("versions", [])):
         raise ValueError("unknown image version")
-    assets[shot_id]["selected"] = version
+    assets[owner]["selected"] = version
     write_json(root / "work/assets.json", assets)
 
 

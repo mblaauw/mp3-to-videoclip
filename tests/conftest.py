@@ -32,6 +32,15 @@ requires_ffmpeg = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(autouse=True)
+def isolated_user_settings(tmp_path: Path, monkeypatch):
+    """Never read the developer's real settings or provider key during tests."""
+    monkeypatch.setattr(
+        "mp3_to_videoclip.config.settings_path",
+        lambda: tmp_path / "no-user-settings.toml",
+    )
+
+
 # --------------------------------------------------------------------------- #
 # process, frame and packet helpers
 # --------------------------------------------------------------------------- #

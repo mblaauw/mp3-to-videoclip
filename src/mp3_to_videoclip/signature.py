@@ -145,7 +145,7 @@ def prepare_review(root: Path, base: Path, project) -> dict:
         "preflight": str(preflight.relative_to(root)),
         "preflight_sha256": file_hash(preflight),
         "samples": samples,
-        "warning": "Inspect actual composited preflight images, then clip approve PROJECT graphics --inspected --note ...; this base is not final.",
+        "warning": "Inspect the actual composited preflight samples in Studio, then approve graphics with the inspected attestation; this base is not final.",
     }
     write_json(root / REVIEW, value)
     return value

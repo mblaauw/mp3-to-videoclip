@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from api_support import add_assets, make_api_project
 
+from mp3_to_videoclip import graphics, services, signature
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip import services
 from mp3_to_videoclip.storage import file_hash, read_json, write_json
 
 
@@ -110,3 +111,92 @@ def test_the_report_written_by_the_preview_job_passes_the_preview_gate(tmp_path,
         preview_watched=True,
     )
     P.require_approval(root, "preview")
+
+
+def test_signature_final_requires_graphics_before_compose(tmp_path, monkeypatch):
+    root = make_api_project(tmp_path)
+    add_assets(root)
+    stored = read_json(root / "project.json")
+    stored["signature_required"] = True
+    write_json(root / "project.json", stored)
+    composed = []
+
+    def gate(_root, stage):
+        if stage == "graphics":
+            raise ValueError("graphics needs current user approval")
+
+    monkeypatch.setattr(services.render.P, "require_approval", gate)
+    monkeypatch.setattr(
+        graphics,
+        "compose",
+        lambda *args, **kwargs: composed.append((args, kwargs)) or {},
+    )
+
+    with pytest.raises(ValueError, match="graphics needs current user approval"):
+        services.render.render_final(root, root / "renders" / "final-v001.mp4")
+    assert composed == []
+
+
+def test_signature_final_composes_the_reviewed_base(tmp_path, monkeypatch):
+    root = make_api_project(tmp_path)
+    add_assets(root)
+    stored = read_json(root / "project.json")
+    stored["signature_required"] = True
+    write_json(root / "project.json", stored)
+    base = root / "renders" / "base-v001.mp4"
+    base.parent.mkdir()
+    base.write_bytes(b"reviewed base")
+    approvals = []
+    calls = []
+
+    def compose(root_arg, base_arg, output_arg):
+        calls.append((root_arg, base_arg, output_arg))
+        output_arg.write_bytes(b"composed film")
+        return {"output": str(output_arg), "delivery_ready": False}
+
+    monkeypatch.setattr(
+        services.render.P, "require_approval", lambda _root, stage: approvals.append(stage)
+    )
+    monkeypatch.setattr(
+        signature, "validate_review", lambda _root, _project: {"base": "renders/base-v001.mp4"}
+    )
+    monkeypatch.setattr(signature, "current_input_hash", lambda _root: "c" * 64)
+    monkeypatch.setattr(services.render.P, "stage_hash", lambda _root, _stage: "g" * 64)
+    monkeypatch.setattr(graphics, "compose", compose)
+
+    report = services.render.render_final(root, root / "renders" / "final-v001.mp4")
+
+    assert approvals == ["stills", "graphics"]
+    assert calls[0][1] == base
+    assert report["delivery_ready"] is True
+    assert report["graphics_approval_hash"] == "g" * 64
+    sidecar = read_json(root / "renders" / "final-v001.json")
+    assert sidecar["delivery_ready"] is True
+    assert sidecar["input_hash"] == "c" * 64
+
+
+def test_base_writes_the_report_and_prepares_the_graphics_review(tmp_path, monkeypatch):
+    root = make_api_project(tmp_path)
+    add_assets(root)
+    stored = read_json(root / "project.json")
+    stored["signature_required"] = True
+    write_json(root / "project.json", stored)
+    output = root / "renders" / "base-v001.mp4"
+    calls = []
+
+    monkeypatch.setattr(services.render.P, "require_approval", lambda *_args: None)
+    monkeypatch.setattr(services.render, "_render", _fake_render(calls))
+    monkeypatch.setattr(signature, "current_input_hash", lambda _root: "b" * 64)
+    monkeypatch.setattr(
+        signature,
+        "prepare_review",
+        lambda _root, base, _project: {"base": str(base.relative_to(_root))},
+    )
+
+    report = services.render.render_base(root, output)
+
+    assert report["delivery_ready"] is False
+    assert report["graphics_review"]["base"] == "renders/base-v001.mp4"
+    sidecar = read_json(output.with_suffix(".json"))
+    assert sidecar["input_hash"] == "b" * 64
+    assert sidecar["delivery_ready"] is False

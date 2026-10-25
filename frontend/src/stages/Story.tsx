@@ -8,11 +8,19 @@ export function StoryStage({ slug }: { slug: string }) {
   const [style, setStyle] = useState("");
   const [treatment, setTreatment] = useState("");
   const [look, setLook] = useState("");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setBrief(null);
+    setDirection("");
+    setStyle("");
+    setTreatment("");
+    setLook("");
+    setError(null);
     api
       .brief(slug)
       .then((b) => {
@@ -22,10 +30,18 @@ export function StoryStage({ slug }: { slug: string }) {
         setTreatment(b.treatment || "");
         setLook(b.creative?.look || "");
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   const save = async () => {
+    // Never PATCH the blank initial form while the current brief is still loading.
+    if (!brief || saving) return;
     setSaving(true);
     setError(null);
     try {
@@ -33,9 +49,13 @@ export function StoryStage({ slug }: { slug: string }) {
         direction,
         style,
         treatment,
-        creative: { ...(brief?.creative || {}), look },
+        creative: { ...(brief.creative || {}), look },
       });
       setBrief(updated);
+      setDirection(updated.direction || "");
+      setStyle(updated.style || "");
+      setTreatment(updated.treatment || "");
+      setLook(updated.creative?.look || "");
       setRevision((value) => value + 1);
     } catch (e) {
       setError(String(e));
@@ -49,6 +69,12 @@ export function StoryStage({ slug }: { slug: string }) {
       <h2>Story</h2>
       <p className="sub">Treatment, look and characters. Every write is a versioned artifact.</p>
       {error && <p className="error">{error}</p>}
+      {loading && <p className="meta">Loading the current brief…</p>}
+      {!loading && !brief && (
+        <button onClick={load} type="button">
+          Retry loading the brief
+        </button>
+      )}
       <ApprovalBar slug={slug} stages={["brief"]} refresh={revision} />
       <div className="card">
         <h3>Direction and style</h3>
@@ -90,7 +116,7 @@ export function StoryStage({ slug }: { slug: string }) {
         ))}
         {!brief?.characters?.length && <p className="empty">No characters.</p>}
       </div>
-      <button onClick={save} disabled={saving}>
+      <button onClick={save} disabled={!brief || loading || saving}>
         {saving ? "Saving…" : "Save brief"}
       </button>
     </>

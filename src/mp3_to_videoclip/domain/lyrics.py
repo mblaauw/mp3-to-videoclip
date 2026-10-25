@@ -8,10 +8,23 @@ truthful coarse map, not a per-word alignment.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from mp3_to_videoclip.models import Lyrics, Segment
+from mp3_to_videoclip.storage import digest, read_json, write_json
 
 _TAG = re.compile(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
+
+
+def save_lyrics(root: Path, lyrics: Lyrics) -> None:
+    """Replace the live lyrics while keeping the previous artifact in history."""
+    previous = root / "work" / "lyrics.json"
+    if previous.exists():
+        value = read_json(previous)
+        archive = root / f"work/lyrics-history/{digest(value)}.json"
+        if not archive.exists():
+            write_json(archive, value)
+    write_json(previous, lyrics.model_dump())
 
 
 def parse_lrc(text: str, duration: float) -> Lyrics:

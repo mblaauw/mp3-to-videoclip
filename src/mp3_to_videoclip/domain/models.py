@@ -62,6 +62,7 @@ class Project(BaseModel):
     image_settings: ImageSettings | None = None
     image_seed: int | None = Field(default=None, ge=0, le=2147483647, strict=True)
     style_preset: str | None = None
+    signature_required: bool | None = Field(default=None, strict=True)
     budget: list[BudgetEntry] = Field(default_factory=list)
 
     @property

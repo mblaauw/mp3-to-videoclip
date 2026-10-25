@@ -21,10 +21,20 @@ def estimate(
     regenerate: bool = False,
 ) -> dict:
     """Quote the selected shots at live schema/pricing; saves the quote."""
+    from mp3_to_videoclip import production as P
     from mp3_to_videoclip.storage import project_lock
 
+    # The Images screen may pass a reprise shot ID. Generation is owned by the
+    # source asset, so quote the owner once and never the alias as a second task.
+    board = P.load_board(root)
+    owners = {shot.id: (shot.asset_shot_id or shot.id) for shot in board.shots}
+    normalized: list[str] = []
+    for shot_id in shot_ids:
+        owner = owners.get(shot_id, shot_id)
+        if owner not in normalized:
+            normalized.append(owner)
     with project_lock(root):
-        quote = G.quote_images(root, scope, reserve, ids=shot_ids, regenerate=regenerate)
+        quote = G.quote_images(root, scope, reserve, ids=normalized, regenerate=regenerate)
     return {
         "quote_id": quote["id"],
         "scope": quote["scope"],

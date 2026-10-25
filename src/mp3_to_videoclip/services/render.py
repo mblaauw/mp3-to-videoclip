@@ -1,4 +1,4 @@
-"""Render service: Remotion for preview and final, FFmpeg for probe/mux/verify."""
+"""Render service: Remotion base/preview, FFmpeg graphics composite for delivery."""
 
 from __future__ import annotations
 
@@ -9,20 +9,29 @@ from mp3_to_videoclip.render import render as _render
 from mp3_to_videoclip.storage import file_hash, inside, write_json
 
 
-def render_final(root: Path, output: Path | None = None) -> dict:
-    """Render the selected stills to a versioned MP4 on the exact timeline."""
-    # The full-stills decision is the last human gate before a delivery render.
+def _next_output(directory: Path, prefix: str) -> Path:
+    version = 1
+    while (directory / f"{prefix}-v{version:03d}.mp4").exists():
+        version += 1
+    return directory / f"{prefix}-v{version:03d}.mp4"
+
+
+def _write_report(output: Path, report: dict) -> Path:
+    path = output.with_suffix(".json")
+    write_json(path, report)
+    return path
+
+
+def render_base(root: Path, output: Path | None = None) -> dict:
+    """Render the selected stills without graphics; this is never delivery."""
     P.require_approval(root, "stills")
     project = P.load_project(root)
     shots = P.resolved_assets(root)
     directory = root / "renders"
     directory.mkdir(parents=True, exist_ok=True)
-    if output is None:
-        version = 1
-        while (directory / f"{project.slug}-final-v{version:03d}.mp4").exists():
-            version += 1
-        output = directory / f"{project.slug}-final-v{version:03d}.mp4"
-    return _render(
+    output = output or _next_output(directory, f"{project.slug}-base")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    report = _render(
         project,
         shots,
         inside(root, project.source),
@@ -30,6 +39,60 @@ def render_final(root: Path, output: Path | None = None) -> dict:
         root / "work",
         brand=P.load_brand(root),
     )
+    from mp3_to_videoclip.signature import current_input_hash, prepare_review
+
+    report["input_hash"] = current_input_hash(root)
+    report["delivery_ready"] = False
+    # Write the report before preparing the review: validate_review later reads
+    # this sidecar to prove the base belongs to the current storyboard/stills.
+    _write_report(output, report)
+    if P.requires_signature(root, project):
+        report["graphics_review"] = prepare_review(root, output, project)
+        _write_report(output, report)
+    return report
+
+
+def render_final(root: Path, output: Path | None = None) -> dict:
+    """Render delivery: compose approved graphics over the reviewed base."""
+    # The full-stills decision is the last human gate before a delivery render.
+    P.require_approval(root, "stills")
+    project = P.load_project(root)
+    directory = root / "renders"
+    directory.mkdir(parents=True, exist_ok=True)
+
+    if P.requires_signature(root, project):
+        from mp3_to_videoclip.graphics import compose
+        from mp3_to_videoclip.signature import current_input_hash, validate_review
+
+        # Both the approval record and the reviewed bytes must still match.
+        P.require_approval(root, "graphics")
+        review = validate_review(root, project)
+        base = inside(root, review["base"])
+        output = output or _next_output(directory, f"{project.slug}-final")
+        report = compose(root, base, output)
+        report["delivery_ready"] = True
+        report["graphics_approval_hash"] = P.stage_hash(root, "graphics")
+        report["input_hash"] = current_input_hash(root)
+        _write_report(Path(report["output"]), report)
+        return report
+
+    # Projects without a signature have no separate graphics pass.
+    output = output or _next_output(directory, f"{project.slug}-final")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    report = _render(
+        project,
+        P.resolved_assets(root),
+        inside(root, project.source),
+        output,
+        root / "work",
+        brand=P.load_brand(root),
+    )
+    from mp3_to_videoclip.signature import current_input_hash
+
+    report["delivery_ready"] = True
+    report["input_hash"] = current_input_hash(root)
+    _write_report(output, report)
+    return report
 
 
 def render_preview(root: Path, output: Path | None = None) -> dict:
@@ -38,11 +101,7 @@ def render_preview(root: Path, output: Path | None = None) -> dict:
     shots = P.resolved_assets(root)
     directory = root / "previews"
     directory.mkdir(parents=True, exist_ok=True)
-    if output is None:
-        version = 1
-        while (directory / f"{project.slug}-preview-v{version:03d}.mp4").exists():
-            version += 1
-        output = directory / f"{project.slug}-preview-v{version:03d}.mp4"
+    output = output or _next_output(directory, f"{project.slug}-preview")
     report = _render(
         project,
         shots,

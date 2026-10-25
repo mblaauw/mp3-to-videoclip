@@ -66,13 +66,11 @@ async def analyze(slug: str, request: Request):
 
 @router.put("/lyrics")
 async def update_lyrics(slug: str, request: Request, payload: dict):
+    from mp3_to_videoclip.domain.lyrics import parse_lrc, save_lyrics
     from mp3_to_videoclip.models import Lyrics
-    from mp3_to_videoclip.storage import write_json
 
     root = project_root(request, slug)
     if "lrc" in payload:
-        from mp3_to_videoclip.domain.lyrics import parse_lrc
-
         if not isinstance(payload["lrc"], str) or len(payload["lrc"]) > 200_000:
             return {"error": "paste a reasonable amount of lyrics"}
         try:
@@ -84,5 +82,5 @@ async def update_lyrics(slug: str, request: Request, payload: dict):
             lyrics = Lyrics.model_validate(payload)
         except ValueError as exc:
             return {"error": str(exc)}
-    write_json(root / "work" / "lyrics.json", lyrics.model_dump())
+    save_lyrics(root, lyrics)
     return {"status": "saved", "segments": len(lyrics.segments)}

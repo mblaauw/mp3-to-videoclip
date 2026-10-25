@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import valid_slug
 from mp3_to_videoclip.domain import archive
-from mp3_to_videoclip.storage import read_json
+from mp3_to_videoclip.storage import read_json, read_optional
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -29,6 +29,7 @@ class ProjectSummary(BaseModel):
     archived: bool = False
     render: str | None = None
     still_count: int = 0
+    error: str | None = None
 
 
 @router.get("", response_model=list[ProjectSummary])
@@ -77,7 +78,19 @@ async def list_projects(request: Request):
                 )
             )
         except Exception:
-            continue
+            # A production the app cannot load must stay visible: silently
+            # dropping it looks exactly like data loss.
+            result.append(
+                ProjectSummary(
+                    slug=entry.name,
+                    title=entry.name.replace("-", " ").title(),
+                    archived=False,
+                    error=(
+                        "This production could not be loaded. Check project.json "
+                        "and its source audio before opening it."
+                    ),
+                )
+            )
     return result
 
 
@@ -157,6 +170,8 @@ async def get_project(slug: str, request: Request, verify: bool = False):
         raise HTTPException(status_code=404, detail="project not found")
     root = _projects_dir(request) / slug
     if not root.is_dir() or not (root / "project.json").is_file():
+        raise HTTPException(status_code=404, detail="project not found")
+    if not isinstance(read_optional(root / "project.json"), dict):
         raise HTTPException(status_code=404, detail="project not found")
     if archive.is_archived(root):
         film = archive.read(root)

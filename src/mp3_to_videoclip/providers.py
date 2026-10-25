@@ -178,10 +178,15 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 def runware_api_key() -> str:
-    """Use the user's explicitly selected project-veil key; ignore generic fallback."""
-    key = os.environ.get(RUNWARE_KEY_ENV)
+    """Use the Studio/settings key, then the explicitly selected environment key."""
+    from .config import effective_settings
+
+    key = effective_settings().runware_api_key
     if not key or not key.strip():
-        raise ValueError(f"{RUNWARE_KEY_ENV} is not configured; no audio upload/inference made")
+        raise ValueError(
+            f"{RUNWARE_KEY_ENV} is not configured in Studio settings or the environment; "
+            "no audio upload/inference made"
+        )
     return key
 
 

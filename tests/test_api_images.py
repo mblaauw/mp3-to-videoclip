@@ -368,3 +368,38 @@ def test_alias_review_records_the_shared_asset_owner(client, project):
     assert response.status_code == 200, response.text
     assert response.json()["review"]["shot_id"] == "s001"
     assert response.json()["review"]["verdict"] == "accept"
+
+    selected = client.post(
+        "/api/projects/production/images/select",
+        json={"shot_id": "s002", "version": 2},
+    )
+    assert selected.status_code == 200, selected.text
+    assets = read_json(project / "work/assets.json")
+    assert assets["s001"]["selected"] == 2
+
+
+def test_estimate_quotes_the_alias_owner_once(project, monkeypatch):
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.services import generation
+    from mp3_to_videoclip.storage import read_json, write_json
+
+    add_assets(project)
+    board = read_json(project / P.STAGE_FILES["storyboard"])
+    board["shots"][1]["asset_shot_id"] = "s001"
+    write_json(project / P.STAGE_FILES["storyboard"], board)
+    captured = {}
+
+    def fake_quote(root, scope, reserve, *, ids, regenerate):
+        captured["ids"] = ids
+        return {
+            "id": "quote-alias",
+            "scope": scope,
+            "tasks": [],
+            "reserve_total_usd": "0.00",
+            "cap_usd": None,
+        }
+
+    monkeypatch.setattr(generation.G, "quote_images", fake_quote)
+    result = generation.estimate(project, ["s002", "s001"])
+    assert captured["ids"] == ["s001"]
+    assert result["quote_id"] == "quote-alias"

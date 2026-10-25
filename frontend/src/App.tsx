@@ -49,13 +49,18 @@ export function App() {
               <button
                 className={p.slug === slug ? "active" : ""}
                 aria-current={p.slug === slug ? "true" : undefined}
+                aria-disabled={!!p.error}
+                disabled={!!p.error}
+                title={p.error ?? undefined}
                 onClick={() => setSlug(p.slug)}
               >
                 {p.title}
                 <div className="meta">
-                  {p.archived ? "archive" : "live"}
-                  {p.duration ? ` · ${p.duration.toFixed(0)}s` : ""}
+                  {p.error
+                    ? "unreadable"
+                    : `${p.archived ? "archive" : "live"}${p.duration ? ` · ${p.duration.toFixed(0)}s` : ""}`}
                 </div>
+                {p.error && <div className="meta error">{p.error}</div>}
               </button>
             </li>
           ))}
@@ -83,7 +88,7 @@ export function App() {
                   </button>
                 ))}
               </div>
-              <StageView slug={selected.slug} stage={stage} />
+              <StageView key={selected.slug} slug={selected.slug} stage={stage} />
             </>
           )
         ) : (
@@ -92,6 +97,7 @@ export function App() {
       </main>
 
       <Director
+        key={creating || selected?.archived ? "none" : (slug ?? "none")}
         slug={creating || selected?.archived ? null : slug}
         stage={stage}
         archived={!!selected?.archived}

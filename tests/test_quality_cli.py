@@ -50,11 +50,7 @@ def test_cli_preview_versioning_review_and_prompt_inspection(tmp_path):
     assert first["actual_shots"] == ["s001", "s002", "s004"]
     with pytest.raises(ValueError, match="preview"):
         P.require_approval(root, "preview")
-    execute(
-        parser().parse_args(
-            ["approve", str(root), "preview", "--note", "Test user reviewed pacing"]
-        )
-    )
+    P.approve(root, "preview", "Test user reviewed pacing")
     P.require_approval(root, "preview")
     reviewed = read_json(root / "work/preview-review.json")
     second = execute(parser().parse_args(["preview", str(root), "--scope", "available"]))

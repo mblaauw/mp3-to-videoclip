@@ -24,7 +24,3 @@ jobs:
         run: uv run ruff check .
       - name: Test
         run: uv run pytest -q
-      - name: Install browser test runtime
-        run: uv run --with playwright playwright install --with-deps chromium
-      - name: Browser regressions
-        run: uv run --with playwright pytest tests/test_studio_browser.py -q

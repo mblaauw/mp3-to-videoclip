@@ -2,16 +2,20 @@
 
 One local web app that turns an MP3 into a finished videoclip: import the track,
 talk to a built-in director, review the storyboard and the stills, and render the
-film. Money, source audio and generated stills stay on this machine.
+film. Money records, the library, source audio and generated stills are kept
+locally. Only an explicitly authorized paid transcription, listening pass or
+image batch sends the required bytes to the provider.
 
 **Current state (25 Oct 2026): the new Studio is live.** `uv run studio` opens the
 library, creates a schema-3 production from an MP3, measures it locally, and takes
 it through Track, Story, Storyboard, Images and Film with content-bound approvals
 and a job tray. The waveform timeline, the Remotion Player preview, the error tray,
-image reviews and the preview/stills/graphics attestations are live. The old
-interim server and its Python UI are gone; `clip` remains only for engine tasks
-that have no GUI yet (transcription, listening, backups, signing, maintenance). The phase plan, decisions and acceptance criteria
-live in `.opencode/tasks/gui-rework.md`.
+image reviews, the preview and graphics attestations and the stills approval are
+live. The old interim server and its Python UI are gone; `clip` remains only for
+engine tasks that have no GUI yet (transcription, listening, backups, signing,
+maintenance). The phase plan and acceptance criteria live in
+`.opencode/tasks/gui-rework.md`; the decisions came from the 25 Oct 2026 brief it
+references.
 
 ## What works today
 
@@ -44,7 +48,8 @@ uv run studio
 That is the whole install. The Studio serves the committed frontend build; the
 first launch installs the pinned renderer packages if they are missing (no browser
 download, no paid call) and never invokes `tsc` without frontend dependencies.
-The Film screen shows a setup card if the renderer or a system tool is missing.
+The Film screen shows a setup card when the local renderer is missing; the card
+lists any missing system tool as well.
 
 Also required on `PATH`: `ffmpeg`, `ffprobe`, `node` (the Remotion renderer is
 pinned in `renderers/remotion/package.json`). Frontend development is the only
@@ -52,9 +57,10 @@ reason to run `npm ci --prefix frontend`; the renderer install is
 `npm ci --prefix renderers/remotion --ignore-scripts` when diagnosing a failed
 first run.
 
-The Runware key is read from `PROJECT_VEIL_RUNWARE_API`. It is only needed for
-paid image work; analysis and rendering are local. Never commit it or write it
-into a production folder.
+The Runware key can be saved in the Studio settings file or supplied as
+`PROJECT_VEIL_RUNWARE_API`; a saved key wins. It is only needed for paid image,
+transcription or listening work; analysis and rendering are local. Never commit it
+or write it into a production folder.
 
 ## Using the Studio
 
@@ -101,11 +107,11 @@ src/mp3_to_videoclip/    engine: models, timing, generation, renderer, CLI
 renderers/remotion/      pinned Remotion renderer (render.mjs)
 projects/                productions (gitignored, never deleted, never rewritten in place)
 backups/                 metadata snapshots and private archives (gitignored)
-docs/ARCHITECTURE.md     how the pieces fit and where the rework is going
+docs/ARCHITECTURE.md     how the pieces fit together
 .opencode/skills/        craft notes kept until they are distilled into director prompts
 ```
 
-## Where the rework is going
+## How it fits together
 
 One FastAPI process, one job runner, one event stream and a Vite/React frontend;
 the in-app director owns the LLM turn, the paid batch and the render, and the user
