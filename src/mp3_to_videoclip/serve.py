@@ -1,4 +1,4 @@
-"""Live layer: a loopback server that streams the durable spine, read-only by default.
+"""Interim Studio: the loopback review app kept alive until the Phase 4 frontend replaces it.
 
 Deliberately small and boring: no framework and no build step. GETs are review
 projections. POST /api/create performs local setup. A separately terminal-enabled
@@ -26,9 +26,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import appdata, human_actions, human_ui, sources, spine, studio, studio_ui
+from . import appdata, human_actions, human_ui, sources, studio, studio_ui
 
-STREAM_INTERVAL = 0.5
 HEARTBEAT_SECONDS = 10.0
 MAX_UPLOAD_BYTES = 250 * 1024 * 1024
 
@@ -268,19 +267,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(
                 {"actions_enabled": bool(self.server.action_token), "stages": list(UPSTREAM)}
             )
-        if parsed.path == "/api/status":
-            with spine.connect(self.server.db) as conn:
-                return self._json(spine.status(conn))
-        if parsed.path == "/api/runs":
-            limit = int((query.get("limit") or ["20"])[0])
-            with spine.connect(self.server.db) as conn:
-                return self._json({"runs": spine.run_list(conn, limit)})
-        if parsed.path == "/api/events":
-            after = int((query.get("after") or ["0"])[0])
-            run = (query.get("run") or [None])[0]
-            limit = int((query.get("limit") or ["200"])[0])
-            with spine.connect(self.server.db) as conn:
-                return self._json({"events": spine.event_list(conn, run, after, limit)})
+        if parsed.path == "/api/stream":
+            return self._idle_stream()
+        if parsed.path in ("/api/runs", "/api/events", "/api/status"):
+            # The durable run journal was removed with the agent runtime; the
+            # interim Studio keeps these shapes until the Phase 4 frontend.
+            return self._json({"retired": True, "runs": [], "events": []})
         if parsed.path == "/api/studio":
             return self._json({"productions": studio.scan(self.server.projects_dir)})
         if parsed.path.startswith("/api/project/"):
@@ -319,21 +311,6 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 except (ValueError, KeyError) as exc:
                     return self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            if rest == ["feedback"]:
-                from . import feedback
-
-                try:
-                    return self._json(
-                        {
-                            "requests": feedback.requests(
-                                root,
-                                stage=(query.get("stage") or [None])[0],
-                                status=(query.get("status") or [None])[0],
-                            )
-                        }
-                    )
-                except ValueError as exc:
-                    return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             if rest == ["approvals"]:
                 return self._json(appdata.approvals(root))
             if rest == ["quotes"]:
@@ -387,8 +364,6 @@ class Handler(BaseHTTPRequestHandler):
                 )
             except ValueError as exc:
                 return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-        if parsed.path == "/api/stream":
-            return self._stream(query)
         if not parsed.path.startswith("/api/"):
             return self._page_error(HTTPStatus.NOT_FOUND, "This Studio page was not found")
         return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
@@ -412,7 +387,7 @@ class Handler(BaseHTTPRequestHandler):
                 segments = [unquote(part) for part in parsed.path.strip("/").split("/")]
                 supported = (len(segments) == 5 and segments[3] in {"approve", "authorize"}) or (
                     len(segments) == 4
-                    and segments[3] in {"feedback", "review", "approve-story", "credits"}
+                    and segments[3] in {"review", "approve-story", "credits"}
                 )
                 if not supported:
                     raise human_actions.ActionError("unsupported write route", 405)
@@ -429,29 +404,6 @@ class Handler(BaseHTTPRequestHandler):
                         if segments[3] == "approve"
                         else human_actions.authorize_quote(root, segments[4], body)
                     )
-                elif len(segments) == 4 and segments[3] == "feedback":
-                    from . import feedback
-                    from .storage import project_lock
-
-                    body = self._read_body(64000)
-                    if set(body) - {"stage", "scope", "target", "message", "style", "confirmed"}:
-                        raise human_actions.ActionError("unexpected feedback fields")
-                    if body.get("confirmed") is not True:
-                        raise human_actions.ActionError(
-                            "confirm that this instruction should revise the production"
-                        )
-                    with project_lock(root):
-                        value = {
-                            "request": feedback.record(
-                                root,
-                                stage=body.get("stage"),
-                                scope=body.get("scope", "whole"),
-                                target=body.get("target"),
-                                message=body.get("message"),
-                                style=body.get("style"),
-                                author="studio",
-                            )
-                        }
                 elif len(segments) == 4 and segments[3] == "review":
                     value = human_actions.record_shot_review(root, self._read_body(8192))
                 elif len(segments) == 4 and segments[3] == "approve-story":
@@ -620,31 +572,23 @@ class Handler(BaseHTTPRequestHandler):
     do_PATCH = _unsupported_write
     do_OPTIONS = _unsupported_write
 
-    # -- server-sent events ----------------------------------------------- #
-    def _stream(self, query):
-        after = int((query.get("after") or ["0"])[0])
-        run = (query.get("run") or [None])[0]
+    # -- interim event stream --------------------------------------------- #
+    def _idle_stream(self):
+        """Keep the interim Studio's EventSource alive without inventing events.
+
+        The durable journal is gone; real progress events arrive with the Phase 4
+        frontend. A heartbeat keeps the browser from reconnecting in a loop.
+        """
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Connection", "keep-alive")
         self.end_headers()
-        last_beat = time.monotonic()
         try:
             while True:
-                with spine.connect(self.server.db) as conn:
-                    events = spine.event_list(conn, run, after, 200)
-                for event in events:
-                    after = max(after, event["seq"])
-                    payload = json.dumps(event, default=str)
-                    self.wfile.write(f"data: {payload}\n\n".encode())
-                if events:
-                    last_beat = time.monotonic()
-                elif time.monotonic() - last_beat > HEARTBEAT_SECONDS:
-                    self.wfile.write(b": keep-alive\n\n")
-                    last_beat = time.monotonic()
+                self.wfile.write(b": keep-alive\n\n")
                 self.wfile.flush()
-                time.sleep(STREAM_INTERVAL)
+                time.sleep(HEARTBEAT_SECONDS)
         except (BrokenPipeError, ConnectionResetError):
             return
 
@@ -1084,7 +1028,6 @@ def _float(query, key):
 
 def build_server(
     projects_dir: str | Path,
-    db: str | Path,
     *,
     port: int = 8765,
     token: str | None = None,
@@ -1100,7 +1043,6 @@ def build_server(
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
     httpd.projects_dir = Path(projects_dir).resolve()
-    httpd.db = Path(db)
     httpd.token = token
     httpd.action_token = action_token
     httpd.sources_dir = (
@@ -1115,7 +1057,6 @@ def build_server(
 
 def serve(
     projects_dir: str | Path,
-    db: str | Path,
     *,
     port: int = 8765,
     token: str | None = None,
@@ -1134,7 +1075,7 @@ def serve(
         ):
             raise ValueError("Human actions were not enabled")
         action_token = secrets.token_urlsafe(32)
-    httpd, url = build_server(projects_dir, db, port=port, token=token, action_token=action_token)
+    httpd, url = build_server(projects_dir, port=port, token=token, action_token=action_token)
     app_url = url.replace("/?token=", "/app?token=")
     if ready is not None:
         ready.put(app_url)
@@ -1153,9 +1094,9 @@ def serve(
         httpd.server_close()
 
 
-def start_in_thread(projects_dir, db, *, port=0, token="test-token"):
+def start_in_thread(projects_dir, *, port=0, token="test-token"):
     """Test helper: start the server on an ephemeral port and return (server, url, thread)."""
-    httpd, url = build_server(projects_dir, db, port=port, token=token)
+    httpd, url = build_server(projects_dir, port=port, token=token)
     thread = threading.Thread(
         target=httpd.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True
     )

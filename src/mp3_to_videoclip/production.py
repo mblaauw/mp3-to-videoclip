@@ -872,7 +872,7 @@ def approve(
     write_json(root / "work/approvals.json", approvals)
 
 
-def skeleton(root: Path, nominal_seconds=None, timing="beats", *, min_seconds=4, max_seconds=12):
+def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None, max_seconds=None):
     """Build a timing-only skeleton (TODO content, never creative approval).
 
     ``timing`` selects the boundary source: ``beats`` (local beat estimates),
@@ -881,14 +881,21 @@ def skeleton(root: Path, nominal_seconds=None, timing="beats", *, min_seconds=4,
     music-aware rather than rigidly uniform) or ``free`` (uniform, no beats).
     Shot IDs stay stable and the timeline always covers ``total_frames`` exactly.
     """
-    if timing not in ("adaptive", "beats", "events", "free"):
-        raise ValueError("timing must be adaptive, beats, events or free")
     require_approval(root, "brief")
     if (root / STAGE_FILES["storyboard"]).exists():
         raise ValueError("storyboard already exists; edit it rather than overwrite")
     project = load_project(root)
+    new_film = project.prompt_version == 2
+    if timing is None:
+        timing = "adaptive" if project.image_model is not None else "beats"
+    if timing not in ("adaptive", "beats", "events", "free"):
+        raise ValueError("timing must be adaptive, beats, events or free")
     if nominal_seconds is None:
-        nominal_seconds = 8 if timing == "adaptive" else 10
+        nominal_seconds = (5 if new_film else 8) if timing == "adaptive" else 10
+    if min_seconds is None:
+        min_seconds = 1.5 if new_film else 4
+    if max_seconds is None:
+        max_seconds = 7 if new_film else 12
     if timing == "adaptive":
         from .pacing import plan_boundaries
 

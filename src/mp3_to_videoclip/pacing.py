@@ -1,6 +1,6 @@
 """Pure, deterministic adaptive shot-timing planner for the 4-12 second mode.
 
-This module implements the timing half of ``docs/STILL_FILM_DEFAULTS_PLAN.md``
+This module implements the timing half of the new-film skeleton defaults
 (item 5): a small adaptive mode that targets roughly eight seconds per shot, may
 shorten or lengthen a shot to land on a *reviewed* musical event, and always
 covers the exact source frame count. It is pure arithmetic over caller-supplied

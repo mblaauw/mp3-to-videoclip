@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 clip = "mp3_to_videoclip.cli:main"
+studio = "mp3_to_videoclip.launcher:main"
 
 [build-system]
 requires = ["hatchling"]

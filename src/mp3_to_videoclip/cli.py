@@ -11,7 +11,7 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
-from . import derivations, generation, operations, production, profiles, spine
+from . import derivations, generation, operations, production, profiles
 from .analysis import analyze
 from .branding import brand_hash, load_brand
 from .models import (
@@ -47,27 +47,6 @@ def parser() -> argparse.ArgumentParser:
         description="Agent-operated MP3 → storyboard → stills → video. No automatic paid stages."
     )
     commands = p.add_subparsers(dest="command", required=True)
-    control = commands.add_parser(
-        "style-test", help="One tracked style control; no audio or fake film"
-    )
-    style_operations = control.add_subparsers(dest="operation", required=True)
-    for operation in ("quote", "run", "recover", "approve"):
-        action = style_operations.add_parser(operation)
-        action.add_argument("directory", type=Path)
-        if operation == "quote":
-            action.add_argument("--reserve", default="0.10")
-        elif operation == "run":
-            action.add_argument("--quote", required=True)
-            action.add_argument("--cap", required=True)
-            action.add_argument("--note", required=True)
-        else:
-            action.add_argument("--task", required=True)
-            if operation == "approve":
-                action.add_argument(
-                    "--note",
-                    required=True,
-                    help="The user's actual visual style decision, not automatic agent acceptance",
-                )
     doctor = commands.add_parser("doctor", help="Show tool/credential availability without values")
     doctor.set_defaults(project=None)
     schema = commands.add_parser("schema", help="Print editable artifact JSON schemas")
@@ -75,66 +54,8 @@ def parser() -> argparse.ArgumentParser:
         "kind", choices=["brief", "lyrics", "storyboard", "events", "brand", "listening"]
     )
     schema.set_defaults(project=None)
-    spine = commands.add_parser("spine", help="Inspect the durable run journal")
-    spine_ops = spine.add_subparsers(dest="operation", required=True)
-    for name, help_text in {
-        "status": "Counts, open human waits and the journal location",
-        "runs": "Recent runs with steps and open interrupts",
-        "events": "Append-only event stream, optionally for one run",
-        "reconcile": "Mark runs whose owning process is gone as interrupted",
-        "trace": "One run as evidence: steps, waits, output and cost",
-        "resolve": "Record a human decision for one durable wait",
-    }.items():
-        action = spine_ops.add_parser(name, help=help_text)
-        action.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
-        if name in ("runs", "events"):
-            action.add_argument("--limit", type=int, default=20)
-        if name == "events":
-            action.add_argument("--run")
-            action.add_argument("--after", type=int, default=0)
-        if name == "trace":
-            action.add_argument("--run", required=True)
-        if name == "resolve":
-            action.add_argument("--interrupt", required=True)
-            action.add_argument("--note", required=True)
-    sync = spine_ops.add_parser("sync", help="Import work/operations receipts as runs")
-    sync.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
-    sync.add_argument("--projects-dir", type=Path, default=Path("projects"))
-    spine.set_defaults(project=None)
-    plan = commands.add_parser("plan", help="Propose, inspect and run a validated plan")
-    plan_ops = plan.add_subparsers(dest="operation", required=True)
-    plan_build = plan_ops.add_parser("build", help="Turn open actions into a plan; changes nothing")
-    plan_build.add_argument("project", type=Path)
-    plan_build.add_argument("--intent", help="Why this run exists")
-    for name, help_text in {"list": "Recent plans", "show": "One plan"}.items():
-        action = plan_ops.add_parser(name, help=help_text)
-        action.add_argument("project", type=Path)
-        if name == "show":
-            action.add_argument("--id", required=True)
-    plan_run = plan_ops.add_parser("run", help="Execute concrete steps, stop at humans")
-    plan_run.add_argument("project", type=Path)
-    plan_run.add_argument("--id", required=True)
-    plan_run.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
-    plan_run.add_argument(
-        "--allow-edit", action="store_true", help="Delegate canonical edits to this run"
-    )
-    plan.set_defaults(project=None)
-    context_cmd = commands.add_parser(
-        "context", help="Assemble the labelled context pack for a step"
-    )
-    context_cmd.add_argument("project", type=Path)
-    context_cmd.add_argument("--stage")
-    context_cmd.add_argument("--shots", type=int, default=0)
-    context_cmd.add_argument("--include-prompts", action="store_true")
-    eval_cmd = commands.add_parser("eval", help="Run structural invariant checks over the repo")
-    eval_cmd.add_argument("--root", type=Path, default=Path("."))
-    eval_cmd.set_defaults(project=None)
-    mcp_cmd = commands.add_parser("mcp", help="MCP stdio server exposing read/derive tools")
-    mcp_cmd.add_argument("--projects-dir", type=Path, default=Path("projects"))
-    mcp_cmd.set_defaults(project=None)
     serve_cmd = commands.add_parser("serve", help="Read-only live studio over loopback + SSE")
     serve_cmd.add_argument("--projects-dir", type=Path, default=Path("projects"))
-    serve_cmd.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
     serve_cmd.add_argument("--port", type=int, default=8765)
     serve_cmd.add_argument("--token", help="Session token; generated when omitted")
     serve_cmd.add_argument(
@@ -143,26 +64,6 @@ def parser() -> argparse.ArgumentParser:
         help="Interactively enable human Studio decisions (TTY required)",
     )
     serve_cmd.set_defaults(project=None)
-    feedback_cmd = commands.add_parser(
-        "feedback", help="Read, record or resolve Studio revision requests"
-    )
-    feedback_cmd.add_argument("project", type=Path)
-    feedback_cmd.add_argument("--stage", choices=["track", "story", "style", "images", "finish"])
-    feedback_cmd.add_argument("--status", choices=["open", "resolved"])
-    feedback_cmd.add_argument("--message", help="Record a new user/agent revision request")
-    feedback_cmd.add_argument("--scope", choices=["whole", "section", "shot"], default="whole")
-    feedback_cmd.add_argument("--target", help="Shot or section ID for a scoped request")
-    feedback_cmd.add_argument("--style", help="Optional replacement film-style text")
-    feedback_cmd.add_argument("--author", default="agent")
-    feedback_cmd.add_argument("--resolve", dest="request_id", help="Resolve an open request ID")
-    feedback_cmd.add_argument("--reply", help="Agent reply recorded when resolving")
-    intake = commands.add_parser("intake", help="Build a static intake wizard that emits commands")
-    intake.add_argument("--output-dir", type=Path, help="Where the page is written")
-    intake.add_argument("--name", help="Explicit safe .html basename; never overwritten")
-    intake.set_defaults(project=None)
-    inspect = commands.add_parser("inspect", help="Build a static per-shot inspector page")
-    inspect.add_argument("project", type=Path)
-    inspect.add_argument("--shot", help="One shot ID; omit for the whole board")
     studio = commands.add_parser(
         "studio", help="Build one static index page for every production on disk"
     )
@@ -230,8 +131,6 @@ def parser() -> argparse.ArgumentParser:
         "locate": "Resolve a frame or second to its exact shot and source owner",
         "adopt": "Record an inspected local derivative (crop/mirror/tone) as a new image version",
         "progress": "Monitor local operations from their durable receipts; never approves or spends",
-        "dashboard": "Render a self-contained beatmap/storyboard review page from canonical artifacts",
-        "shot-edit": "Change one shot's transition, dissolve, camera or grade (validated re-edit)",
     }.items():
         cmd = commands.add_parser(name, help=help_text)
         cmd.add_argument("project", type=Path)
@@ -309,47 +208,6 @@ def parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="Mark receipts whose owning process is provably gone as interrupted",
             )
-        elif name == "shot-edit":
-            cmd.add_argument("--shot", required=True)
-            cmd.add_argument(
-                "--transition",
-                choices=["fade", "wipe_left", "wipe_right", "none"],
-                help="Incoming transition for this shot (needs dissolve handle frames)",
-            )
-            cmd.add_argument(
-                "--dissolve", type=int, help="Handle frames allocated to the incoming transition"
-            )
-            cmd.add_argument(
-                "--camera",
-                choices=["hold", "zoom_in", "zoom_out", "pan_left", "pan_right"],
-            )
-            cmd.add_argument(
-                "--effect",
-                action="append",
-                default=[],
-                metavar="KEY=VALUE",
-                help="Bounded grade, e.g. contrast=1.05 (repeatable)",
-            )
-            cmd.add_argument("--clear-effects", action="store_true")
-            cmd.add_argument("--note", required=True)
-        elif name == "dashboard":
-            cmd.add_argument(
-                "--stage",
-                choices=["board", "stills", "delivery"],
-                default="board",
-                help="Which review moment this page is for",
-            )
-            cmd.add_argument(
-                "--no-embed-images",
-                action="store_true",
-                help="Reference stills relatively instead of embedding downscaled thumbnails",
-            )
-            cmd.add_argument(
-                "--embed-audio",
-                action="store_true",
-                help="Embed the private source audio (larger file) instead of referencing it",
-            )
-            cmd.add_argument("--name", help="Explicit safe .html basename; never overwritten")
         elif name == "locate":
             when = cmd.add_mutually_exclusive_group(required=True)
             when.add_argument("--frame", type=int)
@@ -474,9 +332,6 @@ READ_ONLY_COMMANDS = frozenset(
         "locate",
         "preflight",
         "prompts",
-        "context",
-        "dashboard",
-        "inspect",
         "sheet",
         "studio",
     }
@@ -493,16 +348,6 @@ def _project_scope(root: Path, command: str):
 
 
 def execute(args):
-    if args.command == "style-test":
-        from .calibration import approve_control, quote_control, recover_control, run_control
-
-        if args.operation == "quote":
-            return quote_control(args.directory, args.reserve)
-        if args.operation == "run":
-            return run_control(args.directory, args.quote, args.cap, args.note)
-        if args.operation == "approve":
-            return approve_control(args.directory, args.task, args.note)
-        return recover_control(args.directory, args.task)
     if args.command == "doctor":
         return {
             "ffmpeg": shutil.which("ffmpeg"),
@@ -523,62 +368,16 @@ def execute(args):
             "shared_RUNWARE_API_KEY_ignored": bool(os.environ.get("RUNWARE_API_KEY")),
             "OPENAI_API_KEY_present": bool(os.environ.get("OPENAI_API_KEY")),
         }
-    if args.command == "spine":
-        with spine.connect(args.db) as conn:
-            if args.operation == "status":
-                return spine.status(conn)
-            if args.operation == "runs":
-                return {"runs": spine.run_list(conn, args.limit)}
-            if args.operation == "events":
-                return {"events": spine.event_list(conn, args.run, args.after, args.limit)}
-            if args.operation == "trace":
-                return spine.trace(conn, args.run)
-            if args.operation == "resolve":
-                return spine.resolve_human(conn, args.interrupt, resolution={"note": args.note})
-            if args.operation == "sync":
-                return spine.sync_operations(conn, args.projects_dir)
-            return spine.reconcile(conn)
-    if args.command == "plan":
-        from . import plans
-
-        if args.operation == "build":
-            built = plans.build(args.project, intent=args.intent)
-            target = plans.save(args.project, built)
-            return {**built, "path": str(target.relative_to(args.project))}
-        if args.operation == "list":
-            return {"plans": plans.history(args.project)}
-        if args.operation == "show":
-            return plans.load(args.project, args.id)
-        return plans.run(
-            args.project,
-            args.id,
-            db=spine.resolve_db(args.db),
-            allow_edit=args.allow_edit,
-        )
-    if args.command == "eval":
-        from . import evals
-
-        return evals.run(args.root)
-    if args.command == "mcp":
-        from . import mcp
-
-        mcp.serve(args.projects_dir)
-        return None
     if args.command == "serve":
         from . import serve
 
         serve.serve(
             args.projects_dir,
-            spine.resolve_db(args.db),
             port=args.port,
             token=args.token,
             actions=args.actions,
         )
         return None
-    if args.command == "intake":
-        from .intake import build_intake
-
-        return build_intake(output_dir=args.output_dir, name=args.name)
     if args.command == "studio":
         from .studio import build_studio
 
@@ -637,26 +436,6 @@ def execute(args):
     with _project_scope(root, args.command):
         project = production.load_project(root)
         cmd = args.command
-        if cmd == "feedback":
-            from . import feedback
-
-            if args.request_id:
-                if not args.reply:
-                    raise ValueError("--resolve needs --reply with what changed")
-                return {"resolved": feedback.resolve(root, args.request_id, reply=args.reply)}
-            if args.message:
-                return {
-                    "request": feedback.record(
-                        root,
-                        stage=args.stage or "story",
-                        scope=args.scope,
-                        target=args.target,
-                        message=args.message,
-                        style=args.style,
-                        author=args.author,
-                    )
-                }
-            return {"requests": feedback.requests(root, stage=args.stage, status=args.status)}
         if cmd == "budget":
             from . import budget
 
@@ -763,42 +542,6 @@ def execute(args):
                 running_only=args.running_only,
                 reconcile_stale=args.reconcile,
             )
-        if cmd == "shot-edit":
-            from .edits import UNSET, edit_shot
-
-            return edit_shot(
-                root,
-                args.shot,
-                note=args.note,
-                transition=UNSET if args.transition is None else args.transition,
-                dissolve=args.dissolve,
-                camera=args.camera,
-                effects=args.effect,
-                clear_effects=args.clear_effects,
-            )
-        if cmd == "dashboard":
-            from .dashboard import build_dashboard
-
-            return build_dashboard(
-                root,
-                args.stage,
-                embed_images=not args.no_embed_images,
-                embed_audio=args.embed_audio,
-                name=args.name,
-            )
-        if cmd == "context":
-            from .context import build
-
-            return build(
-                root,
-                stage=args.stage,
-                shots=args.shots,
-                include_prompts=args.include_prompts,
-            )
-        if cmd == "inspect":
-            from .inspector import build_inspector
-
-            return build_inspector(root, args.shot)
         if cmd == "adopt":
             return derivations.adopt_derivative(
                 root,
@@ -830,23 +573,20 @@ def execute(args):
                 args.min_seconds is not None or args.max_seconds is not None
             ):
                 raise ValueError("--min-seconds/--max-seconds only apply to --timing adaptive")
-            new_film = project.prompt_version == 2
-            min_seconds = (1.5 if new_film else 4) if args.min_seconds is None else args.min_seconds
-            max_seconds = (7 if new_film else 12) if args.max_seconds is None else args.max_seconds
-            target = (
-                args.seconds
-                if args.seconds is not None
-                else ((5 if new_film else 8) if timing == "adaptive" else 10)
-            )
-            if not 1 <= target <= 30:
+            if args.seconds is not None and not 1 <= args.seconds <= 30:
                 raise ValueError("nominal storyboard duration must be 1–30 seconds")
             board = production.skeleton(
-                root, target, timing, min_seconds=min_seconds, max_seconds=max_seconds
+                root,
+                args.seconds,
+                timing,
+                min_seconds=args.min_seconds,
+                max_seconds=args.max_seconds,
             )
+            resolved_min = (1.5 if (project.prompt_version == 2) else 4) if args.min_seconds is None else args.min_seconds
             short = (
                 timing == "adaptive"
                 and len(board.shots) == 1
-                and board.shots[0].duration_frames < math.ceil(Fraction(min_seconds) * project.fps)
+                and board.shots[0].duration_frames < math.ceil(Fraction(resolved_min) * project.fps)
             )
             notes = []
             if short:

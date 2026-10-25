@@ -22,7 +22,7 @@ def action_server(tmp_path):
     projects.mkdir()
     root = make_root(projects)
     budget.set_budget(root, "1.00", "test authority")
-    server, url, thread = serve.start_in_thread(projects, tmp_path / "db.sqlite3", token="read")
+    server, url, thread = serve.start_in_thread(projects, token="read")
     server.action_token = "human"
     base = url.split("?")[0]
     yield root, server, base
@@ -230,7 +230,7 @@ def test_public_cli_decisions_redirect_and_non_tty_actions_fail(
     assert "Studio" in capsys.readouterr().err
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     with pytest.raises(ValueError, match="interactive terminal"):
-        serve.serve(tmp_path, tmp_path / "db.sqlite3", actions=True)
+        serve.serve(tmp_path, actions=True)
 
 
 def test_existing_authority_is_not_silently_inflated_or_replaced(action_server):
@@ -392,7 +392,7 @@ def test_action_enable_requires_exact_terminal_phrase(tmp_path, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda _: "no")
     monkeypatch.setattr(serve, "build_server", lambda *args, **kwargs: pytest.fail("must not bind"))
     with pytest.raises(ValueError, match="not enabled"):
-        serve.serve(tmp_path, tmp_path / "db.sqlite3", actions=True)
+        serve.serve(tmp_path, actions=True)
 
 
 def test_corrupt_authority_is_not_treated_as_missing(action_server):

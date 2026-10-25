@@ -14,7 +14,6 @@ from test_creative_production import (
 from test_native_size import init, synth_source
 from test_production_defaults import Nano
 
-from mp3_to_videoclip import calibration as C
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import profiles, signature
 from mp3_to_videoclip.cli import execute, parser
@@ -160,94 +159,6 @@ def test_style_first_versioning_preserves_old_image_spec(tmp_path):
     project.pop("prompt_version")
     write_json(root / "project.json", project)
     assert P.image_spec(root, shot) == old
-
-
-def test_single_control_journaled_no_fake_film_or_resubmit(tmp_path):
-    root = tmp_path / "calibration"
-    fake = Control(root)
-    q = C.quote_control(root, client=fake)
-    assert fake.submissions == []
-    assert not (root / "project.json").exists() and not (root / "media").exists()
-    assert not (root / "work/approvals.json").exists()
-    out = C.run_control(root, q["id"], "0.10", "test explicit single-control authority", fake)
-    assert out["status"] == "ready" and out["user_style_approval"] is False
-    assert len(fake.submissions) == 1
-    assert fake.submissions[0]["positivePrompt"] == profiles.ROOFTOP_CONTROL_PROMPT
-    assert "inputs" not in fake.submissions[0]
-    C.run_control(root, q["id"], "0.10", "test same quote resume", fake)
-    assert len(fake.submissions) == 1
-    with pytest.raises(ValueError, match="one control already"):
-        C.quote_control(root, client=fake)
-
-
-def test_explicit_style_approval_is_durable_bound_and_network_free(tmp_path):
-    root = tmp_path / "calibration"
-    fake = Control(root)
-    q = C.quote_control(root, client=fake)
-    C.run_control(root, q["id"], "0.10", "test explicit single-control authority", fake)
-    args = parser().parse_args(
-        [
-            "style-test",
-            "approve",
-            str(root),
-            "--task",
-            q["uuid"],
-            "--note",
-            "User: the style is perfect",
-        ]
-    )
-    approved = execute(args)
-    assert approved["user_style_approval"] is True and approved["candidate_only"] is False
-    before = (root / C.APPROVAL).read_bytes()
-    execute(args)
-    assert (root / C.APPROVAL).read_bytes() == before
-    assert C.recover_control(root, q["uuid"], fake)["user_style_approval"] is True
-    assert len(fake.submissions) == 1 and fake.polls == []
-    image = root / approved["path"]
-    Image.new("RGB", (1376, 768), (0, 0, 0)).save(image)
-    assert C._result(root, q["uuid"])["user_style_approval"] is False
-    with pytest.raises(ValueError, match="intact completed"):
-        C.approve_control(root, q["uuid"], "User approved original, not changed bytes")
-
-
-def test_pending_control_cannot_be_approved(tmp_path):
-    root = tmp_path / "calibration"
-    fake = Control(root, pending=True)
-    q = C.quote_control(root, client=fake)
-    C.run_control(root, q["id"], "0.10", "test scope", fake)
-    with pytest.raises(ValueError, match="intact completed"):
-        C.approve_control(root, q["uuid"], "Not yet inspected by user")
-    assert not (root / C.APPROVAL).exists()
-
-
-def test_pending_recovery_never_resubmits(tmp_path):
-    root = tmp_path / "calibration"
-    fake = Control(root, pending=True)
-    q = C.quote_control(root, client=fake)
-    assert C.run_control(root, q["id"], "0.10", "test scope", fake)["status"] == "submitted"
-    with pytest.raises(ValueError, match="already submitted"):
-        C.run_control(root, q["id"], "0.10", "not a retry", fake)
-    fake.pending = False
-    assert C.recover_control(root, q["uuid"], fake)["status"] == "ready"
-    assert len(fake.submissions) == 1 and fake.polls == [q["uuid"]]
-
-
-def test_tampering_and_excess_cap_stop_before_submission(tmp_path):
-    root = tmp_path / "calibration"
-    fake = Control(root)
-    q = C.quote_control(root, client=fake)
-    with pytest.raises(ValueError, match="up to USD"):
-        C.run_control(root, q["id"], "1", "test oversized", fake)
-    q["request"]["positivePrompt"] = "not the control"
-    q["input_hash"] = digest(q["request"])
-    write_json(root / f"work/quotes/{q['id']}.json", q)
-    with pytest.raises(ValueError, match="exact authorized"):
-        C.run_control(root, q["id"], "0.10", "test edited", fake)
-    assert not fake.submissions and not read_json(root / "work/tasks.json")
-    assert (
-        parser().parse_args(["style-test", "recover", str(root), "--task", q["uuid"]]).operation
-        == "recover"
-    )
 
 
 def confirmed_spec(root, project):
@@ -430,14 +341,14 @@ def test_new_skeleton_defaults_do_not_change_old_film_cadence(tmp_path, monkeypa
 
     monkeypatch.setattr(P, "skeleton", skeleton)
     execute(parser().parse_args(["skeleton", str(root), "--timing", "adaptive"]))
-    assert calls[-1] == (8, "adaptive", {"min_seconds": 4, "max_seconds": 12})
+    assert calls[-1] == (None, "adaptive", {"min_seconds": None, "max_seconds": None})
     config = read_json(root / "project.json")
     config["prompt_version"] = 2
     write_json(root / "project.json", config)
     execute(parser().parse_args(["skeleton", str(root)]))
     # No model on this synthetic fixture: explicitly choose adaptive as in new init.
     execute(parser().parse_args(["skeleton", str(root), "--timing", "adaptive"]))
-    assert calls[-1] == (5, "adaptive", {"min_seconds": 1.5, "max_seconds": 7})
+    assert calls[-1] == (None, "adaptive", {"min_seconds": None, "max_seconds": None})
 
 
 @pytest.mark.parametrize("renderer_binding", [False, True])
@@ -485,16 +396,3 @@ def test_base_render_prepares_review_but_is_never_delivery(tmp_path, monkeypatch
     signature.validate_review(root, P.load_project(root))
     with pytest.raises(ValueError, match="graphics needs"):
         execute(parser().parse_args(["render", str(root)]))
-
-
-def test_billed_download_failure_recovers_same_request(tmp_path):
-    root = tmp_path / "calibration"
-    fake = Control(root, fail_download=True)
-    quote = C.quote_control(root, client=fake)
-    with pytest.raises(ProviderError):
-        C.run_control(root, quote["id"], "0.10", "test single control authority", fake)
-    task = read_json(root / "work/tasks.json")[quote["uuid"]]
-    assert task["status"] == "result" and task["cost_usd"] is not None
-    fake.fail_download = False
-    assert C.recover_control(root, quote["uuid"], fake)["status"] == "ready"
-    assert len(fake.submissions) == 1 and fake.polls == []

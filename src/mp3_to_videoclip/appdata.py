@@ -15,15 +15,56 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-from . import feedback as feedback_module
 from . import flow, studio
 from . import production as P
-from .dashboard import _music_grid
 from .models import Brief, Project, Storyboard
-from .storage import digest, inside, read_optional
+from .storage import digest, inside, read_json, read_optional
 
 THUMB_WIDTH = 360
 THUMB_QUALITY = 78
+
+
+def _music_grid(root: Path) -> dict:
+    """Optional reviewed bar grid. Absent or unapproved means no bar claims at all."""
+    path = root / "work/music-grid.json"
+    if not path.is_file():
+        return {
+            "enabled": False,
+            "reason": "no reviewed grid file; no meter or bar numbers claimed",
+        }
+    raw = read_json(path)
+    problems = []
+    if raw.get("approved") is not True:
+        problems.append("grid is not marked approved")
+    bpm = raw.get("bpm")
+    beats_per_bar = raw.get("beats_per_bar")
+    zero = raw.get("bar_zero_frame")
+    if not isinstance(bpm, (int, float)) or not 30 <= bpm <= 300:
+        problems.append("bpm must be a number between 30 and 300")
+    if not isinstance(beats_per_bar, int) or not 2 <= beats_per_bar <= 12:
+        problems.append("beats_per_bar must be an integer between 2 and 12")
+    if not isinstance(zero, int) or zero < 0:
+        problems.append("bar_zero_frame must be a non-negative integer")
+    frames_per_bar = raw.get("frames_per_bar")
+    if frames_per_bar is None and not problems:
+        frames_per_bar = (60.0 / float(bpm)) * beats_per_bar * raw.get("fps", 24)
+    if not isinstance(frames_per_bar, (int, float)) or frames_per_bar <= 0:
+        problems.append("frames_per_bar must be positive")
+    if problems:
+        return {
+            "enabled": False,
+            "reason": "; ".join(problems),
+            "file": str(path.relative_to(root)),
+        }
+    return {
+        "enabled": True,
+        "bpm": float(bpm),
+        "beats_per_bar": int(beats_per_bar),
+        "frames_per_bar": float(frames_per_bar),
+        "bar_zero_frame": int(zero),
+        "note": raw.get("note", ""),
+        "approved_by": raw.get("approved_by", ""),
+    }
 
 
 def _optional(root: Path, relative: str):
@@ -83,8 +124,6 @@ def workflow(root: Path) -> dict:
         "preview_review": preview_review,
         "preview_movie": preview_movie,
         "flow": flow.settings(root),
-        "feedback": [],
-        "feedback_problem": None,
         "proof_shot_ids": [],
         "rollout": {
             "automatic_gate": False,
@@ -99,10 +138,6 @@ def workflow(root: Path) -> dict:
     }
     if result["graphics_spec"]["available"]:
         result["graphics_spec_hash"] = digest(result["graphics_spec"]["artifact"])
-    try:
-        result["feedback"] = feedback_module.requests(root)[-40:]
-    except (OSError, ValueError) as exc:
-        result["feedback_problem"] = str(exc)
     storyboard = _workflow_artifact(root, P.STAGE_FILES["storyboard"])
     try:
         brief = Brief.model_validate(artifacts["brief"]["artifact"])

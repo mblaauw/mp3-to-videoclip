@@ -201,9 +201,7 @@ def test_workflow_http_route_is_token_scoped_read_only_and_path_guarded(tmp_path
     projects.mkdir()
     root = make_root(projects)
     before = snapshot(root)
-    server, url, thread = serve.start_in_thread(
-        projects, tmp_path / "journal.sqlite3", token="test"
-    )
+    server, url, thread = serve.start_in_thread(projects, token="test")
     base = url.split("?")[0]
     try:
         with pytest.raises(urllib.error.HTTPError) as denied:
@@ -247,7 +245,7 @@ def test_serve_prints_the_workflow_workspace_not_the_old_journal(tmp_path, monke
         serve, "build_server", lambda *a, **kw: (server, "http://127.0.0.1:8800/?token=test")
     )
     ready = queue.Queue()
-    serve.serve(tmp_path, tmp_path / "journal.sqlite3", ready=ready)
+    serve.serve(tmp_path, ready=ready)
     assert ready.get_nowait() == "http://127.0.0.1:8800/app?token=test"
     assert "Studio live: http://127.0.0.1:8800/app?token=test" in capsys.readouterr().out
     assert server.closed
