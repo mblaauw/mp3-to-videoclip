@@ -165,3 +165,51 @@ def test_first_base_creates_nested_destination_before_rendering(tmp_path, monkey
             output,
             tmp_path / "work",
         )
+
+
+def test_approval_revision_does_not_read_the_browser(tmp_path, monkeypatch):
+    first = remotion.implementation_hash()
+    chrome = tmp_path / "Chrome"
+    chrome.write_bytes(b"browser version one")
+    monkeypatch.setenv("REMOTION_CHROME", str(chrome))
+    assert remotion.implementation_hash() == first
+    chrome.write_bytes(b"browser version two after a security update")
+    assert remotion.implementation_hash() == first
+    monkeypatch.setenv("REMOTION_CHROME", str(tmp_path / "not-installed"))
+    assert remotion.implementation_hash() == first
+
+
+def test_schema_three_uses_remotion_without_a_legacy_backend_flag(tmp_path, monkeypatch):
+    project = Project(
+        slug="new-film",
+        schema_version=3,
+        title="New",
+        source_sha256="a" * 64,
+        duration=1,
+        width=192,
+        height=108,
+    )
+    legacy = Project(
+        slug="old-film",
+        title="Old",
+        source_sha256="a" * 64,
+        duration=1,
+        width=192,
+        height=108,
+    )
+    assert project.uses_remotion is True
+    assert legacy.uses_remotion is False
+    monkeypatch.setattr(remotion, "implementation_hash", lambda: "revision")
+    assert remotion.renderer_binding(project) == {
+        "renderer_backend": "remotion",
+        "renderer_revision": "revision",
+    }
+    assert remotion.renderer_binding(legacy) == {}
+
+    from mp3_to_videoclip import render as R
+
+    monkeypatch.setattr(
+        "mp3_to_videoclip.remotion.render_base", lambda *args, **kwargs: {"sentinel": True}
+    )
+    result = R.render(project, [], tmp_path / "audio.mp3", tmp_path / "out.mp4", tmp_path)
+    assert result == {"sentinel": True}

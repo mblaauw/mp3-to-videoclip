@@ -18,7 +18,13 @@ ENGINE = Path(__file__).resolve().parents[2] / "renderers/remotion"
 
 
 def implementation_hash() -> str:
-    """Bind code, locked dependencies, actual local browser and font bytes."""
+    """Bind renderer code, locked dependencies and font bytes; never the browser.
+
+    A browser security update changes produced bytes only if the renderer source
+    changes, so hashing the desktop binary would revoke a reviewed preview for no
+    content reason. Local Node and Chrome are checked when a render starts, not
+    when an approval is compared.
+    """
     from .graphics import resolve_font
 
     names = ["package.json", "package-lock.json", "render.mjs"]
@@ -26,26 +32,18 @@ def implementation_hash() -> str:
     missing = [str(p) for p in paths if not p.is_file()]
     if missing or not (ENGINE / "src/index.jsx").is_file():
         raise ValueError(f"Remotion source bundle incomplete: {missing}")
-    browser = Path(
-        os.environ.get(
-            "REMOTION_CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        )
-    )
-    if not browser.is_file() or not shutil.which("node"):
-        raise ValueError("Remotion needs local Node and Chrome; no automatic browser download")
     font = resolve_font()[0]
     return digest(
         {
             "files": {str(p.relative_to(ENGINE)): file_hash(p) for p in paths},
             "adapter": file_hash(Path(__file__)),
-            "browser": file_hash(browser),
             "font": file_hash(font),
         }
     )
 
 
 def renderer_binding(project: Project) -> dict:
-    if project.renderer_backend != "remotion":
+    if not project.uses_remotion:
         return {}
     return {"renderer_backend": "remotion", "renderer_revision": implementation_hash()}
 

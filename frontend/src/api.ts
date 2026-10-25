@@ -1,3 +1,4 @@
+import type { PreviewShot } from "./baseFilm";
 import { toast } from "./toast";
 
 export type ProjectSummary = {
@@ -109,6 +110,22 @@ export type ImageShot = {
   review: ImageReview | null;
 };
 
+export type PreviewInput = {
+  available: boolean;
+  reason?: string;
+  fps: number;
+  width: number;
+  height: number;
+  durationInFrames: number;
+  shots: PreviewShot[];
+  audio: string;
+  preview_banner: boolean;
+  preview_placeholders: string[];
+  stale_shots: string[];
+  brand_plate?: string | null;
+  brand_duration_frames?: number;
+};
+
 export type Job = {
   id: string;
   kind: string;
@@ -217,6 +234,7 @@ export const api = {
       `/api/projects/${slug}/track`,
     ),
   images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),
+  preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
   exports: (slug: string) =>
     request<{ exports: string[]; previews: string[] }>(
       `/api/projects/${slug}/exports`,

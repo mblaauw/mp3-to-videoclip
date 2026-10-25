@@ -131,6 +131,7 @@ def init_project(
     preset = "custom" if style is not None or not default_look else profiles.STYLE_PRESET_ID
     project = Project(
         slug=slug,
+        schema_version=3,
         title=title.strip() if title is not None else slug.replace("-", " ").title(),
         source_sha256=file_hash(source),
         duration=duration,
@@ -687,7 +688,7 @@ def check_preview_binding(root: Path, report: dict):
         raise ValueError("preview was generated from a different proof set; re-render and review")
     if report.get("brand_hash") != brand_hash(root):
         raise ValueError("brand changed since preview; re-render and review")
-    if load_project(root).renderer_backend == "remotion":
+    if load_project(root).uses_remotion:
         from .remotion import implementation_hash
 
         if report.get("renderer_revision") != implementation_hash():

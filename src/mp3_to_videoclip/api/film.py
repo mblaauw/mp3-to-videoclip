@@ -26,6 +26,18 @@ async def get_graphics(slug: str, request: Request):
     return {"available": True, "spec": read_json(path)}
 
 
+@router.get("/preview")
+async def preview_input(slug: str, request: Request):
+    """The live Player payload: the renderer's shot fields plus local URLs."""
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    try:
+        return services.preview.player_input(root, slug)
+    except (OSError, ValueError) as exc:
+        return {"available": False, "reason": str(exc)}
+
+
 @router.post("/render")
 async def render(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)

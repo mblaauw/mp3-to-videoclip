@@ -53,11 +53,11 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | Phase | State |
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
-| 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. The interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`, `studio.py`, `appdata.py`, `human_actions.py`) was deleted in the Phase 4 cleanup. Remaining for Phase 5: `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py`. `src/` 21,124 -> 17,371 before that cleanup; re-measure after Phase 5. |
+| 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. The interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`, `studio.py`, `appdata.py`, `human_actions.py`) was deleted in the Phase 4 cleanup. Remaining after Phase 5: `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` for the Phase 6/legacy pass. `src/` 21,124 -> 17,371 before that cleanup, now 16,802 Python lines after Phase 5. |
 | 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **merged as PR #12** (merge `21c6ff5`, 25 Oct 2026). Phase 2 built the LLM adapter, tool dispatch, turn loop and stage-aware guides; this slice adds bounded prompt history, the recorded fake-provider probe, library-correct tool roots, domain-validated proof selection and a browser Stop. |
 | 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026) and **cleaned up as PR #11** (merge `a3aefc8`, 25 Oct 2026). Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. Phase 4 added MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. The cleanup added image reviews, preview/stills/graphics attestations and the final-render stills gate, then deleted the interim server and its old-surface tests. |
-| 5 · render cleanup | not started |
+| 5 · render cleanup | **acceptance met on `gui-rework/phase-5-render`.** One `BaseFilm` and `timing.mjs` now drive both the MP4 renderer and the live Player; renderer approvals no longer read the browser binary; a Studio preview job writes its own review report; schema-3 projects render with Remotion even after migration drops the legacy backend flag; preview and final were rendered cold on a copied production. `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` remain for the Phase 6/legacy pass. |
 | 6 · polish | not started |
 
 ## Live production state (zero-bars)
@@ -195,7 +195,7 @@ Merged as PR #11 (merge `a3aefc8`, 25 Oct 2026):
    inputs) and `test_api_approvals.py` (preview watch attestation). Added a
    project-slug path guard and its test.
 5. Kept `flow.py`, `operations.py`, `reviews.py`, `signature.py`, `backup.py` and
-   the engine-only `cli.py` for Phase 5.
+   the engine-only `cli.py` beyond Phase 5 for the Phase 6/legacy pass.
 
 Evidence: full suite green after the deletion; `uv run studio` starts and serves;
 `uv run clip` no longer offers `serve` or `studio`; no import of a deleted module;
@@ -231,6 +231,50 @@ read-only).
   chat correctly in the earlier Phase 4 session; the fake probe above is the
   repeatable record.
 
+## Phase 5 render close-out (25 Oct 2026)
+
+- **One composition.** `renderers/remotion/src/BaseFilm.jsx` is imported by both
+  `index.jsx` (MP4) and `frontend/src/baseFilm.ts` (Player). The Player also runs
+  `timing.mjs` for allocation, visible layers, camera, grade and transitions; it
+  no longer keeps a second zoom/pan approximation. Vite dedupes React and Remotion
+  so the shared file uses the frontend's single runtime.
+- **Preview payload.** `GET /preview` returns the renderer's own shot fields,
+  selected-still URLs and source audio. Missing stills keep their allocated span
+  and show the same placeholder marking; stale stills are counted in the card.
+  Film no longer rebuilds shots from three independent responses.
+- **Browser parity evidence.** On a 4-shot board, seeking to local frame 57
+  produced `width 1298.07`, `height 730.165`, `left -9.03529`, `top -5.08235` —
+  exactly `cameraAtFrame`/`layerRect` at frame 3 of an 18-frame zoom. On a board
+  with `wipe_left` and a 3-frame handle, frame 31 showed the outgoing and incoming
+  layers with `clip-path: inset(0 74.0741% 0 0)`. The rendered frame 31 sampled
+  incoming on the left and outgoing on the right; frame 33 was fully incoming.
+  Zero-bars: 79 shots, Player interactive in 1.32 s with one image mounted, no
+  console errors, audio present.
+- **No Chrome read.** `implementation_hash()` hashes renderer source, lockfile,
+  adapter and font bytes, never the Chrome binary. A test changes and removes
+  `REMOTION_CHROME`; the revision stays identical. Local Node/Chrome are checked
+  when a render starts, not when an approval is compared.
+- **Preview gate.** The Studio preview job writes `work/preview-review.json`
+  (movie bytes, storyboard, proof, brand, renderer revision) so the preview
+  approval is available immediately after the job. The test renders through the
+  service, approves with the watch attestation and calls `require_approval`.
+- **Native schema 3.** `init_project` writes schema 3 from the start, and the
+  budget rewrite changes only `budget`, preserving backend/signature/source
+  fields. Previously the app's migration plus budget write stripped
+  `renderer_backend`, so a new film silently fell back to the FFmpeg path (and a
+  short film failed on the brand duration). Schema 3 without the flag now selects
+  Remotion; an explicit backend still wins for schema 1.
+- **Cold renders.** On a copied production with no Remotion caches, the GUI job
+  path produced a preview and a final: 72 frames, 24 fps, 1920x1080, H264
+  yuv420p, AAC 44.1 kHz, 3.000 s each, full decode with no errors. The preview
+  report bound the new bytes and the preview approval passed. A second copied
+  board with a wipe, fade and post effects rendered a 72-frame preview; sampled
+  pixels at the dissolve frames matched the shared transition function.
+- **Python ↔ timing parity.** `tests/test_timing_parity.py` loads the actual ESM
+  with Node and compares zoom/camera moves, graphics constants, brand constants,
+  post-effect bounds, transition literals, allocation acceptance/total frames and
+  legacy camera endpoints with `render.py`, `graphics.py` and `models.py`.
+
 ## Acceptance per phase
 
 - **0:** tag exists; snapshot restores metadata; golden passes. ✅
@@ -240,12 +284,12 @@ read-only).
 - **3:** probe recorded; fake-provider session import → board → mocked batch → one
   regeneration; Stop < 1 s. ✅ (probe in `tests/test_director_probe.py`; browser Stop 15 ms)
 - **4:** every route zero console errors; 390/900/1280; keyboard-only path; Player spike. ✅
-- **5:** no Chrome read; preview + final on a clean runner; `timing.mjs` parity.
+- **5:** no Chrome read; preview + final on a clean runner; `timing.mjs` parity. ✅ (browser frame 57 and wipe frame 31 matched; cold preview/final 72 frames each; parity test in `tests/test_timing_parity.py`)
 - **6:** fresh clone → `uv sync` → `uv run studio` → film, no terminal.
 
 ## Open questions
 
-- Remotion Player at 79 shots: measured at ~800 ms to interactive with one still
-  mounted; no reason to change the approach.
-- YouTube audio bitrate in the brief (384 kbps) to be checked against the live spec in
-  Phase 5; harmless if generous.
+- Remotion Player at 79 shots: measured at 1.32 s to interactive with one still
+  mounted after the shared composition; no reason to change the approach.
+- YouTube audio bitrate in the brief (384 kbps) remains a presentation note, not
+  a timing or approval input.

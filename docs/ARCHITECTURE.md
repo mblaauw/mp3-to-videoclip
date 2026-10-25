@@ -1,8 +1,8 @@
 # Architecture
 
 Two layers: a deterministic engine that owns timing, money and pixels, and a
-presentation layer that is being replaced. The project folder is the single source
-of truth; nothing in the app is a second state store.
+Studio that presents it. The project folder is the single source of truth; nothing
+in the app is a second state store.
 
 ## Engine (stable)
 
@@ -65,7 +65,8 @@ services/         analysis, generation, transcription, render, runware
 director/         OpenAI-compatible adapter, tools, context, prompts, conversation
 jobs/             asyncio runner, per-project serialisation, SSE events
 frontend/         Vite + React + TypeScript, @remotion/player for the real composition
-packages/composition/  shared Remotion compositions for renderer and browser
+renderers/remotion/src/BaseFilm.jsx + timing.mjs
+                  one composition and one frame model shared by MP4 and Player
 ```
 
 Staleness replaces approvals: a cheap fingerprint per artifact drives an "made

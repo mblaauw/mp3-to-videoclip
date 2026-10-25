@@ -24,9 +24,10 @@ live in `.opencode/tasks/gui-rework.md`.
 - Paid image batches with a pre-submit journal: task UUID and reservation are
   written **before** the request, recovery happens by UUID and never resubmits,
   and an unknown cost keeps its reservation until the provider reports it.
-- Remotion for both stills-film previews and the final cut; FFmpeg for probe,
-  mux and verification (`remotion.py`, `render.py`). The Studio also plays the
-  board live through `@remotion/player` with the source audio and selected stills.
+- Remotion for stills-film previews, the final cut and the live Studio Player;
+  FFmpeg for probe, mux and verification (`remotion.py`, `render.py`). The Player
+  runs the renderer's own `BaseFilm` and `timing.mjs`, so the live picture uses
+  the same spans, camera, grade and transitions as the MP4.
 - A measured waveform under the storyboard; drag a boundary (or use the arrow
   keys) and both adjacent shots resize without moving later cuts.
 - Read-only archive view of frozen productions (`domain/archive.py`).
@@ -61,7 +62,8 @@ writes a schema-3 production, and queues the local analysis job. Paste LRC
 timestamps in Track when the track has vocals; no lyric position is invented.
 In Storyboard, drag the gold boundaries over the waveform (or focus one and use
 the arrow keys) to retime the cut; later cuts stay put. Film shows a live Player
-preview from the selected stills and the source audio before you render.
+preview from the selected stills and the source audio before you render. It runs
+the renderer's own composition and timing module, not a second approximation.
 
 **Director:** add `llm_api_key` (and optionally `llm_base_url` / `llm_model`) under
 `[settings]` in `~/.config/mp3-to-videoclip/settings.toml`, or set
@@ -69,7 +71,8 @@ preview from the selected stills and the source audio before you render.
 
 Approvals, reviews and spending are content-bound: bytes, prompt inputs and
 quote scopes are hashed, so changing an artifact invalidates its approval instead
-of silently inheriting it. Archived films open read-only; every stage endpoint
+of silently inheriting it. Renderer approvals bind the renderer source, locked
+dependencies, font and output bytes; a Chrome security update changes no approval. Archived films open read-only; every stage endpoint
 refuses to write to them.
 
 ## Checks

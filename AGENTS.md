@@ -42,9 +42,8 @@ ever read.
 
 ## Rework state
 
-Phases 0–2 and the Phase 4 Studio are merged. `uv run studio` owns intake, the
-five stages, the director, paid generation and rendering; the interim
-`serve.py`/`studio_ui*`/`human_*` server and its tests were removed in the Phase 4
-cleanup. `cli.py` remains only for engine tasks without a GUI yet. Remaining: the
-director compaction/fake-provider probe (Phase 3), legacy model branches, Phase 5
-render cleanup and the Phase 6 fresh-clone path.
+Phases 0–5 are complete. `uv run studio` owns intake, the five stages, the
+director, paid generation and rendering; the interim server and its tests are
+gone. The Player imports the renderer's own `BaseFilm.jsx` and `timing.mjs`, and
+renderer approvals no longer hash the browser binary. Remaining: the Phase 6
+fresh-clone path and the legacy FFmpeg/Pillow branches kept for frozen films.
