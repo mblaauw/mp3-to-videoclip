@@ -121,3 +121,10 @@ def test_a_budget_topup_does_not_invalidate_a_creative_approval(tmp_path):
             _stage(client.get("/api/projects/production/approvals").json(), "brief")["state"]
             == "approved"
         )
+
+
+def test_approvals_can_be_scoped_to_the_stages_on_screen(tmp_path):
+    _, client = _client(tmp_path)
+    with client:
+        payload = client.get("/api/projects/production/approvals?stages=brief,proof").json()
+        assert [item["stage"] for item in payload["stages"]] == ["brief", "proof"]

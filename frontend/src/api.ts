@@ -173,8 +173,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  approvals: (slug: string) =>
-    request<{ stages: ApprovalState[] }>(`/api/projects/${slug}/approvals`),
+  approvals: (slug: string, stages: string[]) =>
+    request<{ stages: ApprovalState[] }>(
+      `/api/projects/${slug}/approvals?stages=${encodeURIComponent(stages.join(","))}`,
+    ),
   approve: (
     slug: string,
     stage: string,

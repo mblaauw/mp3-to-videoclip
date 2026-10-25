@@ -57,9 +57,12 @@ def _approval(root, stage: str) -> dict:
 
 
 @router.get("/approvals")
-async def get_approvals(slug: str, request: Request):
+async def get_approvals(slug: str, request: Request, stages: str | None = None):
     root = project_root(request, slug)
-    return {"stages": [_approval(root, stage) for stage in STAGES]}
+    wanted = STAGES
+    if stages:
+        wanted = tuple(stage for stage in stages.split(",") if stage in STAGES)
+    return {"stages": [_approval(root, stage) for stage in wanted]}
 
 
 @router.post("/approvals/{stage}")

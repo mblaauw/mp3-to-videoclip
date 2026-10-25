@@ -17,8 +17,8 @@ export function ApprovalBar({ slug, stages }: { slug: string; stages: string[] }
 
   const load = () => {
     api
-      .approvals(slug)
-      .then((d) => setItems(d.stages.filter((s) => stages.includes(s.stage))))
+      .approvals(slug, stages)
+      .then((d) => setItems(d.stages))
       .catch((e) => setError(String(e)));
   };
 
