@@ -167,5 +167,31 @@ a dedicated agent with Studio-only permissions and instructions.
 
 ## Status
 
-Complete. The isolated server and mock provider were stopped; the scratch
+Spike complete. The isolated server and mock provider were stopped; the scratch
 fixtures remain under gitignored `.opencode/scratch/t1/` for the next phase.
+
+## Implementation (slice 1, in progress)
+
+- `director/opencode.py`: app-owned process manager, fixed password, 2.0.x
+  health/version check, config writer, async client, SSE relay, session reuse,
+  Stop on stream close, persisted text history.
+- `director/mcp.py`: newline-delimited stdio MCP bridge over the safe director
+  tools; paid jobs and renders excluded; slug confined to `projects/`;
+  `get_images` becomes MCP image content.
+- `config.py`: `gateway`, `opencode_bin`, `writer_model`, `editor_model` and
+  `opencode_workspace`; the old direct fields stay for fallback.
+- `api/director.py`: role-aware routing (`writer` for content stages, `editor`
+  for Film), model availability check before the stream, gateway failure
+  fallback only when a direct key exists, app-owned gateway cache.
+- `app.py`: gateway shutdown in the app lifespan.
+- `docs/ARCHITECTURE.md`: durable gateway contract and known limits.
+
+Verified locally with the real 2.0.28 binary and the local mock provider: a
+Writer session exposed only `clipstudio_*` tools and called
+`clipstudio_get_project`, whose result fed a second model step. One manual
+probe first created a session without setting its model; OpenCode fell back to
+a free catalog model and returned a quota 429. No paid call was made. The
+gateway now validates the configured model and sets it explicitly.
+
+Remaining for T1: the settings UI, a live Writer/Editor probe on the
+configured models (owner authorization required), and the PR/CI cycle.

@@ -37,4 +37,7 @@ async def put_settings(payload: dict):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     save_settings(settings)
+    from mp3_to_videoclip.api.director import close_gateways
+
+    close_gateways()
     return _public(settings)

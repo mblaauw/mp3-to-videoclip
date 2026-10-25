@@ -19,6 +19,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from .api.approvals import router as approvals_router
 from .api.budget import router as budget_router
+from .api.director import close_gateways
 from .api.director import router as director_router
 from .api.film import router as film_router
 from .api.images import router as images_router
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
     await runner.start()
     app.state.runner = runner
     yield
+    close_gateways()
     await runner.stop()
 
 

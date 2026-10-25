@@ -54,6 +54,51 @@ The old hand-written `ThreadingHTTPServer` and its Python-string UI were removed
 in the Phase 4 cleanup. `cli.py` remains for engine tasks that do not have a GUI
 yet: transcription, the listening pass, backups, signing and render maintenance.
 
+## Director gateway
+
+The Writer/Editor gateway is an app-owned OpenCode v2 process, not the user's
+shared OpenCode service. `director/opencode.py` starts `opencode serve` on a
+free loopback port with a per-launch `OPENCODE_SERVER_PASSWORD` (Basic user
+`opencode`), checks `GET /api/info` and refuses anything outside 2.0.x. It runs
+from a dedicated workspace, so this repository's `AGENTS.md` and skills never
+enter the agent prompt.
+
+The workspace config defines two primary agents, `writer` and `editor`, with
+models from Settings. Their permissions deny every built-in tool and allow only
+`clipstudio_*`. The `clipstudio` MCP server is
+`python -m mp3_to_videoclip.director.mcp --projects-dir <absolute projects>`,
+using newline-delimited JSON. It exposes the safe director tools and withholds
+paid jobs (`generate_images`, `transcribe_lyrics`) and renders. `get_images`
+returns MCP image content, not base64 in text.
+
+A Studio turn opens `/api/event` before prompting, filters the global stream by
+`sessionID`, maps `session.text.delta` / tool events / `session.execution.*` to
+the existing `TurnEvent` shape, and persists text-only history in
+`work/chat.jsonl`. Stop is the HTTP stream closing: the turn interrupts the
+OpenCode session and keeps the partial text. The session is reused per
+production and role while its model fingerprint matches; a primary agent's
+model is **not** applied at session creation, so the gateway sets the session
+model explicitly.
+
+Known v2.0.28 limits: the event stream ignores `Last-Event-ID`, so a reconnect
+must refetch `/api/session/{id}/message`; interrupt ends the step as
+`finish: "error"` plus `session.execution.interrupted`; and a model missing from
+`GET /api/model` is rejected before a turn starts rather than falling back to a
+free catalog model.
+
+The verified local probe used the mock provider and called
+`clipstudio_get_project` through a Writer session; the tool result fed a second
+model step. The live Writer/Editor probe is scripted and refuses to spend unless
+authorized:
+
+```sh
+PROBE_ALLOW_SPEND=1 uv run python scripts/probe_opencode.py \
+  --project <writable-copy-of-a-production> --yes
+```
+
+It asks each role to call `clipstudio_get_project`, `clipstudio_get_images`
+(two selected stills) and its write tool. Production folders are refused.
+
 ## Target
 
 ```text
@@ -62,7 +107,7 @@ launcher.py       `uv run studio`: free port, build frontend if stale, open brow
 api/              projects, track, story, storyboard, images, film, director, jobs, budget, approvals, settings, setup
 domain/           intake, models, migration, approvals, archive, budget, lyrics
 services/         analysis, generation, graphics, transcription, render, preview input, runware
-director/         OpenAI-compatible adapter, tools, context, prompts, conversation
+director/         direct adapter, OpenCode gateway, MCP bridge, tools, context, prompts, conversation
 jobs/             asyncio runner, per-project serialisation, SSE events
 frontend/         Vite + React + TypeScript, @remotion/player for the real composition
 renderers/remotion/src/BaseFilm.jsx + timing.mjs
