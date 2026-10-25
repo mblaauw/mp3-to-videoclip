@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 try:
     import tomllib
@@ -20,6 +21,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseModel):
     runware_api_key: str = ""
+    gateway: Literal["opencode", "direct"] = "direct"
+    opencode_bin: str = "opencode"
+    writer_model: str = "openai/gpt-6.1-sol"
+    editor_model: str = "opencode-go/deepseek-v4.1-flash"
+    opencode_workspace: str = ""
     llm_base_url: str = "https://opencode.ai/inference/go/openai/v1"
     llm_api_key: str = ""
     llm_model: str = "deepseek-v4.1-flash"
