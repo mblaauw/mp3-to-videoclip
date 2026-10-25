@@ -15,6 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api.projects import router as projects_router
+from .api.settings import router as settings_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +26,10 @@ async def lifespan(app: FastAPI):
 
 def create_app(projects_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="mp3-to-videoclip Studio", lifespan=lifespan)
+    if projects_dir is not None:
+        app.state.projects_dir = str(projects_dir)
+    app.include_router(projects_router)
+    app.include_router(settings_router)
 
     app.add_middleware(
         CORSMiddleware,
