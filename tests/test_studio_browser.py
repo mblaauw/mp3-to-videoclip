@@ -486,9 +486,7 @@ def test_workflow_route_failure_has_retry_and_late_response_cannot_replace_view(
     page.locator("#tab-story").click()
     page.wait_for_selector("#view h2 >> text=Story & storyboard")
     try:
-        pending[0].fulfill(
-            json={"artifacts": {}, "music_mode": "vocal", "flow": {}}
-        )
+        pending[0].fulfill(json={"artifacts": {}, "music_mode": "vocal", "flow": {}})
     except Exception:
         pass
     page.wait_for_timeout(300)

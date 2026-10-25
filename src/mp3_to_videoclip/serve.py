@@ -386,8 +386,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 segments = [unquote(part) for part in parsed.path.strip("/").split("/")]
                 supported = (len(segments) == 5 and segments[3] in {"approve", "authorize"}) or (
-                    len(segments) == 4
-                    and segments[3] in {"review", "approve-story", "credits"}
+                    len(segments) == 4 and segments[3] in {"review", "approve-story", "credits"}
                 )
                 if not supported:
                     raise human_actions.ActionError("unsupported write route", 405)

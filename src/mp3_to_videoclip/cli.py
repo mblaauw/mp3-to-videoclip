@@ -582,7 +582,11 @@ def execute(args):
                 min_seconds=args.min_seconds,
                 max_seconds=args.max_seconds,
             )
-            resolved_min = (1.5 if (project.prompt_version == 2) else 4) if args.min_seconds is None else args.min_seconds
+            resolved_min = (
+                (1.5 if (project.prompt_version == 2) else 4)
+                if args.min_seconds is None
+                else args.min_seconds
+            )
             short = (
                 timing == "adaptive"
                 and len(board.shots) == 1
