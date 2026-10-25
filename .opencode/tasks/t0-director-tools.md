@@ -28,13 +28,15 @@ before adding the Writer/Editor roles. Four defects:
 
 - `uv run pytest -q`: 824 passed, 1 skipped.
 - `uv run ruff check .` / `uv run ruff format --check .`: clean.
-- `build_context("zero-bars", stage="story")`: 0.04 s, 10.8 kB, 79
-  current-input stills, brief, recorded approvals, budget and shot table; no
-  source hash or gate pass.
+- `build_context("zero-bars", stage="story")`: 0.04 s, 10.8 kB, 79 shots
+  whose selected stills are current by input hash (review acceptance is
+  separate), plus brief, recorded approvals, budget and stage; no source hash
+  or gate pass.
 - `get_images` on `zero-bars` returned two 512 px thumbnails as image parts with
   no errors; chat history stores only the bounded text result.
 - No production folder was written.
 
 ## Status
 
-Complete on `director/t0-tools`, based on `7b93068`.
+Complete and merged in PR #18 (`fd782ab`), based on `7b93068`. The branch
+`director/t0-tools` is deleted.
