@@ -60,7 +60,7 @@ export function App() {
         )}
       </main>
 
-      <Director slug={slug} />
+      <Director slug={slug} stage={stage} />
       <JobTray />
     </div>
   );
@@ -74,7 +74,7 @@ function StageView({ slug, stage }: { slug: string; stage: Stage }) {
   return <FilmStage slug={slug} />;
 }
 
-function Director({ slug }: { slug: string | null }) {
+function Director({ slug, stage }: { slug: string | null; stage: Stage }) {
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -99,7 +99,7 @@ function Director({ slug }: { slug: string | null }) {
       const res = await fetch(`/api/projects/${slug}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, stage }),
       });
       if (!res.ok || !res.body) throw new Error(await res.text());
       const reader = res.body.getReader();
@@ -134,7 +134,7 @@ function Director({ slug }: { slug: string | null }) {
     <aside className="director">
       <header>
         <h2>Director</h2>
-        <div className="meta">{slug ? `project ${slug}` : "no project"}</div>
+        <div className="meta">{slug ? `project ${slug} · ${stage}` : "no project"}</div>
       </header>
       <div className="messages">
         {messages.map((m, i) => (

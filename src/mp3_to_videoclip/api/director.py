@@ -38,7 +38,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
         model=settings.llm_model,
         session_id=f"studio-{slug}",
     )
-    system = build_context(slug, root.parent) + "\n\n" + _system_prompt()
+    system = build_context(slug, root.parent) + "\n\n" + _system_prompt(payload.get("stage"))
 
     async def stream():
         runner = getattr(request.app.state, "runner", None)
@@ -60,6 +60,16 @@ async def post_chat(slug: str, request: Request, payload: dict):
     return StreamingResponse(stream(), media_type="application/x-ndjson")
 
 
-def _system_prompt() -> str:
-    path = Path(__file__).resolve().parent.parent / "director" / "prompts" / "system.md"
-    return path.read_text() if path.is_file() else "You are the director."
+STAGES = ("track", "story", "storyboard", "images", "film")
+
+
+def _system_prompt(stage: str | None = None) -> str:
+    """The shared director prompt plus the guide for the stage the user is in."""
+    prompts = Path(__file__).resolve().parent.parent / "director" / "prompts"
+    base = prompts / "system.md"
+    text = base.read_text() if base.is_file() else "You are the director."
+    if stage in STAGES:
+        guide = prompts / f"{stage}.md"
+        if guide.is_file():
+            text += "\n\n---\n\n" + guide.read_text()
+    return text
