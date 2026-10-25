@@ -62,5 +62,4 @@ and generated stills stay immutable; one PR for this slice; `pytest`, `ruff`,
 
 ## Status
 
-Complete on `audit/hardening`, based on `7d9203b`; merge commit recorded in
-the PR.
+Complete on `audit/hardening`; merged as PR #17 (merge `361136e`, 25 Oct 2026).
