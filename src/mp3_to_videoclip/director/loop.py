@@ -37,6 +37,7 @@ async def run_turn(
     system: str,
     *,
     max_tool_calls: int = MAX_TOOL_CALLS,
+    runner=None,
 ) -> AsyncIterator[TurnEvent]:
     messages = load_messages(root)
     messages.append({"role": "user", "content": user_message})
@@ -90,7 +91,7 @@ async def run_turn(
                 yield TurnEvent(kind="ask", payload=args)
                 append_message(root, {"role": "assistant", "content": args.get("question", "")})
                 return
-            tool_result = await dispatch(tc.name, args)
+            tool_result = await dispatch(tc.name, args, runner)
             yield TurnEvent(kind="tool", tool=tc.name, result=tool_result)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result})
             append_message(

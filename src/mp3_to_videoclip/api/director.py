@@ -41,7 +41,8 @@ async def post_chat(slug: str, request: Request, payload: dict):
     system = build_context(slug, root.parent) + "\n\n" + _system_prompt()
 
     async def stream():
-        async for event in run_turn(llm, root, slug, message, system):
+        runner = getattr(request.app.state, "runner", None)
+        async for event in run_turn(llm, root, slug, message, system, runner=runner):
             yield (
                 json.dumps(
                     {

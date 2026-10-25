@@ -65,6 +65,28 @@ TOOLS: list[dict] = [
         ["slug"],
     ),
     _tool(
+        "generate_images",
+        "Start a paid image batch for the selected shots. Checks the production budget first.",
+        {
+            "slug": {"type": "string"},
+            "shot_ids": {"type": "array", "items": {"type": "string"}},
+            "regenerate": {"type": "boolean"},
+        },
+        ["slug", "shot_ids"],
+    ),
+    _tool(
+        "transcribe_lyrics",
+        "Start a paid transcription when the user has no lyrics to paste.",
+        {"slug": {"type": "string"}, "language": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
+        "render",
+        "Start a render job (preview or final). Free and local.",
+        {"slug": {"type": "string"}, "kind": {"type": "string", "enum": ["preview", "final"]}},
+        ["slug", "kind"],
+    ),
+    _tool(
         "set_proof_shots",
         "Choose the proof shots (max 3).",
         {"slug": {"type": "string"}, "shot_ids": {"type": "array", "items": {"type": "string"}}},
@@ -83,15 +105,15 @@ def _root(slug: str) -> Path:
     return Path("projects") / slug
 
 
-async def dispatch(name: str, arguments: dict[str, Any]) -> str:
+async def dispatch(name: str, arguments: dict[str, Any], runner=None) -> str:
     """Dispatch a tool call. Returns a JSON string result."""
     try:
-        return json.dumps(_dispatch(name, arguments), ensure_ascii=False)
+        return json.dumps(_dispatch(name, arguments, runner), ensure_ascii=False)
     except Exception as exc:  # noqa: BLE001
         return json.dumps({"error": str(exc)})
 
 
-def _dispatch(name: str, arguments: dict[str, Any]) -> Any:
+def _dispatch(name: str, arguments: dict[str, Any], runner=None) -> Any:
     from mp3_to_videoclip import production as P
 
     root = _root(arguments["slug"])
@@ -154,6 +176,15 @@ def _dispatch(name: str, arguments: dict[str, Any]) -> Any:
         write_json(root / "work" / "storyboard.json", board.model_dump())
         return board.model_dump()
 
+    if name == "generate_images":
+        return _generate_images(root, arguments, runner)
+
+    if name == "transcribe_lyrics":
+        return _transcribe(root, arguments, runner)
+
+    if name == "render":
+        return _render(root, arguments, runner)
+
     if name == "set_proof_shots":
         from mp3_to_videoclip.models import Brief
 
@@ -169,3 +200,63 @@ def _dispatch(name: str, arguments: dict[str, Any]) -> Any:
         return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}
 
     raise ValueError(f"unknown tool: {name}")
+
+
+def _generate_images(root, arguments, runner):
+    from mp3_to_videoclip import services
+    from mp3_to_videoclip.domain import budget
+
+    shot_ids = arguments.get("shot_ids") or []
+    if not shot_ids:
+        return {"error": "shot_ids required"}
+    estimate = services.generation.estimate(root, shot_ids)
+    decision = budget.check(root, estimate["reserve_usd"])
+    if not decision["ok"]:
+        return {"needs_budget": True, "estimate": estimate, "decision": decision}
+    if runner is None:
+        return {"error": "job runner unavailable; cannot queue a paid batch"}
+
+    import asyncio
+
+    async def work():
+        return await asyncio.to_thread(services.generation.run, root, estimate["quote_id"])
+
+    job_id = runner.submit("images", root.name, work)
+    return {"job_id": job_id, "estimate": estimate, "status": "queued"}
+
+
+def _transcribe(root, arguments, runner):
+    from mp3_to_videoclip import services
+    from mp3_to_videoclip.domain import budget
+
+    quote = services.transcription.quote(root, language=arguments.get("language"))
+    decision = budget.check(root, quote.get("reserve_total_usd") or quote.get("reserve_usd") or "0")
+    if not decision["ok"]:
+        return {"needs_budget": True, "quote": quote, "decision": decision}
+    if runner is None:
+        return {"error": "job runner unavailable; cannot queue a transcription"}
+
+    import asyncio
+
+    async def work():
+        return await asyncio.to_thread(services.transcription.run, root, quote["id"])
+
+    job_id = runner.submit("transcription", root.name, work)
+    return {"job_id": job_id, "quote": quote, "status": "queued"}
+
+
+def _render(root, arguments, runner):
+    from mp3_to_videoclip import services
+
+    kind = arguments.get("kind", "preview")
+    if runner is None:
+        return {"error": "job runner unavailable; cannot queue a render"}
+
+    import asyncio
+
+    async def work():
+        fn = services.render.render_final if kind == "final" else services.render.render_preview
+        return await asyncio.to_thread(fn, root)
+
+    job_id = runner.submit("render", root.name, work)
+    return {"job_id": job_id, "kind": kind, "status": "queued"}
