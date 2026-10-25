@@ -11,7 +11,7 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
-from . import derivations, generation, operations, production, profiles, spine
+from . import derivations, generation, operations, production, profiles
 from .analysis import analyze
 from .branding import brand_hash, load_brand
 from .models import (
@@ -75,66 +75,8 @@ def parser() -> argparse.ArgumentParser:
         "kind", choices=["brief", "lyrics", "storyboard", "events", "brand", "listening"]
     )
     schema.set_defaults(project=None)
-    spine = commands.add_parser("spine", help="Inspect the durable run journal")
-    spine_ops = spine.add_subparsers(dest="operation", required=True)
-    for name, help_text in {
-        "status": "Counts, open human waits and the journal location",
-        "runs": "Recent runs with steps and open interrupts",
-        "events": "Append-only event stream, optionally for one run",
-        "reconcile": "Mark runs whose owning process is gone as interrupted",
-        "trace": "One run as evidence: steps, waits, output and cost",
-        "resolve": "Record a human decision for one durable wait",
-    }.items():
-        action = spine_ops.add_parser(name, help=help_text)
-        action.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
-        if name in ("runs", "events"):
-            action.add_argument("--limit", type=int, default=20)
-        if name == "events":
-            action.add_argument("--run")
-            action.add_argument("--after", type=int, default=0)
-        if name == "trace":
-            action.add_argument("--run", required=True)
-        if name == "resolve":
-            action.add_argument("--interrupt", required=True)
-            action.add_argument("--note", required=True)
-    sync = spine_ops.add_parser("sync", help="Import work/operations receipts as runs")
-    sync.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
-    sync.add_argument("--projects-dir", type=Path, default=Path("projects"))
-    spine.set_defaults(project=None)
-    plan = commands.add_parser("plan", help="Propose, inspect and run a validated plan")
-    plan_ops = plan.add_subparsers(dest="operation", required=True)
-    plan_build = plan_ops.add_parser("build", help="Turn open actions into a plan; changes nothing")
-    plan_build.add_argument("project", type=Path)
-    plan_build.add_argument("--intent", help="Why this run exists")
-    for name, help_text in {"list": "Recent plans", "show": "One plan"}.items():
-        action = plan_ops.add_parser(name, help=help_text)
-        action.add_argument("project", type=Path)
-        if name == "show":
-            action.add_argument("--id", required=True)
-    plan_run = plan_ops.add_parser("run", help="Execute concrete steps, stop at humans")
-    plan_run.add_argument("project", type=Path)
-    plan_run.add_argument("--id", required=True)
-    plan_run.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
-    plan_run.add_argument(
-        "--allow-edit", action="store_true", help="Delegate canonical edits to this run"
-    )
-    plan.set_defaults(project=None)
-    context_cmd = commands.add_parser(
-        "context", help="Assemble the labelled context pack for a step"
-    )
-    context_cmd.add_argument("project", type=Path)
-    context_cmd.add_argument("--stage")
-    context_cmd.add_argument("--shots", type=int, default=0)
-    context_cmd.add_argument("--include-prompts", action="store_true")
-    eval_cmd = commands.add_parser("eval", help="Run structural invariant checks over the repo")
-    eval_cmd.add_argument("--root", type=Path, default=Path("."))
-    eval_cmd.set_defaults(project=None)
-    mcp_cmd = commands.add_parser("mcp", help="MCP stdio server exposing read/derive tools")
-    mcp_cmd.add_argument("--projects-dir", type=Path, default=Path("projects"))
-    mcp_cmd.set_defaults(project=None)
     serve_cmd = commands.add_parser("serve", help="Read-only live studio over loopback + SSE")
     serve_cmd.add_argument("--projects-dir", type=Path, default=Path("projects"))
-    serve_cmd.add_argument("--db", help="Journal path (default studio/spine.sqlite3)")
     serve_cmd.add_argument("--port", type=int, default=8765)
     serve_cmd.add_argument("--token", help="Session token; generated when omitted")
     serve_cmd.add_argument(
@@ -523,53 +465,11 @@ def execute(args):
             "shared_RUNWARE_API_KEY_ignored": bool(os.environ.get("RUNWARE_API_KEY")),
             "OPENAI_API_KEY_present": bool(os.environ.get("OPENAI_API_KEY")),
         }
-    if args.command == "spine":
-        with spine.connect(args.db) as conn:
-            if args.operation == "status":
-                return spine.status(conn)
-            if args.operation == "runs":
-                return {"runs": spine.run_list(conn, args.limit)}
-            if args.operation == "events":
-                return {"events": spine.event_list(conn, args.run, args.after, args.limit)}
-            if args.operation == "trace":
-                return spine.trace(conn, args.run)
-            if args.operation == "resolve":
-                return spine.resolve_human(conn, args.interrupt, resolution={"note": args.note})
-            if args.operation == "sync":
-                return spine.sync_operations(conn, args.projects_dir)
-            return spine.reconcile(conn)
-    if args.command == "plan":
-        from . import plans
-
-        if args.operation == "build":
-            built = plans.build(args.project, intent=args.intent)
-            target = plans.save(args.project, built)
-            return {**built, "path": str(target.relative_to(args.project))}
-        if args.operation == "list":
-            return {"plans": plans.history(args.project)}
-        if args.operation == "show":
-            return plans.load(args.project, args.id)
-        return plans.run(
-            args.project,
-            args.id,
-            db=spine.resolve_db(args.db),
-            allow_edit=args.allow_edit,
-        )
-    if args.command == "eval":
-        from . import evals
-
-        return evals.run(args.root)
-    if args.command == "mcp":
-        from . import mcp
-
-        mcp.serve(args.projects_dir)
-        return None
     if args.command == "serve":
         from . import serve
 
         serve.serve(
             args.projects_dir,
-            spine.resolve_db(args.db),
             port=args.port,
             token=args.token,
             actions=args.actions,

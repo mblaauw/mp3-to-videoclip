@@ -385,9 +385,7 @@ def _post(base, path, body, *, capability="human"):
 def test_guided_http_routes_need_capability_and_never_spend(tmp_path):
     root = guided_root(tmp_path)
     projects = root.parent
-    server, url, thread = serve.start_in_thread(
-        projects, tmp_path / "journal.sqlite3", token="read"
-    )
+    server, url, thread = serve.start_in_thread(projects, token="read")
     server.action_token = "human"
     base = url.split("?")[0]
     try:

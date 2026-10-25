@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from test_creative_production import approve_through_proof, make_root, record_stills
 
-from mp3_to_videoclip import serve, spine, studio
+from mp3_to_videoclip import serve, studio
 from mp3_to_videoclip.storage import read_json, write_json
 
 playwright = pytest.importorskip("playwright.sync_api")
@@ -45,8 +45,7 @@ def studio_page(tmp_path, browser, request):
         sources / "track.json",
         {"title": "Test source", "isLiked": True, "metadata": {"duration": 2}},
     )
-    db = tmp_path / "journal.sqlite3"
-    httpd, url, thread = serve.start_in_thread(projects, db, token="browser-test")
+    httpd, url, thread = serve.start_in_thread(projects, token="browser-test")
     httpd.sources_dir = sources
     if getattr(request, "param", False):
         httpd.action_token = "browser-human-capability"
@@ -55,7 +54,7 @@ def studio_page(tmp_path, browser, request):
     page.on("pageerror", lambda error: errors.append(str(error)))
     base = url.split("?")[0]
     app = base + "app?token=browser-test"
-    yield page, app, root, second, db, audio
+    yield page, app, root, second, audio
     page.unroute_all(behavior="ignoreErrors")
     page.close()
     httpd.shutdown()
@@ -134,7 +133,7 @@ def test_thumbnails_and_board_inspection_use_the_served_project_identity(studio_
 
 
 def test_create_opens_returned_project_without_reload(studio_page):
-    page, app, root, _second, _db, audio = studio_page
+    page, app, root, _second, audio = studio_page
     page.goto(app)
     page.locator("#newProduction").click()
     assert page.locator("#sourceFile").is_visible()
@@ -175,17 +174,6 @@ def test_failed_copy_is_honest_and_command_stays_selectable(studio_page):
     assert page.locator("#view pre[tabindex='0']").count() > 0
 
 
-def test_live_activity_marks_snapshot_dirty_outside_runs(studio_page):
-    page, app, root, _second, db, *_ = studio_page
-    select_project(page, app, tab="story")
-    page.wait_for_function("() => activitySource && activitySource.readyState === 1")
-    with spine.connect(db) as conn:
-        spine.start_run(conn, intent="background local work", production=root.name)
-    page.wait_for_selector("text=Studio activity detected")
-    assert page.locator("#tab-story").get_attribute("aria-selected") == "true"
-    assert page.locator("#view .callout").count() > 0
-
-
 def test_auth_error_has_human_recovery_and_api_stays_json(studio_page):
     page, app, *_ = studio_page
     response = page.goto(app.split("?")[0])
@@ -198,7 +186,7 @@ def test_auth_error_has_human_recovery_and_api_stays_json(studio_page):
 
 
 def test_new_production_browses_for_a_file_without_preloading_songs(studio_page):
-    page, app, _root, _second, _db, audio = studio_page
+    page, app, _root, _second, audio = studio_page
     requests = []
     page.on("request", lambda request: requests.append(request.url))
     page.goto(app)
@@ -222,21 +210,6 @@ def test_new_production_browses_for_a_file_without_preloading_songs(studio_page)
     assert "track" in page.locator("#sourceStatus").inner_text()
     assert any("/api/source?name=track.mp3" in url for url in requests)
     assert not any("/api/sources" in url for url in requests)
-
-
-def test_run_event_failure_has_a_working_retry(studio_page):
-    page, app, root, _second, db, *_ = studio_page
-    with spine.connect(db) as conn:
-        spine.start_run(conn, intent="show events", production=root.name)
-    page.route(
-        "**/api/events?*",
-        lambda route: route.fulfill(status=500, json={"error": "Events unavailable"}),
-    )
-    page.goto(app + "#/production/runs")
-    page.wait_for_selector("#log >> text=Events unavailable")
-    page.unroute("**/api/events?*")
-    page.locator("#log").get_by_role("button", name="Try again").click()
-    page.wait_for_selector("#log >> text=run.started")
 
 
 def test_malformed_route_cancels_a_pending_snapshot(studio_page):
@@ -583,7 +556,7 @@ def test_style_gate_records_proof_without_script_error(studio_page):
 def test_story_feedback_request_and_composite_approval_are_separate_actions(studio_page):
     from mp3_to_videoclip import flow
 
-    page, app, _root, second, _db, *_ = studio_page
+    page, app, _root, second, *_ = studio_page
     flow.mark(second)
     open_human_session(page, app)
     page.goto(app + "#/second/story")
@@ -614,7 +587,7 @@ def test_story_feedback_request_and_composite_approval_are_separate_actions(stud
 def test_finish_credits_are_editable_only_for_guided_projects(studio_page):
     from mp3_to_videoclip import flow, signature
 
-    page, app, root, second, _db, *_ = studio_page
+    page, app, root, second, *_ = studio_page
     select_project(page, app, tab="finish")
     assert "predates guided credits" in page.locator("#view").inner_text()
     assert page.locator(".credit-row").count() == 0
@@ -723,7 +696,7 @@ def test_preview_playback_and_confirmation_target_the_bound_movie_not_the_newest
 
 
 def test_setup_dialog_validates_steps_preserves_back_navigation_and_escape(studio_page):
-    page, app, _root, _second, _db, audio = studio_page
+    page, app, _root, _second, audio = studio_page
     page.goto(app)
     page.locator("#newProduction").click()
     assert page.locator("#createDialog").is_visible()
@@ -749,7 +722,7 @@ def test_setup_dialog_validates_steps_preserves_back_navigation_and_escape(studi
 
 
 def test_setup_single_flight_and_failed_submit_offer_honest_recovery(studio_page):
-    page, app, _root, _second, _db, audio = studio_page
+    page, app, _root, _second, audio = studio_page
     page.goto(app)
     page.locator("#newProduction").click()
     choose_audio(page, audio)

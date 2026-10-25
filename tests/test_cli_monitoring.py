@@ -42,7 +42,6 @@ def hold_lock(root: Path):
         (["status"], "approvals"),
         (["progress"], "operations"),
         (["costs"], "currency"),
-        (["context"], "production"),
         (["dashboard"], "html"),
         (["studio", "--projects-dir"], "page"),
     ],
