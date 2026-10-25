@@ -122,5 +122,3 @@ class JobRunner:
     def run_sync(self, func, *args, **kwargs):
         """Run a blocking function in the thread pool."""
         return self._executor.submit(func, *args, **kwargs)
-
-

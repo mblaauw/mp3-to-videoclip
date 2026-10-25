@@ -17,9 +17,14 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
+from .api.film import router as film_router
+from .api.images import router as images_router
 from .api.jobs import router as jobs_router
 from .api.projects import router as projects_router
 from .api.settings import router as settings_router
+from .api.story import router as story_router
+from .api.storyboard import router as storyboard_router
+from .api.track import router as track_router
 from .jobs import JobRunner
 
 
@@ -38,6 +43,11 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
         app.state.projects_dir = str(projects_dir)
     app.include_router(projects_router)
     app.include_router(settings_router)
+    app.include_router(track_router)
+    app.include_router(story_router)
+    app.include_router(storyboard_router)
+    app.include_router(images_router)
+    app.include_router(film_router)
     app.include_router(jobs_router)
 
     @app.get("/api/events")
@@ -57,7 +67,6 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
                         yield {"event": "heartbeat", "data": {}}
             finally:
                 runner.bus.unsubscribe(queue)
-
 
         return EventSourceResponse(stream())
 
