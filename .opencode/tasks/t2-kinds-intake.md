@@ -1,7 +1,7 @@
 # T2 — Production kinds, intake and brief
 
-Status: implementation complete, merge gate pending
-Revision: director/t2-kinds
+Status: complete
+Revision: merged as ff7be5b (PR #20), from branch commit 0d531a1
 Authorized: 2026-10-25, owner said "continue and do the whole of T2".
 
 ## Objective
@@ -121,3 +121,9 @@ accepts reference links and the existing reference flow stays the image path.
 - `Intent.length_seconds` is whole seconds; a fractional window is preserved in
   `audio_window` and the film duration, while the intent rounds to the nearest
   second. The UI offers whole-second choices.
+
+## Merge
+
+PR #20 squash-merged as `ff7be5b`; the branch commit `0d531a1` and the
+merge tree are identical. CI check passed (4m35s) after the first runner was
+cancelled for a stuck `apt-get install ffmpeg`.
