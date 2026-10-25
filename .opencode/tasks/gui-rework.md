@@ -41,7 +41,7 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | Phase | State |
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
-| 1 · delete and migrate | **in progress, on branch `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed, second agent runtime removed (106 tests gone), `.opencode/skills` kept for Phase 3, read-only archive reader for the two frozen films. Remaining: static page generators and one-off modules, CLI logic moved into domain functions then `cli.py` deleted, legacy model branches, docs rewrite. |
+| 1 · delete and migrate | **in progress, on branch `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed, second agent runtime removed (106 tests gone), `.opencode/skills` kept for Phase 3, read-only archive reader, static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`; `src/` 21,124 → 17,371 lines), docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`. Remaining: move CLI-only defaults into domain functions (B13) and delete `cli.py` + the `clip` entry behind a `studio` launcher, then remove the legacy model branches. `zero-bars` migration stays in Phase 2 with the schema-3 models. |
 | 2 · backend skeleton | not started — owns the schema-3 models and therefore the zero-bars importer |
 | 3 · director | not started |
 | 4 · frontend | not started — deletes the interim Studio and the approval paths |
