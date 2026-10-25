@@ -3,7 +3,7 @@
 from .context import build_context
 from .conversation import append_message, chat_path, load_messages
 from .llm import DirectorLLM, TextDelta, ToolCall, TurnResult, Usage
-from .tools import READ_TOOLS, dispatch
+from .tools import TOOLS, dispatch
 
 __all__ = [
     "DirectorLLM",
@@ -11,7 +11,7 @@ __all__ = [
     "ToolCall",
     "TurnResult",
     "Usage",
-    "READ_TOOLS",
+    "TOOLS",
     "dispatch",
     "build_context",
     "append_message",
