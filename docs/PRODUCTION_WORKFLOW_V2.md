@@ -176,7 +176,10 @@ frame interval, source owner, selected version and hash labels plus a JSON
 sidecar. It is a review aid, not an approval, and does not overwrite prior sheets.
 
 Use fresh bounded visual-review sessions with the relevant identity reference,
-at most 15 image occurrences including detail crops. Return text-only coverage.
+at most 15 image occurrences including detail crops, counted against the whole
+session history rather than the new pack alone. Return text-only coverage; a
+session the guard has blocked is spent, so its unread files are unread and need
+a new bounded session.
 Calibrate severity on existing accepted/rejected examples before a paid film;
 repeated sessions on one model are not independent confirmation. Failed/timed-
 out reviewers are unavailable evidence, not PASS. No fake "all reviewed" claims.

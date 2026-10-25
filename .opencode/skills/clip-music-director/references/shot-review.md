@@ -23,9 +23,12 @@ Watch the actual timing; a contact sheet alone cannot validate pacing or sync.
 Record coverage and uncertainty. Do not report uninspected images as reviewed.
 Follow the global image budget: inventory/deduplicate and at most 15 image
 occurrences per fresh session INCLUDING identity refs, re-reads and crops —
-practically 6–8 per pack — and fewer if the route's limit is lower. Coverage is
-complete, "unavailable" is not a pass, and re-reads or per-frame divisions are
-never mandatory. Return coverage text only, never forward images.
+practically 6–8 per pack — and fewer if the route's limit is lower. The ceiling
+is cumulative over the session's whole history, so plan the count before the
+first read and open a new session rather than adding a late round; a blocked
+session is spent, not retryable in place. Coverage is complete, "unavailable" is
+not a pass, and re-reads or per-frame divisions are never mandatory. Return
+coverage text only, never forward images.
 
 ## Fixed dispositions (workflow 2)
 

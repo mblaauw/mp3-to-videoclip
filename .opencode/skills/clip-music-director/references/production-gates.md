@@ -51,9 +51,13 @@ they do not restate these.
   issue (identity, required content, anatomy that the shot depends on).
 - Fresh bounded sessions: **at most 15 image occurrences per session, including
   reference and detail crops** — practically **6–8** per pack, with headroom kept
-  below the ceiling. Inventory and deduplicate first, keep coverage complete, and
-  add no mandatory re-reads or per-frame review divisions. Return text-only
-  coverage; never forward images into the coordinating session.
+  below the ceiling. Count the plan before the first read, and treat the ceiling
+  as cumulative over the session's history: a later round in the same session, a
+  re-read or a forwarded image spends the same allowance, and a blocked session
+  is spent rather than retryable with a smaller batch. Inventory and deduplicate
+  first, keep coverage complete, and add no mandatory re-reads or per-frame review
+  divisions. Return text-only coverage; never forward images into the
+  coordinating session.
 - A failed/timed-out reviewer is unavailable evidence, not a PASS. Repeated
   sessions on one model are not independent confirmation; stop re-confirming
   with a single model. Calibrate severity on existing accepted/rejected examples.
