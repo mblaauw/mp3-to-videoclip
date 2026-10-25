@@ -17,7 +17,7 @@ from pathlib import Path
 from .remotion import ENGINE
 
 REPO = Path(__file__).resolve().parents[2]
-INSTALL_TIMEOUT_SECONDS = 900
+INSTALL_TIMEOUT_SECONDS = 240
 
 CHROME_CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
