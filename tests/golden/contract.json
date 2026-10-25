@@ -1,0 +1,163 @@
+{
+  "prompts": [
+    {
+      "shot_id": "s001",
+      "positivePrompt": "A fully painted comic cover panel driven toward photorealism: a realistic depiction in the painted tradition of Alex Ross and Gabriele Dell'Otto, weighted roughly 70% Ross for photographic anatomy, skin and lighting, 30% Dell'Otto for crushed blacks, hard specular highlights and gritty texture.\n\nRendered at photographic fidelity with a brush: skin with visible pores and subsurface scattering, individual hairs, convincing material weave, wear and creases appropriate to the visible subject, accurate near-to-far perspective and volume. Use the shot's focal length, aperture and focus plane to produce photographic depth and subject separation, not uniformly outlined objects. Veiling glare and a faint lens flare where a hard light crosses the frame, controlled blown highlights on reflective surfaces, fine 35mm film grain, natural colour science, believable exposure.\n\nFrom the Dell'Otto side, translated into photographic terms: ink-black shadow shapes with detail crushed out, brilliant specular whites, hard rim light, gritty high-contrast punch, and the faintest trace of halftone print grain in the shadows.\n\nHyper-detailed photorealism rendered entirely by brush \u2014 a painting that could be mistaken for a photograph. Not a 3D render, not CGI, not a cel-shaded or outlined cartoon, not waxy plastic skin.\n\nFixture-grade overcast palette.\nFrame s001 of the fixture sequence\nFraming: wide establishing shot\nWet street at night, sodium light\nc1 identity: A tall woman with a red scarf and a shaved head\nc1 state (rain): soaked wool coat\nNo lettering anywhere in the frame\nAvoid: text; logos",
+      "size": [
+        1376,
+        768
+      ],
+      "references": [],
+      "profile_version": "f1f91efa89a83501d6de24c9cc5e00e71d3c033c5e84a10ac73b1341f60b1c25",
+      "generation": {
+        "model": "google-nano-banana-2-1",
+        "settings": {
+          "thinkingLevel": "high"
+        },
+        "seed": 7
+      }
+    },
+    {
+      "shot_id": "s002",
+      "positivePrompt": "A fully painted comic cover panel driven toward photorealism: a realistic depiction in the painted tradition of Alex Ross and Gabriele Dell'Otto, weighted roughly 70% Ross for photographic anatomy, skin and lighting, 30% Dell'Otto for crushed blacks, hard specular highlights and gritty texture.\n\nRendered at photographic fidelity with a brush: skin with visible pores and subsurface scattering, individual hairs, convincing material weave, wear and creases appropriate to the visible subject, accurate near-to-far perspective and volume. Use the shot's focal length, aperture and focus plane to produce photographic depth and subject separation, not uniformly outlined objects. Veiling glare and a faint lens flare where a hard light crosses the frame, controlled blown highlights on reflective surfaces, fine 35mm film grain, natural colour science, believable exposure.\n\nFrom the Dell'Otto side, translated into photographic terms: ink-black shadow shapes with detail crushed out, brilliant specular whites, hard rim light, gritty high-contrast punch, and the faintest trace of halftone print grain in the shadows.\n\nHyper-detailed photorealism rendered entirely by brush \u2014 a painting that could be mistaken for a photograph. Not a 3D render, not CGI, not a cel-shaded or outlined cartoon, not waxy plastic skin.\n\nFixture-grade overcast palette.\nFrame s002 of the fixture sequence\nFraming: close-up\nWet street at night, sodium light\nc1 identity: A tall woman with a red scarf and a shaved head\nc1 state (rain): soaked wool coat\nNo lettering anywhere in the frame\nAvoid: text; logos",
+      "size": [
+        1376,
+        768
+      ],
+      "references": [],
+      "profile_version": "f1f91efa89a83501d6de24c9cc5e00e71d3c033c5e84a10ac73b1341f60b1c25",
+      "generation": {
+        "model": "google-nano-banana-2-1",
+        "settings": {
+          "thinkingLevel": "high"
+        },
+        "seed": 7
+      }
+    },
+    {
+      "shot_id": "s003",
+      "positivePrompt": "A fully painted comic cover panel driven toward photorealism: a realistic depiction in the painted tradition of Alex Ross and Gabriele Dell'Otto, weighted roughly 70% Ross for photographic anatomy, skin and lighting, 30% Dell'Otto for crushed blacks, hard specular highlights and gritty texture.\n\nRendered at photographic fidelity with a brush: skin with visible pores and subsurface scattering, individual hairs, convincing material weave, wear and creases appropriate to the visible subject, accurate near-to-far perspective and volume. Use the shot's focal length, aperture and focus plane to produce photographic depth and subject separation, not uniformly outlined objects. Veiling glare and a faint lens flare where a hard light crosses the frame, controlled blown highlights on reflective surfaces, fine 35mm film grain, natural colour science, believable exposure.\n\nFrom the Dell'Otto side, translated into photographic terms: ink-black shadow shapes with detail crushed out, brilliant specular whites, hard rim light, gritty high-contrast punch, and the faintest trace of halftone print grain in the shadows.\n\nHyper-detailed photorealism rendered entirely by brush \u2014 a painting that could be mistaken for a photograph. Not a 3D render, not CGI, not a cel-shaded or outlined cartoon, not waxy plastic skin.\n\nFixture-grade overcast palette.\nFrame s003 of the fixture sequence\nFraming: wide establishing shot\nWet street at night, sodium light\nc1 identity: A tall woman with a red scarf and a shaved head\nc1 state (rain): soaked wool coat\nNo lettering anywhere in the frame\nAvoid: text; logos",
+      "size": [
+        1376,
+        768
+      ],
+      "references": [],
+      "profile_version": "f1f91efa89a83501d6de24c9cc5e00e71d3c033c5e84a10ac73b1341f60b1c25",
+      "generation": {
+        "model": "google-nano-banana-2-1",
+        "settings": {
+          "thinkingLevel": "high"
+        },
+        "seed": 7
+      }
+    }
+  ],
+  "timing": [
+    {
+      "frame": 0,
+      "seconds": 0.0,
+      "shot_id": "s001",
+      "owner_shot_id": "s001",
+      "start_frame": 0,
+      "end_frame": 720,
+      "start_seconds": 0.0,
+      "end_seconds": 30.0
+    },
+    {
+      "frame": 1,
+      "seconds": 0.041666666666666664,
+      "shot_id": "s001",
+      "owner_shot_id": "s001",
+      "start_frame": 0,
+      "end_frame": 720,
+      "start_seconds": 0.0,
+      "end_seconds": 30.0
+    },
+    {
+      "frame": 719,
+      "seconds": 29.958333333333332,
+      "shot_id": "s001",
+      "owner_shot_id": "s001",
+      "start_frame": 0,
+      "end_frame": 720,
+      "start_seconds": 0.0,
+      "end_seconds": 30.0
+    },
+    {
+      "frame": 720,
+      "seconds": 30.0,
+      "shot_id": "s002",
+      "owner_shot_id": "s002",
+      "start_frame": 720,
+      "end_frame": 1680,
+      "start_seconds": 30.0,
+      "end_seconds": 70.0
+    },
+    {
+      "frame": 1199,
+      "seconds": 49.958333333333336,
+      "shot_id": "s002",
+      "owner_shot_id": "s002",
+      "start_frame": 720,
+      "end_frame": 1680,
+      "start_seconds": 30.0,
+      "end_seconds": 70.0
+    },
+    {
+      "frame": 1200,
+      "seconds": 50.0,
+      "shot_id": "s002",
+      "owner_shot_id": "s002",
+      "start_frame": 720,
+      "end_frame": 1680,
+      "start_seconds": 30.0,
+      "end_seconds": 70.0
+    },
+    {
+      "frame": 1559,
+      "seconds": 64.95833333333333,
+      "shot_id": "s002",
+      "owner_shot_id": "s002",
+      "start_frame": 720,
+      "end_frame": 1680,
+      "start_seconds": 30.0,
+      "end_seconds": 70.0
+    },
+    {
+      "frame": 2159,
+      "seconds": 89.95833333333333,
+      "shot_id": "s003",
+      "owner_shot_id": "s003",
+      "start_frame": 1680,
+      "end_frame": 2160,
+      "start_seconds": 70.0,
+      "end_seconds": 90.0
+    }
+  ],
+  "remotion_request": {
+    "kind": "base",
+    "output": "<output>",
+    "assetRoot": "<assets>",
+    "width": 1920,
+    "height": 1080,
+    "fps": 24,
+    "frames": 2160,
+    "chrome": "<chrome>",
+    "input": {
+      "shots": [
+        {
+          "id": "s001",
+          "frames": 720
+        },
+        {
+          "id": "s002",
+          "frames": 960
+        },
+        {
+          "id": "s003",
+          "frames": 480
+        }
+      ]
+    }
+  }
+}
