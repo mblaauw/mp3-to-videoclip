@@ -8,8 +8,9 @@ film. Money, source audio and generated stills stay on this machine.
 library, creates a schema-3 production from an MP3, measures it locally, and takes
 it through Track, Story, Storyboard, Images and Film with content-bound approvals
 and a job tray. The waveform timeline, the Remotion Player preview and the error
-tray are live. The interim Studio and the old CLI surface still exist; removing
-them is the next tracked slice. The phase plan, decisions and acceptance criteria
+tray are live. The interim Studio and the old CLI surface still exist; deleting the
+old server and UI is the next tracked slice, and the engine CLI stays for the
+tasks that have no GUI yet. The phase plan, decisions and acceptance criteria
 live in `.opencode/tasks/gui-rework.md`.
 
 ## What works today

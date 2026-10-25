@@ -45,8 +45,9 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
   runtime (`spine/plans/context/evals/mcp/tools`), the static page generators and the
   dead one-off modules.
 - `serve.py` and the approval paths stay, working, until the commit in Phase 4 that lands
-  the new frontend. Phase 1's ≤ 11,000-line target is therefore measured after that
-  replacement, not at Phase 1 merge.
+  the new frontend. That frontend is now merged (PR #10); deleting the old server and
+  its UI is the next slice. Phase 1's ≤ 11,000-line target is measured after that
+  deletion, not at Phase 1 merge.
 
 ## Status
 
@@ -56,7 +57,7 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. Remaining modules (`flow`, `operations`, `sources`, `human_*`, `studio`, `studio_ui*`, `reviews`, `appdata`, `backup`, `signature`) are imported by the interim Studio/CLI and cannot be deleted until their replacements land in Phases 2-4 (recorded deviation). Legacy model branches move with them. `src/` 21,124 -> 17,371. |
 | 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
-| 4 · frontend | **acceptance met on `gui-rework/phase-4-intake`; PR #10.** Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. This branch adds MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. Remaining, as the next slice: delete the interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`) and port the approval metadata still imported by `api/approvals.py` from `human_actions`; `operations`, `flow`, `reviews`, `signature` and `backup` stay until their Phase 5 replacements. |
+| 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026). Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. This branch adds MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. Remaining, as the next slice: delete the interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`) and port the approval metadata still imported by `api/approvals.py` from `human_actions`; `operations`, `flow`, `reviews`, `signature` and `backup` stay until their Phase 5 replacements. |
 | 5 · render cleanup | not started |
 | 6 · polish | not started |
 
@@ -152,6 +153,34 @@ settings file; a live Track-stage chat turn answered correctly.
   `test_track_read_lyrics_write_and_local_analysis` (audio bytes) and the
   unreadable-upload domain/API tests cover the new backend edges; the frontend is
   pinned by `npm run build` plus the browser sweep.
+
+## Next slice: delete the interim Studio (not started)
+
+The new app is the working replacement, but the old server is still imported by
+its own surface and by the approval metadata path. Do this as one branch with the
+suite green at every step:
+
+1. Port the still-needed decision contract out of `human_actions`: `_body`,
+   `stage_name` and `approve_stage` move to `domain/approvals.py` (or the API
+   router); `api/approvals.py` stops importing `human_actions`.
+2. Move `studio.ORDER` / `studio.approval_state` (used by `appdata.approvals`) to
+   the domain, or retire `appdata.approvals` together with the old projection.
+3. Delete `serve.py`, `studio_ui.py`, `studio_ui_flow.py`, `human_ui.py`,
+   `sources.py` and `studio.py`; remove `clip serve` / `clip studio` and the
+   `--actions` redirect text from `cli.py`.
+4. Triage the old-surface tests before deleting them:
+   `test_studio_browser.py`, `test_studio_actions.py`, `test_studio.py`,
+   `test_live_layer.py`, `test_workflow_projection.py`. Port the still-true
+   engine assertions first: guided policy/marker rules, atomic story approval,
+   artifact path guards, quote authorization/cap/upload consent, preview-watched
+   and graphics attestations. `test_guided_flow.py` keeps its non-HTTP tests.
+5. Keep `flow.py`, `operations.py`, `reviews.py`, `signature.py` and `backup.py`
+   until their Phase 5 replacements; keep `cli.py` for the engine commands that
+   have no GUI yet (transcribe, listen, backup, sign, render maintenance).
+
+Acceptance: no import of a deleted module; `uv run studio` starts and the five
+stages still approve/authorize; `uv run clip serve` is gone; suite green; the
+project count and hashes are unchanged.
 
 ## Acceptance per phase
 
