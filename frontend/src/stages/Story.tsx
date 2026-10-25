@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Brief } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import { IntakeCard } from "../IntakeCard";
 
 export function StoryStage({ slug }: { slug: string }) {
   const [brief, setBrief] = useState<Brief | null>(null);
@@ -39,6 +40,15 @@ export function StoryStage({ slug }: { slug: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  const intakeSaved = (updated: Brief) => {
+    setBrief(updated);
+    setDirection(updated.direction || "");
+    setStyle(updated.style || "");
+    setTreatment(updated.treatment || "");
+    setLook(updated.creative?.look || "");
+    setRevision((value) => value + 1);
+  };
+
   const save = async () => {
     // Never PATCH the blank initial form while the current brief is still loading.
     if (!brief || saving) return;
@@ -75,6 +85,7 @@ export function StoryStage({ slug }: { slug: string }) {
           Retry loading the brief
         </button>
       )}
+      <IntakeCard slug={slug} onSaved={intakeSaved} />
       <ApprovalBar slug={slug} stages={["brief"]} refresh={revision} />
       <div className="card">
         <h3>Direction and style</h3>

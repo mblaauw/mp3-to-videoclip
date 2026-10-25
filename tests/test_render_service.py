@@ -200,3 +200,24 @@ def test_base_writes_the_report_and_prepares_the_graphics_review(tmp_path, monke
     sidecar = read_json(output.with_suffix(".json"))
     assert sidecar["input_hash"] == "b" * 64
     assert sidecar["delivery_ready"] is False
+
+
+def test_every_render_path_receives_the_excerpt_audio(tmp_path, monkeypatch):
+    root = make_api_project(tmp_path)
+    add_assets(root)
+    sentinel = root / "work" / "audio" / "excerpt-test.wav"
+    sentinel.parent.mkdir(parents=True, exist_ok=True)
+    sentinel.write_bytes(b"derived excerpt")
+    calls = []
+
+    def fake(project, shots, audio, output, workdir, **kwargs):
+        calls.append(Path(audio))
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_bytes(b"fake movie")
+        return {"renderer_revision": "revision-1", "input_hash": "b" * 64, "verified": True}
+
+    monkeypatch.setattr(services.render, "_render", fake)
+    monkeypatch.setattr(P, "render_audio", lambda root, project=None: sentinel)
+
+    services.render.render_preview(root, root / "previews" / "excerpt-v001.mp4")
+    assert calls == [sentinel]

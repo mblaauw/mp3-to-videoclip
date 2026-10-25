@@ -26,6 +26,7 @@ class ProjectSummary(BaseModel):
     slug: str
     title: str
     duration: float | None = None
+    kind: str | None = None
     archived: bool = False
     render: str | None = None
     still_count: int = 0
@@ -69,6 +70,7 @@ async def list_projects(request: Request):
                     slug=entry.name,
                     title=project.title,
                     duration=project.duration,
+                    kind=project.kind,
                     archived=False,
                     still_count=sum(
                         1
@@ -102,11 +104,23 @@ async def create_project(
     aspect: Literal["16:9", "9:16"] = "16:9",
     music_mode: Literal["vocal", "instrumental"] = "vocal",
     budget: str | None = None,
+    kind: Literal["music_video", "promo", "advert"] = "music_video",
+    style_preset: str | None = None,
+    objective: str = "",
+    message: str = "",
+    audience: str = "",
+    cta_text: str = "",
+    cta_url: str = "",
+    length_seconds: float | None = None,
+    window_start: float = 0.0,
+    fade_in: float = 0.0,
+    fade_out: float = 1.5,
 ):
     """Upload one MP3, create a schema 3 production and queue local analysis."""
     from mp3_to_videoclip import services
     from mp3_to_videoclip.config import effective_settings
     from mp3_to_videoclip.domain import intake
+    from mp3_to_videoclip.models import CallToAction, Intent
 
     content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if content_type not in ("audio/mpeg", "audio/mp3", "application/octet-stream"):
@@ -131,6 +145,23 @@ async def create_project(
     if cap is None:
         cap = f"{effective_settings().default_budget_usd:.2f}"
     projects_dir = _projects_dir(request)
+    intent = None
+    if kind != "music_video" or any(
+        (objective, message, audience, cta_text, cta_url, length_seconds)
+    ):
+        try:
+            intent = Intent(
+                kind=kind,
+                objective=objective.strip(),
+                audience=audience.strip(),
+                message=message.strip(),
+                cta=CallToAction(text=cta_text.strip(), url=cta_url.strip())
+                if (cta_text.strip() or cta_url.strip())
+                else None,
+                length_seconds=int(length_seconds) if length_seconds is not None else None,
+            ).model_dump()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     with tempfile.TemporaryDirectory(prefix="mp3-intake-") as temp:
         source = Path(temp) / "source.mp3"
         source.write_bytes(data)
@@ -142,6 +173,13 @@ async def create_project(
                 aspect=aspect,
                 music_mode=music_mode,
                 budget=cap,
+                kind=kind,
+                intent=intent,
+                style_preset=style_preset or None,
+                length_seconds=length_seconds,
+                window_start=window_start if kind != "music_video" else 0.0,
+                fade_in=fade_in if kind != "music_video" else 0.0,
+                fade_out=fade_out if kind != "music_video" else 0.0,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -159,7 +197,13 @@ async def create_project(
     return {
         "slug": created["slug"],
         "title": project.title,
+        "kind": project.kind,
         "duration": project.duration,
+        "source_duration": project.source_duration,
+        "audio_window": (
+            project.audio_window.model_dump() if project.audio_window is not None else None
+        ),
+        "signature_required": project.signature_required,
         "analysis_job": job_id,
     }
 
@@ -193,7 +237,14 @@ async def get_project(slug: str, request: Request, verify: bool = False):
     result = {
         "slug": root.name,
         "title": project.title,
+        "kind": project.kind,
         "duration": project.duration,
+        "source_duration": project.source_duration or project.duration,
+        "audio_window": (
+            project.audio_window.model_dump() if project.audio_window is not None else None
+        ),
+        "style_preset": project.style_preset,
+        "signature_required": project.signature_required,
         "fps": project.fps,
         "width": project.width,
         "height": project.height,

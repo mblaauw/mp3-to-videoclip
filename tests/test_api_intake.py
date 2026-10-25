@@ -22,7 +22,7 @@ def fake_probe(monkeypatch):
     monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 12.0)
 
 
-def _upload(client, **overrides):
+def _upload(client, overrides=None, **extra):
     params = {
         "title": "New Film",
         "filename": "song.mp3",
@@ -30,7 +30,8 @@ def _upload(client, **overrides):
         "music_mode": "vocal",
         "budget": "3.50",
     }
-    params.update(overrides)
+    params.update(overrides or {})
+    params.update(extra)
     return client.post(
         "/api/projects",
         params=params,
@@ -151,3 +152,138 @@ def test_unreadable_upload_is_a_400(tmp_path, monkeypatch):
         assert response.status_code == 400
         assert "readable MP3" in response.json()["detail"]
         assert not (tmp_path / "broken").exists()
+
+
+def test_upload_an_advert_keeps_intent_and_skips_signature(tmp_path, monkeypatch):
+    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 120.0)
+    intent = {
+        "kind": "advert",
+        "objective": "pre-save the single before 14 Nov",
+        "audience": "existing listeners",
+        "message": "Out 14 Nov - pre-save now",
+        "reasons": ["first release in two years"],
+        "tone": ["urgent", "warm", "nocturnal"],
+        "mandatories": ["release date"],
+        "avoid": ["stock-photo smiles"],
+        "cta": {"text": "Pre-save now", "url": "https://example.com"},
+        "length_seconds": 30,
+        "audio_window": {"start": 62.0, "end": 92.0, "fade_in": 0.0, "fade_out": 1.5},
+    }
+    with api_client(tmp_path) as client:
+        submitted = []
+        monkeypatch.setattr(
+            client.app.state.runner,
+            "submit",
+            lambda kind, slug, factory: submitted.append((kind, slug)) or "job-ad",
+        )
+        response = _upload(
+            client,
+            title="Forward Ever",
+            overrides={
+                "kind": "advert",
+                "objective": intent["objective"],
+                "message": intent["message"],
+                "cta_text": "Pre-save now",
+                "cta_url": "https://example.com",
+                "length_seconds": 30,
+                "window_start": 62,
+                "fade_out": 1.5,
+            },
+        )
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["kind"] == "advert"
+        assert body["duration"] == 30.0
+        assert body["source_duration"] == 120.0
+        assert body["signature_required"] is False
+        assert submitted == [("analysis", "forward-ever")]
+
+        root = tmp_path / "forward-ever"
+        project = Project.model_validate(json.loads((root / "project.json").read_text()))
+        assert project.kind == "advert"
+        assert project.audio_window.model_dump() == intent["audio_window"]
+        assert not (root / "brand.json").exists()
+        assert not (root / "work" / "graphics-spec.json").exists()
+
+        brief = json.loads((root / "brief.json").read_text())
+        assert brief["intent"]["objective"] == intent["objective"]
+        assert brief["intent"]["message"] == intent["message"]
+        assert brief["intent"]["cta"] == intent["cta"]
+        assert brief["intent"]["length_seconds"] == 30
+
+        saved = client.put(
+            "/api/projects/forward-ever/intake",
+            json={
+                "intent": intent,
+                "style_preset": "clean-photographic-v1",
+                "audio_window": intent["audio_window"],
+            },
+        )
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["brief"]["intent"] == intent
+
+        intake = client.get("/api/projects/forward-ever/intake").json()
+        assert intake["kind"] == "advert"
+        assert intake["audio_window"] == intent["audio_window"]
+        assert intake["style_preset"] == "clean-photographic-v1"
+        assert intake["intent"] == intent
+        assert intake["peaks"] == []
+
+
+def test_advert_upload_refuses_missing_creative_intent(tmp_path):
+    with api_client(tmp_path) as client:
+        response = _upload(
+            client,
+            title="Incomplete",
+            overrides={
+                "kind": "advert",
+                "objective": "launch",
+                "message": "out now",
+                "length_seconds": 30,
+            },
+        )
+        assert response.status_code == 400
+        assert "call to action" in response.json()["detail"]
+        assert not (tmp_path / "incomplete").exists()
+
+
+def test_intake_update_applies_style_and_window(tmp_path, monkeypatch):
+    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 120.0)
+    with api_client(tmp_path) as client:
+        created = _upload(
+            client,
+            title="Window Change",
+            overrides={
+                "kind": "promo",
+                "objective": "release",
+                "message": "out now",
+                "length_seconds": 60,
+            },
+        )
+        assert created.status_code == 201, created.text
+        response = client.put(
+            "/api/projects/window-change/intake",
+            json={
+                "intent": {
+                    "kind": "promo",
+                    "objective": "release the record",
+                    "message": "out now",
+                    "tone": ["warm"],
+                },
+                "style_preset": "brand-graphic-v1",
+                "audio_window": {
+                    "start": 10,
+                    "end": 40,
+                    "fade_in": 0.5,
+                    "fade_out": 1.5,
+                },
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["analysis_needed"] is True
+        assert body["duration"] == 30.0
+        assert body["audio_window"]["start"] == 10.0
+        assert body["intent"]["length_seconds"] == 30
+        assert body["style_preset"] == "brand-graphic-v1"
+        assert body["brief"]["creative"]["look"].startswith("A designed brand-graphic frame")

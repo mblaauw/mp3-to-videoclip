@@ -5,6 +5,7 @@ type TrackData = {
   music: any;
   lyrics: any;
   music_mode: string | null;
+  kind: string;
 };
 
 function clock(seconds: number): string {
@@ -109,7 +110,13 @@ export function TrackStage({ slug }: { slug: string }) {
       </div>
       <div className="card lyrics">
         <h3>Lyrics</h3>
-        {data?.music_mode === "instrumental" ? (
+        {data?.kind !== "music_video" ? (
+          <p className="empty">
+            Lyrics are a music-video intake. This{" "}
+            {(data?.kind || "music_video").replace("_", " ")} uses the Story intent and
+            on-screen supers instead.
+          </p>
+        ) : data?.music_mode === "instrumental" ? (
           <p className="empty">Instrumental track — no lyrics stage.</p>
         ) : lyrics?.segments?.length ? (
           <>

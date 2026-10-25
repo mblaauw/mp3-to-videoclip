@@ -2,6 +2,8 @@
 
 from decimal import Decimal
 
+from . import styles
+
 DEFAULT_MODEL = "google-nano-banana-2-1"
 DEFAULT_MODEL_AIR = "google:nano-banana@2.1"
 LEGACY_MODEL = "bfl-flux-2-klein-4b"
@@ -9,29 +11,9 @@ LEGACY_STYLE_PRESET_ID = "photoreal-painted-v1"
 STYLE_PRESET_ID = "photographic-painted-v2"
 DEFAULT_MAX_CORRECTIONS = 1
 
-# Preserve the successful test's medium, not its scene, camera or lighting setup.
-# 70/30 is creative direction, not a supported numeric model parameter.
-DEFAULT_STYLE = (
-    "A fully painted comic cover panel driven toward photorealism: a realistic "
-    "depiction in the painted tradition of Alex Ross and Gabriele Dell'Otto, weighted "
-    "roughly 70% Ross for photographic anatomy, skin and lighting, 30% Dell'Otto for "
-    "crushed blacks, hard specular highlights and gritty texture.\n\n"
-    "Rendered at photographic fidelity with a brush: skin with visible pores and "
-    "subsurface scattering, individual hairs, convincing material weave, wear and "
-    "creases appropriate to the visible subject, accurate near-to-far perspective "
-    "and volume. Use the shot's focal length, aperture and focus plane to produce "
-    "photographic depth and subject separation, not uniformly outlined objects. "
-    "Veiling glare and a faint lens flare where a hard light crosses the frame, "
-    "controlled blown highlights on reflective surfaces, fine 35mm film grain, "
-    "natural colour science, believable exposure.\n\n"
-    "From the Dell'Otto side, translated into photographic terms: ink-black shadow "
-    "shapes with detail crushed out, brilliant specular whites, hard rim light, gritty "
-    "high-contrast punch, and the faintest trace of halftone print grain in the "
-    "shadows.\n\n"
-    "Hyper-detailed photorealism rendered entirely by brush — a painting that could be "
-    "mistaken for a photograph. Not a 3D render, not CGI, not a cel-shaded or "
-    "outlined cartoon, not waxy plastic skin."
-)
+# The approved core is file-backed so it is one selectable preset, not a rule for
+# every production. The verbatim text and its hash are unchanged.
+DEFAULT_STYLE = styles.preset(STYLE_PRESET_ID).look
 
 # Exact user control, including its scene/optics/lettering; never prefixed globally.
 ROOFTOP_CONTROL_PROMPT = """A fully painted comic cover panel driven toward photorealism: a realistic
@@ -71,12 +53,7 @@ like sharp offset print. No other text, numbers, logos, symbols or watermarks
 anywhere in the frame.
 
 Wide 16:9 composition, cinematic scale, 1376x768."""
-DEFAULT_IMAGE_RULES = (
-    "Single coherent frame, no collage, split screen or panel gutters.",
-    "Full-bleed film still, no cover border, caption box or headline layout.",
-    "No text, lettering, logos, signatures or watermarks in generated pixels; all screen text is composited locally.",
-    "Believable anatomy and spatial relationships at the intended framing; simplified distant detail is acceptable.",
-)
+DEFAULT_IMAGE_RULES = styles.preset(STYLE_PRESET_ID).image_rules
 
 
 def default_settings() -> dict:

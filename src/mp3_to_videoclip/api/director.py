@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.config import effective_settings
 from mp3_to_videoclip.director.context import build_context
@@ -110,7 +111,12 @@ async def post_chat(slug: str, request: Request, payload: dict):
     settings = effective_settings()
     stage = payload.get("stage")
     role = _role(payload, stage)
-    system = build_context(slug, root.parent, stage=stage) + "\n\n" + _system_prompt(stage)
+    project = P.load_project(root, verify_source=False)
+    system = (
+        build_context(slug, root.parent, stage=stage)
+        + "\n\n"
+        + _system_prompt(stage, kind=project.kind, style_preset=project.style_preset, role=role)
+    )
 
     if settings.gateway == "opencode":
         try:
@@ -187,8 +193,16 @@ async def post_chat(slug: str, request: Request, payload: dict):
 STAGES = ("track", "story", "storyboard", "images", "film")
 
 
-def _system_prompt(stage: str | None = None) -> str:
-    """The shared director prompt plus the guide for the stage the user is in."""
+def _system_prompt(
+    stage: str | None = None,
+    *,
+    kind: str | None = None,
+    style_preset: str | None = None,
+    role: str | None = None,
+) -> str:
+    """The shared director prompt plus the stage, kind and task blocks."""
+    from mp3_to_videoclip import kinds, styles
+
     prompts = Path(__file__).resolve().parent.parent / "director" / "prompts"
     base = prompts / "system.md"
     text = base.read_text() if base.is_file() else "You are the director."
@@ -196,4 +210,19 @@ def _system_prompt(stage: str | None = None) -> str:
         guide = prompts / f"{stage}.md"
         if guide.is_file():
             text += "\n\n---\n\n" + guide.read_text()
+    if kind is not None:
+        block = kinds.prompt(kind)
+        if block:
+            text += "\n\n---\n\n" + block
+    if role == "writer" and stage == "story":
+        task = prompts / "writer" / "brief.md"
+        if task.is_file():
+            text += "\n\n---\n\n" + task.read_text()
+    if style_preset is not None and kind is not None:
+        try:
+            chosen = styles.preset(style_preset)
+        except ValueError:
+            chosen = None
+        if chosen is not None:
+            text += f"\n\n---\n\nStyle preset: {chosen.name}. {chosen.description}"
     return text
