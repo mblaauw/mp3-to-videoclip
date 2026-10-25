@@ -619,7 +619,16 @@ def generate(root: Path, quote_id: str, client=None, *, concurrency: int = 1):
             "quote tasks are duplicate or outside the current approved image scope; requote"
         )
     if quote["scope"] == "stills":
-        require_approval(root, "preview" if load_brief(root).creative is not None else "proof")
+        # Keep admission parity with quoting: guided creative full sets gate on the
+        # style check, recorded v2 projects on the mandatory watched preview.
+        from . import flow
+
+        require_approval(
+            root,
+            "preview"
+            if load_brief(root).creative is not None and flow.settings(root)["preview_gate"]
+            else "proof",
+        )
     shots = {s.id: s for s in board.shots}
     schema = read_json(inside(root, quote["schema"]))
     if digest(schema) != quote["schema_hash"]:

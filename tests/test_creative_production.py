@@ -469,6 +469,20 @@ def test_creative_stills_require_preview_while_legacy_require_proof(tmp_path):
         G.quote_images(legacy, "stills", "0.01")
 
 
+def test_guided_stills_quote_and_generate_share_the_style_gate(tmp_path):
+    from mp3_to_videoclip import flow
+
+    root = make_root(tmp_path, name="guided")
+    flow.mark(root)
+    approve_through_proof(root)
+    client = FakeRunware(root)
+    quote = G.quote_images(root, "stills", "0.01", client=client)
+    G.authorize(root, quote["id"], "0.01", "test user authorized the scoped full set")
+    G.generate(root, quote["id"], client)
+    assert "preview" not in read_json(root / "work/approvals.json")
+    assert client.submissions, "a guided stills quote must generate once the style gate is approved"
+
+
 def test_old_proof_quote_cannot_generate_now_nonproof_shots(tmp_path):
     root = make_root(tmp_path)
     approve_prerequisites(root)
