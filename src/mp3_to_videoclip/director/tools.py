@@ -65,6 +65,12 @@ TOOLS: list[dict] = [
         ["slug"],
     ),
     _tool(
+        "set_proof_shots",
+        "Choose the proof shots (max 3).",
+        {"slug": {"type": "string"}, "shot_ids": {"type": "array", "items": {"type": "string"}}},
+        ["slug", "shot_ids"],
+    ),
+    _tool(
         "ask_user",
         "Ask the user a question and end the turn.",
         {"question": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}}},
@@ -147,6 +153,17 @@ def _dispatch(name: str, arguments: dict[str, Any]) -> Any:
         )
         write_json(root / "work" / "storyboard.json", board.model_dump())
         return board.model_dump()
+
+    if name == "set_proof_shots":
+        from mp3_to_videoclip.models import Brief
+
+        brief = P.load_brief(root)
+        creative = brief.creative
+        if creative is None:
+            raise ValueError("a creative profile is required")
+        creative.proof_shot_ids = (arguments.get("shot_ids") or [])[:3]
+        write_json(root / "brief.json", brief.model_dump())
+        return {"proof_shot_ids": creative.proof_shot_ids}
 
     if name == "ask_user":
         return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}
