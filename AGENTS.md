@@ -45,8 +45,11 @@ Run at most two concurrent review lanes and at most three subagents per turn.
 Batch frames, stills and files into one contact sheet or one bounded review
 batch; never spawn one subagent per frame, still or file. Reuse a reviewer for a
 second pass on the same bytes instead of opening a new child, and do not
-re-review unchanged bytes. The director remains the only dispatcher; specialists
-never dispatch helpers.
+re-review unchanged bytes. Reuse is only free for bytes that reviewer already
+has: reaching the image budget is a per-session, cumulative limit (global
+`AGENTS.md`, "Image review budget"), so a reviewer near its ceiling gets no new
+images and new bytes go to a fresh bounded session. The director remains the
+only dispatcher; specialists never dispatch helpers.
 
 ## Approval authority
 

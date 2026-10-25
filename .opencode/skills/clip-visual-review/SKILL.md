@@ -42,10 +42,17 @@ role also runs **story** and **board** modes on those drafts. Links:
    readable distant fingers.
 4. Bounded fresh sessions: **at most 15 image occurrences**, practically 6–8,
    including identity references, detail crops and re-reads, with headroom kept
-   below the ceiling. Inventory and deduplicate first. Return **text-only**
-   coverage — never forward images into the coordinating session. A failed or
-   timed-out reviewer is unavailable evidence, not a PASS; no mandatory re-reads
-   and no per-frame review divisions, but coverage stays complete.
+   below the ceiling. Inventory and deduplicate first, then count the planned
+   occurrences *before* the first read. The ceiling is per **session** and
+   cumulative: everything that session has already read stays in its history, so
+   a later round in the same session starts with less, and a blocked session
+   cannot be rescued by a smaller batch — finish it text-only, report the unseen
+   files as unread, and start a fresh bounded session for those. Prefer one
+   labelled contact sheet (`clip sheet`) plus one benchmark over per-file reads.
+   Return **text-only** coverage — never forward images into the coordinating
+   session. A failed or timed-out reviewer is unavailable evidence, not a PASS;
+   no mandatory re-reads and no per-frame review divisions, but coverage stays
+   complete.
 5. Record the verdict, bound to exact bytes:
 
 ```sh

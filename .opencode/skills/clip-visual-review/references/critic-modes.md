@@ -39,8 +39,10 @@ into the coordinating session, and never report an unseen file as reviewed.
 ## Pixel budget (complements `shot-review.md`)
 
 Practical batch: **6–8 image occurrences including references**; hard ceiling
-**15** in one fresh session, with headroom kept below it. No mandatory re-reads
-and no per-frame review divisions — coverage is complete over the real set, and a
-green report never proves the images are good. Severity calibration and
-accept/uncertain/reject dispositions stay in `shot-review.md`; this file adds no
-new verdict vocabulary.
+**15** in one fresh session, with headroom kept below it. The ceiling is
+cumulative over that session's history — re-reads, crops and a later round spend
+the same allowance, and a blocked session cannot be recovered by a smaller batch
+in place. No mandatory re-reads and no per-frame review divisions — coverage is
+complete over the real set, and a green report never proves the images are good.
+Severity calibration and accept/uncertain/reject dispositions stay in
+`shot-review.md`; this file adds no new verdict vocabulary.

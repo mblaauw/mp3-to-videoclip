@@ -54,6 +54,23 @@ def data_url(path: Path, mime: str) -> str:
     return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
 
+def request(kind: str, output: Path, asset_root: Path, canvas, fps, frames, inputs: dict) -> dict:
+    """The exact renderer request object; pure, so a contract test can pin it."""
+    return {
+        "kind": kind,
+        "output": str(output.resolve()),
+        "assetRoot": str(asset_root.resolve()),
+        "width": canvas[0],
+        "height": canvas[1],
+        "fps": fps,
+        "frames": frames,
+        "chrome": os.environ.get(
+            "REMOTION_CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        ),
+        "input": inputs,
+    }
+
+
 def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, inputs: dict) -> dict:
     """Explicit local subprocess; never npx installs, uploads or implicit fallback.
 
@@ -70,21 +87,9 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
         )
     output.parent.mkdir(parents=True, exist_ok=True)
     asset_root.mkdir(parents=True, exist_ok=True)
-    request = {
-        "kind": kind,
-        "output": str(output.resolve()),
-        "assetRoot": str(asset_root.resolve()),
-        "width": canvas[0],
-        "height": canvas[1],
-        "fps": fps,
-        "frames": frames,
-        "chrome": os.environ.get(
-            "REMOTION_CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        ),
-        "input": inputs,
-    }
+    request_body = request(kind, output, asset_root, canvas, fps, frames, inputs)
     request_path = output.with_suffix(".request.json")
-    write_json(request_path, request)
+    write_json(request_path, request_body)
     progress_path = output.with_name(f".{output.stem}.progress.json")
     operations.phase(
         "rendering-visuals", note=f"{kind} {frames} frames", total=frames, unit="frames", done=0

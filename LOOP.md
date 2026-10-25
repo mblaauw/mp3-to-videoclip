@@ -125,8 +125,12 @@ it and the director never auto-accepts it.
 - Continuous playback with audio is a distinct checkpoint: samples, preflight and
   `ffprobe` are **not** watching. A delegated proxy export must be declared unwatched,
   never a pass.
-- One review session per round, at most 15 image occurrences including references
-  (practically 6–8); complete coverage, never "unavailable" as a pass.
+- One review session per round, at most 15 image occurrences including references and
+  crops (practically 6–8). The ceiling is per **session**, cumulative over its history:
+  re-reads, follow-up rounds and forwarded images spend the same allowance, so image
+  reads stay in a text-only-returning reviewer and never in the director's session.
+  A blocked session is spent, not retried — report unread files as unread and open a
+  fresh bounded session. Complete coverage, never "unavailable" as a pass.
 - Editing, graphics and render work is local (Remotion for new films, FFmpeg for
   encode/mux/probe and legacy); no paid call belongs in editing or verification.
 
