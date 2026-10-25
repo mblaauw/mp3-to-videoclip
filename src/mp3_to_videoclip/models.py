@@ -57,7 +57,7 @@ class ImageSettings(Model):
 
 
 class Project(Model):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 3] = 1
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
     title: str
     source: str = "media/song.mp3"
@@ -78,6 +78,7 @@ class Project(Model):
     signature_required: bool | None = Field(default=None, strict=True)
     source_filename: str | None = None
     renderer_backend: Literal["ffmpeg", "remotion"] | None = None
+    budget: list[dict] = Field(default_factory=list)
 
     @property
     def total_frames(self) -> int:
@@ -309,7 +310,7 @@ class Shot(Model):
 
 
 class Storyboard(Model):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 3] = 1
     aspect: Literal["16:9", "9:16"]
     fps: Literal[24, 30]
     total_frames: int = Field(gt=0)
