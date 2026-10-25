@@ -2,7 +2,7 @@
 
 This repository makes films with a local app. Read `README.md`,
 `docs/ARCHITECTURE.md` and `.opencode/tasks/gui-rework.md` before changing
-anything: the rework is in progress and the task record owns its decisions.
+anything: the phase record owns its decisions and the rework is complete.
 
 ## Rules
 

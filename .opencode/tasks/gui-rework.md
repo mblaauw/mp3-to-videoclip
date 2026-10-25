@@ -56,7 +56,7 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. The interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`, `studio.py`, `appdata.py`, `human_actions.py`) was deleted in the Phase 4 cleanup. Remaining after Phase 5: `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` for the Phase 6/legacy pass. `src/` 21,124 -> 17,371 before that cleanup, now 16,937 Python lines after Phase 6. |
 | 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **merged as PR #12** (merge `21c6ff5`, 25 Oct 2026). Phase 2 built the LLM adapter, tool dispatch, turn loop and stage-aware guides; this slice adds bounded prompt history, the recorded fake-provider probe, library-correct tool roots, domain-validated proof selection and a browser Stop. |
-| 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026) and **cleaned up as PR #11** (merge `a3aefc8`, 25 Oct 2026). Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. Phase 4 added MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. The cleanup added image reviews, preview/stills/graphics attestations and the final-render stills gate, then deleted the interim server and its old-surface tests. |
+| 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026) and **cleaned up as PR #11** (merge `a3aefc8`, 25 Oct 2026). Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. Phase 4 added MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. The cleanup added image reviews, the preview and graphics attestations and the stills approval, then deleted the interim server and its old-surface tests. |
 | 5 · render cleanup | **merged as PR #13** (merge `6916a6c`, 25 Oct 2026). One `BaseFilm` and `timing.mjs` now drive both the MP4 renderer and the live Player; renderer approvals no longer read the browser binary; a Studio preview job writes its own review report; schema-3 projects render with Remotion even after migration drops the legacy backend flag; preview and final were rendered cold on a copied production. `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` remain for the Phase 6/legacy pass. |
 | 6 · polish | **merged as PR #14** (merge `a2eec6e`, 25 Oct 2026). A clone at `7d4eb29` synced and started with `uv sync` + `uv run studio`; the launcher installed the pinned renderer (224 MB, no browser download), served the committed frontend without invoking tsc, and cold preview/final renders succeeded from the copy. Film also offers an in-app retry card when the renderer is missing. The portable headless-shell decision remains open. |
 
@@ -68,8 +68,10 @@ commitment is now the single source). The migration changed the project document
 so the three recorded approvals were invalidated even though brief, board and
 stills were untouched. On the owner's instruction they were re-approved in order
 (brief → storyboard → proof) with notes recording that the content was unchanged
-from the approved revision. All 79 selected stills now resolve and the gates pass.
-A live one-shot image quote was taken for `a001-blue-face` at $0.05 (no
+from the approved revision. All 79 selected stills resolve. Brief, storyboard and
+proof are approved; stills, preview and graphics remain open, and the graphics
+gate becomes visible again through `requires_signature` (see the audit section
+below). A live one-shot image quote was taken for `a001-blue-face` at $0.05 (no
 authorization, no generation). The director key is configured in the user's
 settings file; a live Track-stage chat turn answered correctly.
 
@@ -311,6 +313,28 @@ read-only).
 - A missing `work/graphics-review.json` is a clean "graphics review has not been
   prepared" state in the approval row instead of a raw `[Errno 2]` filesystem
   path. Other missing stage artifacts get the same generic treatment.
+
+## Audit hardening (25 Oct 2026, PR #17)
+
+The post-merge audit found and fixed these defects; the detailed record is
+`.opencode/tasks/audit-hardening.md`.
+
+- Story no longer PATCHes the empty initial form before the current brief loads;
+  switching productions remounts the stage and Director state.
+- Intake reserves a folder atomically, so concurrent same-title uploads cannot
+  delete each other's production.
+- Delivery is split into base and final. A base prepares the graphics review; a
+  final requires the graphics approval and composes the reviewed base. Film shows
+  the actual preflight samples the attestation refers to.
+- `requires_signature` now treats a missing flag on a schema-3 production with a
+  graphics spec as required, so `zero-bars` is gated again without rewriting its
+  folder. Migration preserves the flag for future productions.
+- Alias shots select and quote their shared owner; the library keeps unreadable
+  rows visible; Studio and CLI lyric saves both archive the previous artifact;
+  the Studio Runware key is the key the provider reads.
+- Removed `domain/staleness.py`, `markup.py`, `storage.write_versioned_page` and
+  the unreachable `execute` approve/authorize branches. CI no longer runs the
+  deleted browser test.
 
 ## Acceptance per phase
 

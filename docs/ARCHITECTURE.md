@@ -59,9 +59,9 @@ yet: transcription, the listening pass, backups, signing and render maintenance.
 ```text
 app.py            FastAPI factory, static files, lifespan
 launcher.py       `uv run studio`: free port, build frontend if stale, open browser
-api/              projects, track, story, storyboard, images, film, director, jobs, media, settings, setup
-domain/           project store, schema 3 models, storyboard, prompts, staleness, budget
-services/         analysis, generation, transcription, render, preview input, runware
+api/              projects, track, story, storyboard, images, film, director, jobs, budget, approvals, settings, setup
+domain/           intake, models, migration, approvals, archive, budget, lyrics
+services/         analysis, generation, graphics, transcription, render, preview input, runware
 director/         OpenAI-compatible adapter, tools, context, prompts, conversation
 jobs/             asyncio runner, per-project serialisation, SSE events
 frontend/         Vite + React + TypeScript, @remotion/player for the real composition
@@ -73,5 +73,6 @@ Every artifact has a cheap fingerprint. A changed fingerprint makes its approval
 stale, and the stage says so; the gate blocks until the current bytes are reviewed
 and re-approved. One budget per production pauses a paid job as `needs_budget`
 when it runs out.
-The phases, decisions (D1–D8) and acceptance criteria are in
-`.opencode/tasks/gui-rework.md`; renderer notes stay in `docs/RENDERER.md`.
+The phase plan and acceptance criteria are in
+`.opencode/tasks/gui-rework.md`; decisions D1–D8 are in the 25 Oct 2026 brief that
+record references. Renderer notes stay in `docs/RENDERER.md`.

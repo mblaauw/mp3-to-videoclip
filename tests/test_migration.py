@@ -84,10 +84,10 @@ def test_legacy_project_migrates_and_keeps_its_work(tmp_path):
     assert not set(stored) & {
         "workflow_version",
         "prompt_version",
-        "signature_required",
         "renderer_backend",
         "source_filename",
     }
+    assert stored["signature_required"] is True
     assert stored["budget"][0]["cap_usd"] == "5"
     assert not (root / "work" / "production-budget.json").exists()
     Project.model_validate(stored)
@@ -123,6 +123,26 @@ def test_migrated_project_loads_in_the_engine(tmp_path):
     project = P.load_project(root, verify_source=False)
     assert project.schema_version == 3
     assert project.budget[0]["cap_usd"] == "5"
+
+
+def test_a_missing_signature_flag_is_inferred_from_a_schema_three_spec(tmp_path):
+    from mp3_to_videoclip import production as P
+
+    root = _legacy(tmp_path / "projects" / "demo")
+    migrate(root)
+    stored = json.loads((root / "project.json").read_text())
+    stored.pop("signature_required", None)
+    (root / "project.json").write_text(json.dumps(stored))
+    spec = root / "work" / "graphics-spec.json"
+    spec.parent.mkdir(parents=True, exist_ok=True)
+    spec.write_text("{}")
+    project = P.load_project(root, verify_source=False)
+    assert P.requires_signature(root, project) is True
+
+    stored["signature_required"] = False
+    (root / "project.json").write_text(json.dumps(stored))
+    project = P.load_project(root, verify_source=False)
+    assert P.requires_signature(root, project) is False
 
 
 def test_migration_keeps_the_correction_policy_and_engine_sees_the_cap(tmp_path):

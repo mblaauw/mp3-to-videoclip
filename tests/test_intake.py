@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -71,6 +73,30 @@ def test_the_same_title_gets_a_unique_slug(tmp_path, fake_probe):
     second = intake.create_from_upload(projects, source, title="Zero Bars")
     assert first["slug"] == "zero-bars"
     assert second["slug"] == "zero-bars-2"
+
+
+def test_concurrent_same_title_uploads_both_survive(tmp_path, fake_probe, monkeypatch):
+    projects = tmp_path / "projects"
+    source = _source(tmp_path)
+    barrier = Barrier(2)
+    original = P.init_project
+
+    def both_reserved(*args, **kwargs):
+        # Force both calls past slug selection before either starts writing.
+        barrier.wait(timeout=10)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(P, "init_project", both_reserved)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(intake.create_from_upload, projects, source, title="Zero Bars")
+        second = pool.submit(intake.create_from_upload, projects, source, title="Zero Bars")
+        results = [first.result(timeout=30), second.result(timeout=30)]
+
+    assert {result["slug"] for result in results} == {"zero-bars", "zero-bars-2"}
+    for result in results:
+        root = result["root"]
+        assert (root / "project.json").is_file()
+        assert (root / "media/song.mp3").read_bytes() == b"ID3fake"
 
 
 def test_failed_migration_leaves_no_half_production(tmp_path, fake_probe, monkeypatch):

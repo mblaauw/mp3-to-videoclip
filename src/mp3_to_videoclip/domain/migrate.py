@@ -20,7 +20,6 @@ from .models import SCHEMA_VERSION, BudgetEntry, Project
 LEGACY_KEYS = (
     "workflow_version",
     "prompt_version",
-    "signature_required",
     "renderer_backend",
     "source_filename",
 )
@@ -70,7 +69,10 @@ def migrate(root: Path, *, dry_run: bool = False) -> dict:
     if budget_path.is_file():
         shutil.copy2(budget_path, history / "production-budget.json")
 
-    write_json(root / "project.json", project.model_dump())
+    payload = project.model_dump()
+    if payload.get("signature_required") is None:
+        payload.pop("signature_required", None)
+    write_json(root / "project.json", payload)
     if budget_path.is_file():
         budget_path.unlink()
     return {

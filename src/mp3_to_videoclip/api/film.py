@@ -1,4 +1,4 @@
-"""Film stage: graphics spec, preview/final render, exports."""
+"""Film stage: graphics spec/review, preview/base/final render, exports."""
 
 from __future__ import annotations
 
@@ -10,9 +10,11 @@ from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
-from mp3_to_videoclip.storage import inside
+from mp3_to_videoclip.storage import inside, read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["film"])
+
+KINDS = ("preview", "base", "final")
 
 
 @router.get("/graphics")
@@ -21,9 +23,70 @@ async def get_graphics(slug: str, request: Request):
     path = root / "work" / "graphics-spec.json"
     if not path.is_file():
         return {"available": False}
-    from mp3_to_videoclip.storage import read_json
-
     return {"available": True, "spec": read_json(path)}
+
+
+@router.get("/graphics-review")
+async def get_graphics_review(slug: str, request: Request):
+    """The preflight samples the graphics approval must inspect."""
+    root = project_root(request, slug)
+    path = root / P.STAGE_FILES["graphics"]
+    if not path.is_file():
+        return {"available": False}
+    review = read_json(path)
+    samples = []
+    for relative in sorted(review.get("samples", {})):
+        target = root / relative
+        if not target.is_file():
+            continue
+        name = target.name
+        samples.append(
+            {
+                "name": name,
+                "url": f"/api/projects/{slug}/graphics-review/{name}",
+                "sha256": review["samples"][relative],
+            }
+        )
+    current = True
+    reason = None
+    try:
+        from mp3_to_videoclip.signature import validate_review
+
+        validate_review(root, P.load_project(root))
+    except OSError:
+        current = False
+        reason = "the graphics review is incomplete; render a current base and review it"
+    except (ValueError, KeyError) as exc:
+        current = False
+        reason = str(exc)
+    return {
+        "available": True,
+        "current": current,
+        "reason": reason,
+        "warning": review.get("warning"),
+        "base": review.get("base"),
+        "samples": samples,
+    }
+
+
+@router.get("/graphics-review/{name}")
+async def get_graphics_sample(slug: str, name: str, request: Request):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*\.png", name):
+        raise HTTPException(status_code=404, detail="unknown graphics sample")
+    root = project_root(request, slug)
+    path = root / P.STAGE_FILES["graphics"]
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="graphics review is missing")
+    matches = [rel for rel in read_json(path).get("samples", {}) if Path(rel).name == name]
+    if len(matches) != 1:
+        raise HTTPException(status_code=404, detail="unknown graphics sample")
+    try:
+        target = inside(root, matches[0])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="unknown graphics sample") from exc
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="graphics sample is missing")
+    return FileResponse(target, media_type="image/png")
 
 
 @router.get("/preview")
@@ -42,11 +105,13 @@ async def preview_input(slug: str, request: Request):
 async def render(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     kind = payload.get("kind", "preview")
-    if kind not in ("preview", "final"):
-        raise HTTPException(status_code=400, detail="kind must be preview or final")
-    if kind == "final":
+    if kind not in KINDS:
+        raise HTTPException(status_code=400, detail="kind must be preview, base or final")
+    if kind in ("base", "final"):
         try:
             P.require_approval(root, "stills")
+            if kind == "final" and P.requires_signature(root):
+                P.require_approval(root, "graphics")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     runner = getattr(request.app.state, "runner", None)
@@ -57,7 +122,11 @@ async def render(slug: str, request: Request, payload: dict):
     from mp3_to_videoclip import services
 
     async def work():
-        fn = services.render.render_final if kind == "final" else services.render.render_preview
+        fn = {
+            "preview": services.render.render_preview,
+            "base": services.render.render_base,
+            "final": services.render.render_final,
+        }[kind]
         return await asyncio.to_thread(fn, root)
 
     job_id = runner.submit("render", slug, work)

@@ -70,6 +70,17 @@ def test_library_identity_and_still_count_follow_the_folder(client, project):
     assert client.get("/api/projects/production").json()["slug"] == "production"
 
 
+def test_an_unreadable_production_stays_visible(tmp_path, client):
+    broken = tmp_path / "broken-film"
+    broken.mkdir()
+    (broken / "project.json").write_text("{not json")
+    rows = client.get("/api/projects").json()
+    row = next(item for item in rows if item["slug"] == "broken-film")
+    assert row["title"] == "Broken Film"
+    assert "could not be loaded" in row["error"]
+    assert client.get("/api/projects/broken-film").status_code == 404
+
+
 def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
     path = tmp_path / "settings.toml"
     monkeypatch.setattr("mp3_to_videoclip.config.settings_path", lambda: path)
@@ -111,6 +122,8 @@ def test_track_read_lyrics_write_and_local_analysis(client, project, monkeypatch
         json={"lrc": "[00:00.50] one\n[00:01.50] two"},
     )
     assert imported.json() == {"status": "saved", "segments": 2}
+    history = sorted((project / "work" / "lyrics-history").glob("*.json"))
+    assert len(history) == 2, "both replaced lyric artifacts must stay in history"
     stored = client.get("/api/projects/production/track").json()["lyrics"]
     assert stored["segments"][-1]["end"] == 2.0
     assert "error" in client.put("/api/projects/production/lyrics", json={"lrc": "no tags"}).json()
@@ -271,6 +284,9 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
     blocked = client.post("/api/projects/production/render", json={"kind": "final"})
     assert blocked.status_code == 400
     assert "needs current user approval" in blocked.text
+    base_blocked = client.post("/api/projects/production/render", json={"kind": "base"})
+    assert base_blocked.status_code == 400
+    assert "needs current user approval" in base_blocked.text
     assert submitted == [("render", "production")]
 
     (project / "renders").mkdir()
@@ -289,6 +305,41 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
     assert client.get("/api/projects/production/film/renders/missing.mp4").status_code == 404
     assert client.get("/api/projects/production/film/renders/a.txt").status_code == 404
     assert client.get("/api/projects/production/film/other/a.mp4").status_code == 404
+
+
+def test_graphics_review_lists_and_serves_only_review_samples(client, project):
+    sample = project / "work/reviews/signature-test/001-intro.png"
+    sample.parent.mkdir(parents=True)
+    sample.write_bytes(b"png-bytes")
+    write_json(
+        project / "work/graphics-review.json",
+        {
+            "base": "renders/base-v001.mp4",
+            "warning": "Inspect the actual composited samples",
+            "samples": {"work/reviews/signature-test/001-intro.png": "a" * 64},
+        },
+    )
+
+    body = client.get("/api/projects/production/graphics-review").json()
+    assert body["available"] is True
+    assert body["current"] is False
+    assert "incomplete" in body["reason"]
+    assert "graphics-spec.json" not in body["reason"]
+    assert body["warning"].startswith("Inspect")
+    assert body["samples"] == [
+        {
+            "name": "001-intro.png",
+            "url": "/api/projects/production/graphics-review/001-intro.png",
+            "sha256": "a" * 64,
+        }
+    ]
+
+    served = client.get(body["samples"][0]["url"])
+    assert served.status_code == 200
+    assert served.content == b"png-bytes"
+    assert served.headers["content-type"] == "image/png"
+
+    assert client.get("/api/projects/production/graphics-review/002-unknown.png").status_code == 404
 
 
 def test_budget_read_topup_and_validation(client, project):

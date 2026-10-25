@@ -26,7 +26,7 @@ from .models import (
 from .preview import build_preview
 from .providers import RUNWARE_KEY_ENV
 from .render import contact_sheet, render
-from .storage import digest, file_hash, inside, project_lock, read_json, write_json
+from .storage import file_hash, inside, project_lock, read_json, write_json
 
 
 def parse_native_size(text: str, aspect: str) -> list[int]:
@@ -518,20 +518,11 @@ def execute(args):
                 permission_confirmed=args.permission_confirmed,
                 from_version=args.from_version,
             )
-        if cmd == "approve":
-            production.approve(
-                root, args.stage, args.note, args.ack_uncertain, inspected=args.inspected
-            )
-            return {"approved": args.stage}
         if cmd == "import-lyrics":
+            from .domain.lyrics import save_lyrics
+
             lyrics = Lyrics.model_validate(read_json(args.file))
-            previous = root / "work/lyrics.json"
-            if previous.exists():
-                value = read_json(previous)
-                archive = root / f"work/lyrics-history/{digest(value)}.json"
-                if not archive.exists():
-                    write_json(archive, value)
-            write_json(root / "work/lyrics.json", lyrics.model_dump())
+            save_lyrics(root, lyrics)
             return {"imported": "lyrics", "segments": len(lyrics.segments), "approved": False}
         if cmd == "skeleton":
             timing = args.timing or ("adaptive" if project.image_model is not None else "beats")
@@ -724,9 +715,6 @@ def execute(args):
                 args.shots.split(",") if args.shots else None,
                 args.regenerate,
             )
-        if cmd == "authorize":
-            generation.authorize(root, args.quote, args.cap, args.note)
-            return {"authorized_quote": args.quote, "generated": False}
         if cmd == "transcribe":
             result = generation.transcribe_quote(root, args.quote)
             if result is not None:
@@ -805,6 +793,7 @@ def execute(args):
         if cmd == "render":
             production.require_approval(root, "stills")
             shots = production.resolved_assets(root)
+            signature = production.requires_signature(root, project)
             directory = root / "renders"
             if args.name:
                 if not re.fullmatch(r"[a-zA-Z0-9_-]+\.mp4", args.name):
@@ -814,7 +803,7 @@ def execute(args):
                 version = 1
                 prefix = (
                     f"{project.slug}-{'base' if args.base_only else 'stills'}"
-                    if project.signature_required
+                    if signature
                     else "stills"
                 )
                 while (directory / f"{prefix}-v{version:03d}.mp4").exists():
@@ -829,11 +818,11 @@ def execute(args):
                 next_action=(
                     "the base is not delivery: inspect the composited graphics samples, record the "
                     "graphics decision, then render the final composite"
-                    if project.signature_required and args.base_only
+                    if signature and args.base_only
                     else "inspect the export report, samples and audio before delivery"
                 ),
             ):
-                if project.signature_required and not args.base_only:
+                if signature and not args.base_only:
                     from .graphics import compose
                     from .signature import validate_review
 
@@ -855,7 +844,7 @@ def execute(args):
                 from .signature import current_input_hash
 
                 report["input_hash"] = current_input_hash(root)
-                if project.signature_required:
+                if signature:
                     from .signature import prepare_review
 
                     report["delivery_ready"] = False

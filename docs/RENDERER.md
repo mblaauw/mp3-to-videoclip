@@ -72,10 +72,13 @@ acceptance and legacy camera endpoints with the Python models and renderer.
 
 A Studio preview job writes `work/preview-review.json` itself, binding the movie
 bytes to the current storyboard, proof set, brand and renderer revision, so the
-preview approval is available as soon as the render finishes. The final render
-still requires the `stills` approval. Schema 3 selects Remotion even when a
-migrated document no longer carries the legacy `renderer_backend` field; an
-explicit backend wins for older schema-1 projects.
+preview approval is available as soon as the render finishes. Delivery is two
+steps in both the Studio and the CLI: a **base** render carries the stills edit
+but no graphics and prepares the preflight samples; after the graphics approval,
+a **final** render composites the reviewed graphics onto that exact base. The
+final therefore needs the `stills` and `graphics` approvals. Schema 3 selects
+Remotion even when a migrated document no longer carries the legacy
+`renderer_backend` field; an explicit backend wins for older schema-1 projects.
 
 ## Acceptance is more than tests
 

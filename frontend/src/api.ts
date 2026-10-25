@@ -8,6 +8,7 @@ export type ProjectSummary = {
   archived: boolean;
   render: string | null;
   still_count: number;
+  error?: string | null;
 };
 
 export type ProjectDetail = {
@@ -118,6 +119,21 @@ export type SetupStatus = {
   ffprobe: boolean;
   renderer: boolean;
   frontend: boolean;
+};
+
+export type GraphicsSample = {
+  name: string;
+  url: string;
+  sha256: string;
+};
+
+export type GraphicsReview = {
+  available: boolean;
+  current?: boolean;
+  reason?: string | null;
+  warning?: string;
+  base?: string;
+  samples?: GraphicsSample[];
 };
 
 export type PreviewInput = {
@@ -244,6 +260,8 @@ export const api = {
       `/api/projects/${slug}/track`,
     ),
   images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),
+  graphicsReview: (slug: string) =>
+    request<GraphicsReview>(`/api/projects/${slug}/graphics-review`),
   preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
   exports: (slug: string) =>
     request<{ exports: string[]; previews: string[] }>(
@@ -349,7 +367,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  render: (slug: string, kind: "preview" | "final") =>
+  render: (slug: string, kind: "preview" | "base" | "final") =>
     request<unknown>(`/api/projects/${slug}/render`, {
       method: "POST",
       body: JSON.stringify({ kind }),

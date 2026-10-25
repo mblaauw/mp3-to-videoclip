@@ -35,7 +35,13 @@ export function ImagesStage({ slug }: { slug: string }) {
         setRevision((value) => value + 1);
         if (!initialized.current) {
           initialized.current = true;
-          setSelected(new Set(d.shots.filter((s) => !s.versions.length).map((s) => s.id)));
+          setSelected(
+            new Set(
+              d.shots
+                .filter((s) => s.owner === s.id && !s.versions.length)
+                .map((s) => s.owner),
+            ),
+          );
         }
       })
       .catch((e) => setError(String(e)));
@@ -118,12 +124,16 @@ export function ImagesStage({ slug }: { slug: string }) {
 
   const selectMissing = () => {
     clearQuote();
-    setSelected(new Set(shots.filter((s) => !s.versions.length).map((s) => s.id)));
+    setSelected(
+      new Set(
+        shots.filter((s) => s.owner === s.id && !s.versions.length).map((s) => s.owner),
+      ),
+    );
   };
 
   const selectAll = () => {
     clearQuote();
-    setSelected(new Set(shots.map((s) => s.id)));
+    setSelected(new Set(shots.filter((s) => s.owner === s.id).map((s) => s.owner)));
   };
 
   const clearSelection = () => {
@@ -294,12 +304,13 @@ export function ImagesStage({ slug }: { slug: string }) {
               <label className="inline">
                 <input
                   type="checkbox"
-                  checked={selected.has(s.id)}
-                  onChange={() => toggle(s.id)}
+                  checked={selected.has(s.owner)}
+                  onChange={() => toggle(s.owner)}
                 />
                 {s.id}
               </label>{" "}
-              · {s.versions.length} version{s.versions.length === 1 ? "" : "s"}
+              {s.owner !== s.id && <span className="meta">reprise of {s.owner} · </span>}
+              {s.versions.length} version{s.versions.length === 1 ? "" : "s"}
             </h3>
             <p className="meta">
               {s.review
@@ -317,12 +328,12 @@ export function ImagesStage({ slug }: { slug: string }) {
                       src={`/api/projects/${slug}/images/${encodeURIComponent(s.owner)}/${v.version}`}
                       alt={`${s.id} version ${v.version}`}
                       loading="lazy"
-                      onClick={() => selectVersion(slug, s.id, v.version, load, setError)}
+                      onClick={() => selectVersion(slug, s.owner, v.version, load, setError)}
                     />
                     <figcaption>
                       <button
                         className={v.version === s.selected ? "active" : ""}
-                        onClick={() => selectVersion(slug, s.id, v.version, load, setError)}
+                        onClick={() => selectVersion(slug, s.owner, v.version, load, setError)}
                         disabled={v.version === s.selected}
                       >
                         v{v.version}

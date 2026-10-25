@@ -31,10 +31,7 @@ class Control(Nano):
 
 
 def test_exact_control_does_not_contaminate_reusable_style():
-    text = (
-        Path(__file__).parents[1]
-        / ".opencode/skills/clip-music-director/references/successful-manual-test.md"
-    ).read_text()
+    text = (Path(__file__).parent / "fixtures/successful-manual-test.md").read_text()
     supplied = text.split("```text\n", 1)[1].split("```", 1)[0].strip()
     assert profiles.ROOFTOP_CONTROL_PROMPT == supplied
     assert all(
@@ -294,18 +291,12 @@ def test_cli_requires_inspected_graphics_and_composes_not_base(tmp_path, monkeyp
     with pytest.raises(ValueError, match="graphics needs"):
         execute(parser().parse_args(["render", str(root)]))
     with pytest.raises(ValueError, match="--inspected"):
-        execute(parser().parse_args(["approve", str(root), "graphics", "--note", "not inspected"]))
-    execute(
-        parser().parse_args(
-            [
-                "approve",
-                str(root),
-                "graphics",
-                "--inspected",
-                "--note",
-                "test actual graphics samples inspected",
-            ]
-        )
+        P.approve(root, "graphics", "not inspected")
+    P.approve(
+        root,
+        "graphics",
+        "test actual graphics samples inspected",
+        inspected=True,
     )
     calls = []
 
