@@ -233,7 +233,7 @@ def write_preview_report(root, name="work/preview-v001.mp4"):
     report = {
         "movie": name,
         "movie_sha256": file_hash(movie),
-        "storyboard_hash": digest(read_json(root / P.STAGE_FILES["storyboard"])),
+        "storyboard_hash": P.preview_board_hash(root),
         "proof_hash": P.stage_hash(root, "proof"),
         "input_hash": digest({"render_inputs": "fake"}),
     }

@@ -394,3 +394,45 @@ button.active { border-color: var(--gold); color: var(--gold); }
   .approve { flex-wrap: wrap; }
   .approve input { flex: 1 1 100%; }
 }
+
+/* image reviews */
+.review { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.review-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.review-controls input[aria-label^="Review note"] {
+  flex: 1 1 260px;
+  background: var(--panel2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12px;
+}
+.review-controls select {
+  background: var(--panel2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+.review-controls .inline { font-size: 12px; }
+.approvals .attest {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.approvals .attest input { margin-top: 2px; }
+.chip.accept { border-color: var(--ok); color: var(--ok); }
+.chip.reject { border-color: var(--bad); color: var(--bad); }
+.chip.uncertain { border-color: var(--warn); color: var(--warn); }

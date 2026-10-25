@@ -248,6 +248,10 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
     assert queued.json() == {"job_id": "job-1", "kind": "preview", "status": "queued"}
     assert submitted == [("render", "production")]
     assert client.post("/api/projects/production/render", json={"kind": "warp"}).status_code == 400
+    blocked = client.post("/api/projects/production/render", json={"kind": "final"})
+    assert blocked.status_code == 400
+    assert "needs current user approval" in blocked.text
+    assert submitted == [("render", "production")]
 
     (project / "renders").mkdir()
     (project / "renders" / "a.mp4").write_bytes(b"x")

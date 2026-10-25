@@ -154,26 +154,47 @@ settings file; a live Track-stage chat turn answered correctly.
   unreadable-upload domain/API tests cover the new backend edges; the frontend is
   pinned by `npm run build` plus the browser sweep.
 
+## Phase 4 closure: reviews and attestations (25 Oct 2026)
+
+Found while planning the deletion: the new GUI could select a still but could
+not record the accepted review `proof`/`stills` approval requires, and the
+approval bar had no way to send `preview_watched`/`inspected`, so a new film
+could never pass those gates.
+
+- `POST /images/review` records a verdict, note and inspection acknowledgement
+  against the exact version; `GET /images` returns the selected version's latest
+  review. Stale input hashes are refused, alias shots resolve their owner, and
+  the UI shows a verdict badge plus per-shot accept/reject/uncertain controls.
+- `proof` and `stills` approval bars now appear on Images; a reviewed proof set
+  and a reviewed full set both pass end to end in the browser.
+- The approval bar sends `preview_watched` (preview), `inspected` (graphics) and
+  `acknowledge_uncertain` (lyrics); preview/graphics Approve stays disabled until
+  the matching box is checked. Verified preview approval in the browser.
+- Engine validation errors from an approval now return HTTP 400 instead of a 200
+  body with `error`, so the stage shows a toast and keeps the decision visible.
+- A final render now requires the `stills` approval in both the API pre-check and
+  `services.render.render_final`; the Film card says where that approval lives.
+
 ## Next slice: delete the interim Studio (not started)
 
 The new app is the working replacement, but the old server is still imported by
 its own surface and by the approval metadata path. Do this as one branch with the
 suite green at every step:
 
-1. Port the still-needed decision contract out of `human_actions`: `_body`,
-   `stage_name` and `approve_stage` move to `domain/approvals.py` (or the API
-   router); `api/approvals.py` stops importing `human_actions`.
+1. ~~Port `_body`, `stage_name` and `approve_stage` to `domain/approvals.py`.~~
 2. Move `studio.ORDER` / `studio.approval_state` (used by `appdata.approvals`) to
    the domain, or retire `appdata.approvals` together with the old projection.
 3. Delete `serve.py`, `studio_ui.py`, `studio_ui_flow.py`, `human_ui.py`,
-   `sources.py` and `studio.py`; remove `clip serve` / `clip studio` and the
-   `--actions` redirect text from `cli.py`.
+   `sources.py`, `studio.py`, `appdata.py` and `human_actions.py`; remove
+   `clip serve` / `clip studio` and the `--actions` redirect text from `cli.py`.
 4. Triage the old-surface tests before deleting them:
    `test_studio_browser.py`, `test_studio_actions.py`, `test_studio.py`,
    `test_live_layer.py`, `test_workflow_projection.py`. Port the still-true
    engine assertions first: guided policy/marker rules, atomic story approval,
    artifact path guards, quote authorization/cap/upload consent, preview-watched
-   and graphics attestations. `test_guided_flow.py` keeps its non-HTTP tests.
+   and graphics attestations. `test_guided_flow.py` keeps its policy tests and
+   drops the combined-story/credits/review helpers that only the old surface
+   used; the new review endpoint covers the shot-review half.
 5. Keep `flow.py`, `operations.py`, `reviews.py`, `signature.py` and `backup.py`
    until their Phase 5 replacements; keep `cli.py` for the engine commands that
    have no GUI yet (transcribe, listen, backup, sign, render maintenance).

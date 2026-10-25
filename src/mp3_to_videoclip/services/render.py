@@ -11,6 +11,8 @@ from mp3_to_videoclip.storage import inside
 
 def render_final(root: Path, output: Path | None = None) -> dict:
     """Render the selected stills to a versioned MP4 on the exact timeline."""
+    # The full-stills decision is the last human gate before a delivery render.
+    P.require_approval(root, "stills")
     project = P.load_project(root)
     shots = P.resolved_assets(root)
     directory = root / "renders"

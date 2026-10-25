@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.storage import inside
 
@@ -31,6 +32,11 @@ async def render(slug: str, request: Request, payload: dict):
     kind = payload.get("kind", "preview")
     if kind not in ("preview", "final"):
         raise HTTPException(status_code=400, detail="kind must be preview or final")
+    if kind == "final":
+        try:
+            P.require_approval(root, "stills")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     runner = getattr(request.app.state, "runner", None)
     if runner is None:
         return {"error": "job runner unavailable"}

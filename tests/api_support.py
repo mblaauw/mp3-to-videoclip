@@ -11,7 +11,7 @@ from mp3_to_videoclip import flow
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.app import create_app
 from mp3_to_videoclip.references import import_reference
-from mp3_to_videoclip.storage import file_hash, read_json, write_json
+from mp3_to_videoclip.storage import digest, file_hash, read_json, write_json
 
 
 def make_api_project(tmp_path: Path, name: str = "production") -> Path:
@@ -48,7 +48,7 @@ def add_assets(root: Path, versions: int = 2) -> None:
                     "version": version,
                     "path": path.relative_to(root).as_posix(),
                     "sha256": file_hash(path),
-                    "input_hash": "0" * 64,
+                    "input_hash": digest(P.image_spec(root, shot)),
                     "task_id": f"task-{shot.id}-{version}",
                 }
             )

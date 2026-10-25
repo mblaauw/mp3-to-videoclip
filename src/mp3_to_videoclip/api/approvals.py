@@ -10,9 +10,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from mp3_to_videoclip import human_actions
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.domain import approvals
 from mp3_to_videoclip.storage import read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["approvals"])
@@ -69,8 +69,8 @@ async def get_approvals(slug: str, request: Request, stages: str | None = None):
 async def approve_stage(slug: str, stage: str, request: Request, payload: dict):
     root = project_root(request, slug)
     try:
-        return human_actions.approve_stage(root, stage, payload)
-    except human_actions.ActionError as exc:
+        return approvals.approve_stage(root, stage, payload)
+    except approvals.ApprovalError as exc:
         return JSONResponse({"error": str(exc)}, status_code=exc.status)
     except ValueError as exc:
-        return {"error": str(exc)}
+        return JSONResponse({"error": str(exc)}, status_code=400)
