@@ -12,7 +12,9 @@ from .storage import digest, read_json
 
 
 def strict_workflow(root: Path):
-    return read_json(root / "project.json").get("workflow_version") == 2
+    """The creative workflow: explicit v2 or the migrated/native schema 3."""
+    project = read_json(root / "project.json")
+    return project.get("workflow_version") == 2 or project.get("schema_version") == 3
 
 
 def manifest(root: Path, ids=None):
@@ -62,7 +64,7 @@ def manifest(root: Path, ids=None):
                 "description": state.description if state else None,
                 "attributes": state.attributes if state else {},
             }
-            if project.workflow_version == 2 and not character.identity:
+            if P.creative_workflow(project) and not character.identity:
                 issue(
                     shot.id,
                     "identity",
@@ -159,7 +161,7 @@ def manifest(root: Path, ids=None):
                 "digit-count",
                 "ambiguous five fingers plus a thumb; use four fingers and a thumb",
             )
-        if project.workflow_version == 2:
+        if P.creative_workflow(project):
             for ref in spec["references"]:
                 try:
                     validate_import(root, ref["path"])

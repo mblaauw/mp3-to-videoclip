@@ -23,6 +23,18 @@ override it where they disagree:
 - One commit per numbered task in the brief.
 - Every phase ends with `pytest` and `ruff` green and an app that starts.
 
+## Schema 3 semantics (decided during Phase 2)
+
+Schema 3 is the native form of the guided workflow v2, not a new, weaker flow. The
+engine therefore treats `schema_version == 3` exactly like `workflow_version == 2`:
+the v2 prompt layout, character identity separate from description, reference
+import receipts, accepted proof/stills reviews, preflight before storyboard
+approval, and a required production budget. This was a real migration defect:
+without it every migrated still failed its input-hash check and the film could not
+be rendered, while cumulative budget admission silently had no cap. Approval
+hashes intentionally exclude the administrative budget history, so a top-up
+cannot invalidate a reviewed story.
+
 ## Deviation from the brief (recorded, reversible)
 
 Phase 1's delete table removes the current Studio (`serve.py`, `studio_ui*`, `human_*`)
@@ -42,11 +54,45 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. Remaining modules (`flow`, `operations`, `sources`, `human_*`, `studio`, `studio_ui*`, `reviews`, `appdata`, `backup`, `signature`) are imported by the interim Studio/CLI and cannot be deleted until their replacements land in Phases 2-4 (recorded deviation). Legacy model branches move with them. `src/` 21,124 -> 17,371. |
-| 2 · backend skeleton | not started — owns the schema-3 models and therefore the zero-bars importer |
-| 3 · director | not started |
-| 4 · frontend | not started — deletes the interim Studio and the approval paths |
+| 2 · backend skeleton | **gate-ready on `gui-rework/phase-2-backend`.** Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
+| 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
+| 4 · frontend | **started inside Phase 2** — library, five stages, director panel, job tray, approvals, image thumbnails/estimate/generate. Still open: Remotion Player preview, waveform and draggable boundaries, error toasts, the 390/900/1280 keyboard pass; deleting the interim Studio stays Phase 4 proper. |
 | 5 · render cleanup | not started |
 | 6 · polish | not started |
+
+## Live production state (zero-bars)
+
+Schema 3, cap $8.00, committed $2.8843815, remaining $5.1156185 (the earlier
+“$3.26 committed” figure came from per-task cent rounding in the app; the engine
+commitment is now the single source). The migration changed the project document,
+so the three recorded approvals were invalidated even though brief, board and
+stills were untouched. On the owner's instruction they were re-approved in order
+(brief → storyboard → proof) with notes recording that the content was unchanged
+from the approved revision. All 79 selected stills now resolve and the gates pass.
+A live one-shot image quote was taken for `a001-blue-face` at $0.05 (no
+authorization, no generation). The director key is configured in the user's
+settings file; a live Track-stage chat turn answered correctly.
+
+
+## Phase 2 gate evidence (25 Oct 2026)
+
+- `tests/test_api_routes.py`, `test_api_images.py`, `test_api_approvals.py` and
+  `test_api_archive.py` exercise every route, including the NDJSON director
+  stream, the SSE hello, job list/get/cancel and all error branches; the paid
+  services are faked, so no provider call is made.
+- `tests/test_job_runner.py` pins per-project serialisation, cross-project
+  overlap, cancel-suppresses-success and the queued → started → succeeded event
+  order.
+- Local timings on `zero-bars`: `GET /api/projects` 23 ms, `GET
+  /api/projects/{slug}` 27 ms (the expensive verified status moved behind
+  `?verify=true`), scoped proof approvals 45 ms.
+- Fixed while testing: unvalidated storyboard/lyrics/brief writes, secrets
+  returned by `GET /api/settings`, a budget top-up that could go below committed
+  spend or accept negative/zero, blocking analysis on the event loop, an
+  unvalidated render kind, an SSE stream that waited 10 s to notice a closed tab,
+  and a runner that serialised every project because it awaited jobs inline.
+- The brief's B4/B6/B7 regression definitions are not in the repository. The
+  owner waived them on 25 Oct 2026 and accepted the route/timing gate as Phase 2.
 
 ## Acceptance per phase
 

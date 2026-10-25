@@ -39,3 +39,6 @@ style-tests/
 archive/
 brand/releases/
 .vscode/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+.playwright-mcp/

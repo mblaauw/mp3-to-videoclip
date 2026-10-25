@@ -83,15 +83,23 @@ def workflow_version(root: Path):
     return value.get("workflow_version") if isinstance(value, dict) else None
 
 
+def schema_version(root: Path):
+    path = root / PROJECT_PATH
+    if not path.exists():
+        return None
+    value = read_json(path)
+    return value.get("schema_version") if isinstance(value, dict) else None
+
+
+def strict_paid(root: Path) -> bool:
+    """Creative-workflow productions always need a cap before paid work."""
+    return schema_version(root) == 3 or workflow_version(root) == STRICT_WORKFLOW_VERSION
+
+
 # --------------------------------------------------------------------------- #
 # budget artifact
 # --------------------------------------------------------------------------- #
-def read_budget(root: Path) -> dict | None:
-    """Validated production budget, or ``None`` for a legacy/unconfigured project."""
-    path = root / BUDGET_PATH
-    if not path.exists():
-        return None
-    record = read_json(path)
+def _validate_budget_record(record) -> dict:
     if not isinstance(record, dict) or record.get("version") != BUDGET_VERSION:
         raise ValueError("production budget artifact is invalid; recreate it explicitly")
     cap = money(record.get("cap_usd"))
@@ -107,6 +115,39 @@ def read_budget(root: Path) -> dict | None:
     if not str(record.get("note", "")).strip():
         raise ValueError("production budget artifact is missing its authority note")
     return record
+
+
+def _schema_budget(root: Path) -> dict | None:
+    """Schema 3 keeps the cap history in project.json; synthesise the same record."""
+    path = root / PROJECT_PATH
+    if not path.exists():
+        return None
+    project = read_json(path)
+    if not isinstance(project, dict) or project.get("schema_version") != 3:
+        return None
+    entries = project.get("budget") or []
+    if not entries:
+        return None
+    latest = entries[-1]
+    if not isinstance(latest, dict):
+        raise ValueError("project budget history is invalid; inspect it locally")
+    return _validate_budget_record(
+        {
+            "version": BUDGET_VERSION,
+            "cap_usd": latest.get("cap_usd"),
+            "max_corrections": latest.get("max_corrections", DEFAULT_MAX_CORRECTIONS),
+            "note": str(latest.get("reason") or "schema 3 production budget"),
+            "at": latest.get("at") or _now(),
+        }
+    )
+
+
+def read_budget(root: Path) -> dict | None:
+    """Validated production budget, or ``None`` for a legacy/unconfigured project."""
+    path = root / BUDGET_PATH
+    if path.exists():
+        return _validate_budget_record(read_json(path))
+    return _schema_budget(root)
 
 
 def commitment(root: Path) -> Decimal:
@@ -169,9 +210,10 @@ def set_budget(root: Path, cap_usd, note: str, max_corrections: int | None = Non
 def require_budget(root: Path) -> dict | None:
     """Strict workflow 2 requires a budget; legacy/unconfigured projects do not."""
     record = read_budget(root)
-    if record is None and workflow_version(root) == STRICT_WORKFLOW_VERSION:
+    if record is None and strict_paid(root):
         raise ValueError(
-            "workflow version 2 requires an explicit production budget before authorized paid tasks"
+            "workflow version 2 and schema 3 require an explicit production budget "
+            "before authorized paid tasks"
         )
     return record
 
@@ -199,7 +241,7 @@ def check_capacity(root: Path, additional_usd, *, context: str = "submission"):
 
 def require_reconciled(root: Path, admitted=()):
     """No new work after ambiguous prior tasks; allow this run's live workers."""
-    if read_budget(root) is None and workflow_version(root) != STRICT_WORKFLOW_VERSION:
+    if read_budget(root) is None and not strict_paid(root):
         return
     allowed = set(admitted)
     unresolved = [
@@ -232,7 +274,7 @@ def correction_policy(root: Path) -> tuple[bool, int]:
     record = read_budget(root)
     if record is not None:
         return True, record["max_corrections"]
-    if workflow_version(root) == STRICT_WORKFLOW_VERSION:
+    if strict_paid(root):
         return True, DEFAULT_MAX_CORRECTIONS
     return False, 2  # Historical inactive policy; no new default injected into old projects.
 
@@ -417,6 +459,7 @@ def summary(root: Path) -> dict:
         "currency": "USD",
         "budget_configured": record is not None,
         "workflow_version": workflow_version(root),
+        "schema_version": schema_version(root),
         "cap_usd": str(cap) if cap is not None else None,
         "max_corrections": record["max_corrections"] if record else None,
         "note": record["note"] if record else None,
