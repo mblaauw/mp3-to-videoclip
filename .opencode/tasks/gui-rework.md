@@ -302,6 +302,16 @@ read-only).
   card says so. Pinning Remotion's headless shell remains an open portability
   decision, not a hidden download.
 
+## Post-phase polish (25 Oct 2026)
+
+- The library now lists the folder slug that routes actually open, never the
+  independent `project.json` slug. A copied or renamed production can no longer
+  advertise an entry that opens another folder (or 404s). Live rows also report
+  the count of selected stills instead of the default zero.
+- A missing `work/graphics-review.json` is a clean "graphics review has not been
+  prepared" state in the approval row instead of a raw `[Errno 2]` filesystem
+  path. Other missing stage artifacts get the same generic treatment.
+
 ## Acceptance per phase
 
 - **0:** tag exists; snapshot restores metadata; golden passes. ✅

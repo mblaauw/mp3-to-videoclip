@@ -163,3 +163,16 @@ def test_preview_requires_a_continuous_watch_attestation(tmp_path):
         watched = approve("preview", preview_watched=True)
         assert watched.status_code == 200, watched.text
         assert watched.json()["record"]["preview_watched"] is True
+
+
+def test_a_missing_graphics_review_is_a_clean_unavailable_state(tmp_path):
+    from api_support import add_assets
+
+    root, client = _client(tmp_path)
+    add_assets(root)
+    with client:
+        row = client.get("/api/projects/production/approvals?stages=graphics").json()["stages"][0]
+    assert row["state"] == "unavailable"
+    assert "graphics review has not been prepared" in row["error"]
+    assert "graphics-review.json" not in row["error"]
+    assert "/production/work" not in row["error"]
