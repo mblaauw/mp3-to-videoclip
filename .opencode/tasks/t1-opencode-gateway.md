@@ -204,4 +204,5 @@ Editor: 3,957 input / 250 output tokens, $0.00078. Artifacts were written only
 to `.opencode/scratch/t1/probe-live-214i/`.
 
 Remaining: the Settings UI (the API and TOML already accept the gateway and
-role models) and the PR/CI cycle.
+role models). T1 is otherwise complete and merged in PR #19 (`94bad64`), on top
+of the spike record `81f9e28`.
