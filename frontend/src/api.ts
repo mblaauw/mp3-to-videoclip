@@ -49,6 +49,20 @@ export type Brief = {
   } | null;
 };
 
+export type ImageVersion = {
+  version: number;
+  path: string;
+  sha256: string;
+  input_hash: string;
+};
+
+export type ImageShot = {
+  id: string;
+  owner: string;
+  selected: number | null;
+  versions: ImageVersion[];
+};
+
 export type Job = {
   id: string;
   kind: string;
@@ -77,7 +91,7 @@ export const api = {
   brief: (slug: string) => request<Brief>(`/api/projects/${slug}/brief`),
   storyboard: (slug: string) => request<Storyboard>(`/api/projects/${slug}/storyboard`),
   track: (slug: string) => request<{ music: unknown; lyrics: unknown }>(`/api/projects/${slug}/track`),
-  images: (slug: string) => request<Record<string, unknown>>(`/api/projects/${slug}/images`),
+  images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),
   exports: (slug: string) => request<{ exports: string[] }>(`/api/projects/${slug}/exports`),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
   jobs: () => request<Job[]>("/api/jobs"),
@@ -85,4 +99,24 @@ export const api = {
   chat: (slug: string) => request<{ messages: unknown[] }>(`/api/projects/${slug}/chat`),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
+  patchBrief: (slug: string, patch: Partial<Brief>) =>
+    request<Brief>(`/api/projects/${slug}/brief`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  patchShots: (slug: string, changes: Partial<Shot>[]) =>
+    request<Storyboard>(`/api/projects/${slug}/storyboard/shots`, {
+      method: "PATCH",
+      body: JSON.stringify({ changes }),
+    }),
+  selectImage: (slug: string, shot_id: string, version: number) =>
+    request<unknown>(`/api/projects/${slug}/images/select`, {
+      method: "POST",
+      body: JSON.stringify({ shot_id, version }),
+    }),
+  render: (slug: string, kind: "preview" | "final") =>
+    request<unknown>(`/api/projects/${slug}/render`, {
+      method: "POST",
+      body: JSON.stringify({ kind }),
+    }),
 };

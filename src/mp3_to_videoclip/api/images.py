@@ -13,7 +13,27 @@ router = APIRouter(prefix="/api/projects/{slug}", tags=["images"])
 @router.get("/images")
 async def get_images(slug: str, request: Request):
     root = project_root(request, slug)
-    return P.status(root)
+    assets_path = root / "work" / "assets.json"
+    assets = {}
+    if assets_path.is_file():
+        import json
+
+        assets = json.loads(assets_path.read_text())
+    board = P.load_board(root) if (root / "work" / "storyboard.json").is_file() else None
+    shots = []
+    if board is not None:
+        for shot in board.shots:
+            owner = shot.asset_shot_id or shot.id
+            entry = assets.get(owner, {})
+            shots.append(
+                {
+                    "id": shot.id,
+                    "owner": owner,
+                    "selected": entry.get("selected"),
+                    "versions": entry.get("versions", []),
+                }
+            )
+    return {"shots": shots}
 
 
 @router.post("/images/estimate")

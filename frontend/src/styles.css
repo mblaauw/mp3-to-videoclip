@@ -86,3 +86,27 @@ th { color: var(--muted); font-weight: 600; }
   .rail { border-right: 0; border-bottom: 1px solid var(--line); }
   .director { border-left: 0; border-top: 1px solid var(--line); }
 }
+
+td input, td textarea, td select {
+  width: 100%;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12px;
+}
+td textarea { min-height: 52px; resize: vertical; }
+.card textarea {
+  width: 100%;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+button.active { border-color: var(--gold); color: var(--gold); }

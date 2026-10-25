@@ -20,6 +20,25 @@ async def get_graphics(slug: str, request: Request):
     return {"available": True, "spec": read_json(path)}
 
 
+@router.post("/render")
+async def render(slug: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    kind = payload.get("kind", "preview")
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        return {"error": "job runner unavailable"}
+    import asyncio
+
+    from mp3_to_videoclip import services
+
+    async def work():
+        fn = services.render.render_final if kind == "final" else services.render.render_preview
+        return await asyncio.to_thread(fn, root)
+
+    job_id = runner.submit("render", slug, work)
+    return {"job_id": job_id, "kind": kind, "status": "queued"}
+
+
 @router.get("/exports")
 async def list_exports(slug: str, request: Request):
     root = project_root(request, slug)
