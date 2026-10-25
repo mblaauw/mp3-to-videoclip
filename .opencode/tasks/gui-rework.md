@@ -57,7 +57,7 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **merged as PR #12** (merge `21c6ff5`, 25 Oct 2026). Phase 2 built the LLM adapter, tool dispatch, turn loop and stage-aware guides; this slice adds bounded prompt history, the recorded fake-provider probe, library-correct tool roots, domain-validated proof selection and a browser Stop. |
 | 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026) and **cleaned up as PR #11** (merge `a3aefc8`, 25 Oct 2026). Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. Phase 4 added MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. The cleanup added image reviews, preview/stills/graphics attestations and the final-render stills gate, then deleted the interim server and its old-surface tests. |
-| 5 · render cleanup | **acceptance met on `gui-rework/phase-5-render`.** One `BaseFilm` and `timing.mjs` now drive both the MP4 renderer and the live Player; renderer approvals no longer read the browser binary; a Studio preview job writes its own review report; schema-3 projects render with Remotion even after migration drops the legacy backend flag; preview and final were rendered cold on a copied production. `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` remain for the Phase 6/legacy pass. |
+| 5 · render cleanup | **merged as PR #13** (merge `6916a6c`, 25 Oct 2026). One `BaseFilm` and `timing.mjs` now drive both the MP4 renderer and the live Player; renderer approvals no longer read the browser binary; a Studio preview job writes its own review report; schema-3 projects render with Remotion even after migration drops the legacy backend flag; preview and final were rendered cold on a copied production. `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` remain for the Phase 6/legacy pass. |
 | 6 · polish | not started |
 
 ## Live production state (zero-bars)
@@ -231,7 +231,7 @@ read-only).
   chat correctly in the earlier Phase 4 session; the fake probe above is the
   repeatable record.
 
-## Phase 5 render close-out (25 Oct 2026)
+## Phase 5 render close-out (25 Oct 2026, PR #13)
 
 - **One composition.** `renderers/remotion/src/BaseFilm.jsx` is imported by both
   `index.jsx` (MP4) and `frontend/src/baseFilm.ts` (Player). The Player also runs
