@@ -12,6 +12,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from api_support import add_assets, make_api_project
+
 from mp3_to_videoclip.director.llm import TextDelta, ToolCall, TurnResult, Usage
 from mp3_to_videoclip.director.loop import run_turn
 
@@ -85,6 +87,20 @@ async def _collect(llm, root):
     return [e async for e in run_turn(llm, root, "demo", "What is this?", "system")]
 
 
+async def _collect_in_projects(llm, root, projects_dir):
+    return [
+        event
+        async for event in run_turn(
+            llm,
+            root,
+            "production",
+            "Look at s001 and s002.",
+            "system",
+            projects_dir=projects_dir,
+        )
+    ]
+
+
 def test_long_history_is_compacted_before_the_model_call(tmp_path, monkeypatch):
     root = _project(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -114,6 +130,84 @@ class SlowLLM:
         yield TextDelta(text="Thinking")
         await asyncio.sleep(5)
         yield TurnResult(text="Too late")
+
+
+def test_the_loop_passes_tool_thumbnails_to_the_next_model_call(tmp_path):
+    root = make_api_project(tmp_path)
+    add_assets(root)
+
+    class ImageLLM:
+        def __init__(self):
+            self.calls = []
+            self.n = 0
+
+        async def stream(self, messages, tools=None, system=None):
+            self.calls.append(messages)
+            self.n += 1
+            if self.n == 1:
+                call = ToolCall(
+                    id="call-images",
+                    name="get_images",
+                    arguments='{"slug": "production", "shot_ids": ["s001", "s002"]}',
+                )
+                yield call
+                yield TurnResult(text="", tool_calls=[call])
+            else:
+                last = messages[-1]
+                assert last["role"] == "user"
+                assert isinstance(last["content"], list)
+                assert any(part.get("type") == "image_url" for part in last["content"])
+                assert sum(part.get("type") == "image_url" for part in last["content"]) == 2
+                yield TextDelta(text="I inspected both stills.")
+                yield TurnResult(text="I inspected both stills.")
+
+    llm = ImageLLM()
+    events = asyncio.run(_collect_in_projects(llm, root, tmp_path))
+    assert events[-1].kind == "done"
+    assert len(llm.calls) == 2
+    chat = (root / "work" / "chat.jsonl").read_text()
+    assert "data:image" not in chat
+    stored = [json.loads(line) for line in chat.splitlines()]
+    tool = next(message for message in stored if message.get("name") == "get_images")
+    assert json.loads(tool["content"])["image_count"] == 2
+
+
+def test_the_loop_keeps_parallel_tool_results_before_the_image_message(tmp_path):
+    root = make_api_project(tmp_path)
+    add_assets(root)
+
+    class ParallelLLM:
+        def __init__(self):
+            self.calls = []
+            self.n = 0
+
+        async def stream(self, messages, tools=None, system=None):
+            self.calls.append(messages)
+            self.n += 1
+            if self.n == 1:
+                calls = [
+                    ToolCall(
+                        id="call-project", name="get_project", arguments='{"slug": "production"}'
+                    ),
+                    ToolCall(
+                        id="call-images",
+                        name="get_images",
+                        arguments='{"slug": "production", "shot_ids": ["s001"]}',
+                    ),
+                ]
+                for call in calls:
+                    yield call
+                yield TurnResult(text="", tool_calls=calls)
+            else:
+                roles = [message["role"] for message in messages[-3:]]
+                assert roles == ["tool", "tool", "user"], roles
+                assert isinstance(messages[-1]["content"], list)
+                yield TurnResult(text="Done.", tool_calls=[])
+
+    llm = ParallelLLM()
+    events = asyncio.run(_collect_in_projects(llm, root, tmp_path))
+    assert events[-1].kind == "done"
+    assert len(llm.calls) == 2
 
 
 def test_closing_the_stream_stops_within_one_second(tmp_path, monkeypatch):

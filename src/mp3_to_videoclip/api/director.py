@@ -42,7 +42,8 @@ async def post_chat(slug: str, request: Request, payload: dict):
         model=settings.llm_model,
         session_id=f"studio-{slug}",
     )
-    system = build_context(slug, root.parent) + "\n\n" + _system_prompt(payload.get("stage"))
+    stage = payload.get("stage")
+    system = build_context(slug, root.parent, stage=stage) + "\n\n" + _system_prompt(stage)
 
     async def stream():
         runner = getattr(request.app.state, "runner", None)
