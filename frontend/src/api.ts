@@ -1,3 +1,5 @@
+import { toast } from "./toast";
+
 export type ProjectSummary = {
   slug: string;
   title: string;
@@ -5,6 +7,20 @@ export type ProjectSummary = {
   archived: boolean;
   render: string | null;
   still_count: number;
+};
+
+export type ProjectDetail = {
+  slug: string;
+  title: string;
+  duration: number;
+  fps: number;
+  width: number;
+  height: number;
+  music_mode: string | null;
+  archived: false;
+  shots: number;
+  stills: number;
+  approvals: string[];
 };
 
 export type Budget = {
@@ -33,6 +49,22 @@ export type Storyboard = {
   fps: number;
   total_frames: number;
   shots: Shot[];
+};
+
+export type MusicWindow = {
+  time: number;
+  end?: number;
+  level_db?: number;
+};
+
+export type Music = {
+  duration?: number;
+  estimated_tempo_bpm?: number | null;
+  beats?: number[];
+  energy_curve?: { time: number; energy: number }[];
+  fine_windows?: MusicWindow[];
+  sections?: { start: number; end: number; label: string }[];
+  warnings?: string[];
 };
 
 export type Brief = {
@@ -109,21 +141,25 @@ export type ImageEstimateResponse = {
   error?: string;
 };
 
+async function errorMessage(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const parsed = JSON.parse(text);
+    const detail = parsed.detail || parsed.error || text;
+    return typeof detail === "string" ? detail : JSON.stringify(detail);
+  } catch {
+    return text;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
   });
   if (!res.ok) {
-    const text = await res.text();
-    let message = text;
-    try {
-      const parsed = JSON.parse(text);
-      message = parsed.detail || parsed.error || text;
-      if (typeof message !== "string") message = JSON.stringify(message);
-    } catch {
-      // keep the raw body
-    }
+    const message = await errorMessage(res);
+    toast(message);
     throw new Error(`${res.status}: ${message}`);
   }
   return (await res.json()) as T;
@@ -147,7 +183,11 @@ export const api = {
       headers: { "Content-Type": file.type || "audio/mpeg" },
       body: file,
     });
-    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+    if (!res.ok) {
+      const message = await errorMessage(res);
+      toast(message);
+      throw new Error(`${res.status}: ${message}`);
+    }
     return (await res.json()) as {
       slug: string;
       title: string;
@@ -155,12 +195,12 @@ export const api = {
       analysis_job: string | null;
     };
   },
-  project: (slug: string) => request<unknown>(`/api/projects/${slug}`),
+  project: (slug: string) => request<ProjectDetail>(`/api/projects/${slug}`),
   brief: (slug: string) => request<Brief>(`/api/projects/${slug}/brief`),
   storyboard: (slug: string) =>
     request<Storyboard | { available: false }>(`/api/projects/${slug}/storyboard`),
   track: (slug: string) =>
-    request<{ music: unknown; lyrics: unknown; music_mode: string | null }>(
+    request<{ music: Music | null; lyrics: unknown; music_mode: string | null }>(
       `/api/projects/${slug}/track`,
     ),
   images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),

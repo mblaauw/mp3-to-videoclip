@@ -4,12 +4,28 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.storage import inside
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["track"])
+
+
+@router.get("/audio")
+async def get_audio(slug: str, request: Request):
+    """The source recording, for the in-app player and waveform."""
+    root = project_root(request, slug)
+    project = P.load_project(root)
+    try:
+        target = inside(root, project.source)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="audio is missing") from exc
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="audio is missing")
+    return FileResponse(target, media_type="audio/mpeg", content_disposition_type="inline")
 
 
 @router.get("/track")

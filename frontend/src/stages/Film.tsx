@@ -1,13 +1,27 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { api, type Budget } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import type { PreviewShot } from "../LivePreview";
+
+const LivePlayer = lazy(() => import("../LivePlayer"));
 
 type FilmFile = { kind: "previews" | "renders"; name: string };
+
+type LiveState = {
+  shots: PreviewShot[];
+  audio: string;
+  durationInFrames: number;
+  fps: number;
+  width: number;
+  height: number;
+};
 
 export function FilmStage({ slug }: { slug: string }) {
   const [previews, setPreviews] = useState<string[]>([]);
   const [exports, setExports] = useState<string[]>([]);
   const [selected, setSelected] = useState<FilmFile | null>(null);
+  const [live, setLive] = useState<LiveState | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -47,6 +61,55 @@ export function FilmStage({ slug }: { slug: string }) {
     return () => clearInterval(id);
   }, [slug]);
 
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.storyboard(slug), api.images(slug), api.project(slug)])
+      .then(([board, images, project]) => {
+        if (cancelled) return;
+        if ("available" in board) {
+          setLive(null);
+          setLiveError("The storyboard must exist before a live preview can play.");
+          return;
+        }
+        const byShot = new Map(images.shots.map((shot) => [shot.id, shot]));
+        const scale = Math.min(1, 1280 / project.width);
+        const shots: PreviewShot[] = board.shots.map((shot) => {
+          const entry = byShot.get(shot.id);
+          const version =
+            entry?.versions.find((item) => item.version === entry.selected) ??
+            entry?.versions.at(-1);
+          return {
+            id: shot.id,
+            start_frame: shot.start_frame,
+            duration_frames: shot.duration_frames,
+            dissolve_frames: shot.dissolve_frames,
+            camera: shot.camera,
+            image:
+              entry && version
+                ? `/api/projects/${slug}/images/${entry.owner}/${version.version}`
+                : null,
+          };
+        });
+        setLive({
+          shots,
+          audio: `/api/projects/${slug}/audio`,
+          durationInFrames: board.total_frames,
+          fps: board.fps,
+          width: Math.round(project.width * scale),
+          height: Math.round(project.height * scale),
+        });
+        setLiveError(null);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setLive(null);
+        setLiveError(`Live preview unavailable: ${String(e)}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
   const render = async (kind: "preview" | "final") => {
     setBusy(kind);
     setError(null);
@@ -77,11 +140,42 @@ export function FilmStage({ slug }: { slug: string }) {
       {error && <p className="error">{error}</p>}
       {message && <p className="message">{message}</p>}
 
+      <div className="card live-preview">
+        <h3>Live preview</h3>
+        {live ? (
+          <>
+            <Suspense fallback={<p className="empty">Loading the player…</p>}>
+              <LivePlayer
+                shots={live.shots}
+                audio={live.audio}
+                durationInFrames={live.durationInFrames}
+                fps={live.fps}
+                width={live.width}
+                height={live.height}
+              />
+            </Suspense>
+            <p className="meta">
+              {live.shots.filter((shot) => shot.image).length} of {live.shots.length} stills
+              loaded · camera motion approximates the render
+            </p>
+          </>
+        ) : (
+          <p className="empty">{liveError ?? "No storyboard yet."}</p>
+        )}
+      </div>
+
       <div className="card player">
         <h3>Screen</h3>
         {src && selected ? (
           <>
-            <video key={src} controls playsInline preload="metadata" src={src} />
+            <video
+              key={src}
+              controls
+              playsInline
+              preload="metadata"
+              aria-label="Rendered film"
+              src={src}
+            />
             <div className="film-meta">
               <span>
                 {selected.kind === "renders" ? "final" : "preview"} · {selected.name}

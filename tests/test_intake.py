@@ -145,3 +145,15 @@ def test_a_new_project_keeps_the_default_style_core(tmp_path, fake_probe):
     write_json(root / "brief.json", brief.model_dump())
     with pytest.raises(ValueError, match="DEFAULT_STYLE"):
         P.approve(root, "brief", "test changed look", via="studio", review_confirmed=True)
+
+
+def test_unreadable_audio_is_a_clean_value_error(tmp_path, monkeypatch):
+    projects = tmp_path / "projects"
+
+    def broken(path):
+        raise RuntimeError("ffprobe failed")
+
+    monkeypatch.setattr("mp3_to_videoclip.production.probe", broken)
+    with pytest.raises(ValueError, match="readable MP3"):
+        intake.create_from_upload(projects, _source(tmp_path), title="Broken")
+    assert not (projects / "broken").exists()

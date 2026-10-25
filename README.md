@@ -7,9 +7,10 @@ film. Money, source audio and generated stills stay on this machine.
 **Current state (25 Oct 2026): the new Studio is live.** `uv run studio` opens the
 library, creates a schema-3 production from an MP3, measures it locally, and takes
 it through Track, Story, Storyboard, Images and Film with content-bound approvals
-and a job tray. The interim Studio and the old CLI surface remain only until Phase
-4 removes them. The phase plan, decisions and acceptance criteria live in
-`.opencode/tasks/gui-rework.md`.
+and a job tray. The waveform timeline, the Remotion Player preview and the error
+tray are live. The interim Studio and the old CLI surface still exist; removing
+them is the next tracked slice. The phase plan, decisions and acceptance criteria
+live in `.opencode/tasks/gui-rework.md`.
 
 ## What works today
 
@@ -23,13 +24,17 @@ and a job tray. The interim Studio and the old CLI surface remain only until Pha
   written **before** the request, recovery happens by UUID and never resubmits,
   and an unknown cost keeps its reservation until the provider reports it.
 - Remotion for both stills-film previews and the final cut; FFmpeg for probe,
-  mux and verification (`remotion.py`, `render.py`).
+  mux and verification (`remotion.py`, `render.py`). The Studio also plays the
+  board live through `@remotion/player` with the source audio and selected stills.
+- A measured waveform under the storyboard; drag a boundary (or use the arrow
+  keys) and both adjacent shots resize without moving later cuts.
 - Read-only archive view of frozen productions (`domain/archive.py`).
 
 ## Setup
 
 ```sh
 uv sync
+npm ci --prefix frontend
 npm ci --prefix renderers/remotion --ignore-scripts
 ```
 
@@ -51,6 +56,9 @@ uv run studio --port 8799
 a title, starting budget and 16:9 or 9:16. The app probes and copies the source,
 writes a schema-3 production, and queues the local analysis job. Paste LRC
 timestamps in Track when the track has vocals; no lyric position is invented.
+In Storyboard, drag the gold boundaries over the waveform (or focus one and use
+the arrow keys) to retime the cut; later cuts stay put. Film shows a live Player
+preview from the selected stills and the source audio before you render.
 
 **Director:** add `llm_api_key` (and optionally `llm_base_url` / `llm_model`) under
 `[settings]` in `~/.config/mp3-to-videoclip/settings.toml`, or set

@@ -7,6 +7,7 @@ budget entry. No stage is approved on the user's behalf.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import unicodedata
@@ -72,15 +73,18 @@ def create_from_upload(
     # A failed intake must not leave a half-production; only remove the directory
     # this call created, never an existing production.
     try:
-        P.init_project(
-            root,
-            source,
-            slug,
-            aspect=aspect,
-            fps=24,
-            music_mode=music_mode,
-            title=title,
-        )
+        try:
+            P.init_project(
+                root,
+                source,
+                slug,
+                aspect=aspect,
+                fps=24,
+                music_mode=music_mode,
+                title=title,
+            )
+        except (RuntimeError, OSError, json.JSONDecodeError) as exc:
+            raise ValueError("the file is not a readable MP3") from exc
         migrate(root)
         app_budget.add_budget(root, cap, "initial production budget")
     except BaseException:

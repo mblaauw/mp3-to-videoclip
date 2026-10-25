@@ -6,6 +6,7 @@ import { ImagesStage } from "./stages/Images";
 import { FilmStage } from "./stages/Film";
 import { TrackStage } from "./stages/Track";
 import { NewProduction } from "./NewProduction";
+import { ToastTray } from "./ToastTray";
 
 const STAGES = ["track", "story", "storyboard", "images", "film"] as const;
 type Stage = (typeof STAGES)[number];
@@ -46,6 +47,7 @@ export function App() {
             <li key={p.slug}>
               <button
                 className={p.slug === slug ? "active" : ""}
+                aria-current={p.slug === slug ? "true" : undefined}
                 onClick={() => setSlug(p.slug)}
               >
                 {p.title}
@@ -73,6 +75,7 @@ export function App() {
                   <button
                     key={s}
                     className={s === stage ? "active" : ""}
+                    aria-pressed={s === stage}
                     onClick={() => setStage(s)}
                   >
                     {s}
@@ -93,6 +96,7 @@ export function App() {
         archived={!!selected?.archived}
       />
       <JobTray />
+      <ToastTray />
     </div>
   );
 }

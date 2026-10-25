@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, type Brief, type Shot, type Storyboard } from "../api";
+import { api, type Brief, type Music, type Shot, type Storyboard } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import { Timeline } from "../Timeline";
 
 export function StoryboardStage({ slug }: { slug: string }) {
   const [board, setBoard] = useState<Storyboard | null>(null);
@@ -11,6 +12,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
   const [proofIds, setProofIds] = useState<string[]>([]);
   const [savingProof, setSavingProof] = useState(false);
   const [proofMessage, setProofMessage] = useState<string | null>(null);
+  const [music, setMusic] = useState<Music | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,6 +24,10 @@ export function StoryboardStage({ slug }: { slug: string }) {
       .brief(slug)
       .then((data: Brief) => setProofIds(data.creative?.proof_shot_ids || []))
       .catch(() => setProofIds([]));
+    api
+      .track(slug)
+      .then((data) => setMusic(data.music))
+      .catch(() => setMusic(null));
   }, [slug]);
 
   const edit = (id: string, field: keyof Shot, value: string | number) => {
@@ -87,6 +93,11 @@ export function StoryboardStage({ slug }: { slug: string }) {
     }
   };
 
+  const boardChanged = (next: Storyboard) => {
+    setBoard(next);
+    setRevision((value) => value + 1);
+  };
+
   return (
     <>
       <h2>Storyboard</h2>
@@ -128,7 +139,17 @@ export function StoryboardStage({ slug }: { slug: string }) {
       )}
       <div className="card">
         {board ? (
-          <table>
+          <>
+            <h3>Timeline</h3>
+            <Timeline
+              slug={slug}
+              board={board}
+              music={music}
+              onChange={boardChanged}
+              onError={setError}
+            />
+            <div className="table-scroll">
+            <table>
             <thead>
               <tr>
                 <th>Shot</th>
@@ -186,6 +207,8 @@ export function StoryboardStage({ slug }: { slug: string }) {
               ))}
             </tbody>
           </table>
+            </div>
+          </>
         ) : (
           <>
             <p className="empty">No storyboard yet. The brief must be approved first.</p>

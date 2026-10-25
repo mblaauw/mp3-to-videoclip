@@ -134,3 +134,15 @@ def test_same_origin_and_vite_dev_origin_are_allowed(tmp_path):
             headers={"Origin": "http://127.0.0.1:9999"},
         )
         assert wrong_port.status_code == 403
+
+
+def test_unreadable_upload_is_a_400(tmp_path, monkeypatch):
+    def broken(path):
+        raise RuntimeError("ffprobe failed")
+
+    monkeypatch.setattr("mp3_to_videoclip.production.probe", broken)
+    with api_client(tmp_path) as client:
+        response = _upload(client, title="Broken")
+        assert response.status_code == 400
+        assert "readable MP3" in response.json()["detail"]
+        assert not (tmp_path / "broken").exists()
