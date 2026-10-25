@@ -133,6 +133,7 @@ def test_new_productions_are_always_workflow_2_remotion(tmp_path):
     root = tmp_path / "modern"
     init(root, source)
     stored = json.loads((root / "project.json").read_text())
+    assert stored["schema_version"] == 3
     assert stored["workflow_version"] == 2
     assert stored["prompt_version"] == 2
     assert stored["renderer_backend"] == "remotion"

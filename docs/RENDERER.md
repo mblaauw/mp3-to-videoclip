@@ -43,13 +43,33 @@ for a different organisation. No licence key or font file belongs in git.
   muxes the original audio once, assembles existing sparse alpha windows and copies
   base AAC packets verbatim into the final. Output is H264/yuv420p/AAC/faststart.
 - Preflight decodes the actual cached Remotion overlay, not a Pillow approximation.
-  Current implementation, locked dependencies, browser/font bytes, props, selected
-  images and resolved identity are content-bound. Corrupt cache is an error,
-  never an excuse to silently invent a new accepted version.
+  Renderer source, locked dependencies, font bytes, props, selected images and the
+  resolved identity are content-bound. The browser binary is deliberately not
+  hashed: a Chrome security update must not revoke a reviewed preview, and the
+  renderer still refuses to start without a local executable. Corrupt cache is an
+  error, never an excuse to silently invent a new accepted version.
 - Only selected image bytes are copied into flat renderer-public staging. Original
   media, reference photos, credentials and project artifacts are not web-served.
 - Renderers publish versioned outputs without overwriting an earlier delivery.
   Existing preview/proof/graphics gates and durable provider ledger remain in charge.
+
+## Live Player and preview approval
+
+`renderers/remotion/src/BaseFilm.jsx` is the one still-film composition. The
+renderer imports it from `index.jsx`; the Studio imports the same file through
+`frontend/src/baseFilm.ts` and Vite dedupes React and Remotion to one copy. The
+Player gets `GET /api/projects/<slug>/preview`: the renderer's shot fields,
+selected-still URLs and the source audio. A missing still keeps its span and is
+marked as a placeholder, never dropped. `tests/test_timing_parity.py` loads
+`timing.mjs` with Node and compares its constants, enums, bounds, allocation
+acceptance and legacy camera endpoints with the Python models and renderer.
+
+A Studio preview job writes `work/preview-review.json` itself, binding the movie
+bytes to the current storyboard, proof set, brand and renderer revision, so the
+preview approval is available as soon as the render finishes. The final render
+still requires the `stills` approval. Schema 3 selects Remotion even when a
+migrated document no longer carries the legacy `renderer_backend` field; an
+explicit backend wins for older schema-1 projects.
 
 ## Acceptance is more than tests
 

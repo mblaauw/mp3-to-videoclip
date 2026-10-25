@@ -85,6 +85,13 @@ class Project(Model):
         return math.ceil(self.duration * self.fps)
 
     @property
+    def uses_remotion(self) -> bool:
+        """An explicit backend wins; schema 3 without one is the native Remotion form."""
+        if self.renderer_backend is not None:
+            return self.renderer_backend == "remotion"
+        return self.schema_version == 3
+
+    @property
     def image_size(self) -> tuple[int, int]:
         if self.native_size is not None:
             return (self.native_size[0], self.native_size[1])

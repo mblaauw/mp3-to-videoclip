@@ -53,7 +53,8 @@ def add_budget(root: Path, amount, reason: str) -> dict:
         raise ValueError("record why the cap changed")
     if value < committed(root):
         raise ValueError("the new cap is below the committed spend; reconcile or choose more")
-    project = _project(root)
+    raw = read_json(root / "project.json")
+    project = Project.model_validate(raw)
     previous = project.budget[-1].max_corrections if project.budget else None
     project.budget.append(
         BudgetEntry(
@@ -63,7 +64,10 @@ def add_budget(root: Path, amount, reason: str) -> dict:
             max_corrections=previous,
         )
     )
-    write_json(root / "project.json", project.model_dump())
+    # Budget is administrative: rewrite only that key so the engine's backend,
+    # signature and source fields from a native schema-3 document survive.
+    raw["budget"] = [entry.model_dump() for entry in project.budget]
+    write_json(root / "project.json", raw)
     return project.budget[-1].model_dump()
 
 

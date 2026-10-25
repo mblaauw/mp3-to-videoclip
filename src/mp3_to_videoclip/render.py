@@ -623,7 +623,7 @@ def render(
     audio = Path(audio)
     workdir = Path(workdir)
 
-    if project.renderer_backend == "remotion":
+    if project.uses_remotion:
         from .remotion import render_base
 
         return render_base(

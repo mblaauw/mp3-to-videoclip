@@ -4,7 +4,7 @@ import { LivePreview, type PreviewProps } from "./LivePreview";
 
 /** Kept in its own module so the Player and Remotion load only on the Film stage. */
 export default function LivePlayer({
-  shots,
+  input,
   audio,
   durationInFrames,
   fps,
@@ -19,7 +19,7 @@ export default function LivePlayer({
   return (
     <Player<AnyZodObject, PreviewProps>
       component={LivePreview}
-      inputProps={{ shots, audio }}
+      inputProps={{ input, audio }}
       durationInFrames={durationInFrames}
       fps={fps}
       compositionWidth={width}

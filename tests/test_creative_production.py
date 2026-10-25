@@ -237,6 +237,10 @@ def write_preview_report(root, name="work/preview-v001.mp4"):
         "proof_hash": P.stage_hash(root, "proof"),
         "input_hash": digest({"render_inputs": "fake"}),
     }
+    if P.load_project(root).uses_remotion:
+        from mp3_to_videoclip.remotion import implementation_hash
+
+        report["renderer_revision"] = implementation_hash()
     write_json(root / P.STAGE_FILES["preview"], report)
     return report
 

@@ -1,19 +1,20 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { api, type Budget } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
-import type { PreviewShot } from "../LivePreview";
+import type { BaseFilmInput } from "../baseFilm";
 
 const LivePlayer = lazy(() => import("../LivePlayer"));
 
 type FilmFile = { kind: "previews" | "renders"; name: string };
 
 type LiveState = {
-  shots: PreviewShot[];
+  input: BaseFilmInput;
   audio: string;
   durationInFrames: number;
   fps: number;
   width: number;
   height: number;
+  stale: number;
 };
 
 export function FilmStage({ slug }: { slug: string }) {
@@ -63,40 +64,32 @@ export function FilmStage({ slug }: { slug: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.storyboard(slug), api.images(slug), api.project(slug)])
-      .then(([board, images, project]) => {
+    api
+      .preview(slug)
+      .then((payload) => {
         if (cancelled) return;
-        if ("available" in board) {
+        if (!payload.available) {
           setLive(null);
-          setLiveError("The storyboard must exist before a live preview can play.");
+          setLiveError(
+            payload.reason ?? "The storyboard must exist before a live preview can play.",
+          );
           return;
         }
-        const byShot = new Map(images.shots.map((shot) => [shot.id, shot]));
-        const scale = Math.min(1, 1280 / project.width);
-        const shots: PreviewShot[] = board.shots.map((shot) => {
-          const entry = byShot.get(shot.id);
-          const version =
-            entry?.versions.find((item) => item.version === entry.selected) ??
-            entry?.versions.at(-1);
-          return {
-            id: shot.id,
-            start_frame: shot.start_frame,
-            duration_frames: shot.duration_frames,
-            dissolve_frames: shot.dissolve_frames,
-            camera: shot.camera,
-            image:
-              entry && version
-                ? `/api/projects/${slug}/images/${entry.owner}/${version.version}`
-                : null,
-          };
-        });
+        const scale = Math.min(1, 1280 / payload.width);
         setLive({
-          shots,
-          audio: `/api/projects/${slug}/audio`,
-          durationInFrames: board.total_frames,
-          fps: board.fps,
-          width: Math.round(project.width * scale),
-          height: Math.round(project.height * scale),
+          input: {
+            shots: payload.shots,
+            preview_banner: payload.preview_banner,
+            preview_placeholders: payload.preview_placeholders,
+            brand_plate: payload.brand_plate ?? null,
+            brand_duration_frames: payload.brand_duration_frames,
+          },
+          audio: payload.audio,
+          durationInFrames: payload.durationInFrames,
+          fps: payload.fps,
+          width: Math.round(payload.width * scale),
+          height: Math.round(payload.height * scale),
+          stale: payload.stale_shots.length,
         });
         setLiveError(null);
       })
@@ -146,7 +139,7 @@ export function FilmStage({ slug }: { slug: string }) {
           <>
             <Suspense fallback={<p className="empty">Loading the player…</p>}>
               <LivePlayer
-                shots={live.shots}
+                input={live.input}
                 audio={live.audio}
                 durationInFrames={live.durationInFrames}
                 fps={live.fps}
@@ -155,8 +148,11 @@ export function FilmStage({ slug }: { slug: string }) {
               />
             </Suspense>
             <p className="meta">
-              {live.shots.filter((shot) => shot.image).length} of {live.shots.length} stills
-              loaded · camera motion approximates the render
+              {live.input.shots.filter((shot) => shot.src).length} of {live.input.shots.length}{" "}
+              stills loaded · same timing, camera and transitions as the render
+              {live.stale > 0
+                ? ` · ${live.stale} selected still${live.stale === 1 ? " is" : "s are"} older than the storyboard`
+                : ""}
             </p>
           </>
         ) : (
