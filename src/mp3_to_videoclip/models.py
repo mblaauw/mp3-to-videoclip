@@ -10,6 +10,8 @@ NATIVE_SIZE_MIN = 512
 NATIVE_SIZE_MAX = 4096
 NATIVE_SIZE_RATIO_TOLERANCE = 0.01
 
+Kind = Literal["music_video", "promo", "advert"]
+
 
 def native_size_problem(value: list[int], width: int, height: int) -> str | None:
     """Readable error for an unusable declared image size, or None when it fits.
@@ -56,6 +58,30 @@ class ImageSettings(Model):
         return {key: value for key, value in handler(self).items() if value is not None}
 
 
+class AudioWindow(Model):
+    """A derived excerpt of the source; seconds are absolute source time."""
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    fade_in: float = Field(default=0, ge=0)
+    fade_out: float = Field(default=0, ge=0)
+
+    @property
+    def duration(self) -> float:
+        return round(self.end - self.start, 6)
+
+    @model_validator(mode="after")
+    def check_interval(self):
+        length = self.end - self.start
+        if length <= 0:
+            raise ValueError("audio window must have positive duration")
+        if self.fade_in > length or self.fade_out > length:
+            raise ValueError("an audio fade cannot be longer than the excerpt")
+        if self.fade_in + self.fade_out > length:
+            raise ValueError("audio fades overlap; shorten one fade")
+        return self
+
+
 class Project(Model):
     schema_version: Literal[1, 3] = 1
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -68,6 +94,9 @@ class Project(Model):
     width: int = Field(gt=0, multiple_of=2)
     height: int = Field(gt=0, multiple_of=2)
     music_mode: Literal["vocal", "instrumental", "music-led"] | None = None
+    kind: Kind | None = None
+    source_duration: float | None = Field(default=None, gt=0)
+    audio_window: AudioWindow | None = None
     native_size: list[int] | None = None
     workflow_version: Literal[2] | None = None
     image_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,100}$")
@@ -108,7 +137,15 @@ class Project(Model):
         for key in ("image_model", "image_settings", "image_seed", "style_preset"):
             if value.get(key) is None:
                 value.pop(key, None)
-        for key in ("prompt_version", "signature_required", "source_filename", "renderer_backend"):
+        for key in (
+            "prompt_version",
+            "signature_required",
+            "source_filename",
+            "renderer_backend",
+            "kind",
+            "source_duration",
+            "audio_window",
+        ):
             if value.get(key) is None:
                 value.pop(key, None)
         return value
@@ -118,6 +155,17 @@ class Project(Model):
         a, b = map(int, self.aspect.split(":"))
         if self.width * b != self.height * a:
             raise ValueError("output dimensions must match the selected aspect")
+        return self
+
+    @model_validator(mode="after")
+    def check_audio_window(self):
+        if self.audio_window is None:
+            return self
+        window = self.audio_window
+        if self.source_duration is not None and window.end > self.source_duration + 1e-6:
+            raise ValueError("audio window ends after the source recording")
+        if abs(self.duration - window.duration) > 1e-6:
+            raise ValueError("project duration must equal the selected audio window")
         return self
 
     @model_validator(mode="after")
@@ -230,7 +278,48 @@ class CreativeProfile(Model):
         return self
 
 
+class CallToAction(Model):
+    text: str = ""
+    url: str = ""
+
+
+class Intent(Model):
+    """The one-page creative intent, filled from the Story intake form."""
+
+    kind: Kind = "music_video"
+    objective: str = ""
+    audience: str = ""
+    message: str = ""
+    reasons: list[str] = Field(default_factory=list, max_length=3)
+    tone: list[str] = Field(default_factory=list, max_length=3)
+    mandatories: list[str] = Field(default_factory=list)
+    avoid: list[str] = Field(default_factory=list)
+    cta: CallToAction | None = None
+    length_seconds: int | None = Field(default=None, gt=0)
+    audio_window: AudioWindow | None = None
+    notes: str = ""
+    about: str = ""
+    performance: bool | None = None
+    reference_links: list[str] = Field(default_factory=list)
+    assets: str = ""
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        for key in ("notes", "about", "performance", "reference_links", "assets"):
+            if value.get(key) in (None, "", []):
+                value.pop(key, None)
+        if value.get("cta") is None:
+            value.pop("cta", None)
+        if value.get("length_seconds") is None:
+            value.pop("length_seconds", None)
+        if value.get("audio_window") is None:
+            value.pop("audio_window", None)
+        return value
+
+
 class Brief(Model):
+    intent: Intent | None = None
     direction: str = ""
     style: str = ""
     treatment: str = ""
@@ -238,6 +327,13 @@ class Brief(Model):
     avoid: list[str] = Field(default_factory=list)
     characters: list[Character] = Field(default_factory=list)
     creative: CreativeProfile | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("intent") is None:
+            value.pop("intent", None)
+        return value
 
 
 class Framing(Model):

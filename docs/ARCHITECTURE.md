@@ -23,7 +23,8 @@ in the app is a second state store.
 projects/<slug>/
   project.json          slug, title, duration, fps, aspect, model settings, source hash
   media/song.mp3        immutable source audio
-  brief.json            treatment, look, characters, scenes, references
+  brief.json            intent, treatment, look, characters, scenes, references
+  work/audio/           derived excerpt WAV for promo/advert (source stays untouched)
   work/music.json       measured beats/energy/sections
   work/lyrics.json      supplied or transcribed lyrics (drafts until reviewed)
   work/storyboard.json  shots: stable ID, frames, purpose, prompt, camera
@@ -36,6 +37,37 @@ projects/<slug>/
 `projects/`, `backups/` and `archive/` are never deleted and never rewritten in
 place. Code rollback is the git tag `pre-gui-rework`; production rollback is the
 metadata snapshot in `backups/` written by `scripts/snapshot_projects.py`.
+
+## Production kinds and intake
+
+Every new production carries `project.kind` (`music_video`, `promo` or
+`advert`). The code table in `kinds.py` is authoritative for lengths, default
+style, text density, pacing, opening/closing and whether the 25/40 graphics
+signature is required; the prose block the Writer reads is
+`director/prompts/kinds/<kind>.md`. Music videos keep the 25 s opening and 40 s
+credits. Promo and advert are created with `signature_required=false`, no
+`brand.json` and no `graphics-spec.json`; their final render is the film itself,
+without a credits composite.
+
+The Story intake is one card over `GET/PUT /api/projects/<slug>/intake`. It
+writes `brief.intent` (objective, audience, message, reasons, tone,
+mandatories, avoid, CTA, length, window), selects a style preset and, for
+promo/advert, the excerpt window. The optionals are serialized only when set, so
+legacy brief and project payloads keep their approval hashes.
+
+`project.duration` is the film duration. `project.source_duration` is the full
+recording and `project.audio_window` is the absolute source window with fades.
+`audio.py` writes a derived PCM WAV under `work/audio/`, keyed by source hash and
+window; the source MP3 is only read. Analysis, the live Player, preview, base and
+final all render the excerpt. A window change is refused once a storyboard,
+non-empty event map or lyrics exist, and it deletes stale measurement.
+
+Style presets are Markdown files in `director/prompts/styles/` with a small
+JSON-valued header (look, image rules, model settings, protected flag). The
+settings API exposes the list. `photographic-painted-v2` keeps its approved core
+verbatim and is the only protected preset; choosing it or inheriting it still
+requires the core at the start of `creative.look`. Custom looks and the other
+presets are not prefixed with that core.
 
 ## Money and evidence
 

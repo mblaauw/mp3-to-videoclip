@@ -11,11 +11,15 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 def _public(settings: Settings) -> dict:
     """Never send a secret back to the browser; expose presence instead."""
+    from mp3_to_videoclip import kinds, styles
+
     value = settings.model_dump()
     value["llm_api_key"] = ""
     value["runware_api_key"] = ""
     value["has_llm_api_key"] = bool(settings.llm_api_key)
     value["has_runware_api_key"] = bool(settings.runware_api_key)
+    value["style_presets"] = styles.public_presets()
+    value["kinds"] = kinds.public_kinds()
     return value
 
 

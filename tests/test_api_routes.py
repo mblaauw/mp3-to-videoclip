@@ -89,6 +89,18 @@ def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
         first = client.get("/api/settings").json()
         assert first["llm_api_key"] == ""
         assert first["has_llm_api_key"] is False
+        assert {item["id"] for item in first["style_presets"]} == {
+            "photographic-painted-v2",
+            "clean-photographic-v1",
+            "product-studio-v1",
+            "brand-graphic-v1",
+        }
+        assert {item["id"] for item in first["kinds"]} == {
+            "music_video",
+            "promo",
+            "advert",
+        }
+        assert first["style_presets"][0]["look"]
 
         saved = client.put("/api/settings", json={"llm_api_key": "secret-1", "brand_name": "Test"})
         assert saved.status_code == 200
@@ -451,3 +463,18 @@ def test_director_chat_reads_and_streams(client, monkeypatch):
     assert streamed.status_code == 200
     events = [json.loads(line) for line in streamed.text.splitlines() if line]
     assert [event["kind"] for event in events] == ["text", "done"]
+
+
+def test_intake_keeps_a_custom_look_when_no_preset_is_selected(client, project):
+    before = read_json(project / "brief.json")["creative"]["look"]
+    saved = client.put(
+        "/api/projects/production/intake",
+        json={
+            "intent": {"kind": "music_video"},
+            "style_preset": "",
+            "audio_window": None,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["style_preset"] is None
+    assert read_json(project / "brief.json")["creative"]["look"] == before

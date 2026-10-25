@@ -69,6 +69,13 @@ def create_from_upload(
     aspect: str = "16:9",
     music_mode: str = "vocal",
     budget: str = "5.00",
+    kind: str = "music_video",
+    intent: dict | None = None,
+    style_preset: str | None = None,
+    length_seconds: float | None = None,
+    window_start: float = 0.0,
+    fade_in: float = 0.0,
+    fade_out: float = 0.0,
 ) -> dict:
     """Copy, probe and migrate one MP3 into a new production folder."""
     title = title.strip()
@@ -80,6 +87,28 @@ def create_from_upload(
         raise ValueError("aspect must be 16:9 or 9:16")
     if music_mode not in ("vocal", "instrumental"):
         raise ValueError("music mode must be vocal or instrumental")
+    from mp3_to_videoclip import kinds
+    from mp3_to_videoclip.models import Intent
+
+    profile = kinds.get(kind)
+    try:
+        intent_value = Intent.model_validate(intent or {})
+    except ValueError as exc:
+        raise ValueError(f"intake intent is invalid: {exc}") from exc
+    if profile.id == "advert":
+        missing = [
+            label
+            for label, field in (
+                ("objective", intent_value.objective),
+                ("message", intent_value.message),
+                ("call to action", intent_value.cta.text if intent_value.cta else ""),
+            )
+            if not field.strip()
+        ]
+        if missing:
+            raise ValueError("an advert needs " + ", ".join(missing))
+        if length_seconds is None and intent_value.length_seconds is None:
+            raise ValueError("an advert needs a target length")
     if not source.is_file():
         raise ValueError("the upload is empty")
     if source.suffix.lower() != ".mp3":
@@ -106,6 +135,13 @@ def create_from_upload(
                 fps=24,
                 music_mode=music_mode,
                 title=title,
+                kind=profile.id,
+                intent=intent_value.model_dump(),
+                style_preset=style_preset,
+                length_seconds=length_seconds or intent_value.length_seconds,
+                window_start=window_start,
+                fade_in=fade_in,
+                fade_out=fade_out,
             )
         except (RuntimeError, OSError, json.JSONDecodeError) as exc:
             raise ValueError("the file is not a readable MP3") from exc

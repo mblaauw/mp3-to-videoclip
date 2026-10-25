@@ -32,6 +32,11 @@ references.
   FFmpeg for probe, mux and verification (`remotion.py`, `render.py`). The Player
   runs the renderer's own `BaseFilm` and `timing.mjs`, so the live picture uses
   the same spans, camera, grade and transitions as the MP4.
+- Three production kinds (music video, promo, advert) with a kind-specific
+  intake, `brief.intent`, selectable style presets and a kind-based signature
+  package (`music_video` keeps the 25/40 opening and credits).
+- Promo/advert excerpt windows with waveform handles and fades. The source MP3 is
+  untouched; analysis, the Player and every render use the derived excerpt.
 - A measured waveform under the storyboard; drag a boundary (or use the arrow
   keys) and both adjacent shots resize without moving later cuts.
 - Read-only archive view of frozen productions (`domain/archive.py`).

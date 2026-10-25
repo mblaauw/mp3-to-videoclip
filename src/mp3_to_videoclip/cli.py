@@ -73,10 +73,16 @@ def parser() -> argparse.ArgumentParser:
         metavar="WxH",
         help="Image-generation size for this production, e.g. 1376x768; omit to keep the default",
     )
+    init.add_argument("--kind", choices=["music_video", "promo", "advert"], default="music_video")
     init.add_argument("--model", help="Persist a model schema slug override for this production")
     init.add_argument(
         "--style", help="Replace the default global look; do not include shot content"
     )
+    init.add_argument("--style-preset", help="Select a style preset by ID (or use --style)")
+    init.add_argument("--length", type=float, help="Excerpt length in seconds for promo/advert")
+    init.add_argument("--window-start", type=float, default=0.0, help="Excerpt start in seconds")
+    init.add_argument("--fade-in", type=float, default=0.0, help="Excerpt fade-in seconds")
+    init.add_argument("--fade-out", type=float, default=0.0, help="Excerpt fade-out seconds")
     init.add_argument("--image-settings", help="JSON settings object replacing the model defaults")
     init.add_argument("--image-seed", type=int, help="Optional seed, not an identity guarantee")
 
@@ -393,8 +399,14 @@ def execute(args):
             image_settings=image_settings,
             image_seed=args.image_seed,
             style=args.style,
+            style_preset=args.style_preset,
             native_size=native_size,
             title=args.title,
+            kind=args.kind,
+            length_seconds=args.length,
+            window_start=args.window_start,
+            fade_in=args.fade_in,
+            fade_out=args.fade_out,
         )
         return project.model_dump()
     if not root.is_dir():
@@ -474,7 +486,7 @@ def execute(args):
             if path.exists() and not args.force:
                 result = {"analysis": str(path), "reused": True}
             else:
-                data = analyze(inside(root, project.source), project.duration)
+                data = analyze(production.render_audio(root, project), project.duration)
                 write_json(path, data)
                 result = {
                     "analysis": str(path),
@@ -490,7 +502,7 @@ def execute(args):
                 from .deep_analysis import deep_analyze
 
                 deep_path = root / "work/music-deep.json"
-                deep = deep_analyze(inside(root, project.source), project.duration)
+                deep = deep_analyze(production.render_audio(root, project), project.duration)
                 write_json(deep_path, deep)
                 result = {
                     **result,
@@ -836,7 +848,7 @@ def execute(args):
                 report = render(
                     project,
                     shots,
-                    inside(root, project.source),
+                    production.render_audio(root, project),
                     directory / name,
                     root / "work",
                     brand=load_brand(root),

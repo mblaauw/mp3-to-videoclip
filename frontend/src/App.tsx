@@ -58,7 +58,7 @@ export function App() {
                 <div className="meta">
                   {p.error
                     ? "unreadable"
-                    : `${p.archived ? "archive" : "live"}${p.duration ? ` · ${p.duration.toFixed(0)}s` : ""}`}
+                    : `${p.archived ? "archive" : (p.kind || "live").replace("_", " ")}${p.duration ? ` · ${p.duration.toFixed(0)}s` : ""}`}
                 </div>
                 {p.error && <div className="meta error">{p.error}</div>}
               </button>

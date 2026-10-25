@@ -124,8 +124,16 @@ def build_context(slug: str, projects_dir: Path | None = None, stage: str | None
             assets = {}
         lines = [
             f"# Project snapshot: {project.title} ({root.name})",
-            f"- Schema {project.schema_version}; {project.duration:.1f}s; "
+            f"- Schema {project.schema_version}; kind "
+            f"{project.kind or 'music_video (legacy)'}; {project.duration:.1f}s; "
             f"{project.total_frames} frames at {project.fps}fps; {project.aspect}.",
+            f"- Source: {project.source_duration or project.duration:.1f}s"
+            + (
+                f"; excerpt {project.audio_window.start:.1f}-{project.audio_window.end:.1f}s "
+                f"(fade in {project.audio_window.fade_in:.1f}, out {project.audio_window.fade_out:.1f})"
+                if project.audio_window is not None
+                else "; whole track"
+            ),
             f"- Music: {_music(root)}",
             f"- Budget: {_budget(root)}",
             f"- Recorded approvals (not revalidated): {_approvals(root)}",
@@ -136,6 +144,18 @@ def build_context(slug: str, projects_dir: Path | None = None, stage: str | None
             lines.append(f"- Current stage: {stage}")
         lines.append("")
         lines.append("## Brief")
+        if brief.intent is not None:
+            intent = brief.intent
+            lines.append(
+                f"- Intent: objective {_clip(intent.objective, 120)}; audience "
+                f"{_clip(intent.audience, 80)}; message {_clip(intent.message, 120)}"
+            )
+            if intent.reasons:
+                lines.append("- Reasons: " + "; ".join(_clip(x, 80) for x in intent.reasons))
+            if intent.cta is not None and (intent.cta.text or intent.cta.url):
+                lines.append(
+                    f"- CTA: {_clip(intent.cta.text, 60)} {_clip(intent.cta.url, 100)}".rstrip()
+                )
         lines.append(f"- Direction: {_clip(brief.direction)}")
         lines.append(f"- Style: {_clip(brief.style)}")
         lines.append(f"- Treatment: {_clip(brief.treatment, 420)}")

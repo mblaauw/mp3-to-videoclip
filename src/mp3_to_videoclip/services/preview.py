@@ -72,7 +72,11 @@ def player_input(root: Path, slug: str) -> dict:
         "height": project.height,
         "durationInFrames": board.total_frames,
         "shots": shots,
-        "audio": f"/api/projects/{slug}/audio",
+        "audio": (
+            f"/api/projects/{slug}/audio-excerpt"
+            if project.audio_window is not None
+            else f"/api/projects/{slug}/audio"
+        ),
         # A live preview is unmarked; the rendered preview carries its own banner.
         "preview_banner": False,
         "preview_placeholders": placeholders,

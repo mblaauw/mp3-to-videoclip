@@ -446,3 +446,93 @@ button.active { border-color: var(--gold); color: var(--gold); }
   line-height: 1.55;
 }
 .setup li.missing { color: var(--warn); }
+
+/* production intake */
+.intake-card .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.intake-card label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.intake-card input,
+.intake-card select,
+.intake-card textarea {
+  width: 100%;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+.intake-card textarea { resize: vertical; }
+.intake-card .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.intake-card .actions .meta { color: var(--muted); }
+.window-card { margin-top: 16px; }
+.window-card h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.window-waveform {
+  position: relative;
+  height: 96px;
+  margin: 10px 0 12px;
+  background: #0a0f14;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+}
+.window-bars {
+  position: absolute;
+  inset: 6px 8px;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  pointer-events: none;
+}
+.window-bars span {
+  flex: 1 1 0;
+  min-width: 1px;
+  background: linear-gradient(to top, #2b5560, #7fb3bd);
+  border-radius: 1px 1px 0 0;
+}
+.window-bars .meta { margin: auto; font-size: 12px; }
+.window-region {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(212, 174, 106, 0.16);
+  border-left: 2px solid var(--gold);
+  border-right: 2px solid var(--gold);
+  pointer-events: none;
+}
+.window-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  cursor: ew-resize;
+}
+.window-handle::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 7px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--gold);
+  box-shadow: 0 0 0 1px #0a0f14;
+}
+@media (max-width: 700px) {
+  .intake-card .grid { grid-template-columns: 1fr; }
+}

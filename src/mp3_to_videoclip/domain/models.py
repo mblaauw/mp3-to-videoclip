@@ -14,7 +14,9 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from mp3_to_videoclip.models import (  # noqa: F401 - re-exported for the app
+    AudioWindow,
     Brief,
+    CallToAction,
     CameraKeyframe,
     CameraPath,
     Character,
@@ -22,6 +24,7 @@ from mp3_to_videoclip.models import (  # noqa: F401 - re-exported for the app
     CreativeProfile,
     Framing,
     ImageSettings,
+    Intent,
     Lyrics,
     MusicEvent,
     PostEffects,
@@ -57,6 +60,9 @@ class Project(BaseModel):
     width: int = Field(gt=0, multiple_of=2)
     height: int = Field(gt=0, multiple_of=2)
     music_mode: Literal["vocal", "instrumental"] | None = None
+    kind: Literal["music_video", "promo", "advert"] | None = None
+    source_duration: float | None = Field(default=None, gt=0)
+    audio_window: AudioWindow | None = None
     native_size: list[int] | None = None
     image_model: str | None = None
     image_settings: ImageSettings | None = None
@@ -74,6 +80,16 @@ class Project(BaseModel):
         a, b = map(int, self.aspect.split(":"))
         if self.width * b != self.height * a:
             raise ValueError("output dimensions must match the selected aspect")
+        return self
+
+    @model_validator(mode="after")
+    def check_audio_window(self):
+        if self.audio_window is None:
+            return self
+        if self.source_duration is not None and self.audio_window.end > self.source_duration + 1e-6:
+            raise ValueError("audio window ends after the source recording")
+        if abs(self.duration - self.audio_window.duration) > 1e-6:
+            raise ValueError("project duration must equal the selected audio window")
         return self
 
     @property

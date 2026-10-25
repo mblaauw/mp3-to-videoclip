@@ -5,16 +5,53 @@ export type ProjectSummary = {
   slug: string;
   title: string;
   duration: number | null;
+  kind?: string | null;
   archived: boolean;
   render: string | null;
   still_count: number;
   error?: string | null;
 };
 
+export type AudioWindow = {
+  start: number;
+  end: number;
+  fade_in: number;
+  fade_out: number;
+};
+
+export type StylePreset = {
+  id: string;
+  name: string;
+  description: string;
+  protected?: boolean;
+  look?: string;
+  image_rules?: string[];
+  model?: string | null;
+};
+
+export type KindProfile = {
+  id: string;
+  label: string;
+  purpose: string;
+  lengths: number[];
+  default_length: number | null;
+  allows_full_track: boolean;
+  structures: string[];
+  text_density: string;
+  signature_required: boolean;
+  style_presets: string[];
+  default_style: string;
+};
+
 export type ProjectDetail = {
   slug: string;
   title: string;
+  kind: string | null;
   duration: number;
+  source_duration: number;
+  audio_window: AudioWindow | null;
+  style_preset: string | null;
+  signature_required: boolean | null;
   fps: number;
   width: number;
   height: number;
@@ -69,7 +106,27 @@ export type Music = {
   warnings?: string[];
 };
 
+export type Intent = {
+  kind?: string;
+  objective?: string;
+  audience?: string;
+  message?: string;
+  reasons?: string[];
+  tone?: string[];
+  mandatories?: string[];
+  avoid?: string[];
+  cta?: { text?: string; url?: string } | null;
+  length_seconds?: number | null;
+  audio_window?: AudioWindow | null;
+  notes?: string;
+  about?: string;
+  performance?: boolean | null;
+  reference_links?: string[];
+  assets?: string;
+};
+
 export type Brief = {
+  intent?: Intent | null;
   direction?: string;
   style?: string;
   treatment?: string;
@@ -109,6 +166,28 @@ export type ImageShot = {
   selected: number | null;
   versions: ImageVersion[];
   review: ImageReview | null;
+};
+
+export type IntakePayload = {
+  title: string;
+  kind: string;
+  intent: Intent | null;
+  brief: Brief;
+  style_preset: string | null;
+  style_presets: StylePreset[];
+  kinds: KindProfile[];
+  source_duration: number;
+  duration: number;
+  audio_window: AudioWindow | null;
+  peaks: number[];
+  analysis_needed: boolean;
+};
+
+export type Settings = {
+  default_budget_usd?: number;
+  style_presets?: StylePreset[];
+  kinds?: KindProfile[];
+  [key: string]: unknown;
 };
 
 export type SetupStatus = {
@@ -225,7 +304,22 @@ export const api = {
   projects: () => request<ProjectSummary[]>("/api/projects"),
   createProject: async (
     file: File,
-    meta: { title: string; aspect: string; music_mode: string; budget: string },
+    meta: {
+      title: string;
+      aspect: string;
+      music_mode: string;
+      budget: string;
+      kind: string;
+      style_preset: string;
+      objective?: string;
+      message?: string;
+      cta_text?: string;
+      cta_url?: string;
+      length_seconds?: number;
+      window_start?: number;
+      fade_in?: number;
+      fade_out?: number;
+    },
   ) => {
     const params = new URLSearchParams({
       title: meta.title,
@@ -233,7 +327,19 @@ export const api = {
       aspect: meta.aspect,
       music_mode: meta.music_mode,
       budget: meta.budget,
+      kind: meta.kind,
+      style_preset: meta.style_preset,
     });
+    if (meta.kind !== "music_video") {
+      params.set("objective", meta.objective || "");
+      params.set("message", meta.message || "");
+      params.set("cta_text", meta.cta_text || "");
+      params.set("cta_url", meta.cta_url || "");
+      params.set("window_start", String(meta.window_start ?? 0));
+      params.set("fade_in", String(meta.fade_in ?? 0));
+      params.set("fade_out", String(meta.fade_out ?? 1.5));
+      if (meta.length_seconds) params.set("length_seconds", String(meta.length_seconds));
+    }
     const res = await fetch(`/api/projects?${params}`, {
       method: "POST",
       headers: { "Content-Type": file.type || "audio/mpeg" },
@@ -247,18 +353,34 @@ export const api = {
     return (await res.json()) as {
       slug: string;
       title: string;
+      kind: string;
       duration: number;
+      source_duration: number | null;
+      audio_window: AudioWindow | null;
+      signature_required: boolean | null;
       analysis_job: string | null;
     };
   },
   project: (slug: string) => request<ProjectDetail>(`/api/projects/${slug}`),
   brief: (slug: string) => request<Brief>(`/api/projects/${slug}/brief`),
+  intake: (slug: string) => request<IntakePayload>(`/api/projects/${slug}/intake`),
+  updateIntake: (
+    slug: string,
+    body: { intent: Intent; style_preset: string; audio_window: AudioWindow | null },
+  ) =>
+    request<IntakePayload>(`/api/projects/${slug}/intake`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
   storyboard: (slug: string) =>
     request<Storyboard | { available: false }>(`/api/projects/${slug}/storyboard`),
   track: (slug: string) =>
-    request<{ music: Music | null; lyrics: unknown; music_mode: string | null }>(
-      `/api/projects/${slug}/track`,
-    ),
+    request<{
+      music: Music | null;
+      lyrics: unknown;
+      music_mode: string | null;
+      kind: string;
+    }>(`/api/projects/${slug}/track`),
   images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),
   graphicsReview: (slug: string) =>
     request<GraphicsReview>(`/api/projects/${slug}/graphics-review`),
@@ -269,7 +391,7 @@ export const api = {
     ),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
   jobs: () => request<Job[]>("/api/jobs"),
-  settings: () => request<Record<string, unknown>>("/api/settings"),
+  settings: () => request<Settings>("/api/settings"),
   setup: () => request<SetupStatus>("/api/setup"),
   installRenderer: () =>
     request<{ installed: boolean; already_present: boolean; output: string }>(

@@ -24,7 +24,7 @@ from PIL import Image, ImageDraw, ImageFont
 from .branding import load_brand, pack_hash
 from .models import Project, RenderShot, Shot, Storyboard
 from .render import render
-from .storage import digest, file_hash, inside
+from .storage import digest, file_hash
 
 # Bump to invalidate derived preview plates when the marking/placeholder changes.
 PREVIEW_VERSION = "preview-v1"
@@ -191,7 +191,9 @@ def build_preview(
     output = Path(output)
     workdir = Path(workdir)
 
-    audio = inside(root, project.source)
+    from .production import render_audio
+
+    audio = render_audio(root, project)
     if not audio.is_file():
         raise FileNotFoundError(f"source audio not found: {audio}")
     board.check_project(project)
