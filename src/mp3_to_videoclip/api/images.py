@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+import asyncio
+import json
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip import services
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.domain import budget
+from mp3_to_videoclip.storage import inside
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["images"])
+
+
+def _decisions(root, reserve_usd):
+    return budget.check(root, reserve_usd)
 
 
 @router.get("/images")
@@ -36,12 +47,89 @@ async def get_images(slug: str, request: Request):
     return {"shots": shots}
 
 
+@router.get("/images/{owner}/{version}")
+async def get_image_file(slug: str, owner: str, version: int, request: Request):
+    root = project_root(request, slug)
+    path = root / "work" / "assets.json"
+    assets = json.loads(path.read_text()) if path.is_file() else {}
+    entry = assets.get(owner) or {}
+    chosen = next((v for v in entry.get("versions", []) if v["version"] == version), None)
+    if not chosen:
+        raise HTTPException(status_code=404, detail="unknown image version")
+    try:
+        target = inside(root, chosen["path"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="image file is missing")
+    return FileResponse(target)
+
+
 @router.post("/images/estimate")
 async def estimate_images(slug: str, request: Request, payload: dict):
-    project_root(request, slug)
-    shot_ids = payload.get("shot_ids", [])
-    # Return a simple estimate based on the number of shots.
-    return {"shot_ids": shot_ids, "estimated_count": len(shot_ids)}
+    root = project_root(request, slug)
+    shot_ids = payload.get("shot_ids") or []
+    if not shot_ids:
+        return {"error": "select at least one shot"}
+    try:
+        estimate = services.generation.estimate(
+            root,
+            shot_ids,
+            scope=payload.get("scope", "stills"),
+            reserve=str(payload.get("reserve_usd", "0.05")),
+            regenerate=bool(payload.get("regenerate")),
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}
+    if not estimate["tasks"]:
+        return {"error": "every selected shot already has this exact image; use regenerate"}
+    return {
+        "estimate": estimate,
+        "decision": _decisions(root, estimate["reserve_usd"]),
+        "budget": _budget_card(root),
+    }
+
+
+@router.post("/images/generate")
+async def generate_images(slug: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    quote_id = payload.get("quote_id")
+    if not quote_id:
+        return {"error": "estimate the selection first"}
+    try:
+        quote = services.generation.quote(root, quote_id)
+    except (ValueError, FileNotFoundError) as exc:
+        return {"error": str(exc)}
+    decision = _decisions(root, quote["reserve_total_usd"])
+    if not decision["ok"]:
+        return {"needs_budget": True, "decision": decision, "budget": _budget_card(root)}
+    if services.generation.uploads_required(quote) and not payload.get("uploads_confirmed"):
+        return {"error": "reference images will be uploaded; confirm that explicitly"}
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        return {"error": "job runner unavailable"}
+    try:
+        services.generation.authorize(
+            root,
+            quote_id,
+            note=payload.get("note") or "user confirmed in Studio",
+            uploads_confirmed=bool(payload.get("uploads_confirmed")),
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+    async def work():
+        return await asyncio.to_thread(services.generation.run, root, quote_id)
+
+    job_id = runner.submit("images", slug, work)
+    return {
+        "job_id": job_id,
+        "quote_id": quote_id,
+        "reserve_usd": quote["reserve_total_usd"],
+        "tasks": len(quote["tasks"]),
+        "status": "queued",
+        "budget": _budget_card(root),
+    }
 
 
 @router.post("/images/select")
@@ -53,3 +141,14 @@ async def select_version(slug: str, request: Request, payload: dict):
         return {"error": "shot_id and version required"}
     P.select_asset(root, shot_id, version)
     return {"selected": shot_id, "version": version}
+
+
+def _budget_card(root) -> dict:
+    cap = budget.cap(root)
+    committed = budget.committed(root)
+    remaining = budget.remaining(root)
+    return {
+        "cap_usd": budget.fmt(cap) if cap is not None else None,
+        "committed_usd": budget.fmt(committed),
+        "remaining_usd": budget.fmt(remaining) if remaining is not None else None,
+    }

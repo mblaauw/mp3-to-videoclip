@@ -71,6 +71,9 @@ TOOLS: list[dict] = [
             "slug": {"type": "string"},
             "shot_ids": {"type": "array", "items": {"type": "string"}},
             "regenerate": {"type": "boolean"},
+            "scope": {"type": "string", "enum": ["proof", "stills"]},
+            "reserve_usd": {"type": "string"},
+            "note": {"type": "string"},
         },
         ["slug", "shot_ids"],
     ),
@@ -209,12 +212,32 @@ def _generate_images(root, arguments, runner):
     shot_ids = arguments.get("shot_ids") or []
     if not shot_ids:
         return {"error": "shot_ids required"}
-    estimate = services.generation.estimate(root, shot_ids)
+    try:
+        estimate = services.generation.estimate(
+            root,
+            shot_ids,
+            scope=arguments.get("scope", "stills"),
+            reserve=arguments.get("reserve_usd", "0.05"),
+            regenerate=bool(arguments.get("regenerate")),
+        )
+    except ValueError as exc:
+        return {"error": str(exc), "needs_approval": True}
     decision = budget.check(root, estimate["reserve_usd"])
     if not decision["ok"]:
         return {"needs_budget": True, "estimate": estimate, "decision": decision}
+    if estimate["uploads_required"]:
+        return {
+            "needs_confirmation": "reference images will be uploaded; confirm in the Images stage",
+            "estimate": estimate,
+        }
     if runner is None:
         return {"error": "job runner unavailable; cannot queue a paid batch"}
+
+    services.generation.authorize(
+        root,
+        estimate["quote_id"],
+        note=arguments.get("note") or "confirmed in director chat",
+    )
 
     import asyncio
 
@@ -233,16 +256,11 @@ def _transcribe(root, arguments, runner):
     decision = budget.check(root, quote.get("reserve_total_usd") or quote.get("reserve_usd") or "0")
     if not decision["ok"]:
         return {"needs_budget": True, "quote": quote, "decision": decision}
-    if runner is None:
-        return {"error": "job runner unavailable; cannot queue a transcription"}
-
-    import asyncio
-
-    async def work():
-        return await asyncio.to_thread(services.transcription.run, root, quote["id"])
-
-    job_id = runner.submit("transcription", root.name, work)
-    return {"job_id": job_id, "quote": quote, "status": "queued"}
+    # Uploading personal audio is a separate consent; the director cannot give it.
+    return {
+        "needs_confirmation": "the source audio will be uploaded; confirm transcription in the Track stage",
+        "quote": {key: quote.get(key) for key in ("id", "reserve_total_usd", "language")},
+    }
 
 
 def _render(root, arguments, runner):

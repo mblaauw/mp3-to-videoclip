@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Brief } from "../api";
+import { ApprovalBar } from "../ApprovalBar";
 
 export function StoryStage({ slug }: { slug: string }) {
   const [brief, setBrief] = useState<Brief | null>(null);
@@ -40,6 +41,7 @@ export function StoryStage({ slug }: { slug: string }) {
       <h2>Story</h2>
       <p className="sub">Treatment, look and characters. Every write is a versioned artifact.</p>
       {error && <p className="error">{error}</p>}
+      <ApprovalBar slug={slug} stages={["brief"]} />
       <div className="card">
         <h3>Treatment</h3>
         <textarea value={treatment} onChange={(e) => setTreatment(e.target.value)} rows={10} />

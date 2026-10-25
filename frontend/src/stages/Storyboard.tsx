@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Shot, type Storyboard } from "../api";
+import { ApprovalBar } from "../ApprovalBar";
 
 export function StoryboardStage({ slug }: { slug: string }) {
   const [board, setBoard] = useState<Storyboard | null>(null);
@@ -42,6 +43,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
         update the board.
       </p>
       {error && <p className="error">{error}</p>}
+      <ApprovalBar slug={slug} stages={["storyboard"]} />
       <div className="card">
         {board ? (
           <table>

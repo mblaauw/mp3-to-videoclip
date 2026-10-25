@@ -73,6 +73,41 @@ export type Job = {
   error: string | null;
 };
 
+export type ApprovalState = {
+  stage: string;
+  state: "approved" | "stale" | "missing" | "unavailable";
+  expected_hash?: string;
+  at?: string | null;
+  note?: string | null;
+  error?: string;
+};
+
+export type BudgetDecision = {
+  ok: boolean;
+  needs_budget: boolean;
+  remaining: string | null;
+  cap_usd: string | null;
+  requested_usd?: string;
+  suggested_usd?: string;
+};
+
+export type ImageEstimate = {
+  quote_id: string;
+  scope: string;
+  tasks: number;
+  reserve_usd: string;
+  cap_usd: string | null;
+  uploads_required: boolean;
+  shot_ids: string[];
+};
+
+export type ImageEstimateResponse = {
+  estimate?: ImageEstimate;
+  decision?: BudgetDecision;
+  budget?: Omit<Budget, "history">;
+  error?: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -113,6 +148,41 @@ export const api = {
     request<unknown>(`/api/projects/${slug}/images/select`, {
       method: "POST",
       body: JSON.stringify({ shot_id, version }),
+    }),
+  imageEstimate: (
+    slug: string,
+    body: { shot_ids: string[]; reserve_usd: string; scope: string; regenerate: boolean },
+  ) =>
+    request<ImageEstimateResponse>(`/api/projects/${slug}/images/estimate`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  generateImages: (
+    slug: string,
+    body: { quote_id: string; note: string; uploads_confirmed: boolean },
+  ) =>
+    request<{
+      job_id?: string;
+      error?: string;
+      needs_budget?: boolean;
+      decision?: BudgetDecision;
+      budget?: Omit<Budget, "history">;
+      tasks?: number;
+      reserve_usd?: string;
+    }>(`/api/projects/${slug}/images/generate`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  approvals: (slug: string) =>
+    request<{ stages: ApprovalState[] }>(`/api/projects/${slug}/approvals`),
+  approve: (
+    slug: string,
+    stage: string,
+    body: { expected_hash: string; note: string; confirmed: true },
+  ) =>
+    request<{ approved: string }>(`/api/projects/${slug}/approvals/${stage}`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   render: (slug: string, kind: "preview" | "final") =>
     request<unknown>(`/api/projects/${slug}/render`, {

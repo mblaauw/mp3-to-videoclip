@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
+from .api.approvals import router as approvals_router
 from .api.budget import router as budget_router
 from .api.director import router as director_router
 from .api.film import router as film_router
@@ -51,6 +52,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
     app.include_router(images_router)
     app.include_router(film_router)
     app.include_router(budget_router)
+    app.include_router(approvals_router)
     app.include_router(director_router)
     app.include_router(jobs_router)
 

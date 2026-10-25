@@ -14,6 +14,7 @@ export function App() {
   const [slug, setSlug] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("track");
   const [error, setError] = useState<string | null>(null);
+  const selected = projects.find((p) => p.slug === slug) || null;
 
   useEffect(() => {
     api.projects().then(setProjects).catch((e) => setError(String(e)));
@@ -44,25 +45,53 @@ export function App() {
       </aside>
 
       <main className="main">
-        {slug ? (
-          <>
-            <div className="tabs">
-              {STAGES.map((s) => (
-                <button key={s} className={s === stage ? "active" : ""} onClick={() => setStage(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-            <StageView slug={slug} stage={stage} />
-          </>
+        {selected ? (
+          selected.archived ? (
+            <ArchivedFilm project={selected} />
+          ) : (
+            <>
+              <div className="tabs">
+                {STAGES.map((s) => (
+                  <button
+                    key={s}
+                    className={s === stage ? "active" : ""}
+                    onClick={() => setStage(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+              <StageView slug={selected.slug} stage={stage} />
+            </>
+          )
         ) : (
           <p className="empty">Select a production.</p>
         )}
       </main>
 
-      <Director slug={slug} stage={stage} />
+      <Director slug={selected?.archived ? null : slug} stage={stage} archived={!!selected?.archived} />
       <JobTray />
     </div>
+  );
+}
+
+function ArchivedFilm({ project }: { project: ProjectSummary }) {
+  return (
+    <>
+      <h2>{project.title}</h2>
+      <p className="sub">
+        Finished film, read-only. The archive keeps the delivered render and its stills exactly as
+        they were signed off.
+      </p>
+      <div className="card">
+        <h3>Delivered film</h3>
+        <div className="pre">{project.render ?? "No render recorded."}</div>
+      </div>
+      <div className="card">
+        <h3>Stills</h3>
+        <div className="pre">{project.still_count} stills preserved in the archive.</div>
+      </div>
+    </>
   );
 }
 
@@ -74,7 +103,15 @@ function StageView({ slug, stage }: { slug: string; stage: Stage }) {
   return <FilmStage slug={slug} />;
 }
 
-function Director({ slug, stage }: { slug: string | null; stage: Stage }) {
+function Director({
+  slug,
+  stage,
+  archived,
+}: {
+  slug: string | null;
+  stage: Stage;
+  archived: boolean;
+}) {
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -134,7 +171,9 @@ function Director({ slug, stage }: { slug: string | null; stage: Stage }) {
     <aside className="director">
       <header>
         <h2>Director</h2>
-        <div className="meta">{slug ? `project ${slug} · ${stage}` : "no project"}</div>
+        <div className="meta">
+          {archived ? "archive · read-only" : slug ? `project ${slug} · ${stage}` : "no project"}
+        </div>
       </header>
       <div className="messages">
         {messages.map((m, i) => (
@@ -144,21 +183,29 @@ function Director({ slug, stage }: { slug: string | null; stage: Stage }) {
           </div>
         ))}
         {error && <p className="error">{error}</p>}
-        {!messages.length && <p className="empty">Ask the director to change the film.</p>}
+        {!messages.length && (
+          <p className="empty">
+            {archived
+              ? "This film is delivered; the director does not change archives."
+              : "Ask the director to change the film."}
+          </p>
+        )}
       </div>
-      <div className="composer">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
-          }}
-          placeholder="Make the middle darker…"
-        />
-        <button onClick={send} disabled={busy || !slug}>
-          {busy ? "…" : "Send"}
-        </button>
-      </div>
+      {!archived && (
+        <div className="composer">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
+            }}
+            placeholder="Make the middle darker…"
+          />
+          <button onClick={send} disabled={busy || !slug}>
+            {busy ? "…" : "Send"}
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

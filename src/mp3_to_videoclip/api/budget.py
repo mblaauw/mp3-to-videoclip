@@ -17,9 +17,9 @@ async def get_budget(slug: str, request: Request):
     committed = budget.committed(root)
     remaining = budget.remaining(root)
     return {
-        "cap_usd": str(cap) if cap is not None else None,
-        "committed_usd": str(committed),
-        "remaining_usd": str(remaining) if remaining is not None else None,
+        "cap_usd": budget.fmt(cap) if cap is not None else None,
+        "committed_usd": budget.fmt(committed),
+        "remaining_usd": budget.fmt(remaining) if remaining is not None else None,
         "history": budget.history(root),
     }
 
@@ -28,4 +28,4 @@ async def get_budget(slug: str, request: Request):
 async def add_budget(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     entry = budget.add_budget(root, payload["amount"], payload.get("reason", "user approved more"))
-    return {"entry": entry, "cap_usd": budget.cap(root)}
+    return {"entry": entry, "cap_usd": budget.fmt(budget.cap(root))}

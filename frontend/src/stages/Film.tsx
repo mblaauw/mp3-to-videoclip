@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Budget } from "../api";
+import { ApprovalBar } from "../ApprovalBar";
 
 export function FilmStage({ slug }: { slug: string }) {
   const [exports, setExports] = useState<string[]>([]);
@@ -50,6 +51,7 @@ export function FilmStage({ slug }: { slug: string }) {
           {busy === "final" ? "Queueing…" : "Render final"}
         </button>
       </div>
+      <ApprovalBar slug={slug} stages={["preview", "graphics"]} />
       <div className="card">
         <h3>Exports</h3>
         {exports.length ? (

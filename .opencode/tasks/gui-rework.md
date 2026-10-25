@@ -23,6 +23,18 @@ override it where they disagree:
 - One commit per numbered task in the brief.
 - Every phase ends with `pytest` and `ruff` green and an app that starts.
 
+## Schema 3 semantics (decided during Phase 2)
+
+Schema 3 is the native form of the guided workflow v2, not a new, weaker flow. The
+engine therefore treats `schema_version == 3` exactly like `workflow_version == 2`:
+the v2 prompt layout, character identity separate from description, reference
+import receipts, accepted proof/stills reviews, preflight before storyboard
+approval, and a required production budget. This was a real migration defect:
+without it every migrated still failed its input-hash check and the film could not
+be rendered, while cumulative budget admission silently had no cap. Approval
+hashes intentionally exclude the administrative budget history, so a top-up
+cannot invalidate a reviewed story.
+
 ## Deviation from the brief (recorded, reversible)
 
 Phase 1's delete table removes the current Studio (`serve.py`, `studio_ui*`, `human_*`)
@@ -42,11 +54,23 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. Remaining modules (`flow`, `operations`, `sources`, `human_*`, `studio`, `studio_ui*`, `reviews`, `appdata`, `backup`, `signature`) are imported by the interim Studio/CLI and cannot be deleted until their replacements land in Phases 2-4 (recorded deviation). Legacy model branches move with them. `src/` 21,124 -> 17,371. |
-| 2 · backend skeleton | not started — owns the schema-3 models and therefore the zero-bars importer |
-| 3 · director | not started |
-| 4 · frontend | not started — deletes the interim Studio and the approval paths |
+| 2 · backend skeleton | **in progress on `gui-rework/phase-2-backend`.** Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Still open: conversation compaction, probe, route coverage for the remaining surfaces, and the Phase 2 PR. |
+| 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
+| 4 · frontend | **started inside Phase 2** — library, five stages, director panel, job tray, approvals, image thumbnails/estimate/generate. Still open: Remotion Player preview, waveform and draggable boundaries, error toasts, the 390/900/1280 keyboard pass; deleting the interim Studio stays Phase 4 proper. |
 | 5 · render cleanup | not started |
 | 6 · polish | not started |
+
+## Live production state (zero-bars)
+
+Schema 3, cap $8.00, committed $2.8843815, remaining $5.1156185 (the earlier
+“$3.26 committed” figure came from per-task cent rounding in the app; the engine
+commitment is now the single source). The migration changed the project document,
+so the three recorded approvals are **stale** even though brief, board and stills
+are untouched. They must be re-approved in the app in order: **brief → storyboard
+→ proof**, each with a written note. Generation and transcription stay blocked
+until then; rendering stays blocked because `resolved_assets` needs current proof
+approval. Do not approve on the user's behalf.
+
 
 ## Acceptance per phase
 
