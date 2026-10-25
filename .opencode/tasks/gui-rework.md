@@ -55,7 +55,7 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. The interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`, `studio.py`, `appdata.py`, `human_actions.py`) was deleted in the Phase 4 cleanup. Remaining for Phase 5: `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py`. `src/` 21,124 -> 17,371 before that cleanup; re-measure after Phase 5. |
 | 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
-| 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
+| 3 · director | **acceptance met on `gui-rework/phase-3-director`.** Phase 2 built the LLM adapter, tool dispatch, turn loop and stage-aware guides; this slice adds bounded prompt history, the recorded fake-provider probe, library-correct tool roots, domain-validated proof selection and a browser Stop. |
 | 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026) and **cleaned up as PR #11** (merge `a3aefc8`, 25 Oct 2026). Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. Phase 4 added MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. The cleanup added image reviews, preview/stills/graphics attestations and the final-render stills gate, then deleted the interim server and its old-surface tests. |
 | 5 · render cleanup | not started |
 | 6 · polish | not started |
@@ -202,6 +202,35 @@ Evidence: full suite green after the deletion; `uv run studio` starts and serves
 the zero-bars approvals and assets were not touched (the live Player check was
 read-only).
 
+## Phase 3 director close-out (25 Oct 2026)
+
+- **Compaction.** `director/conversation.py` bounds a turn to 60 messages and
+  keeps the most recent 24 from a user-turn boundary. Older user request
+  snippets and tool names become a short summary appended to the system prompt;
+  tool outputs and assistant prose are dropped. The JSONL log is never rewritten.
+  The server prompt is rebuilt with the current project state every turn.
+- **Recorded fake-provider probe.** `tests/test_director_probe.py` creates a real
+  schema-3 production through `domain.intake`, approves the brief, then a scripted
+  provider drives `get_project → create_storyboard → set_proof_shots →
+  generate_images → generate_images(regenerate) → done`. The image service and
+  runner are fakes; the turn loop and tools are real. It asserts the board covers
+  the project, the proof selection is recorded, the first batch is not a
+  regeneration, the second is, both quotes are authorized and both jobs queue.
+  The scripted turn completes in under 1 s (no network, no paid call).
+- **Stop.** The composer shows a Stop button while a turn runs; aborting the
+  fetch returns the button in 15 ms in the browser. `run_turn` also closes in
+  under 1 s when its stream is closed mid-turn (the server path on disconnect).
+- **Zoom.** The director's tool root now follows the configured projects
+  directory instead of hardcoded `./projects`; the search path is tested from a
+  different working directory. `set_proof_shots` goes through
+  `production.set_proof_ids`, so the same count/known-ID rules apply in chat.
+- **Chat errors and streaming.** Missing messages and a missing LLM key are HTTP
+  400/503 instead of 200 bodies the stream parser ignored. The composer buffers
+  NDJSON lines across network chunks and shows the API detail as a toast.
+- **Live evidence.** The owner's configured provider answered a real Track-stage
+  chat correctly in the earlier Phase 4 session; the fake probe above is the
+  repeatable record.
+
 ## Acceptance per phase
 
 - **0:** tag exists; snapshot restores metadata; golden passes. ✅
@@ -209,7 +238,7 @@ read-only).
   zero-bars imports to schema 3 and opens; suite < 3 min.
 - **2:** every route tested; zero-bars opens < 150 ms; B4/B6/B7 regression tests.
 - **3:** probe recorded; fake-provider session import → board → mocked batch → one
-  regeneration; Stop < 1 s.
+  regeneration; Stop < 1 s. ✅ (probe in `tests/test_director_probe.py`; browser Stop 15 ms)
 - **4:** every route zero console errors; 390/900/1280; keyboard-only path; Player spike. ✅
 - **5:** no Chrome read; preview + final on a clean runner; `timing.mjs` parity.
 - **6:** fresh clone → `uv sync` → `uv run studio` → film, no terminal.

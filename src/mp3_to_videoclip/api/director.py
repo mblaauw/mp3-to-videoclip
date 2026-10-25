@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from mp3_to_videoclip.api._helpers import project_root
@@ -30,12 +30,12 @@ async def post_chat(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     message = payload.get("message", "")
     if not isinstance(message, str) or not message.strip():
-        return {"error": "message required"}
+        raise HTTPException(status_code=400, detail="message required")
     if len(message) > 8000:
-        return {"error": "message is too long"}
+        raise HTTPException(status_code=400, detail="message is too long")
     settings = effective_settings()
     if not settings.llm_api_key:
-        return {"error": "no LLM key configured; open Settings"}
+        raise HTTPException(status_code=503, detail="no LLM key configured; open Settings")
     llm = DirectorLLM(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
@@ -46,7 +46,9 @@ async def post_chat(slug: str, request: Request, payload: dict):
 
     async def stream():
         runner = getattr(request.app.state, "runner", None)
-        async for event in run_turn(llm, root, slug, message, system, runner=runner):
+        async for event in run_turn(
+            llm, root, slug, message, system, runner=runner, projects_dir=root.parent
+        ):
             yield (
                 json.dumps(
                     {

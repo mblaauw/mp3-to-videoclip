@@ -104,22 +104,32 @@ TOOLS: list[dict] = [
 ]
 
 
-def _root(slug: str) -> Path:
-    return Path("projects") / slug
+def _root(slug: str, projects_dir: Path | None = None) -> Path:
+    return (projects_dir or Path("projects")) / slug
 
 
-async def dispatch(name: str, arguments: dict[str, Any], runner=None) -> str:
+async def dispatch(
+    name: str,
+    arguments: dict[str, Any],
+    runner=None,
+    projects_dir: Path | None = None,
+) -> str:
     """Dispatch a tool call. Returns a JSON string result."""
     try:
-        return json.dumps(_dispatch(name, arguments, runner), ensure_ascii=False)
+        return json.dumps(_dispatch(name, arguments, runner, projects_dir), ensure_ascii=False)
     except Exception as exc:  # noqa: BLE001
         return json.dumps({"error": str(exc)})
 
 
-def _dispatch(name: str, arguments: dict[str, Any], runner=None) -> Any:
+def _dispatch(
+    name: str,
+    arguments: dict[str, Any],
+    runner=None,
+    projects_dir: Path | None = None,
+) -> Any:
     from mp3_to_videoclip import production as P
 
-    root = _root(arguments["slug"])
+    root = _root(arguments["slug"], projects_dir)
 
     if name == "get_project":
         project = P.load_project(root)
@@ -189,15 +199,7 @@ def _dispatch(name: str, arguments: dict[str, Any], runner=None) -> Any:
         return _render(root, arguments, runner)
 
     if name == "set_proof_shots":
-        from mp3_to_videoclip.models import Brief
-
-        brief = P.load_brief(root)
-        creative = brief.creative
-        if creative is None:
-            raise ValueError("a creative profile is required")
-        creative.proof_shot_ids = (arguments.get("shot_ids") or [])[:3]
-        write_json(root / "brief.json", brief.model_dump())
-        return {"proof_shot_ids": creative.proof_shot_ids}
+        return {"proof_shot_ids": P.set_proof_ids(root, arguments.get("shot_ids") or [])}
 
     if name == "ask_user":
         return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}

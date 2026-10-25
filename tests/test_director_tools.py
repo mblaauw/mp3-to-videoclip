@@ -138,3 +138,14 @@ def test_transcription_never_uploads_audio_from_chat(tmp_path, monkeypatch):
     result = json.loads(asyncio.run(tools.dispatch("transcribe_lyrics", {"slug": "demo"}, runner)))
     assert "needs_confirmation" in result
     assert runner.submitted == []
+
+
+def test_tools_follow_the_configured_projects_directory(tmp_path, monkeypatch):
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+    root = _project(tmp_path)
+    result = json.loads(
+        asyncio.run(tools.dispatch("get_project", {"slug": "demo"}, projects_dir=root.parent))
+    )
+    assert result == {"slug": "demo", "title": "Demo", "duration": 60.0}

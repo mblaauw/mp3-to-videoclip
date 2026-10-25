@@ -339,16 +339,17 @@ def test_events_stream_starts_with_hello(client):
 
 def test_director_chat_reads_and_streams(client, monkeypatch):
     assert client.get("/api/projects/production/chat").json() == {"messages": []}
-    assert client.post("/api/projects/production/chat", json={"message": ""}).json() == {
-        "error": "message required"
-    }
+    empty = client.post("/api/projects/production/chat", json={"message": ""})
+    assert empty.status_code == 400
+    assert empty.json()["detail"] == "message required"
 
     monkeypatch.setattr(
         "mp3_to_videoclip.api.director.effective_settings",
         lambda: Settings(llm_api_key=""),
     )
-    missing = client.post("/api/projects/production/chat", json={"message": "hi"}).json()
-    assert missing["error"].startswith("no LLM key")
+    missing = client.post("/api/projects/production/chat", json={"message": "hi"})
+    assert missing.status_code == 503
+    assert missing.json()["detail"].startswith("no LLM key")
 
     monkeypatch.setattr(
         "mp3_to_videoclip.api.director.effective_settings",
