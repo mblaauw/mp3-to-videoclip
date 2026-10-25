@@ -170,28 +170,38 @@ a dedicated agent with Studio-only permissions and instructions.
 Spike complete. The isolated server and mock provider were stopped; the scratch
 fixtures remain under gitignored `.opencode/scratch/t1/` for the next phase.
 
-## Implementation (slice 1, in progress)
+## Implementation (slice 1, complete except the settings UI)
 
-- `director/opencode.py`: app-owned process manager, fixed password, 2.0.x
-  health/version check, config writer, async client, SSE relay, session reuse,
-  Stop on stream close, persisted text history.
+- `director/opencode.py`: app-owned process manager, fixed password, 2.1.4–2.1.x
+  health/version check, desktop-CLI discovery, config writer, async client, SSE
+  relay, MCP readiness + warm-up session, session reuse, Stop on stream close,
+  persisted text history.
 - `director/mcp.py`: newline-delimited stdio MCP bridge over the safe director
   tools; paid jobs and renders excluded; slug confined to `projects/`;
   `get_images` becomes MCP image content.
 - `config.py`: `gateway`, `opencode_bin`, `writer_model`, `editor_model` and
   `opencode_workspace`; the old direct fields stay for fallback.
 - `api/director.py`: role-aware routing (`writer` for content stages, `editor`
-  for Film), model availability check before the stream, gateway failure
-  fallback only when a direct key exists, app-owned gateway cache.
+  for Film), model availability check before the stream, MCP readiness check,
+  gateway failure fallback only when a direct key exists, app-owned gateway
+  cache.
 - `app.py`: gateway shutdown in the app lifespan.
 - `docs/ARCHITECTURE.md`: durable gateway contract and known limits.
 
-Verified locally with the real 2.0.28 binary and the local mock provider: a
-Writer session exposed only `clipstudio_*` tools and called
-`clipstudio_get_project`, whose result fed a second model step. One manual
-probe first created a session without setting its model; OpenCode fell back to
-a free catalog model and returned a quota 429. No paid call was made. The
-gateway now validates the configured model and sets it explicitly.
+The 2.0.28 line has a GPT-6.1 Sol auto-compaction failure, so the gateway now
+requires 2.1.4+ and can discover the desktop app's CLI. On 2.1.x a blanket `*`
+deny is a hard deny that overrides later allows; built-ins are denied action by
+action. A fresh session snapshots its tool catalog, so the gateway waits for
+`clipstudio` and creates a discardable warm-up session before the real one.
 
-Remaining for T1: the settings UI, a live Writer/Editor probe on the
-configured models (owner authorization required), and the PR/CI cycle.
+Live probe on 2026-10-25 with `openai/gpt-6.1-sol` and
+`opencode-go/deepseek-v4.1-flash`:
+Writer called `clipstudio_get_project`, `clipstudio_get_images` and
+`clipstudio_update_brief`; Editor called `clipstudio_get_project`,
+`clipstudio_get_images` and `clipstudio_update_shots`. No built-in tool ran.
+Writer: 2,932 input / 118 output tokens, cost 0 (OpenAI subscription).
+Editor: 3,957 input / 250 output tokens, $0.00078. Artifacts were written only
+to `.opencode/scratch/t1/probe-live-214i/`.
+
+Remaining: the Settings UI (the API and TOML already accept the gateway and
+role models) and the PR/CI cycle.

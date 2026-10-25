@@ -86,7 +86,7 @@ def test_chat_routes_a_writer_turn_through_the_gateway(tmp_path, monkeypatch):
     events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
     assert events[0]["kind"] == "text"
     assert events[-1]["kind"] == "done"
-    assert fake.created == 1
+    assert fake.created == 2
     assert fake.models == ["openai/gpt-6.1-sol"]
     assert fake.closed is True
 

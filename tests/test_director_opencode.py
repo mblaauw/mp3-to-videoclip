@@ -13,6 +13,7 @@ from mp3_to_videoclip.director.opencode import (
     OpenCodeError,
     OpenCodeGateway,
     _version,
+    discover_binary,
     gateway_config,
     parse_model,
     run_gateway_turn,
@@ -51,7 +52,7 @@ HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 """
 
 
-def _fake_binary(tmp_path: Path, version: str = "2.0.28") -> Path:
+def _fake_binary(tmp_path: Path, version: str = "2.1.4") -> Path:
     path = tmp_path / "opencode"
     path.write_text(FAKE.replace("VERSION", version))
     path.chmod(0o755)
@@ -74,11 +75,15 @@ def test_gateway_config_denies_builtins_and_allows_studio_tools(tmp_path):
     assert config["agents"]["writer"]["model"] == "openai/gpt-6.1-sol"
     assert config["agents"]["editor"]["model"] == "opencode-go/deepseek-v4.1-flash"
     permissions = config["agents"]["writer"]["permissions"]
-    assert permissions[0] == {"action": "*", "resource": "*", "effect": "deny"}
+    assert all(rule["action"] != "*" for rule in permissions)
+    assert {"action": "shell", "resource": "*", "effect": "deny"} in permissions
+    assert {"action": "edit", "resource": "*", "effect": "deny"} in permissions
+    assert {"action": "execute", "resource": "*", "effect": "deny"} in permissions
     assert permissions[-1] == {"action": "clipstudio_*", "resource": "*", "effect": "allow"}
     server = config["mcp"]["servers"]["clipstudio"]
     assert server["type"] == "local"
     assert server["codemode"] is False
+    assert server["protocol"] == "legacy"
     assert server["command"][:2] == ["/usr/bin/python3", "-m"]
     assert str(tmp_path) in server["command"]
     assert Path(server["command"][-1]).is_absolute()
@@ -92,6 +97,21 @@ def test_model_reference_and_version_parsing():
         parse_model("not-a-provider-model")
     assert _version("2.0.28") == (2, 0, 28)
     assert _version("2.0") == (2, 0, 0)
+
+
+def test_discovery_prefers_a_supported_desktop_cli(tmp_path):
+    old = tmp_path / "old-opencode"
+    old.write_text("#!/bin/sh\necho 'opencode v2.0.28'\n")
+    old.chmod(0o755)
+    desktop = tmp_path / "desktop"
+    (desktop / "2.1.4-arm64").mkdir(parents=True)
+    new = desktop / "2.1.4-arm64" / "opencode-cli"
+    new.write_text("#!/bin/sh\necho 'opencode v2.1.4'\n")
+    new.chmod(0o755)
+
+    assert discover_binary(str(old), search_roots=[desktop]) == str(new)
+    assert discover_binary(str(new), search_roots=[desktop]) == str(new)
+    assert discover_binary(str(old), search_roots=[tmp_path / "empty"]) == str(old)
 
 
 def test_gateway_starts_authenticates_and_stops(tmp_path):
@@ -108,13 +128,13 @@ def test_gateway_starts_authenticates_and_stops(tmp_path):
             gateway.stop()
 
     info, base_url = asyncio.run(run())
-    assert info["version"] == "2.0.28"
+    assert info["version"] == "2.1.4"
     assert base_url.startswith("http://127.0.0.1:")
     assert gateway.process is None
 
 
 def test_gateway_refuses_an_unverified_version(tmp_path):
-    gateway = _gateway(tmp_path, _fake_binary(tmp_path, "2.1.4"))
+    gateway = _gateway(tmp_path, _fake_binary(tmp_path, "2.0.28"))
     with pytest.raises(OpenCodeError, match="outside the verified"):
         asyncio.run(gateway.start())
     assert gateway.process is None
@@ -135,13 +155,23 @@ class FakeClient:
         self.prompt_text = ""
         self.interrupted = 0
         self.models = []
+        self.waited = 0
+        self.order = []
 
     async def create_session(self, *, title, agent):
         self.created += 1
+        self.order.append("create")
         return "ses_test"
 
     async def set_model(self, session_id, model):
         self.models.append(model)
+
+    async def delete_session(self, session_id):
+        self.order.append("delete")
+
+    async def wait_for_mcp(self):
+        self.waited += 1
+        self.order.append("wait")
 
     async def prompt(self, session_id, text, files=None):
         self.prompted = True
@@ -199,6 +229,7 @@ def test_gateway_turn_relays_text_tools_and_persists_history(tmp_path):
                 "Revise the treatment.",
                 "PROJECT CONTEXT",
                 model="openai/gpt-6.1-sol",
+                warmup_delay=0,
             )
         ]
 
@@ -208,8 +239,10 @@ def test_gateway_turn_relays_text_tools_and_persists_history(tmp_path):
     assert events[2].tool == "clipstudio_update_brief"
     assert json.loads(events[2].arguments) == {"slug": "production"}
     assert events[3].result == '{"ok": true}'
-    assert client.created == 1
+    assert client.created == 2
     assert client.models == ["openai/gpt-6.1-sol"]
+    assert client.waited == 1
+    assert client.order == ["wait", "create", "create", "delete"]
     assert "PROJECT CONTEXT" in client.prompt_text
     assert "Revise the treatment." in client.prompt_text
 
@@ -229,7 +262,7 @@ def test_gateway_turn_reuses_the_saved_session(tmp_path):
 
     second = FakeClient(_events(deltas=("two",)))
     asyncio.run(_collect(second, root))
-    assert first.created == 1
+    assert first.created == 2
     assert second.created == 0
     assert second.models == []
 
@@ -245,6 +278,7 @@ async def _collect(client, root):
             "Continue.",
             "CONTEXT",
             model="openai/gpt-6.1-sol",
+            warmup_delay=0,
         )
     ]
 
@@ -293,6 +327,7 @@ def test_closing_the_gateway_turn_interrupts_the_session(tmp_path):
             "Keep going.",
             "CONTEXT",
             model="openai/gpt-6.1-sol",
+            warmup_delay=0,
         )
         event = await anext(stream)
         await stream.aclose()

@@ -16,6 +16,7 @@ from mp3_to_videoclip.director.loop import run_turn
 from mp3_to_videoclip.director.opencode import (
     OpenCodeError,
     OpenCodeGateway,
+    discover_binary,
     gateway_workspace,
     run_gateway_turn,
 )
@@ -33,8 +34,9 @@ def _workspace(settings) -> Path:
 async def get_gateway(settings, projects_dir: Path) -> OpenCodeGateway:
     """One gateway per binary/workspace/projects/models combination."""
     workspace = _workspace(settings)
+    binary = discover_binary(settings.opencode_bin)
     key = (
-        settings.opencode_bin,
+        binary,
         str(workspace),
         str(projects_dir.resolve()),
         settings.writer_model,
@@ -43,7 +45,7 @@ async def get_gateway(settings, projects_dir: Path) -> OpenCodeGateway:
     gateway = GATEWAYS.get(key)
     if gateway is None:
         gateway = OpenCodeGateway(
-            binary=settings.opencode_bin,
+            binary=binary,
             workspace=workspace,
             projects_dir=projects_dir,
             writer_model=settings.writer_model,
@@ -136,6 +138,15 @@ async def post_chat(slug: str, request: Request, payload: dict):
                     status_code=503,
                     detail=f"model {model} is not available in OpenCode; check Settings",
                 )
+            if hasattr(client, "wait_for_mcp"):
+                try:
+                    await client.wait_for_mcp()
+                except Exception as exc:  # noqa: BLE001 - gateway boundary
+                    await client.aclose()
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"clipstudio MCP server did not connect: {exc}",
+                    ) from exc
 
             async def gateway_stream():
                 try:

@@ -15,7 +15,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import secrets
+import shutil
 import socket
 import subprocess
 import sys
@@ -33,24 +35,26 @@ from .loop import TurnEvent
 
 WRITER_MODEL = "openai/gpt-6.1-sol"
 EDITOR_MODEL = "opencode-go/deepseek-v4.1-flash"
-MIN_VERSION = (2, 0, 0)
-MAX_VERSION = (2, 1, 0)
+MIN_VERSION = (2, 1, 4)
+MAX_VERSION = (2, 2, 0)
 HEALTH_TIMEOUT = 20.0
 STOP_GRACE = 5.0
+WARMUP_DELAY = 0.5
 
 WRITER_SYSTEM = (
     "You are the Studio Writer: concepts, scripts, storyboards, shot prompts and "
     "image review. Read the project snapshot in the user message first. Use only "
     "the clipstudio_* tools for project state; never invent a shot, approval or "
-    "asset. Read before writing, keep every other field intact, and use "
-    "clipstudio_get_images before judging a still. If the user must decide, ask "
-    "one focused question."
+    "asset. Never call execute, browser, opencode or any built-in tool. Read before "
+    "writing, keep every other field intact, and use clipstudio_get_images before "
+    "judging a still. If the user must decide, ask one focused question."
 )
 EDITOR_SYSTEM = (
     "You are the Studio Editor: music map, cut plan, transitions, text timing and "
     "the post pass. Read the project snapshot in the user message first. Use only "
-    "the clipstudio_* tools for project state. Every cut must have a musical or "
-    "narrative reason; never invent a measurement or an asset."
+    "the clipstudio_* tools for project state; never call execute, browser, "
+    "opencode or any built-in tool. Every cut must have a musical or narrative "
+    "reason; never invent a measurement or an asset."
 )
 
 
@@ -86,6 +90,46 @@ def parse_model(value: str) -> tuple[str, str, str | None]:
     return provider, model, variant or None
 
 
+def _binary_version(binary: str) -> tuple[int, int, int] | None:
+    try:
+        result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", result.stdout + result.stderr)
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
+
+
+def discover_binary(configured: str, search_roots=None) -> str:
+    """Prefer a supported binary; otherwise fall back to the configured one.
+
+    The desktop app ships its CLI outside PATH, and the 2.0.x line fails the
+    Writer model with an auto-compaction error. A configured path wins when it
+    is already in the verified range; the desktop CLI is the next candidate.
+    """
+    if search_roots is None:
+        search_roots = (Path.home() / "Library/Application Support/ai.opencode.desktop/cli",)
+    candidates: list[str] = []
+    if Path(configured).is_file():
+        candidates.append(configured)
+    else:
+        found = shutil.which(configured)
+        if found:
+            candidates.append(found)
+    for root in search_roots:
+        root = Path(root)
+        if root.is_dir():
+            candidates.extend(
+                str(path) for path in sorted(root.glob("*/opencode-cli"), reverse=True)
+            )
+    for candidate in candidates:
+        version = _binary_version(candidate)
+        if version is not None and MIN_VERSION <= version < MAX_VERSION:
+            return candidate
+    return configured
+
+
 def gateway_workspace() -> Path:
     return Path.home() / ".local" / "share" / "mp3-to-videoclip" / "opencode"
 
@@ -100,8 +144,24 @@ def gateway_config(
     """The app-owned config. Built-in tools are denied, Studio MCP tools allowed."""
     executable = python or sys.executable
     projects_dir = Path(projects_dir).resolve()
+    # A blanket "*" deny is a hard deny on 2.1.x and overrides the later allow,
+    # so the built-in actions are denied one by one.
+    builtin_actions = (
+        "read",
+        "edit",
+        "shell",
+        "glob",
+        "grep",
+        "webfetch",
+        "websearch",
+        "skill",
+        "subagent",
+        "question",
+        "external_directory",
+        "execute",
+    )
     permissions = [
-        {"action": "*", "resource": "*", "effect": "deny"},
+        *({"action": action, "resource": "*", "effect": "deny"} for action in builtin_actions),
         {"action": "clipstudio_*", "resource": "*", "effect": "allow"},
     ]
     return {
@@ -137,6 +197,7 @@ def gateway_config(
                     "environment": {
                         "PYTHONPATH": str(Path(__file__).resolve().parents[3]),
                     },
+                    "protocol": "legacy",
                     "codemode": False,
                 }
             }
@@ -169,6 +230,10 @@ class OpenCodeClient:
         response.raise_for_status()
         return response.json()["data"]["id"]
 
+    async def delete_session(self, session_id: str) -> None:
+        response = await self._client.delete(f"/api/session/{session_id}")
+        response.raise_for_status()
+
     async def prompt(self, session_id: str, text: str, files: list[dict] | None = None) -> dict:
         body: dict[str, Any] = {"text": text}
         if files:
@@ -195,6 +260,26 @@ class OpenCodeClient:
         response = await self._client.get("/api/model")
         response.raise_for_status()
         return response.json()["data"]
+
+    async def mcp_servers(self) -> list[dict]:
+        response = await self._client.get("/api/mcp")
+        response.raise_for_status()
+        return response.json()["data"]
+
+    async def wait_for_mcp(self, name: str = "clipstudio", timeout: float = 15.0) -> None:
+        """Wait until the app-owned MCP server reports connected.
+
+        The first prompt can otherwise race the MCP process and the model sees
+        no Studio tools at all. A missing server is a startup error, not a turn.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            for server in await self.mcp_servers():
+                status = server.get("status") or {}
+                if server.get("name") == name and status.get("status") == "connected":
+                    return
+            await asyncio.sleep(0.25)
+        raise OpenCodeError(f"MCP server {name} did not connect")
 
     async def model_available(self, model: str) -> bool:
         provider, model_id, _variant = parse_model(model)
@@ -330,7 +415,7 @@ class OpenCodeGateway:
                             raise OpenCodeError(
                                 "OpenCode "
                                 f"{response.json().get('version')} is outside the verified "
-                                "2.0.x range; pin the gateway binary"
+                                "2.1.x range (2.1.4+); the 2.0.x line fails the Writer model"
                             )
                         return
                 except httpx.HTTPError:
@@ -367,6 +452,8 @@ def load_session(root: Path, role: str, model: str) -> dict[str, Any] | None:
         return None
     if entry.get("model") != model or entry.get("agent") != role:
         return None
+    if entry.get("warm") is not True:
+        return None
     session_id = entry.get("id")
     return entry if isinstance(session_id, str) and session_id else None
 
@@ -375,7 +462,7 @@ def save_session(root: Path, role: str, session_id: str, model: str) -> None:
     value = read_optional(session_path(root), {})
     if not isinstance(value, dict):
         value = {}
-    value[role] = {"id": session_id, "model": model, "agent": role}
+    value[role] = {"id": session_id, "model": model, "agent": role, "warm": True}
     write_json(session_path(root), value)
 
 
@@ -404,6 +491,7 @@ async def run_gateway_turn(
     *,
     model: str,
     timeout: float = 900.0,
+    warmup_delay: float = WARMUP_DELAY,
 ) -> AsyncIterator[TurnEvent]:
     """Run one Studio turn through the gateway and persist the text history.
 
@@ -411,10 +499,26 @@ async def run_gateway_turn(
     changes. The event stream is opened before the prompt so the first delta
     cannot be lost. Cancelling the consumer interrupts the gateway execution.
     """
+    wait_for_mcp = getattr(client, "wait_for_mcp", None)
+    if wait_for_mcp is not None:
+        # A session snapshots its tool catalog at creation; wait before it.
+        await wait_for_mcp()
+
     entry = load_session(root, role, model)
-    session_id = (
-        entry["id"] if entry else await client.create_session(title=f"{slug} {role}", agent=role)
-    )
+    if entry is not None:
+        session_id = entry["id"]
+    else:
+        # A fresh OpenCode session snapshots the MCP catalog. Create and drop a
+        # warm-up session first so the real session sees the Studio tools.
+        warm = await client.create_session(title=f"warmup {slug} {role}", agent=role)
+        await asyncio.sleep(warmup_delay)
+        session_id = await client.create_session(title=f"{slug} {role}", agent=role)
+        delete = getattr(client, "delete_session", None)
+        if delete is not None:
+            try:
+                await delete(warm)
+            except Exception:  # noqa: BLE001 - an orphan warm-up is harmless
+                pass
     save_session(root, role, session_id, model)
     if entry is None and hasattr(client, "set_model"):
         await client.set_model(session_id, model)

@@ -114,14 +114,16 @@ async def probe(
                 error = event.payload.get("error")
         names = {event.tool for event in tool_events if event.result}
         failed = [event.tool for event in tool_events if '"error"' in event.result]
+        unexpected = sorted(name for name in names if not name.startswith("clipstudio_"))
         expected = {"clipstudio_get_project", "clipstudio_get_images"}
         expected.add("clipstudio_update_brief" if role == "writer" else "clipstudio_update_shots")
         missing = expected - names
         print(f"{role}: {text.strip()[:300]}")
         print(
-            f"{role}: tools={sorted(names)} missing={sorted(missing)} failed={failed} error={error}"
+            f"{role}: tools={sorted(names)} missing={sorted(missing)} "
+            f"failed={failed} unexpected={unexpected} error={error}"
         )
-        return not missing and not error and not failed
+        return not missing and not error and not failed and not unexpected
     finally:
         await client.aclose()
         gateway.stop()
