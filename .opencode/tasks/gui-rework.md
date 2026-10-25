@@ -54,7 +54,7 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. Remaining modules (`flow`, `operations`, `sources`, `human_*`, `studio`, `studio_ui*`, `reviews`, `appdata`, `backup`, `signature`) are imported by the interim Studio/CLI and cannot be deleted until their replacements land in Phases 2-4 (recorded deviation). Legacy model branches move with them. `src/` 21,124 -> 17,371. |
-| 2 · backend skeleton | **gate-ready on `gui-rework/phase-2-backend`.** Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 still need their definitions from the owner before merge. |
+| 2 · backend skeleton | **gate-ready on `gui-rework/phase-2-backend`.** Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
 | 4 · frontend | **started inside Phase 2** — library, five stages, director panel, job tray, approvals, image thumbnails/estimate/generate. Still open: Remotion Player preview, waveform and draggable boundaries, error toasts, the 390/900/1280 keyboard pass; deleting the interim Studio stays Phase 4 proper. |
 | 5 · render cleanup | not started |
@@ -91,8 +91,8 @@ settings file; a live Track-stage chat turn answered correctly.
   spend or accept negative/zero, blocking analysis on the event loop, an
   unvalidated render kind, an SSE stream that waited 10 s to notice a closed tab,
   and a runner that serialised every project because it awaited jobs inline.
-- Outstanding: the brief's B4/B6/B7 regression definitions are not in the
-  repository; ask the owner before merging.
+- The brief's B4/B6/B7 regression definitions are not in the repository. The
+  owner waived them on 25 Oct 2026 and accepted the route/timing gate as Phase 2.
 
 ## Acceptance per phase
 
