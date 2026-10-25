@@ -1,8 +1,9 @@
 # Rendering: one timeline, two compatible backends
 
-New `clip init` productions always use Remotion; the legacy creation switch has
-been retired. Existing project JSON that omits `renderer_backend` keeps its
-original FFmpeg path and remains readable/renderable. Remotion is visual
+New schema-3 productions always use Remotion; the legacy creation switch has been
+retired. Legacy schema-1 project JSON that omits `renderer_backend` keeps its
+original FFmpeg path and remains readable/renderable; a schema-3 document without
+the field is Remotion, because schema 3 is the native form. Remotion is visual
 rendering, not generated character animation, a paid service or a second
 production state store.
 

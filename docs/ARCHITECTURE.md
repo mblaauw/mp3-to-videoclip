@@ -10,7 +10,7 @@ in the app is a second state store.
 | --- | --- |
 | `models.py` | Pydantic contracts. All timing is integer output frames; dissolve handles cannot exceed either neighbour. |
 | `timeline.py`, `pacing.py` | Frame/second lookup, shot-bound caption resolution, adaptive boundary planning with a validated tail. |
-| `production.py` | Artifact IO, storyboard skeleton, reference binding, the prompt compiler and the legacy approval chain that the rework removes. |
+| `production.py` | Artifact IO, storyboard skeleton, reference binding, the prompt compiler and the content-bound approval chain. |
 | `analysis.py`, `deep_analysis.py` | Local measurement only. Every estimate is labelled; nothing invents meter, sections or lyrics. |
 | `generation.py`, `providers.py` | Runware client with pre-submit journaling: reservation and task UUID are durable before the request; recovery is by UUID and never resubmits; changed bytes are quarantined. |
 | `budget.py` | Cap, committed cost, unresolved reservations, admission. |
@@ -69,8 +69,9 @@ renderers/remotion/src/BaseFilm.jsx + timing.mjs
                   one composition and one frame model shared by MP4 and Player
 ```
 
-Staleness replaces approvals: a cheap fingerprint per artifact drives an "made
-from an older version" badge and a "Regenerate affected" action, never a block.
-One budget per production pauses a paid job as `needs_budget` when it runs out.
+Every artifact has a cheap fingerprint. A changed fingerprint makes its approval
+stale, and the stage says so; the gate blocks until the current bytes are reviewed
+and re-approved. One budget per production pauses a paid job as `needs_budget`
+when it runs out.
 The phases, decisions (D1–D8) and acceptance criteria are in
 `.opencode/tasks/gui-rework.md`; renderer notes stay in `docs/RENDERER.md`.
