@@ -127,10 +127,13 @@ def test_launcher_rebuilds_the_frontend_when_deps_and_sources_are_ready(tmp_path
 
 
 def test_launcher_installs_the_renderer_on_first_run(monkeypatch, capsys):
+    monkeypatch.setattr(launcher.setup, "status", lambda: {**READY, "renderer": False})
     monkeypatch.setattr(
         launcher.setup,
         "install_renderer",
         lambda: {"installed": True, "already_present": False, "output": ""},
     )
     launcher._ensure_renderer()
-    assert "installed the pinned local renderer" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "installing the pinned local renderer" in output
+    assert "installed the pinned local renderer" in output

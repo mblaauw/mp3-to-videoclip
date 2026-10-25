@@ -30,6 +30,9 @@ def _free_port() -> int:
 
 def _ensure_renderer() -> None:
     """Install the pinned renderer once; a failure still leaves the app runnable."""
+    if setup.status()["renderer"]:
+        return
+    print("Studio: installing the pinned local renderer (first run)…", flush=True)
     try:
         result = setup.install_renderer()
     except (OSError, ValueError) as exc:
