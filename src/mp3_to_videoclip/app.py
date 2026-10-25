@@ -62,12 +62,15 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
         queue = runner.bus.subscribe()
 
         async def stream():
+            yield {"event": "hello", "data": {"ok": True}}
             try:
                 while True:
                     if await request.is_disconnected():
                         break
                     try:
-                        msg = await asyncio.wait_for(queue.get(), timeout=10.0)
+                        # Short wait so a disconnected tab releases the stream promptly;
+                        # the heartbeat also keeps local proxies from timing out.
+                        msg = await asyncio.wait_for(queue.get(), timeout=2.0)
                         yield {"event": msg["event"], "data": msg["payload"]}
                     except TimeoutError:
                         yield {"event": "heartbeat", "data": {}}

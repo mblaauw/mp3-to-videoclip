@@ -1,9 +1,9 @@
 """In-process job runner: one asyncio queue, per-project serialisation.
 
-Jobs for the same project run one at a time per kind (LLM turn, image batch,
-render can overlap; two image batches cannot). Blocking work runs in a thread
-pool. Records persist in work/jobs.json (last 200); jobs that were running at
-startup become ``interrupted``.
+Every job for the same project runs one at a time; different projects can
+overlap. Blocking work runs in a thread pool. Records are in memory only and
+start empty on each launch; cancelling a job marks it and suppresses its result,
+but the current worker keeps running until it returns.
 """
 
 from __future__ import annotations
@@ -40,8 +40,8 @@ class JobRunner:
         self._jobs: dict[str, Job] = {}
         self._factories: dict[str, Callable] = {}
         self._queue: asyncio.Queue[str] = asyncio.Queue()
-        self._running: set[str] = set()
         self._project_locks: dict[str, asyncio.Lock] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
         self._task: asyncio.Task | None = None
 
     @property
@@ -73,6 +73,9 @@ class JobRunner:
             return False
         job.status = "cancelled"
         self._bus.publish("job.cancelled", {"job_id": job_id})
+        task = self._tasks.get(job_id)
+        if task is not None and not task.done():
+            task.cancel()
         return True
 
     async def start(self) -> None:
@@ -85,6 +88,11 @@ class JobRunner:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        tasks = list(self._tasks.values())
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         self._executor.shutdown(wait=False)
 
     async def _loop(self) -> None:
@@ -93,31 +101,46 @@ class JobRunner:
             job = self._jobs.get(job_id)
             if job is None or job.status == "cancelled":
                 continue
-            if job.project not in self._project_locks:
-                self._project_locks[job.project] = asyncio.Lock()
-            async with self._project_locks[job.project]:
-                await self._run(job)
+            # One task per admitted job; the per-project lock still serialises
+            # that project while other projects (and a render beside images) run.
+            task = asyncio.create_task(self._run(job))
+            self._tasks[job.id] = task
+            task.add_done_callback(lambda _task, job_id=job.id: self._tasks.pop(job_id, None))
 
     async def _run(self, job: Job) -> None:
-        job.status = "running"
-        job.started_at = time.time()
-        self._bus.publish(
-            "job.started", {"job_id": job.id, "kind": job.kind, "project": job.project}
-        )
+        lock = self._project_locks.setdefault(job.project, asyncio.Lock())
         try:
-            factory = self._factories.pop(job.id)
-            result = await factory()
-            job.status = "succeeded"
-            self._bus.publish("job.succeeded", {"job_id": job.id, "result": result})
+            async with lock:
+                if job.status == "cancelled":
+                    return
+                job.status = "running"
+                job.started_at = time.time()
+                self._bus.publish(
+                    "job.started",
+                    {"job_id": job.id, "kind": job.kind, "project": job.project},
+                )
+                factory = self._factories.pop(job.id, None)
+                if factory is None:
+                    raise ValueError("job factory is missing")
+                result = await factory()
+                if job.status == "cancelled":
+                    return
+                job.status = "succeeded"
+                self._bus.publish("job.succeeded", {"job_id": job.id, "result": result})
         except asyncio.CancelledError:
-            job.status = "cancelled"
-            self._bus.publish("job.cancelled", {"job_id": job.id})
+            if job.status != "cancelled":
+                job.status = "cancelled"
+                self._bus.publish("job.cancelled", {"job_id": job.id})
+            raise
         except Exception as exc:  # noqa: BLE001
+            if job.status == "cancelled":
+                return
             job.status = "failed"
             job.error = str(exc)
             self._bus.publish("job.failed", {"job_id": job.id, "error": str(exc)})
         finally:
             job.finished_at = time.time()
+            self._factories.pop(job.id, None)
 
     def run_sync(self, func, *args, **kwargs):
         """Run a blocking function in the thread pool."""

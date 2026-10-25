@@ -8,7 +8,7 @@ pauses as ``needs_budget`` and the UI asks the user to approve more.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from mp3_to_videoclip import budget as engine_budget
@@ -18,7 +18,13 @@ from .models import BudgetEntry, Project
 
 
 def money(value) -> Decimal:
-    return Decimal(str(value))
+    try:
+        result = Decimal(str(value))
+    except InvalidOperation as exc:
+        raise ValueError("invalid USD amount") from exc
+    if not result.is_finite() or result < 0:
+        raise ValueError("money must be a finite nonnegative USD amount")
+    return result
 
 
 def fmt(value) -> str:
@@ -40,13 +46,20 @@ def history(root: Path) -> list[dict]:
 
 def add_budget(root: Path, amount, reason: str) -> dict:
     """Append a cap entry; the newest cap is the active one."""
+    value = money(amount)
+    if value <= 0:
+        raise ValueError("the production cap must be a positive USD amount")
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("record why the cap changed")
+    if value < committed(root):
+        raise ValueError("the new cap is below the committed spend; reconcile or choose more")
     project = _project(root)
     previous = project.budget[-1].max_corrections if project.budget else None
     project.budget.append(
         BudgetEntry(
             at=datetime.now(UTC).isoformat(),
-            cap_usd=str(money(amount)),
-            reason=reason,
+            cap_usd=str(value),
+            reason=reason.strip(),
             max_corrections=previous,
         )
     )

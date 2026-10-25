@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
@@ -22,8 +22,12 @@ async def update_shots(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     board = P.load_board(root)
     changes = payload.get("changes", [])
+    if not isinstance(changes, list):
+        return {"error": "changes must be a list"}
     by_id = {s.id: s for s in board.shots}
     for change in changes:
+        if not isinstance(change, dict):
+            return {"error": "each change must be an object"}
         shot_id = change.get("id")
         if shot_id not in by_id:
             continue
@@ -33,10 +37,16 @@ async def update_shots(slug: str, request: Request, payload: dict):
                 continue
             if hasattr(shot, key):
                 setattr(shot, key, value)
+    from mp3_to_videoclip.models import Storyboard
     from mp3_to_videoclip.storage import write_json
 
-    write_json(root / "work" / "storyboard.json", board.model_dump())
-    return board.model_dump()
+    # Re-validate the whole board: a partially applied change must never reach disk.
+    try:
+        updated = Storyboard.model_validate(board.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    write_json(root / "work" / "storyboard.json", updated.model_dump())
+    return updated.model_dump()
 
 
 @router.post("/storyboard/skeleton")

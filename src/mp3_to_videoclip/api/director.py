@@ -29,6 +29,10 @@ async def get_chat(slug: str, request: Request):
 async def post_chat(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     message = payload.get("message", "")
+    if not isinstance(message, str) or not message.strip():
+        return {"error": "message required"}
+    if len(message) > 8000:
+        return {"error": "message is too long"}
     settings = effective_settings()
     if not settings.llm_api_key:
         return {"error": "no LLM key configured; open Settings"}

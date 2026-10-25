@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Request
 
 from mp3_to_videoclip import production as P
@@ -32,7 +34,9 @@ async def analyze(slug: str, request: Request):
     root = project_root(request, slug)
     path = root / "work" / "music.json"
     (root / "work").mkdir(parents=True, exist_ok=True)
-    data = run_analysis(inside(root, P.load_project(root).source), P.load_project(root).duration)
+    project = P.load_project(root)
+    # Local DSP is CPU-bound; keep the event loop free for SSE and job progress.
+    data = await asyncio.to_thread(run_analysis, inside(root, project.source), project.duration)
     write_json(path, data)
     return {
         "status": "done",
@@ -46,9 +50,13 @@ async def analyze(slug: str, request: Request):
 
 @router.put("/lyrics")
 async def update_lyrics(slug: str, request: Request, payload: dict):
-    root = project_root(request, slug)
-    import json as _json
+    from mp3_to_videoclip.models import Lyrics
+    from mp3_to_videoclip.storage import write_json
 
-    (root / "work").mkdir(parents=True, exist_ok=True)
-    (root / "work" / "lyrics.json").write_text(_json.dumps(payload, indent=2) + "\n")
-    return {"status": "saved"}
+    root = project_root(request, slug)
+    try:
+        lyrics = Lyrics.model_validate(payload)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    write_json(root / "work" / "lyrics.json", lyrics.model_dump())
+    return {"status": "saved", "segments": len(lyrics.segments)}

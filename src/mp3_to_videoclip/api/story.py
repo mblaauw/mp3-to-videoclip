@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
@@ -26,7 +26,10 @@ async def update_brief(slug: str, request: Request, payload: dict):
     merged.update(payload)
     from mp3_to_videoclip.models import Brief
 
-    new_brief = Brief.model_validate(merged)
+    try:
+        new_brief = Brief.model_validate(merged)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     from mp3_to_videoclip.storage import write_json
 
     write_json(root / "brief.json", new_brief.model_dump())

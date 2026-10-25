@@ -6,29 +6,13 @@ an approval binds its exact content and that a later edit turns it stale.
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-from test_creative_production import make_root
+from api_support import api_client, make_api_project
 
-from mp3_to_videoclip import flow
-from mp3_to_videoclip.app import create_app
-from mp3_to_videoclip.references import import_reference
 from mp3_to_videoclip.storage import read_json, write_json
 
 
 def _client(tmp_path):
-    root = make_root(tmp_path)
-    flow.mark(root)
-    project = read_json(root / "project.json")
-    project["schema_version"] = 3
-    write_json(root / "project.json", project)
-    brief = read_json(root / "brief.json")
-    for ref in brief["creative"]["references"]:
-        imported = import_reference(
-            root, root / ref["path"], note="test-owned reference", permission_confirmed=True
-        )
-        ref["path"] = imported["path"]
-    write_json(root / "brief.json", brief)
-    return root, TestClient(create_app(projects_dir=tmp_path), base_url="http://127.0.0.1")
+    return make_api_project(tmp_path), api_client(tmp_path)
 
 
 def _stage(payload, name):

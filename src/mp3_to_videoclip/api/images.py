@@ -139,7 +139,10 @@ async def select_version(slug: str, request: Request, payload: dict):
     version = payload.get("version")
     if shot_id is None or version is None:
         return {"error": "shot_id and version required"}
-    P.select_asset(root, shot_id, version)
+    try:
+        P.select_asset(root, shot_id, version)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"selected": shot_id, "version": version}
 
 

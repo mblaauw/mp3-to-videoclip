@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.domain import budget
@@ -27,5 +27,8 @@ async def get_budget(slug: str, request: Request):
 @router.post("/budget")
 async def add_budget(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    entry = budget.add_budget(root, payload["amount"], payload.get("reason", "user approved more"))
+    try:
+        entry = budget.add_budget(root, payload.get("amount"), payload.get("reason", ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"entry": entry, "cap_usd": budget.fmt(budget.cap(root))}

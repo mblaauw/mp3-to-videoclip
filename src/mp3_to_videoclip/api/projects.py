@@ -64,7 +64,7 @@ async def list_projects(request: Request):
 
 
 @router.get("/{slug}")
-async def get_project(slug: str, request: Request):
+async def get_project(slug: str, request: Request, verify: bool = False):
     root = _projects_dir(request) / slug
     if not root.is_dir() or not (root / "project.json").is_file():
         raise HTTPException(status_code=404, detail="project not found")
@@ -79,7 +79,15 @@ async def get_project(slug: str, request: Request):
             "stills": [str(p) for p in film.stills],
         }
     project = P.load_project(root)
-    return {
+    from mp3_to_videoclip.storage import read_json
+
+    board_path = root / "work" / "storyboard.json"
+    board = P.load_board(root) if board_path.is_file() else None
+    assets_path = root / "work" / "assets.json"
+    assets = read_json(assets_path) if assets_path.is_file() else {}
+    approvals_path = root / "work" / "approvals.json"
+    approvals = read_json(approvals_path) if approvals_path.is_file() else {}
+    result = {
         "slug": project.slug,
         "title": project.title,
         "duration": project.duration,
@@ -88,5 +96,15 @@ async def get_project(slug: str, request: Request):
         "height": project.height,
         "music_mode": project.music_mode,
         "archived": False,
-        "status": P.status(root),
+        "shots": len(board.shots) if board is not None else 0,
+        "stills": sum(
+            1
+            for entry in assets.values()
+            if isinstance(entry, dict) and entry.get("selected") is not None
+        ),
+        "approvals": sorted(approvals) if isinstance(approvals, dict) else [],
     }
+    # Full verification re-hashes every selected still; ask for it explicitly.
+    if verify:
+        result["status"] = P.status(root)
+    return result

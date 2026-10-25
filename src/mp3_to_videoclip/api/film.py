@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from mp3_to_videoclip.api._helpers import project_root
 
@@ -24,6 +24,8 @@ async def get_graphics(slug: str, request: Request):
 async def render(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     kind = payload.get("kind", "preview")
+    if kind not in ("preview", "final"):
+        raise HTTPException(status_code=400, detail="kind must be preview or final")
     runner = getattr(request.app.state, "runner", None)
     if runner is None:
         return {"error": "job runner unavailable"}
