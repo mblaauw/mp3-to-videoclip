@@ -1,8 +1,8 @@
 """Launcher for the Studio.
 
-Phase 2: starts the FastAPI app on a free port, opens the browser, and serves
-until interrupted. Falls back to the interim loopback Studio if uvicorn is not
-available.
+Starts the FastAPI app on a free port, opens the browser, and serves until
+interrupted. On a fresh clone it installs the pinned local renderer packages
+once; the committed frontend build needs no Node packages to serve.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from pathlib import Path
 
 import uvicorn
 
+from . import setup
 from .app import create_app
 
 
@@ -27,6 +28,17 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
+def _ensure_renderer() -> None:
+    """Install the pinned renderer once; a failure still leaves the app runnable."""
+    try:
+        result = setup.install_renderer()
+    except (OSError, ValueError) as exc:
+        print(f"Studio: local renderer setup incomplete: {exc}")
+        return
+    if not result["already_present"]:
+        print("Studio: installed the pinned local renderer (first run).")
+
+
 def _build_frontend(repo: Path) -> None:
     """Best-effort: rebuild the Vite app when its sources are newer than dist."""
     frontend = repo / "frontend"
@@ -34,11 +46,22 @@ def _build_frontend(repo: Path) -> None:
     src = frontend / "src"
     if not src.is_dir():
         return
+    npm = shutil.which("npm")
+    if not (frontend / "node_modules").is_dir():
+        if dist.is_dir() or npm is None:
+            # The committed dist is the shipped app; never invoke tsc without deps.
+            return
+        subprocess.run(
+            [npm, "ci", "--prefix", str(frontend), "--ignore-scripts", "--no-audit", "--no-fund"],
+            check=False,
+        )
+        if not (frontend / "node_modules").is_dir():
+            return
     if dist.is_dir() and dist.stat().st_mtime >= src.stat().st_mtime:
         return
-    if not shutil.which("npm"):
+    if npm is None:
         return
-    subprocess.run(["npm", "run", "build"], cwd=frontend, check=False)
+    subprocess.run([npm, "run", "build"], cwd=frontend, check=False)
 
 
 def main() -> None:
@@ -46,7 +69,9 @@ def main() -> None:
     parser.add_argument("--projects-dir", type=Path, default=Path("projects"))
     parser.add_argument("--port", type=int, default=0)
     args = parser.parse_args()
-    _build_frontend(Path(__file__).resolve().parents[2])
+    repo = Path(__file__).resolve().parents[2]
+    _ensure_renderer()
+    _build_frontend(repo)
 
     port = args.port or _free_port()
     app = create_app(projects_dir=args.projects_dir)

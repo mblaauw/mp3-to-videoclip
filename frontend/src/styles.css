@@ -436,3 +436,13 @@ button.active { border-color: var(--gold); color: var(--gold); }
 .chip.accept { border-color: var(--ok); color: var(--ok); }
 .chip.reject { border-color: var(--bad); color: var(--bad); }
 .chip.uncertain { border-color: var(--warn); color: var(--warn); }
+
+/* first-run renderer setup */
+.setup ul {
+  margin: 8px 0 12px;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.setup li.missing { color: var(--warn); }
