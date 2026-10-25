@@ -65,11 +65,13 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 Schema 3, cap $8.00, committed $2.8843815, remaining $5.1156185 (the earlier
 “$3.26 committed” figure came from per-task cent rounding in the app; the engine
 commitment is now the single source). The migration changed the project document,
-so the three recorded approvals are **stale** even though brief, board and stills
-are untouched. They must be re-approved in the app in order: **brief → storyboard
-→ proof**, each with a written note. Generation and transcription stay blocked
-until then; rendering stays blocked because `resolved_assets` needs current proof
-approval. Do not approve on the user's behalf.
+so the three recorded approvals were invalidated even though brief, board and
+stills were untouched. On the owner's instruction they were re-approved in order
+(brief → storyboard → proof) with notes recording that the content was unchanged
+from the approved revision. All 79 selected stills now resolve and the gates pass.
+A live one-shot image quote was taken for `a001-blue-face` at $0.05 (no
+authorization, no generation). The director key is configured in the user's
+settings file; a live Track-stage chat turn answered correctly.
 
 
 ## Acceptance per phase
