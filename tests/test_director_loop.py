@@ -19,10 +19,12 @@ from mp3_to_videoclip.director.loop import run_turn
 class FakeLLM:
     def __init__(self):
         self.calls = []
+        self.systems = []
         self.n = 0
 
     async def stream(self, messages, tools=None, system=None):
         self.calls.append(list(messages))
+        self.systems.append(system)
         self.n += 1
         if self.n == 1:
             yield TextDelta(text="Checking the project. ")
@@ -81,3 +83,51 @@ def test_turn_runs_a_tool_and_stops(tmp_path, monkeypatch):
 
 async def _collect(llm, root):
     return [e async for e in run_turn(llm, root, "demo", "What is this?", "system")]
+
+
+def test_long_history_is_compacted_before_the_model_call(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    history = []
+    for index in range(40):
+        history.append({"role": "user", "content": f"request {index}"})
+        history.append({"role": "assistant", "content": f"answer {index}"})
+    path = root / "work" / "chat.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(json.dumps(message) for message in history) + "\n")
+
+    llm = FakeLLM()
+    asyncio.run(_collect(llm, root))
+
+    sent = llm.calls[0]
+    assert len(sent) < len(history) + 1
+    assert sent[0]["role"] == "user"
+    assert "Earlier conversation compressed" in llm.systems[0]
+    assert "request 39" in llm.systems[0] or "request 39" in json.dumps(sent)
+    stored = [json.loads(line) for line in path.read_text().splitlines()]
+    assert stored[:2] == history[:2]
+    assert len(stored) > len(history)
+
+
+class SlowLLM:
+    async def stream(self, messages, tools=None, system=None):
+        yield TextDelta(text="Thinking")
+        await asyncio.sleep(5)
+        yield TurnResult(text="Too late")
+
+
+def test_closing_the_stream_stops_within_one_second(tmp_path, monkeypatch):
+    import time
+
+    root = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    async def first_and_close():
+        stream = run_turn(SlowLLM(), root, "demo", "go", "system")
+        first = await stream.__anext__()
+        assert first.kind == "text"
+        started = time.perf_counter()
+        await stream.aclose()
+        return time.perf_counter() - started
+
+    assert asyncio.run(first_and_close()) < 1.0

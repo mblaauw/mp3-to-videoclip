@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from .conversation import append_message, load_messages
+from .conversation import append_message, compact_messages, load_messages
 from .llm import DirectorLLM, TextDelta, ToolCall, TurnResult
 from .tools import TOOLS, dispatch
 
@@ -38,8 +38,12 @@ async def run_turn(
     *,
     max_tool_calls: int = MAX_TOOL_CALLS,
     runner=None,
+    projects_dir=None,
 ) -> AsyncIterator[TurnEvent]:
     messages = load_messages(root)
+    messages, summary = compact_messages(messages)
+    if summary:
+        system = (system + "\n\n" + summary).strip()
     messages.append({"role": "user", "content": user_message})
     append_message(root, {"role": "user", "content": user_message})
 
@@ -91,7 +95,7 @@ async def run_turn(
                 yield TurnEvent(kind="ask", payload=args)
                 append_message(root, {"role": "assistant", "content": args.get("question", "")})
                 return
-            tool_result = await dispatch(tc.name, args, runner)
+            tool_result = await dispatch(tc.name, args, runner, projects_dir)
             yield TurnEvent(kind="tool", tool=tc.name, result=tool_result)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result})
             append_message(

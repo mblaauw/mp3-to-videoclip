@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type Job, type ProjectSummary } from "./api";
 import { StoryboardStage } from "./stages/Storyboard";
 import { StoryStage } from "./stages/Story";
@@ -7,6 +7,7 @@ import { FilmStage } from "./stages/Film";
 import { TrackStage } from "./stages/Track";
 import { NewProduction } from "./NewProduction";
 import { ToastTray } from "./ToastTray";
+import { toast } from "./toast";
 
 const STAGES = ["track", "story", "storyboard", "images", "film"] as const;
 type Stage = (typeof STAGES)[number];
@@ -142,6 +143,7 @@ function Director({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const stopRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -158,39 +160,63 @@ function Director({
     setMessages((m) => [...m, { role: "user", text: message }]);
     setBusy(true);
     setError(null);
+    const controller = new AbortController();
+    stopRef.current = controller;
     try {
       const res = await fetch(`/api/projects/${slug}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, stage }),
+        signal: controller.signal,
       });
-      if (!res.ok || !res.body) throw new Error(await res.text());
+      if (!res.ok || !res.body) {
+        const text = await res.text();
+        let message = text;
+        try {
+          const parsed = JSON.parse(text);
+          message = parsed.detail || parsed.error || text;
+        } catch {
+          // keep the raw body
+        }
+        toast(message);
+        throw new Error(`${res.status}: ${message}`);
+      }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let assistant = "";
+      let buffer = "";
+      const consume = (line: string) => {
+        if (!line.trim()) return;
+        const event = JSON.parse(line);
+        if (event.kind !== "text") return;
+        assistant += event.text;
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", text: assistant };
+          return copy;
+        });
+      };
       setMessages((m) => [...m, { role: "assistant", text: "" }]);
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split("\n")) {
-          if (!line.trim()) continue;
-          const event = JSON.parse(line);
-          if (event.kind === "text") {
-            assistant += event.text;
-            setMessages((m) => {
-              const copy = [...m];
-              copy[copy.length - 1] = { role: "assistant", text: assistant };
-              return copy;
-            });
-          }
-        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) consume(line);
       }
+      buffer += decoder.decode();
+      if (buffer.trim()) consume(buffer);
     } catch (e) {
-      setError(String(e));
+      if ((e as Error).name !== "AbortError") setError(String(e));
     } finally {
+      stopRef.current = null;
       setBusy(false);
     }
+  };
+
+  const stop = () => {
+    stopRef.current?.abort();
   };
 
   return (
@@ -227,8 +253,12 @@ function Director({
             }}
             placeholder="Make the middle darker…"
           />
-          <button onClick={send} disabled={busy || !slug}>
-            {busy ? "…" : "Send"}
+          <button
+            onClick={busy ? stop : send}
+            disabled={!slug || (!busy && !text.trim())}
+            aria-label={busy ? "Stop the director" : "Send the message"}
+          >
+            {busy ? "Stop" : "Send"}
           </button>
         </div>
       )}
