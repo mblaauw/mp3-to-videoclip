@@ -17,6 +17,7 @@ export function ImagesStage({ slug }: { slug: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
   const initialized = useRef(false);
 
   const load = () => {
@@ -24,6 +25,7 @@ export function ImagesStage({ slug }: { slug: string }) {
       .images(slug)
       .then((d) => {
         setShots(d.shots);
+        setRevision((value) => value + 1);
         if (!initialized.current) {
           initialized.current = true;
           setSelected(new Set(d.shots.filter((s) => !s.versions.length).map((s) => s.id)));
@@ -153,7 +155,7 @@ export function ImagesStage({ slug }: { slug: string }) {
         </div>
       </div>
 
-      <ApprovalBar slug={slug} stages={["proof"]} />
+      <ApprovalBar slug={slug} stages={["proof"]} refresh={revision} />
 
       <div className="card">
         <h3>Generate ({selected.size} selected)</h3>

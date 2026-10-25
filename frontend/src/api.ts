@@ -1,3 +1,5 @@
+import { toast } from "./toast";
+
 export type ProjectSummary = {
   slug: string;
   title: string;
@@ -5,6 +7,20 @@ export type ProjectSummary = {
   archived: boolean;
   render: string | null;
   still_count: number;
+};
+
+export type ProjectDetail = {
+  slug: string;
+  title: string;
+  duration: number;
+  fps: number;
+  width: number;
+  height: number;
+  music_mode: string | null;
+  archived: false;
+  shots: number;
+  stills: number;
+  approvals: string[];
 };
 
 export type Budget = {
@@ -23,6 +39,7 @@ export type Shot = {
   camera: string;
   dissolve_frames: number;
   framing: string | null;
+  asset_shot_id: string | null;
   must_show: string[];
   scene_id: string | null;
 };
@@ -32,6 +49,22 @@ export type Storyboard = {
   fps: number;
   total_frames: number;
   shots: Shot[];
+};
+
+export type MusicWindow = {
+  time: number;
+  end?: number;
+  level_db?: number;
+};
+
+export type Music = {
+  duration?: number;
+  estimated_tempo_bpm?: number | null;
+  beats?: number[];
+  energy_curve?: { time: number; energy: number }[];
+  fine_windows?: MusicWindow[];
+  sections?: { start: number; end: number; label: string }[];
+  warnings?: string[];
 };
 
 export type Brief = {
@@ -108,32 +141,94 @@ export type ImageEstimateResponse = {
   error?: string;
 };
 
+async function errorMessage(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const parsed = JSON.parse(text);
+    const detail = parsed.detail || parsed.error || text;
+    return typeof detail === "string" ? detail : JSON.stringify(detail);
+  } catch {
+    return text;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${res.status}: ${text}`);
+    const message = await errorMessage(res);
+    toast(message);
+    throw new Error(`${res.status}: ${message}`);
   }
   return (await res.json()) as T;
 }
 
 export const api = {
   projects: () => request<ProjectSummary[]>("/api/projects"),
-  project: (slug: string) => request<unknown>(`/api/projects/${slug}`),
+  createProject: async (
+    file: File,
+    meta: { title: string; aspect: string; music_mode: string; budget: string },
+  ) => {
+    const params = new URLSearchParams({
+      title: meta.title,
+      filename: file.name,
+      aspect: meta.aspect,
+      music_mode: meta.music_mode,
+      budget: meta.budget,
+    });
+    const res = await fetch(`/api/projects?${params}`, {
+      method: "POST",
+      headers: { "Content-Type": file.type || "audio/mpeg" },
+      body: file,
+    });
+    if (!res.ok) {
+      const message = await errorMessage(res);
+      toast(message);
+      throw new Error(`${res.status}: ${message}`);
+    }
+    return (await res.json()) as {
+      slug: string;
+      title: string;
+      duration: number;
+      analysis_job: string | null;
+    };
+  },
+  project: (slug: string) => request<ProjectDetail>(`/api/projects/${slug}`),
   brief: (slug: string) => request<Brief>(`/api/projects/${slug}/brief`),
-  storyboard: (slug: string) => request<Storyboard>(`/api/projects/${slug}/storyboard`),
-  track: (slug: string) => request<{ music: unknown; lyrics: unknown }>(`/api/projects/${slug}/track`),
+  storyboard: (slug: string) =>
+    request<Storyboard | { available: false }>(`/api/projects/${slug}/storyboard`),
+  track: (slug: string) =>
+    request<{ music: Music | null; lyrics: unknown; music_mode: string | null }>(
+      `/api/projects/${slug}/track`,
+    ),
   images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),
-  exports: (slug: string) => request<{ exports: string[] }>(`/api/projects/${slug}/exports`),
+  exports: (slug: string) =>
+    request<{ exports: string[]; previews: string[] }>(
+      `/api/projects/${slug}/exports`,
+    ),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
   jobs: () => request<Job[]>("/api/jobs"),
   settings: () => request<Record<string, unknown>>("/api/settings"),
   chat: (slug: string) => request<{ messages: unknown[] }>(`/api/projects/${slug}/chat`),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
+  saveLyrics: (slug: string, lrc: string) =>
+    request<{ status?: string; segments?: number; error?: string }>(
+      `/api/projects/${slug}/lyrics`,
+      { method: "PUT", body: JSON.stringify({ lrc }) },
+    ),
+  setProofShots: (slug: string, shot_ids: string[]) =>
+    request<{ proof_shot_ids: string[] }>(`/api/projects/${slug}/proof-shots`, {
+      method: "POST",
+      body: JSON.stringify({ shot_ids }),
+    }),
+  createSkeleton: (slug: string) =>
+    request<Storyboard>(`/api/projects/${slug}/storyboard/skeleton`, {
+      method: "POST",
+      body: JSON.stringify({ timing: "adaptive" }),
+    }),
   patchBrief: (slug: string, patch: Partial<Brief>) =>
     request<Brief>(`/api/projects/${slug}/brief`, {
       method: "PATCH",

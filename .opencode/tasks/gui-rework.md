@@ -54,9 +54,9 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. Remaining modules (`flow`, `operations`, `sources`, `human_*`, `studio`, `studio_ui*`, `reviews`, `appdata`, `backup`, `signature`) are imported by the interim Studio/CLI and cannot be deleted until their replacements land in Phases 2-4 (recorded deviation). Legacy model branches move with them. `src/` 21,124 -> 17,371. |
-| 2 · backend skeleton | **gate-ready on `gui-rework/phase-2-backend`.** Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
+| 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
-| 4 · frontend | **started inside Phase 2** — library, five stages, director panel, job tray, approvals, image thumbnails/estimate/generate. Still open: Remotion Player preview, waveform and draggable boundaries, error toasts, the 390/900/1280 keyboard pass; deleting the interim Studio stays Phase 4 proper. |
+| 4 · frontend | **acceptance met on `gui-rework/phase-4-intake`; PR #10.** Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. This branch adds MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. Remaining, as the next slice: delete the interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`) and port the approval metadata still imported by `api/approvals.py` from `human_actions`; `operations`, `flow`, `reviews`, `signature` and `backup` stay until their Phase 5 replacements. |
 | 5 · render cleanup | not started |
 | 6 · polish | not started |
 
@@ -94,6 +94,65 @@ settings file; a live Track-stage chat turn answered correctly.
 - The brief's B4/B6/B7 regression definitions are not in the repository. The
   owner waived them on 25 Oct 2026 and accepted the route/timing gate as Phase 2.
 
+## Phase 4 intake slice (25 Oct 2026)
+
+- `POST /api/projects` takes an MP3 body plus title/aspect/mode/budget query
+  parameters, probes it, creates a schema-3 project through the engine intake and
+  migration, adds the first cap entry and queues a free local analysis job.
+- The origin guard now accepts the actual loopback port and the Vite dev port,
+  not only 8000; browser writes on a random `uv run studio` port were previously
+  rejected. The audio upload is the one non-JSON write the guard admits.
+- Intake form with drag/drop, title, starting budget, 16:9/9:16 and vocal/
+  instrumental. The new production is selected and opens in Track; Track polls
+  until the analysis job lands.
+- LRC import (`domain/lyrics.py`) keeps only the user's explicit `[mm:ss.xx]`
+  tags and closes the last segment at the track duration; no positions are
+  invented. Story exposes direction and style so a fresh brief can be approved.
+- Storyboard empty state is a 200 marker (no console 404) and can create the
+  adaptive timing skeleton without asking the user to certify measured evidence
+  in a guided production.
+- Film stage plays previews and finals through `GET /film/{kind}/{name}` with
+  range support and inline disposition, auto-refreshes the file list while a
+  render runs, and keeps the budget and approval gates. Proof shots are chosen in
+  Storyboard through `POST /proof-shots`; the domain appends them to the brief,
+  so changing the selection invalidates the brief and downstream approvals.
+- End-to-end in a throwaway projects directory: upload a generated 3 s MP3 →
+  project created → analysis succeeded (~117 BPM estimate) → LRC imported →
+  brief approved → adaptive skeleton → proof shot selected → board approved →
+  a 3 s preview played in the app (`readyState 4`). No paid call.
+
+## Phase 4 UI slice (25 Oct 2026)
+
+- **Timeline.** `Timeline.tsx` draws the measured `fine_windows` level envelope
+  (or the 1 Hz energy fallback) under the shot band. A boundary drag resizes both
+  adjacent shots, so every later cut stays at its frame; the API still validates
+  the whole board before writing. Sliders are keyboard operable: arrows move one
+  frame, shift moves ten, Home/End go to the clamped limits. A save in flight is
+  guarded by a ref, so a fast keyboard repeat cannot race two PATCHes.
+- **Player spike.** `@remotion/player` 4.0.536 and `remotion` 4.0.536 are pinned
+  in `frontend/package.json`; the Player is a lazy chunk. Against the 79-shot
+  `zero-bars` board it was interactive in ~800 ms, kept one still mounted, and
+  played the source audio in sync (2.886 s at the 3 s check). The composition is
+  an honest approximation: shot order, durations, dissolves, selected stills and
+  audio; camera motion and transitions remain the renderer's authority.
+- **Error toasts.** Every non-2xx API response raises a `studio-toast` event; the
+  tray is `role="status" aria-live="polite"`, keeps the last three messages and
+  dismisses each after 7 s. Inline stage errors remain for context.
+- **Responsive and keyboard.** At 390 the page scrolls naturally instead of
+  trapping the stage in a small inner scroll box; the storyboard table scrolls
+  inside its card; the file input is focusable and the drop zone shows focus; all
+  stages, sliders, table fields, approvals and the Director are reachable by Tab.
+  The library, all five stages and the intake form were swept at 390, 900 and
+  1280 with **no console errors and no HTTP responses >= 400**.
+- **Intake hardening.** An unreadable MP3 is now a clean 400 (“the file is not a
+  readable MP3”) instead of an uncaught ffprobe 500, and no half-production is
+  left behind. The source audio is served at `GET /audio` with range support.
+- **Tests.** `test_proof_shots_are_validated_and_saved`,
+  `test_storyboard_boundary_update_keeps_later_cuts_in_place`,
+  `test_track_read_lyrics_write_and_local_analysis` (audio bytes) and the
+  unreadable-upload domain/API tests cover the new backend edges; the frontend is
+  pinned by `npm run build` plus the browser sweep.
+
 ## Acceptance per phase
 
 - **0:** tag exists; snapshot restores metadata; golden passes. ✅
@@ -102,12 +161,13 @@ settings file; a live Track-stage chat turn answered correctly.
 - **2:** every route tested; zero-bars opens < 150 ms; B4/B6/B7 regression tests.
 - **3:** probe recorded; fake-provider session import → board → mocked batch → one
   regeneration; Stop < 1 s.
-- **4:** every route zero console errors; 390/900/1280; keyboard-only path; Player spike.
+- **4:** every route zero console errors; 390/900/1280; keyboard-only path; Player spike. ✅ (measured above; interim-Studio deletion tracked separately)
 - **5:** no Chrome read; preview + final on a clean runner; `timing.mjs` parity.
 - **6:** fresh clone → `uv sync` → `uv run studio` → film, no terminal.
 
 ## Open questions
 
-- Remotion Player at 79 shots: assumed acceptable; revisit only if measured.
+- Remotion Player at 79 shots: measured at ~800 ms to interactive with one still
+  mounted; no reason to change the approach.
 - YouTube audio bitrate in the brief (384 kbps) to be checked against the live spec in
   Phase 5; harmless if generous.

@@ -13,6 +13,8 @@ router = APIRouter(prefix="/api/projects/{slug}", tags=["storyboard"])
 @router.get("/storyboard")
 async def get_storyboard(slug: str, request: Request):
     root = project_root(request, slug)
+    if not (root / "work" / "storyboard.json").is_file():
+        return {"available": False}
     board = P.load_board(root)
     return board.model_dump()
 

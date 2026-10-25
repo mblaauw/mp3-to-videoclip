@@ -406,7 +406,7 @@ def _creative_scene(creative: CreativeProfile, scene_id: str | None):
 
 def _require_default_style_core(project: Project, brief: Brief):
     """Validate, never inject or rewrite: older and explicitly custom looks stay intact."""
-    if project.prompt_version != 2 or project.style_preset != profiles.STYLE_PRESET_ID:
+    if not prompt_look_first(project) or project.style_preset != profiles.STYLE_PRESET_ID:
         return
     if digest(profiles.DEFAULT_STYLE) != profiles.STYLE_BENCHMARK["style_core_hash"]:
         raise ValueError(
@@ -551,6 +551,22 @@ def proof_ids(board: Storyboard, brief: Brief | None = None) -> list[str]:
 
 def _current_proof_ids(root: Path, board: Storyboard) -> list[str]:
     return proof_ids(board, load_brief(root))
+
+
+def set_proof_ids(root: Path, shot_ids: list[str]) -> list[str]:
+    """Record the explicit proof shots; they are part of the brief's bytes."""
+    if not (root / STAGE_FILES["storyboard"]).exists():
+        raise ValueError("create the storyboard first")
+    if not isinstance(shot_ids, list) or not all(isinstance(value, str) for value in shot_ids):
+        raise ValueError("proof shots must be a list of storyboard shot IDs")
+    board = load_board(root)
+    brief = load_brief(root)
+    if brief.creative is None:
+        raise ValueError("the creative profile is required for explicit proof shots")
+    brief.creative.proof_shot_ids = list(shot_ids)
+    proof_ids(board, brief)
+    write_json(root / STAGE_FILES["brief"], brief.model_dump())
+    return list(brief.creative.proof_shot_ids)
 
 
 def has_placeholders(shot: Shot) -> bool:
@@ -920,7 +936,10 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
         local = read_json(root / STAGE_FILES["analysis"])
         event_frames = []
         if (root / STAGE_FILES["events"]).exists():
-            require_approval(root, "events")
+            # Guided productions treat measured evidence as agent-owned; the
+            # brief already binds the event bytes. Older flows still certify it.
+            if not flow.settings(root)["guided"]:
+                require_approval(root, "events")
             for event in load_events(root).events:
                 if event.timing_basis == "manual":
                     event_frames += [event.frame] + (

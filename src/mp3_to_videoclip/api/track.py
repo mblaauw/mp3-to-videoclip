@@ -4,12 +4,28 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.storage import inside
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["track"])
+
+
+@router.get("/audio")
+async def get_audio(slug: str, request: Request):
+    """The source recording, for the in-app player and waveform."""
+    root = project_root(request, slug)
+    project = P.load_project(root)
+    try:
+        target = inside(root, project.source)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="audio is missing") from exc
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="audio is missing")
+    return FileResponse(target, media_type="audio/mpeg", content_disposition_type="inline")
 
 
 @router.get("/track")
@@ -23,7 +39,7 @@ async def get_track(slug: str, request: Request):
     lyrics_path = root / "work" / "lyrics.json"
     if lyrics_path.is_file():
         lyrics = __import__("json").loads(lyrics_path.read_text())
-    return {"music": music, "lyrics": lyrics}
+    return {"music": music, "lyrics": lyrics, "music_mode": P.load_project(root).music_mode}
 
 
 @router.post("/analyze")
@@ -54,9 +70,19 @@ async def update_lyrics(slug: str, request: Request, payload: dict):
     from mp3_to_videoclip.storage import write_json
 
     root = project_root(request, slug)
-    try:
-        lyrics = Lyrics.model_validate(payload)
-    except ValueError as exc:
-        return {"error": str(exc)}
+    if "lrc" in payload:
+        from mp3_to_videoclip.domain.lyrics import parse_lrc
+
+        if not isinstance(payload["lrc"], str) or len(payload["lrc"]) > 200_000:
+            return {"error": "paste a reasonable amount of lyrics"}
+        try:
+            lyrics = parse_lrc(payload["lrc"], P.load_project(root).duration)
+        except ValueError as exc:
+            return {"error": str(exc)}
+    else:
+        try:
+            lyrics = Lyrics.model_validate(payload)
+        except ValueError as exc:
+            return {"error": str(exc)}
     write_json(root / "work" / "lyrics.json", lyrics.model_dump())
     return {"status": "saved", "segments": len(lyrics.segments)}

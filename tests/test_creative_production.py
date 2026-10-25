@@ -446,6 +446,26 @@ def test_creative_requires_explicit_unique_known_proof_ids(tmp_path):
     ]
 
 
+def test_set_proof_ids_records_the_selection_and_invalidates_the_brief(tmp_path):
+    root = make_root(tmp_path, proof_shot_ids=())
+    approve_prerequisites(root)
+    before = P.stage_hash(root, "brief")
+
+    selected = P.set_proof_ids(root, ["s001", "s002", "s003"])
+    assert selected == ["s001", "s002", "s003"]
+    assert P.load_brief(root).creative.proof_shot_ids == selected
+    assert P.stage_hash(root, "brief") != before
+    with pytest.raises(ValueError, match="current user approval"):
+        P.require_approval(root, "brief")
+
+    with pytest.raises(ValueError, match="exactly 3"):
+        P.set_proof_ids(root, ["s001", "s002"])
+    with pytest.raises(ValueError, match="unique, known"):
+        P.set_proof_ids(root, ["s999", "s001", "s002"])
+    with pytest.raises(ValueError, match="list"):
+        P.set_proof_ids(root, "s001")
+
+
 def test_creative_storyboard_approval_requires_proof_selection(tmp_path):
     root = make_root(tmp_path, proof_shot_ids=())
     approve_prerequisites(root)

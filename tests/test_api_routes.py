@@ -86,6 +86,20 @@ def test_track_read_lyrics_write_and_local_analysis(client, project, monkeypatch
     saved = client.put("/api/projects/production/lyrics", json=lyrics.model_dump())
     assert saved.json() == {"status": "saved", "segments": 1}
 
+    imported = client.put(
+        "/api/projects/production/lyrics",
+        json={"lrc": "[00:00.50] one\n[00:01.50] two"},
+    )
+    assert imported.json() == {"status": "saved", "segments": 2}
+    stored = client.get("/api/projects/production/track").json()["lyrics"]
+    assert stored["segments"][-1]["end"] == 2.0
+    assert "error" in client.put("/api/projects/production/lyrics", json={"lrc": "no tags"}).json()
+
+    audio = client.get("/api/projects/production/audio")
+    assert audio.status_code == 200
+    assert audio.headers["content-type"] == "audio/mpeg"
+    assert audio.content == (project / "media/song.mp3").read_bytes()
+
     monkeypatch.setattr(
         "mp3_to_videoclip.analysis.analyze",
         lambda path, duration: {
@@ -139,6 +153,40 @@ def test_storyboard_patch_validates_before_writing(client):
     )
 
 
+def test_missing_storyboard_is_an_empty_state(client, project):
+    (project / "work/storyboard.json").unlink()
+    response = client.get("/api/projects/production/storyboard")
+    assert response.status_code == 200
+    assert response.json() == {"available": False}
+
+
+def test_storyboard_boundary_update_keeps_later_cuts_in_place(client):
+    board = client.get("/api/projects/production/storyboard").json()
+    first, second = board["shots"][:2]
+    second_end = second["start_frame"] + second["duration_frames"]
+    after = board["shots"][2]["start_frame"]
+    frame = first["start_frame"] + first["duration_frames"] + 2
+    updated = client.patch(
+        "/api/projects/production/storyboard/shots",
+        json={
+            "changes": [
+                {"id": first["id"], "duration_frames": frame - first["start_frame"]},
+                {
+                    "id": second["id"],
+                    "start_frame": frame,
+                    "duration_frames": second_end - frame,
+                },
+            ]
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    shots = updated.json()["shots"]
+    assert shots[0]["duration_frames"] == frame - first["start_frame"]
+    assert shots[1]["start_frame"] == frame
+    assert shots[1]["start_frame"] + shots[1]["duration_frames"] == second_end
+    assert shots[2]["start_frame"] == after
+
+
 def test_storyboard_skeleton_needs_an_approved_brief(client, project):
     P.approve(project, "brief", "test brief", via="studio", review_confirmed=True)
     (project / "work/storyboard.json").unlink()
@@ -150,6 +198,39 @@ def test_storyboard_skeleton_needs_an_approved_brief(client, project):
     body = created.json()
     assert body["total_frames"] == 48
     assert body["shots"]
+
+
+def test_proof_shots_are_validated_and_saved(client, project):
+    board = client.get("/api/projects/production/storyboard").json()
+    ids = [shot["id"] for shot in board["shots"] if not shot["asset_shot_id"]][:3]
+    saved = client.post("/api/projects/production/proof-shots", json={"shot_ids": ids})
+    assert saved.status_code == 200
+    assert saved.json()["proof_shot_ids"] == ids
+    assert client.get("/api/projects/production/brief").json()["creative"]["proof_shot_ids"] == ids
+    assert (
+        client.post("/api/projects/production/proof-shots", json={"shot_ids": ids[:2]}).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            "/api/projects/production/proof-shots",
+            json={"shot_ids": [ids[0], "missing", ids[1]]},
+        ).status_code
+        == 400
+    )
+
+
+def test_adaptive_skeleton_uses_guided_evidence_without_extra_approvals(client, project):
+    P.approve(project, "brief", "test brief", via="studio", review_confirmed=True)
+    (project / "work/storyboard.json").unlink()
+    created = client.post(
+        "/api/projects/production/storyboard/skeleton",
+        json={"seconds": 2, "timing": "adaptive"},
+    )
+    assert created.status_code == 200, created.text
+    board = created.json()
+    assert board["total_frames"] == 48
+    assert board["shots"][0]["start_frame"] == 0
 
 
 def test_film_graphics_render_and_exports(client, project, monkeypatch):
@@ -170,7 +251,20 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
 
     (project / "renders").mkdir()
     (project / "renders" / "a.mp4").write_bytes(b"x")
-    assert client.get("/api/projects/production/exports").json() == {"exports": ["a.mp4"]}
+    (project / "previews").mkdir()
+    (project / "previews" / "p.mp4").write_bytes(b"p")
+    assert client.get("/api/projects/production/exports").json() == {
+        "exports": ["a.mp4"],
+        "previews": ["p.mp4"],
+    }
+    played = client.get("/api/projects/production/film/renders/a.mp4")
+    assert played.status_code == 200
+    assert played.headers["content-type"] == "video/mp4"
+    assert played.content == b"x"
+    assert client.get("/api/projects/production/film/previews/p.mp4").status_code == 200
+    assert client.get("/api/projects/production/film/renders/missing.mp4").status_code == 404
+    assert client.get("/api/projects/production/film/renders/a.txt").status_code == 404
+    assert client.get("/api/projects/production/film/other/a.mp4").status_code == 404
 
 
 def test_budget_read_topup_and_validation(client, project):

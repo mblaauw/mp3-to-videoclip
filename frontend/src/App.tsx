@@ -5,6 +5,8 @@ import { StoryStage } from "./stages/Story";
 import { ImagesStage } from "./stages/Images";
 import { FilmStage } from "./stages/Film";
 import { TrackStage } from "./stages/Track";
+import { NewProduction } from "./NewProduction";
+import { ToastTray } from "./ToastTray";
 
 const STAGES = ["track", "story", "storyboard", "images", "film"] as const;
 type Stage = (typeof STAGES)[number];
@@ -13,8 +15,20 @@ export function App() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [slug, setSlug] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("track");
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selected = projects.find((p) => p.slug === slug) || null;
+
+  const created = async (newSlug: string) => {
+    setCreating(false);
+    try {
+      setProjects(await api.projects());
+    } catch (e) {
+      setError(String(e));
+    }
+    setSlug(newSlug);
+    setStage("track");
+  };
 
   useEffect(() => {
     api.projects().then(setProjects).catch((e) => setError(String(e)));
@@ -25,11 +39,15 @@ export function App() {
       <aside className="rail">
         <div className="kicker">Studio</div>
         <h1>mp3-to-videoclip</h1>
+        <button className="new" onClick={() => setCreating(true)}>
+          + New production
+        </button>
         <ul>
           {projects.map((p) => (
             <li key={p.slug}>
               <button
                 className={p.slug === slug ? "active" : ""}
+                aria-current={p.slug === slug ? "true" : undefined}
                 onClick={() => setSlug(p.slug)}
               >
                 {p.title}
@@ -45,7 +63,9 @@ export function App() {
       </aside>
 
       <main className="main">
-        {selected ? (
+        {creating ? (
+          <NewProduction onCreated={created} onCancel={() => setCreating(false)} />
+        ) : selected ? (
           selected.archived ? (
             <ArchivedFilm project={selected} />
           ) : (
@@ -55,6 +75,7 @@ export function App() {
                   <button
                     key={s}
                     className={s === stage ? "active" : ""}
+                    aria-pressed={s === stage}
                     onClick={() => setStage(s)}
                   >
                     {s}
@@ -65,12 +86,17 @@ export function App() {
             </>
           )
         ) : (
-          <p className="empty">Select a production.</p>
+          <p className="empty">Select a production or start a new one.</p>
         )}
       </main>
 
-      <Director slug={selected?.archived ? null : slug} stage={stage} archived={!!selected?.archived} />
+      <Director
+        slug={creating || selected?.archived ? null : slug}
+        stage={stage}
+        archived={!!selected?.archived}
+      />
       <JobTray />
+      <ToastTray />
     </div>
   );
 }
