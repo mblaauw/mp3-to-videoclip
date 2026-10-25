@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Shot, type Storyboard } from "../api";
+import { api, type Brief, type Shot, type Storyboard } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 
 export function StoryboardStage({ slug }: { slug: string }) {
@@ -8,6 +8,9 @@ export function StoryboardStage({ slug }: { slug: string }) {
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [proofIds, setProofIds] = useState<string[]>([]);
+  const [savingProof, setSavingProof] = useState(false);
+  const [proofMessage, setProofMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -15,6 +18,10 @@ export function StoryboardStage({ slug }: { slug: string }) {
       .storyboard(slug)
       .then((data) => setBoard("available" in data ? null : data))
       .catch((e) => setError(String(e)));
+    api
+      .brief(slug)
+      .then((data: Brief) => setProofIds(data.creative?.proof_shot_ids || []))
+      .catch(() => setProofIds([]));
   }, [slug]);
 
   const edit = (id: string, field: keyof Shot, value: string | number) => {
@@ -32,6 +39,34 @@ export function StoryboardStage({ slug }: { slug: string }) {
       setError(String(e));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const sourceShots = board?.shots.filter((shot) => !shot.asset_shot_id) || [];
+  const expectedProof = Math.min(3, sourceShots.length);
+
+  const toggleProof = (id: string) => {
+    setProofMessage(null);
+    setProofIds((current) => {
+      if (current.includes(id)) return current.filter((value) => value !== id);
+      if (current.length >= expectedProof) return current;
+      return [...current, id];
+    });
+  };
+
+  const saveProof = async () => {
+    if (!board || proofIds.length !== expectedProof) return;
+    setSavingProof(true);
+    setError(null);
+    try {
+      const result = await api.setProofShots(slug, proofIds);
+      setProofIds(result.proof_shot_ids);
+      setProofMessage("Brief changed — approve it again in Story before the board.");
+      setRevision((value) => value + 1);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingProof(false);
     }
   };
 
@@ -61,6 +96,36 @@ export function StoryboardStage({ slug }: { slug: string }) {
       </p>
       {error && <p className="error">{error}</p>}
       <ApprovalBar slug={slug} stages={["storyboard"]} refresh={revision} />
+      {board && (
+        <div className="card">
+          <h3>
+            Proof shots ({proofIds.length} of {expectedProof})
+          </h3>
+          <p className="meta">
+            Pick the hardest identity or interaction to inspect first, not the safest portrait.
+          </p>
+          <div className="proof-list">
+            {sourceShots.map((shot) => (
+              <label key={shot.id}>
+                <input
+                  type="checkbox"
+                  checked={proofIds.includes(shot.id)}
+                  onChange={() => toggleProof(shot.id)}
+                  disabled={!proofIds.includes(shot.id) && proofIds.length >= expectedProof}
+                />
+                {shot.id}
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={saveProof}
+            disabled={savingProof || proofIds.length !== expectedProof}
+          >
+            {savingProof ? "Saving…" : "Save proof shots"}
+          </button>
+          {proofMessage && <p className="message">{proofMessage}</p>}
+        </div>
+      )}
       <div className="card">
         {board ? (
           <table>

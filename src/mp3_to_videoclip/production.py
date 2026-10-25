@@ -553,6 +553,22 @@ def _current_proof_ids(root: Path, board: Storyboard) -> list[str]:
     return proof_ids(board, load_brief(root))
 
 
+def set_proof_ids(root: Path, shot_ids: list[str]) -> list[str]:
+    """Record the explicit proof shots; they are part of the brief's bytes."""
+    if not (root / STAGE_FILES["storyboard"]).exists():
+        raise ValueError("create the storyboard first")
+    if not isinstance(shot_ids, list) or not all(isinstance(value, str) for value in shot_ids):
+        raise ValueError("proof shots must be a list of storyboard shot IDs")
+    board = load_board(root)
+    brief = load_brief(root)
+    if brief.creative is None:
+        raise ValueError("the creative profile is required for explicit proof shots")
+    brief.creative.proof_shot_ids = list(shot_ids)
+    proof_ids(board, brief)
+    write_json(root / STAGE_FILES["brief"], brief.model_dump())
+    return list(brief.creative.proof_shot_ids)
+
+
 def has_placeholders(shot: Shot) -> bool:
     # Marked placeholders, not words such as Spanish "todo" inside lyrics.
     return any(

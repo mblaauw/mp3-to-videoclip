@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.storage import inside
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["film"])
 
@@ -41,10 +46,42 @@ async def render(slug: str, request: Request, payload: dict):
     return {"job_id": job_id, "kind": kind, "status": "queued"}
 
 
+def _films(directory: Path) -> list[str]:
+    if not directory.is_dir():
+        return []
+    return [
+        path.name
+        for path in sorted(
+            directory.glob("*.mp4"), key=lambda path: path.stat().st_mtime, reverse=True
+        )
+    ]
+
+
 @router.get("/exports")
 async def list_exports(slug: str, request: Request):
     root = project_root(request, slug)
-    renders = root / "renders"
-    if not renders.is_dir():
-        return {"exports": []}
-    return {"exports": [p.name for p in sorted(renders.glob("*.mp4"))]}
+    return {
+        "exports": _films(root / "renders"),
+        "previews": _films(root / "previews"),
+    }
+
+
+@router.get("/film/{kind}/{name}")
+async def play_film(slug: str, kind: str, name: str, request: Request):
+    if kind not in ("renders", "previews"):
+        raise HTTPException(status_code=404, detail="unknown film kind")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.mp4", name):
+        raise HTTPException(status_code=404, detail="unknown film")
+    root = project_root(request, slug)
+    try:
+        target = inside(root, f"{kind}/{name}")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="unknown film") from exc
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="film is missing")
+    return FileResponse(
+        target,
+        media_type="video/mp4",
+        filename=name,
+        content_disposition_type="inline",
+    )

@@ -23,6 +23,7 @@ export type Shot = {
   camera: string;
   dissolve_frames: number;
   framing: string | null;
+  asset_shot_id: string | null;
   must_show: string[];
   scene_id: string | null;
 };
@@ -163,7 +164,10 @@ export const api = {
       `/api/projects/${slug}/track`,
     ),
   images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),
-  exports: (slug: string) => request<{ exports: string[] }>(`/api/projects/${slug}/exports`),
+  exports: (slug: string) =>
+    request<{ exports: string[]; previews: string[] }>(
+      `/api/projects/${slug}/exports`,
+    ),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
   jobs: () => request<Job[]>("/api/jobs"),
   settings: () => request<Record<string, unknown>>("/api/settings"),
@@ -175,6 +179,11 @@ export const api = {
       `/api/projects/${slug}/lyrics`,
       { method: "PUT", body: JSON.stringify({ lrc }) },
     ),
+  setProofShots: (slug: string, shot_ids: string[]) =>
+    request<{ proof_shot_ids: string[] }>(`/api/projects/${slug}/proof-shots`, {
+      method: "POST",
+      body: JSON.stringify({ shot_ids }),
+    }),
   createSkeleton: (slug: string) =>
     request<Storyboard>(`/api/projects/${slug}/storyboard/skeleton`, {
       method: "POST",

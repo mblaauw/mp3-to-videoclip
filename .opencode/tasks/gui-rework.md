@@ -56,7 +56,7 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. Remaining modules (`flow`, `operations`, `sources`, `human_*`, `studio`, `studio_ui*`, `reviews`, `appdata`, `backup`, `signature`) are imported by the interim Studio/CLI and cannot be deleted until their replacements land in Phases 2-4 (recorded deviation). Legacy model branches move with them. `src/` 21,124 -> 17,371. |
 | 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
-| 4 · frontend | **in progress on `gui-rework/phase-4-intake`.** Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. This slice adds MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, a same-origin upload guard and the corrected write-origin policy. Still open: Remotion Player preview, waveform and draggable boundaries, error toasts, the 390/900/1280 keyboard pass; deleting the interim Studio. |
+| 4 · frontend | **in progress on `gui-rework/phase-4-intake`.** Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. This slice adds MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, a same-origin upload guard and the corrected write-origin policy. Still open: Remotion Player preview, waveform and draggable boundaries, error toasts, the 390/900/1280 keyboard pass; deleting the interim Studio. |
 | 5 · render cleanup | not started |
 | 6 · polish | not started |
 
@@ -111,9 +111,15 @@ settings file; a live Track-stage chat turn answered correctly.
 - Storyboard empty state is a 200 marker (no console 404) and can create the
   adaptive timing skeleton without asking the user to certify measured evidence
   in a guided production.
+- Film stage plays previews and finals through `GET /film/{kind}/{name}` with
+  range support and inline disposition, auto-refreshes the file list while a
+  render runs, and keeps the budget and approval gates. Proof shots are chosen in
+  Storyboard through `POST /proof-shots`; the domain appends them to the brief,
+  so changing the selection invalidates the brief and downstream approvals.
 - End-to-end in a throwaway projects directory: upload a generated 3 s MP3 →
   project created → analysis succeeded (~117 BPM estimate) → LRC imported →
-  brief approved → adaptive skeleton created. No paid call.
+  brief approved → adaptive skeleton → proof shot selected → board approved →
+  a 3 s preview played in the app (`readyState 4`). No paid call.
 
 ## Acceptance per phase
 

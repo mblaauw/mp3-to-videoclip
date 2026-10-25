@@ -168,6 +168,26 @@ def test_storyboard_skeleton_needs_an_approved_brief(client, project):
     assert body["shots"]
 
 
+def test_proof_shots_are_validated_and_saved(client, project):
+    board = client.get("/api/projects/production/storyboard").json()
+    ids = [shot["id"] for shot in board["shots"] if not shot["asset_shot_id"]][:3]
+    saved = client.post("/api/projects/production/proof-shots", json={"shot_ids": ids})
+    assert saved.status_code == 200
+    assert saved.json()["proof_shot_ids"] == ids
+    assert client.get("/api/projects/production/brief").json()["creative"]["proof_shot_ids"] == ids
+    assert (
+        client.post("/api/projects/production/proof-shots", json={"shot_ids": ids[:2]}).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            "/api/projects/production/proof-shots",
+            json={"shot_ids": [ids[0], "missing", ids[1]]},
+        ).status_code
+        == 400
+    )
+
+
 def test_adaptive_skeleton_uses_guided_evidence_without_extra_approvals(client, project):
     P.approve(project, "brief", "test brief", via="studio", review_confirmed=True)
     (project / "work/storyboard.json").unlink()
@@ -199,7 +219,20 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
 
     (project / "renders").mkdir()
     (project / "renders" / "a.mp4").write_bytes(b"x")
-    assert client.get("/api/projects/production/exports").json() == {"exports": ["a.mp4"]}
+    (project / "previews").mkdir()
+    (project / "previews" / "p.mp4").write_bytes(b"p")
+    assert client.get("/api/projects/production/exports").json() == {
+        "exports": ["a.mp4"],
+        "previews": ["p.mp4"],
+    }
+    played = client.get("/api/projects/production/film/renders/a.mp4")
+    assert played.status_code == 200
+    assert played.headers["content-type"] == "video/mp4"
+    assert played.content == b"x"
+    assert client.get("/api/projects/production/film/previews/p.mp4").status_code == 200
+    assert client.get("/api/projects/production/film/renders/missing.mp4").status_code == 404
+    assert client.get("/api/projects/production/film/renders/a.txt").status_code == 404
+    assert client.get("/api/projects/production/film/other/a.mp4").status_code == 404
 
 
 def test_budget_read_topup_and_validation(client, project):
