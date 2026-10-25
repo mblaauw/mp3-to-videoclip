@@ -1,58 +1,13 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>mp3-to-videoclip</title>
-  <style>
-    :root{color-scheme:dark;--bg:#0b0f14;--panel:#131a22;--ink:#e8e6df;--muted:#8fa0ae;--line:#23303c;--gold:#d4ae6a}
-    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    main{max-width:980px;margin:0 auto;padding:48px 24px}
-    h1{font-size:22px;margin:0 0 4px}.kicker{color:var(--gold);text-transform:uppercase;letter-spacing:.14em;font-size:11px;font-weight:700}
-    .sub{color:var(--muted);margin:0 0 28px}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:0 0 12px}
-    .row{display:flex;justify-content:space-between;gap:16px;align-items:baseline}
-    .slug{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--muted)}
-    .tag{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--muted)}
-    a{color:var(--gold);text-decoration:none}a:hover{text-decoration:underline}
-    .links{display:flex;gap:14px;flex-wrap:wrap;margin-top:22px;font-size:13px}
-    .empty{color:var(--muted)}
-  </style>
-</head>
-<body>
-<main>
-  <div class="kicker">Studio</div>
-  <h1>mp3-to-videoclip</h1>
-  <p class="sub">Phase 2 backend. The Vite frontend lands in Phase 4; this page is the interim index.</p>
-  <div id="projects" class="empty">Loading projects…</div>
-  <div class="links">
-    <a href="/api/projects">/api/projects</a>
-    <a href="/api/settings">/api/settings</a>
-    <a href="/api/events">/api/events</a>
-    <a href="/docs">API docs</a>
-  </div>
-</main>
-<script>
-async function load() {
-  const out = document.getElementById('projects');
-  try {
-    const res = await fetch('/api/projects');
-    const projects = await res.json();
-    if (!projects.length) { out.textContent = 'No productions yet.'; return; }
-    out.className = '';
-    out.innerHTML = projects.map(p => `
-      <div class="card">
-        <div class="row">
-          <div><strong>${p.title}</strong> <span class="slug">${p.slug}</span></div>
-          <span class="tag">${p.archived ? 'archive' : 'live'}</span>
-        </div>
-        <div class="slug">${p.duration ? p.duration.toFixed(1) + 's' : ''}${p.still_count ? ' · ' + p.still_count + ' stills' : ''}</div>
-      </div>`).join('');
-  } catch (err) {
-    out.textContent = 'Could not load projects: ' + err;
-  }
-}
-load();
-</script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mp3-to-videoclip Studio</title>
+    <script type="module" crossorigin src="/assets/index-BIsI16kA.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-B4j6sKnn.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>
