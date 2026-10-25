@@ -487,7 +487,7 @@ def test_workflow_route_failure_has_retry_and_late_response_cannot_replace_view(
     page.wait_for_selector("#view h2 >> text=Story & storyboard")
     try:
         pending[0].fulfill(
-            json={"artifacts": {}, "music_mode": "vocal", "feedback": [], "flow": {}}
+            json={"artifacts": {}, "music_mode": "vocal", "flow": {}}
         )
     except Exception:
         pass
@@ -550,37 +550,6 @@ def test_style_gate_records_proof_without_script_error(studio_page):
     assert recorded["proof"]["via"] == "studio"
     assert recorded["proof"]["note"] == "The proof samples hold the direction"
     assert read_json(root / "work/tasks.json") == {}
-
-
-@pytest.mark.parametrize("studio_page", [True], indirect=True)
-def test_story_feedback_request_and_composite_approval_are_separate_actions(studio_page):
-    from mp3_to_videoclip import flow
-
-    page, app, _root, second, *_ = studio_page
-    flow.mark(second)
-    open_human_session(page, app)
-    page.goto(app + "#/second/story")
-    page.wait_for_selector("#view h2 >> text=Story & storyboard")
-    feedback_form = page.locator("form", has=page.get_by_role("button", name="Request revision"))
-    feedback_form.locator("textarea").first.fill("Make the middle section quieter.")
-    feedback_form.locator('input[type="checkbox"]').check()
-    feedback_form.get_by_role("button", name="Request revision").click()
-    page.wait_for_selector("#view >> text=Saved. Your agent")
-    assert (
-        read_json(second / "work/feedback.json")[0]["message"] == "Make the middle section quieter."
-    )
-
-    approval = page.locator(
-        "form", has=page.get_by_role("button", name="Approve story & storyboard")
-    )
-    approval.locator("textarea").fill("I agree to this story and board")
-    approval.locator('input[type="checkbox"]').check()
-    approval.get_by_role("button", name="Approve story & storyboard").click()
-    page.wait_for_selector("#view h2 >> text=Style check")
-    approvals = read_json(second / "work/approvals.json")
-    assert approvals["brief"]["via"] == "studio"
-    assert approvals["storyboard"]["via"] == "studio"
-    assert read_json(second / "work/tasks.json") == {}
 
 
 @pytest.mark.parametrize("studio_page", [True], indirect=True)

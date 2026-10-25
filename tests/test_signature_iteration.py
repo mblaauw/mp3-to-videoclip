@@ -341,14 +341,14 @@ def test_new_skeleton_defaults_do_not_change_old_film_cadence(tmp_path, monkeypa
 
     monkeypatch.setattr(P, "skeleton", skeleton)
     execute(parser().parse_args(["skeleton", str(root), "--timing", "adaptive"]))
-    assert calls[-1] == (8, "adaptive", {"min_seconds": 4, "max_seconds": 12})
+    assert calls[-1] == (None, "adaptive", {"min_seconds": None, "max_seconds": None})
     config = read_json(root / "project.json")
     config["prompt_version"] = 2
     write_json(root / "project.json", config)
     execute(parser().parse_args(["skeleton", str(root)]))
     # No model on this synthetic fixture: explicitly choose adaptive as in new init.
     execute(parser().parse_args(["skeleton", str(root), "--timing", "adaptive"]))
-    assert calls[-1] == (5, "adaptive", {"min_seconds": 1.5, "max_seconds": 7})
+    assert calls[-1] == (None, "adaptive", {"min_seconds": None, "max_seconds": None})
 
 
 @pytest.mark.parametrize("renderer_binding", [False, True])

@@ -311,21 +311,6 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 except (ValueError, KeyError) as exc:
                     return self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            if rest == ["feedback"]:
-                from . import feedback
-
-                try:
-                    return self._json(
-                        {
-                            "requests": feedback.requests(
-                                root,
-                                stage=(query.get("stage") or [None])[0],
-                                status=(query.get("status") or [None])[0],
-                            )
-                        }
-                    )
-                except ValueError as exc:
-                    return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             if rest == ["approvals"]:
                 return self._json(appdata.approvals(root))
             if rest == ["quotes"]:
@@ -402,7 +387,7 @@ class Handler(BaseHTTPRequestHandler):
                 segments = [unquote(part) for part in parsed.path.strip("/").split("/")]
                 supported = (len(segments) == 5 and segments[3] in {"approve", "authorize"}) or (
                     len(segments) == 4
-                    and segments[3] in {"feedback", "review", "approve-story", "credits"}
+                    and segments[3] in {"review", "approve-story", "credits"}
                 )
                 if not supported:
                     raise human_actions.ActionError("unsupported write route", 405)
@@ -419,29 +404,6 @@ class Handler(BaseHTTPRequestHandler):
                         if segments[3] == "approve"
                         else human_actions.authorize_quote(root, segments[4], body)
                     )
-                elif len(segments) == 4 and segments[3] == "feedback":
-                    from . import feedback
-                    from .storage import project_lock
-
-                    body = self._read_body(64000)
-                    if set(body) - {"stage", "scope", "target", "message", "style", "confirmed"}:
-                        raise human_actions.ActionError("unexpected feedback fields")
-                    if body.get("confirmed") is not True:
-                        raise human_actions.ActionError(
-                            "confirm that this instruction should revise the production"
-                        )
-                    with project_lock(root):
-                        value = {
-                            "request": feedback.record(
-                                root,
-                                stage=body.get("stage"),
-                                scope=body.get("scope", "whole"),
-                                target=body.get("target"),
-                                message=body.get("message"),
-                                style=body.get("style"),
-                                author="studio",
-                            )
-                        }
                 elif len(segments) == 4 and segments[3] == "review":
                     value = human_actions.record_shot_review(root, self._read_body(8192))
                 elif len(segments) == 4 and segments[3] == "approve-story":

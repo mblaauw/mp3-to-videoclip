@@ -7,7 +7,7 @@ import urllib.request
 import pytest
 from test_creative_production import make_root
 
-from mp3_to_videoclip import feedback, flow, human_actions, serve, signature
+from mp3_to_videoclip import flow, human_actions, serve, signature
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.storage import digest, read_json, write_json
 
@@ -211,31 +211,6 @@ def test_new_production_prefills_style_and_credits_from_siblings(tmp_path):
     assert flow.guided(new) is True
 
 
-def test_feedback_is_durable_and_requires_a_real_request(tmp_path):
-    root = make_root(tmp_path)
-    request = feedback.record(
-        root,
-        stage="story",
-        scope="shot",
-        target="s001",
-        message="Keep the skyline, change the figure to a silhouette.",
-        style="warmer light",
-    )
-    assert request["status"] == "open"
-    assert feedback.requests(root, stage="story", status="open") == [request]
-    resolved = feedback.resolve(root, request["id"], reply="Revised s001 and the style.")
-    assert resolved["status"] == "resolved"
-    assert feedback.requests(root, status="open") == []
-    with pytest.raises(ValueError):
-        feedback.record(root, stage="story", scope="whole", target="s001", message="x")
-    with pytest.raises(ValueError):
-        feedback.record(root, stage="unknown", message="x")
-    with pytest.raises(ValueError):
-        feedback.record(root, stage="story", message=" ")
-    with pytest.raises(ValueError):
-        feedback.resolve(root, request["id"], reply="again")
-
-
 def test_guided_story_approval_is_atomic_and_hash_bound(tmp_path):
     root = guided_root(tmp_path)
     review = human_actions.review_story(root)
@@ -389,24 +364,6 @@ def test_guided_http_routes_need_capability_and_never_spend(tmp_path):
     server.action_token = "human"
     base = url.split("?")[0]
     try:
-        status, body = _post(
-            base,
-            "api/project/production/feedback",
-            {
-                "stage": "story",
-                "scope": "whole",
-                "message": "Make the middle section quieter.",
-                "confirmed": True,
-            },
-        )
-        assert status == 200 and body["request"]["status"] == "open"
-        assert read_json(root / "work/feedback.json")[0]["message"].startswith("Make")
-        status, body = _post(
-            base,
-            "api/project/production/feedback",
-            {"stage": "story", "message": "No confirmation", "confirmed": False},
-        )
-        assert status == 400
         status, _ = _post(
             base,
             "api/project/production/credits",

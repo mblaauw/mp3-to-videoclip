@@ -54,19 +54,16 @@ def parser() -> argparse.ArgumentParser:
         "kind", choices=["brief", "lyrics", "storyboard", "events", "brand", "listening"]
     )
     schema.set_defaults(project=None)
-    feedback_cmd = commands.add_parser(
-        "feedback", help="Read, record or resolve Studio revision requests"
+    serve_cmd = commands.add_parser("serve", help="Read-only live studio over loopback + SSE")
+    serve_cmd.add_argument("--projects-dir", type=Path, default=Path("projects"))
+    serve_cmd.add_argument("--port", type=int, default=8765)
+    serve_cmd.add_argument("--token", help="Session token; generated when omitted")
+    serve_cmd.add_argument(
+        "--actions",
+        action="store_true",
+        help="Interactively enable human Studio decisions (TTY required)",
     )
-    feedback_cmd.add_argument("project", type=Path)
-    feedback_cmd.add_argument("--stage", choices=["track", "story", "style", "images", "finish"])
-    feedback_cmd.add_argument("--status", choices=["open", "resolved"])
-    feedback_cmd.add_argument("--message", help="Record a new user/agent revision request")
-    feedback_cmd.add_argument("--scope", choices=["whole", "section", "shot"], default="whole")
-    feedback_cmd.add_argument("--target", help="Shot or section ID for a scoped request")
-    feedback_cmd.add_argument("--style", help="Optional replacement film-style text")
-    feedback_cmd.add_argument("--author", default="agent")
-    feedback_cmd.add_argument("--resolve", dest="request_id", help="Resolve an open request ID")
-    feedback_cmd.add_argument("--reply", help="Agent reply recorded when resolving")
+    serve_cmd.set_defaults(project=None)
     studio = commands.add_parser(
         "studio", help="Build one static index page for every production on disk"
     )
@@ -439,26 +436,6 @@ def execute(args):
     with _project_scope(root, args.command):
         project = production.load_project(root)
         cmd = args.command
-        if cmd == "feedback":
-            from . import feedback
-
-            if args.request_id:
-                if not args.reply:
-                    raise ValueError("--resolve needs --reply with what changed")
-                return {"resolved": feedback.resolve(root, args.request_id, reply=args.reply)}
-            if args.message:
-                return {
-                    "request": feedback.record(
-                        root,
-                        stage=args.stage or "story",
-                        scope=args.scope,
-                        target=args.target,
-                        message=args.message,
-                        style=args.style,
-                        author=args.author,
-                    )
-                }
-            return {"requests": feedback.requests(root, stage=args.stage, status=args.status)}
         if cmd == "budget":
             from . import budget
 
@@ -596,23 +573,20 @@ def execute(args):
                 args.min_seconds is not None or args.max_seconds is not None
             ):
                 raise ValueError("--min-seconds/--max-seconds only apply to --timing adaptive")
-            new_film = project.prompt_version == 2
-            min_seconds = (1.5 if new_film else 4) if args.min_seconds is None else args.min_seconds
-            max_seconds = (7 if new_film else 12) if args.max_seconds is None else args.max_seconds
-            target = (
-                args.seconds
-                if args.seconds is not None
-                else ((5 if new_film else 8) if timing == "adaptive" else 10)
-            )
-            if not 1 <= target <= 30:
+            if args.seconds is not None and not 1 <= args.seconds <= 30:
                 raise ValueError("nominal storyboard duration must be 1–30 seconds")
             board = production.skeleton(
-                root, target, timing, min_seconds=min_seconds, max_seconds=max_seconds
+                root,
+                args.seconds,
+                timing,
+                min_seconds=args.min_seconds,
+                max_seconds=args.max_seconds,
             )
+            resolved_min = (1.5 if (project.prompt_version == 2) else 4) if args.min_seconds is None else args.min_seconds
             short = (
                 timing == "adaptive"
                 and len(board.shots) == 1
-                and board.shots[0].duration_frames < math.ceil(Fraction(min_seconds) * project.fps)
+                and board.shots[0].duration_frames < math.ceil(Fraction(resolved_min) * project.fps)
             )
             notes = []
             if short:
