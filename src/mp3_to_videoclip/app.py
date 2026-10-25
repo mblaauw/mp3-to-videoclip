@@ -7,6 +7,7 @@ interim ``serve.py`` stays available until the frontend replaces it.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,14 +15,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sse_starlette.sse import EventSourceResponse
 
+from .api.jobs import router as jobs_router
 from .api.projects import router as projects_router
 from .api.settings import router as settings_router
+from .jobs import JobRunner
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    runner = JobRunner()
+    await runner.start()
+    app.state.runner = runner
     yield
+    await runner.stop()
 
 
 def create_app(projects_dir: Path | None = None) -> FastAPI:
@@ -30,6 +38,28 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
         app.state.projects_dir = str(projects_dir)
     app.include_router(projects_router)
     app.include_router(settings_router)
+    app.include_router(jobs_router)
+
+    @app.get("/api/events")
+    async def events(request: Request):
+        runner: JobRunner = request.app.state.runner
+        queue = runner.bus.subscribe()
+
+        async def stream():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        msg = await asyncio.wait_for(queue.get(), timeout=10.0)
+                        yield {"event": msg["event"], "data": msg["payload"]}
+                    except TimeoutError:
+                        yield {"event": "heartbeat", "data": {}}
+            finally:
+                runner.bus.unsubscribe(queue)
+
+
+        return EventSourceResponse(stream())
 
     app.add_middleware(
         CORSMiddleware,
