@@ -53,12 +53,12 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | Phase | State |
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
-| 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. The interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`, `studio.py`, `appdata.py`, `human_actions.py`) was deleted in the Phase 4 cleanup. Remaining after Phase 5: `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` for the Phase 6/legacy pass. `src/` 21,124 -> 17,371 before that cleanup, now 16,802 Python lines after Phase 5. |
+| 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. The interim Studio (`serve.py`, `studio_ui*`, `human_ui.py`, `sources.py`, `studio.py`, `appdata.py`, `human_actions.py`) was deleted in the Phase 4 cleanup. Remaining after Phase 5: `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` for the Phase 6/legacy pass. `src/` 21,124 -> 17,371 before that cleanup, now 16,937 Python lines after Phase 6. |
 | 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **merged as PR #12** (merge `21c6ff5`, 25 Oct 2026). Phase 2 built the LLM adapter, tool dispatch, turn loop and stage-aware guides; this slice adds bounded prompt history, the recorded fake-provider probe, library-correct tool roots, domain-validated proof selection and a browser Stop. |
 | 4 · frontend | **merged as PR #10** (merge `80b09fc`, 25 Oct 2026) and **cleaned up as PR #11** (merge `a3aefc8`, 25 Oct 2026). Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. Phase 4 added MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, film playback, proof-shot selection, the waveform timeline with draggable/keyboard boundaries, the Remotion Player preview, error toasts, the source-audio endpoint and the 390/900/1280 keyboard pass. The cleanup added image reviews, preview/stills/graphics attestations and the final-render stills gate, then deleted the interim server and its old-surface tests. |
 | 5 · render cleanup | **merged as PR #13** (merge `6916a6c`, 25 Oct 2026). One `BaseFilm` and `timing.mjs` now drive both the MP4 renderer and the live Player; renderer approvals no longer read the browser binary; a Studio preview job writes its own review report; schema-3 projects render with Remotion even after migration drops the legacy backend flag; preview and final were rendered cold on a copied production. `flow`, `operations`, `reviews`, `signature`, `backup` and the engine-only `cli.py` remain for the Phase 6/legacy pass. |
-| 6 · polish | not started |
+| 6 · polish | **acceptance met on `gui-rework/phase-6-fresh-clone`.** A clone at `7d4eb29` synced and started with `uv sync` + `uv run studio`; the launcher installed the pinned renderer (224 MB, no browser download), served the committed frontend without invoking tsc, and a cold GUI preview rendered from the copy. Film also offers an in-app retry card when the renderer is missing. The portable headless-shell decision remains open. |
 
 ## Live production state (zero-bars)
 
@@ -275,6 +275,33 @@ read-only).
   post-effect bounds, transition literals, allocation acceptance/total frames and
   legacy camera endpoints with `render.py`, `graphics.py` and `models.py`.
 
+## Phase 6 fresh-clone close-out (25 Oct 2026)
+
+- **Launcher.** `_ensure_renderer()` installs `renderers/remotion` with
+  `npm ci --ignore-scripts --no-audit --no-fund` only when
+  `@remotion/renderer` is absent. A failure prints one line and still starts the
+  app. `_build_frontend()` no longer invokes `tsc` when `frontend/node_modules`
+  is absent; the committed `frontend/dist` is served as-is.
+- **Fresh clone evidence.** A local clone at `7d4eb29` was created with one
+  copied production (productions are gitignored, so a clone never carries them).
+  `uv sync` succeeded; `uv run studio --projects-dir projects --port 8796`
+  installed the pinned renderer on first launch, served the UI, and `GET
+  /api/setup` reported every capability true. A preview job with no
+  `remotion-base-*` or `remotion-assets` cache rendered 72 frames in 12.7 s.
+  The Player loaded the 4-shot board with no console errors.
+- **In-app retry.** With `node_modules` moved aside, Film showed the setup card,
+  listed the missing renderer and disabled both render buttons. Clicking
+  *Install local renderer* removed the card and enabled the buttons in 1.7 s;
+  `GET /api/setup` went from `renderer: false` to true. No console errors.
+- **Capability report.** `GET /api/setup` returns booleans for node, npm, Chrome,
+  FFmpeg, ffprobe, the renderer and the built frontend. `POST
+  /api/setup/renderer` retries the local install. Neither downloads a browser,
+  makes a paid call or touches a production.
+- **Boundary.** The app still requires local Node, FFmpeg/ffprobe and
+  Chrome/Chromium. A fresh Linux runner without Chrome cannot render; the setup
+  card says so. Pinning Remotion's headless shell remains an open portability
+  decision, not a hidden download.
+
 ## Acceptance per phase
 
 - **0:** tag exists; snapshot restores metadata; golden passes. ✅
@@ -285,7 +312,7 @@ read-only).
   regeneration; Stop < 1 s. ✅ (probe in `tests/test_director_probe.py`; browser Stop 15 ms)
 - **4:** every route zero console errors; 390/900/1280; keyboard-only path; Player spike. ✅
 - **5:** no Chrome read; preview + final on a clean runner; `timing.mjs` parity. ✅ (browser frame 57 and wipe frame 31 matched; cold preview/final 72 frames each; parity test in `tests/test_timing_parity.py`)
-- **6:** fresh clone → `uv sync` → `uv run studio` → film, no terminal.
+- **6:** fresh clone → `uv sync` → `uv run studio` → film, no terminal. ✅ (clone `7d4eb29`: renderer auto-install, cold preview 12.7 s, Player clean; GUI retry 1.7 s)
 
 ## Open questions
 

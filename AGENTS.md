@@ -42,8 +42,10 @@ ever read.
 
 ## Rework state
 
-Phases 0–5 are complete. `uv run studio` owns intake, the five stages, the
+Phases 0–6 are complete. `uv run studio` owns intake, the five stages, the
 director, paid generation and rendering; the interim server and its tests are
 gone. The Player imports the renderer's own `BaseFilm.jsx` and `timing.mjs`, and
-renderer approvals no longer hash the browser binary. Remaining: the Phase 6
-fresh-clone path and the legacy FFmpeg/Pillow branches kept for frozen films.
+renderer approvals no longer hash the browser binary. A fresh clone installs the
+pinned renderer on first launch and serves the committed frontend. Remaining: the
+legacy FFmpeg/Pillow branches kept for frozen films and the portable headless-shell
+decision.

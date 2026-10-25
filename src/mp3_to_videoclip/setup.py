@@ -55,22 +55,25 @@ def install_renderer() -> dict:
     npm = shutil.which("npm")
     if npm is None:
         raise ValueError("npm is not available; install Node.js (which includes npm) first")
-    result = subprocess.run(
-        [
-            npm,
-            "ci",
-            "--prefix",
-            str(ENGINE),
-            "--ignore-scripts",
-            "--no-audit",
-            "--no-fund",
-        ],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        timeout=INSTALL_TIMEOUT_SECONDS,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [
+                npm,
+                "ci",
+                "--prefix",
+                str(ENGINE),
+                "--ignore-scripts",
+                "--no-audit",
+                "--no-fund",
+            ],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            timeout=INSTALL_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("the local renderer install timed out") from exc
     output = (result.stdout + result.stderr)[-4000:]
     if result.returncode != 0:
         raise ValueError("the local renderer install failed: " + (output or "npm exited non-zero"))
