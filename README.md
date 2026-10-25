@@ -38,12 +38,19 @@ live in `.opencode/tasks/gui-rework.md`.
 
 ```sh
 uv sync
-npm ci --prefix frontend
-npm ci --prefix renderers/remotion --ignore-scripts
+uv run studio
 ```
 
+That is the whole install. The Studio serves the committed frontend build; the
+first launch installs the pinned renderer packages if they are missing (no browser
+download, no paid call) and never invokes `tsc` without frontend dependencies.
+The Film screen shows a setup card if the renderer or a system tool is missing.
+
 Also required on `PATH`: `ffmpeg`, `ffprobe`, `node` (the Remotion renderer is
-pinned in `renderers/remotion/package.json`).
+pinned in `renderers/remotion/package.json`). Frontend development is the only
+reason to run `npm ci --prefix frontend`; the renderer install is
+`npm ci --prefix renderers/remotion --ignore-scripts` when diagnosing a failed
+first run.
 
 The Runware key is read from `PROJECT_VEIL_RUNWARE_API`. It is only needed for
 paid image work; analysis and rendering are local. Never commit it or write it

@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { api, type Budget } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
 
 const LivePlayer = lazy(() => import("../LivePlayer"));
@@ -24,6 +25,7 @@ export function FilmStage({ slug }: { slug: string }) {
   const [live, setLive] = useState<LiveState | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
+  const [rendererReady, setRendererReady] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -210,12 +212,20 @@ export function FilmStage({ slug }: { slug: string }) {
         </div>
       </div>
 
+      <RendererSetup onReady={setRendererReady} />
+
       <div className="card">
         <h3>Render</h3>
-        <button onClick={() => render("preview")} disabled={busy !== null}>
+        <button
+          onClick={() => render("preview")}
+          disabled={busy !== null || rendererReady === false}
+        >
           {busy === "preview" ? "Queueing…" : "Render preview"}
         </button>{" "}
-        <button onClick={() => render("final")} disabled={busy !== null}>
+        <button
+          onClick={() => render("final")}
+          disabled={busy !== null || rendererReady === false}
+        >
           {busy === "final" ? "Queueing…" : "Render final"}
         </button>
         <p className="meta">

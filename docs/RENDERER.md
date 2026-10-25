@@ -9,7 +9,8 @@ production state store.
 ## Local dependencies
 
 Node, FFmpeg/ffprobe and an existing local Chrome/Chromium executable are required.
-Install the locked project package with:
+`uv run studio` installs the locked renderer package on first launch when it is
+missing; the same install, for diagnosis or CI, is:
 
 ```sh
 npm ci --prefix renderers/remotion --ignore-scripts --no-audit --no-fund
@@ -17,6 +18,10 @@ npm test --prefix renderers/remotion
 uv run pytest
 uv run ruff check .
 ```
+
+The launcher only runs `npm ci --ignore-scripts`; it never downloads a browser,
+opens a paid provider or invokes `npx`. The Film screen repeats the capability
+check and can retry the install from the GUI.
 
 `REMOTION_CHROME` can select a local executable. The adapter never runs `npx`,
 downloads a browser, uploads assets or silently falls back to a different renderer.

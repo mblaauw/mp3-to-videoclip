@@ -110,6 +110,16 @@ export type ImageShot = {
   review: ImageReview | null;
 };
 
+export type SetupStatus = {
+  node: boolean;
+  npm: boolean;
+  chrome: boolean;
+  ffmpeg: boolean;
+  ffprobe: boolean;
+  renderer: boolean;
+  frontend: boolean;
+};
+
 export type PreviewInput = {
   available: boolean;
   reason?: string;
@@ -242,6 +252,12 @@ export const api = {
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
   jobs: () => request<Job[]>("/api/jobs"),
   settings: () => request<Record<string, unknown>>("/api/settings"),
+  setup: () => request<SetupStatus>("/api/setup"),
+  installRenderer: () =>
+    request<{ installed: boolean; already_present: boolean; output: string }>(
+      "/api/setup/renderer",
+      { method: "POST", body: JSON.stringify({}) },
+    ),
   chat: (slug: string) => request<{ messages: unknown[] }>(`/api/projects/${slug}/chat`),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),

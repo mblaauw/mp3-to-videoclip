@@ -59,9 +59,9 @@ yet: transcription, the listening pass, backups, signing and render maintenance.
 ```text
 app.py            FastAPI factory, static files, lifespan
 launcher.py       `uv run studio`: free port, build frontend if stale, open browser
-api/              projects, track, story, storyboard, images, film, director, jobs, media, settings
+api/              projects, track, story, storyboard, images, film, director, jobs, media, settings, setup
 domain/           project store, schema 3 models, storyboard, prompts, staleness, budget
-services/         analysis, generation, transcription, render, runware
+services/         analysis, generation, transcription, render, preview input, runware
 director/         OpenAI-compatible adapter, tools, context, prompts, conversation
 jobs/             asyncio runner, per-project serialisation, SSE events
 frontend/         Vite + React + TypeScript, @remotion/player for the real composition

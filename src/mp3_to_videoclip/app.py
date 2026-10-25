@@ -25,6 +25,7 @@ from .api.images import router as images_router
 from .api.jobs import router as jobs_router
 from .api.projects import router as projects_router
 from .api.settings import router as settings_router
+from .api.setup import router as setup_router
 from .api.story import router as story_router
 from .api.storyboard import router as storyboard_router
 from .api.track import router as track_router
@@ -59,6 +60,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
         app.state.projects_dir = str(projects_dir)
     app.include_router(projects_router)
     app.include_router(settings_router)
+    app.include_router(setup_router)
     app.include_router(track_router)
     app.include_router(story_router)
     app.include_router(storyboard_router)
