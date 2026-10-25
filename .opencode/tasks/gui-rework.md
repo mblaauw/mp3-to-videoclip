@@ -277,7 +277,7 @@ read-only).
 
 ## Phase 6 fresh-clone close-out (25 Oct 2026, PR #14)
 
-- **Launcher.** `_ensure_renderer()` installs `renderers/remotion` with
+- **Launcher.** Follow-up PR #15 prints the first-run notice and bounds the install wait to four minutes. `_ensure_renderer()` installs `renderers/remotion` with
   `npm ci --ignore-scripts --no-audit --no-fund` only when
   `@remotion/renderer` is absent. A failure prints one line and still starts the
   app. `_build_frontend()` no longer invokes `tsc` when `frontend/node_modules`
