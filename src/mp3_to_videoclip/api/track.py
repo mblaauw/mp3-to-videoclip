@@ -23,7 +23,7 @@ async def get_track(slug: str, request: Request):
     lyrics_path = root / "work" / "lyrics.json"
     if lyrics_path.is_file():
         lyrics = __import__("json").loads(lyrics_path.read_text())
-    return {"music": music, "lyrics": lyrics}
+    return {"music": music, "lyrics": lyrics, "music_mode": P.load_project(root).music_mode}
 
 
 @router.post("/analyze")
@@ -54,9 +54,19 @@ async def update_lyrics(slug: str, request: Request, payload: dict):
     from mp3_to_videoclip.storage import write_json
 
     root = project_root(request, slug)
-    try:
-        lyrics = Lyrics.model_validate(payload)
-    except ValueError as exc:
-        return {"error": str(exc)}
+    if "lrc" in payload:
+        from mp3_to_videoclip.domain.lyrics import parse_lrc
+
+        if not isinstance(payload["lrc"], str) or len(payload["lrc"]) > 200_000:
+            return {"error": "paste a reasonable amount of lyrics"}
+        try:
+            lyrics = parse_lrc(payload["lrc"], P.load_project(root).duration)
+        except ValueError as exc:
+            return {"error": str(exc)}
+    else:
+        try:
+            lyrics = Lyrics.model_validate(payload)
+        except ValueError as exc:
+            return {"error": str(exc)}
     write_json(root / "work" / "lyrics.json", lyrics.model_dump())
     return {"status": "saved", "segments": len(lyrics.segments)}

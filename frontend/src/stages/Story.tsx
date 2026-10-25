@@ -4,9 +4,12 @@ import { ApprovalBar } from "../ApprovalBar";
 
 export function StoryStage({ slug }: { slug: string }) {
   const [brief, setBrief] = useState<Brief | null>(null);
+  const [direction, setDirection] = useState("");
+  const [style, setStyle] = useState("");
   const [treatment, setTreatment] = useState("");
   const [look, setLook] = useState("");
   const [saving, setSaving] = useState(false);
+  const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,6 +17,8 @@ export function StoryStage({ slug }: { slug: string }) {
       .brief(slug)
       .then((b) => {
         setBrief(b);
+        setDirection(b.direction || "");
+        setStyle(b.style || "");
         setTreatment(b.treatment || "");
         setLook(b.creative?.look || "");
       })
@@ -25,10 +30,13 @@ export function StoryStage({ slug }: { slug: string }) {
     setError(null);
     try {
       const updated = await api.patchBrief(slug, {
+        direction,
+        style,
         treatment,
         creative: { ...(brief?.creative || {}), look },
       });
       setBrief(updated);
+      setRevision((value) => value + 1);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -41,7 +49,30 @@ export function StoryStage({ slug }: { slug: string }) {
       <h2>Story</h2>
       <p className="sub">Treatment, look and characters. Every write is a versioned artifact.</p>
       {error && <p className="error">{error}</p>}
-      <ApprovalBar slug={slug} stages={["brief"]} />
+      <ApprovalBar slug={slug} stages={["brief"]} refresh={revision} />
+      <div className="card">
+        <h3>Direction and style</h3>
+        <div className="split">
+          <label>
+            Direction
+            <textarea
+              value={direction}
+              onChange={(e) => setDirection(e.target.value)}
+              rows={3}
+              placeholder="What kind of film is this?"
+            />
+          </label>
+          <label>
+            Style
+            <textarea
+              value={style}
+              onChange={(e) => setStyle(e.target.value)}
+              rows={3}
+              placeholder="One honest sentence about the medium"
+            />
+          </label>
+        </div>
+      </div>
       <div className="card">
         <h3>Treatment</h3>
         <textarea value={treatment} onChange={(e) => setTreatment(e.target.value)} rows={10} />

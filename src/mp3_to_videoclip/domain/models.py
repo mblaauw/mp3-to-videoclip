@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from mp3_to_videoclip.models import (  # noqa: F401 - re-exported for the app
     Brief,
@@ -52,7 +52,7 @@ class Project(BaseModel):
     source: str = "media/song.mp3"
     source_sha256: str
     duration: float = Field(gt=0)
-    aspect: Literal["16:9"] = "16:9"
+    aspect: Literal["16:9", "9:16"] = "16:9"
     fps: Literal[24, 30] = 24
     width: int = Field(gt=0, multiple_of=2)
     height: int = Field(gt=0, multiple_of=2)
@@ -68,11 +68,18 @@ class Project(BaseModel):
     def total_frames(self) -> int:
         return math.ceil(self.duration * self.fps)
 
+    @model_validator(mode="after")
+    def check_aspect(self):
+        a, b = map(int, self.aspect.split(":"))
+        if self.width * b != self.height * a:
+            raise ValueError("output dimensions must match the selected aspect")
+        return self
+
     @property
     def image_size(self) -> tuple[int, int]:
         if self.native_size is not None:
             return (self.native_size[0], self.native_size[1])
-        return (1536, 864)
+        return (1536, 864) if self.aspect == "16:9" else (864, 1536)
 
     @property
     def cap_usd(self) -> str | None:

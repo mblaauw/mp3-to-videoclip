@@ -86,6 +86,15 @@ def test_track_read_lyrics_write_and_local_analysis(client, project, monkeypatch
     saved = client.put("/api/projects/production/lyrics", json=lyrics.model_dump())
     assert saved.json() == {"status": "saved", "segments": 1}
 
+    imported = client.put(
+        "/api/projects/production/lyrics",
+        json={"lrc": "[00:00.50] one\n[00:01.50] two"},
+    )
+    assert imported.json() == {"status": "saved", "segments": 2}
+    stored = client.get("/api/projects/production/track").json()["lyrics"]
+    assert stored["segments"][-1]["end"] == 2.0
+    assert "error" in client.put("/api/projects/production/lyrics", json={"lrc": "no tags"}).json()
+
     monkeypatch.setattr(
         "mp3_to_videoclip.analysis.analyze",
         lambda path, duration: {
@@ -139,6 +148,13 @@ def test_storyboard_patch_validates_before_writing(client):
     )
 
 
+def test_missing_storyboard_is_an_empty_state(client, project):
+    (project / "work/storyboard.json").unlink()
+    response = client.get("/api/projects/production/storyboard")
+    assert response.status_code == 200
+    assert response.json() == {"available": False}
+
+
 def test_storyboard_skeleton_needs_an_approved_brief(client, project):
     P.approve(project, "brief", "test brief", via="studio", review_confirmed=True)
     (project / "work/storyboard.json").unlink()
@@ -150,6 +166,19 @@ def test_storyboard_skeleton_needs_an_approved_brief(client, project):
     body = created.json()
     assert body["total_frames"] == 48
     assert body["shots"]
+
+
+def test_adaptive_skeleton_uses_guided_evidence_without_extra_approvals(client, project):
+    P.approve(project, "brief", "test brief", via="studio", review_confirmed=True)
+    (project / "work/storyboard.json").unlink()
+    created = client.post(
+        "/api/projects/production/storyboard/skeleton",
+        json={"seconds": 2, "timing": "adaptive"},
+    )
+    assert created.status_code == 200, created.text
+    board = created.json()
+    assert board["total_frames"] == 48
+    assert board["shots"][0]["start_frame"] == 0
 
 
 def test_film_graphics_render_and_exports(client, project, monkeypatch):

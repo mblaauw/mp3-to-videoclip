@@ -8,7 +8,15 @@ const LABEL: Record<string, string> = {
   unavailable: "not ready",
 };
 
-export function ApprovalBar({ slug, stages }: { slug: string; stages: string[] }) {
+export function ApprovalBar({
+  slug,
+  stages,
+  refresh = 0,
+}: {
+  slug: string;
+  stages: string[];
+  refresh?: number;
+}) {
   const [items, setItems] = useState<ApprovalState[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -25,7 +33,7 @@ export function ApprovalBar({ slug, stages }: { slug: string; stages: string[] }
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, keys]);
+  }, [slug, keys, refresh]);
 
   const approve = async (item: ApprovalState) => {
     if (!item.expected_hash) return;

@@ -6,17 +6,33 @@ export function StoryboardStage({ slug }: { slug: string }) {
   const [board, setBoard] = useState<Storyboard | null>(null);
   const [draft, setDraft] = useState<Record<string, Partial<Shot>>>({});
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
       .storyboard(slug)
-      .then(setBoard)
+      .then((data) => setBoard("available" in data ? null : data))
       .catch((e) => setError(String(e)));
   }, [slug]);
 
   const edit = (id: string, field: keyof Shot, value: string | number) => {
     setDraft((d) => ({ ...d, [id]: { ...d[id], [field]: value } }));
+  };
+
+  const create = async () => {
+    setCreating(true);
+    setError(null);
+    try {
+      setBoard(await api.createSkeleton(slug));
+      setDraft({});
+      setRevision((value) => value + 1);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setCreating(false);
+    }
   };
 
   const save = async () => {
@@ -28,6 +44,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
       const updated = await api.patchShots(slug, changes);
       setBoard(updated);
       setDraft({});
+      setRevision((value) => value + 1);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -43,7 +60,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
         update the board.
       </p>
       {error && <p className="error">{error}</p>}
-      <ApprovalBar slug={slug} stages={["storyboard"]} />
+      <ApprovalBar slug={slug} stages={["storyboard"]} refresh={revision} />
       <div className="card">
         {board ? (
           <table>
@@ -105,7 +122,15 @@ export function StoryboardStage({ slug }: { slug: string }) {
             </tbody>
           </table>
         ) : (
-          <p className="empty">No storyboard yet.</p>
+          <>
+            <p className="empty">No storyboard yet. The brief must be approved first.</p>
+            <button onClick={create} disabled={creating}>
+              {creating ? "Planning…" : "Create timing skeleton"}
+            </button>
+            <p className="meta">
+              Timing only. Fill each shot's purpose and prompt before approving the board.
+            </p>
+          </>
         )}
       </div>
       <button onClick={save} disabled={saving || !Object.keys(draft).length}>

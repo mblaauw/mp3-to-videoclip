@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,6 +39,19 @@ async def lifespan(app: FastAPI):
     app.state.runner = runner
     yield
     await runner.stop()
+
+
+def _origin_allowed(origin: str, port: int | None) -> bool:
+    """Loopback origins only, on this server's port or the Vite dev port."""
+    try:
+        parsed = urlparse(origin)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    if parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+        return False
+    return parsed.port in (5173, 8000) or parsed.port == port
 
 
 def create_app(projects_dir: Path | None = None) -> FastAPI:
@@ -94,14 +108,16 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
             return JSONResponse({"detail": "loopback only"}, status_code=403)
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
             origin = request.headers.get("origin")
-            if origin is not None and origin not in (
-                "http://127.0.0.1:8000",
-                "http://localhost:8000",
-            ):
+            if origin is not None and not _origin_allowed(origin, request.url.port):
                 return JSONResponse({"detail": "origin not allowed"}, status_code=403)
+            content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+            is_upload = request.method == "POST" and request.url.path.rstrip("/") == "/api/projects"
             if (
-                request.headers.get("content-type", "").split(";")[0].strip().lower()
-                != "application/json"
+                not (
+                    is_upload
+                    and content_type in ("audio/mpeg", "audio/mp3", "application/octet-stream")
+                )
+                and content_type != "application/json"
             ):
                 return JSONResponse({"detail": "JSON required"}, status_code=415)
         return await call_next(request)

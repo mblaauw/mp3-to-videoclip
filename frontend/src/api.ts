@@ -115,17 +115,53 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status}: ${text}`);
+    let message = text;
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed.detail || parsed.error || text;
+      if (typeof message !== "string") message = JSON.stringify(message);
+    } catch {
+      // keep the raw body
+    }
+    throw new Error(`${res.status}: ${message}`);
   }
   return (await res.json()) as T;
 }
 
 export const api = {
   projects: () => request<ProjectSummary[]>("/api/projects"),
+  createProject: async (
+    file: File,
+    meta: { title: string; aspect: string; music_mode: string; budget: string },
+  ) => {
+    const params = new URLSearchParams({
+      title: meta.title,
+      filename: file.name,
+      aspect: meta.aspect,
+      music_mode: meta.music_mode,
+      budget: meta.budget,
+    });
+    const res = await fetch(`/api/projects?${params}`, {
+      method: "POST",
+      headers: { "Content-Type": file.type || "audio/mpeg" },
+      body: file,
+    });
+    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+    return (await res.json()) as {
+      slug: string;
+      title: string;
+      duration: number;
+      analysis_job: string | null;
+    };
+  },
   project: (slug: string) => request<unknown>(`/api/projects/${slug}`),
   brief: (slug: string) => request<Brief>(`/api/projects/${slug}/brief`),
-  storyboard: (slug: string) => request<Storyboard>(`/api/projects/${slug}/storyboard`),
-  track: (slug: string) => request<{ music: unknown; lyrics: unknown }>(`/api/projects/${slug}/track`),
+  storyboard: (slug: string) =>
+    request<Storyboard | { available: false }>(`/api/projects/${slug}/storyboard`),
+  track: (slug: string) =>
+    request<{ music: unknown; lyrics: unknown; music_mode: string | null }>(
+      `/api/projects/${slug}/track`,
+    ),
   images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),
   exports: (slug: string) => request<{ exports: string[] }>(`/api/projects/${slug}/exports`),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
@@ -134,6 +170,16 @@ export const api = {
   chat: (slug: string) => request<{ messages: unknown[] }>(`/api/projects/${slug}/chat`),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
+  saveLyrics: (slug: string, lrc: string) =>
+    request<{ status?: string; segments?: number; error?: string }>(
+      `/api/projects/${slug}/lyrics`,
+      { method: "PUT", body: JSON.stringify({ lrc }) },
+    ),
+  createSkeleton: (slug: string) =>
+    request<Storyboard>(`/api/projects/${slug}/storyboard/skeleton`, {
+      method: "POST",
+      body: JSON.stringify({ timing: "adaptive" }),
+    }),
   patchBrief: (slug: string, patch: Partial<Brief>) =>
     request<Brief>(`/api/projects/${slug}/brief`, {
       method: "PATCH",

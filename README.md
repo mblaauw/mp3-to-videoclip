@@ -4,10 +4,12 @@ One local web app that turns an MP3 into a finished videoclip: import the track,
 talk to a built-in director, review the storyboard and the stills, and render the
 film. Money, source audio and generated stills stay on this machine.
 
-**Current state (25 Oct 2026): mid-rework.** The engine, the paid-task journal and
-the renderer are mature. The GUI is still the interim Studio reached through
-`clip`, and the in-app director is being built. The phase plan, decisions and
-acceptance criteria live in `.opencode/tasks/gui-rework.md`.
+**Current state (25 Oct 2026): the new Studio is live.** `uv run studio` opens the
+library, creates a schema-3 production from an MP3, measures it locally, and takes
+it through Track, Story, Storyboard, Images and Film with content-bound approvals
+and a job tray. The interim Studio and the old CLI surface remain only until Phase
+4 removes them. The phase plan, decisions and acceptance criteria live in
+`.opencode/tasks/gui-rework.md`.
 
 ## What works today
 
@@ -38,27 +40,26 @@ The Runware key is read from `PROJECT_VEIL_RUNWARE_API`. It is only needed for
 paid image work; analysis and rendering are local. Never commit it or write it
 into a production folder.
 
-## Using the interim Studio
+## Using the Studio
 
 ```sh
-uv run clip init PROJECT --source song.mp3 --title "…"   # new production
-uv run clip serve --projects-dir projects               # review-only over loopback
-uv run clip serve --projects-dir projects --actions     # add human decisions (TTY)
-uv run clip status PROJECT
+uv run studio                  # free loopback port, opens the browser
+uv run studio --port 8799
 ```
 
-Ordinary stages remain review-and-decide in the browser. Paid work is quoted,
-authorized and then executed exactly once:
+**New production:** press *+ New production*, drop an MP3 (25 MB limit) and choose
+a title, starting budget and 16:9 or 9:16. The app probes and copies the source,
+writes a schema-3 production, and queues the local analysis job. Paste LRC
+timestamps in Track when the track has vocals; no lyric position is invented.
 
-```sh
-uv run clip quote PROJECT --shots s001,s002
-uv run clip authorize PROJECT --quote Q0001       # redirects to the Studio
-uv run clip generate PROJECT --quote Q0001
-```
+**Director:** add `llm_api_key` (and optionally `llm_base_url` / `llm_model`) under
+`[settings]` in `~/.config/mp3-to-videoclip/settings.toml`, or set
+`OPENAI_API_KEY`. The Runware key can also live there instead of the environment.
 
 Approvals, reviews and spending are content-bound: bytes, prompt inputs and
 quote scopes are hashed, so changing an artifact invalidates its approval instead
-of silently inheriting it.
+of silently inheriting it. Archived films open read-only; every stage endpoint
+refuses to write to them.
 
 ## Checks
 

@@ -54,9 +54,9 @@ working app — and no way to advance zero-bars — for the 2–3 weeks of Phase
 | --- | --- |
 | 0 · safety net | **done** — tag `pre-gui-rework`, metadata snapshot (610 files), golden contract test |
 | 1 · delete and migrate | **functionally complete on `gui-rework/phase-1-delete-migrate`.** Done: crew config and loop removed; second agent runtime removed (106 tests); `.opencode/skills` kept for Phase 3; read-only archive reader; static page generators and one-off tools deleted (`dashboard`, `inspector`, `intake`, `calibration`, `edits`); docs replaced with README + `docs/ARCHITECTURE.md` + 60-line `AGENTS.md`; B13 skeleton defaults unified; `studio` launcher added; feedback queue removed. Remaining modules (`flow`, `operations`, `sources`, `human_*`, `studio`, `studio_ui*`, `reviews`, `appdata`, `backup`, `signature`) are imported by the interim Studio/CLI and cannot be deleted until their replacements land in Phases 2-4 (recorded deviation). Legacy model branches move with them. `src/` 21,124 -> 17,371. |
-| 2 · backend skeleton | **gate-ready on `gui-rework/phase-2-backend`.** Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
+| 2 · backend skeleton | **merged as PR #9** (merge `388fb27`, 25 Oct 2026). Done: FastAPI app and launcher; config/settings; job runner + SSE; projects, settings, track, story, storyboard, images, film, jobs, director, budget and approvals routers; domain staleness, schema 3 models and migration; zero-bars migrated; services layer; engine-budget bridge; director LLM adapter/tools/context/turn loop; Vite + React frontend with editable stage workspaces, approvals and paid-image controls. Gate: every route has an API test (28 route tests, no provider call); zero-bars detail opens in ~27 ms and the library in ~23 ms locally; B4/B6/B7 were waived by the owner. |
 | 3 · director | **started inside Phase 2** — LLM adapter, tool dispatch, turn loop, stage-aware guides. Still open: compaction and the recorded fake-provider probe. |
-| 4 · frontend | **started inside Phase 2** — library, five stages, director panel, job tray, approvals, image thumbnails/estimate/generate. Still open: Remotion Player preview, waveform and draggable boundaries, error toasts, the 390/900/1280 keyboard pass; deleting the interim Studio stays Phase 4 proper. |
+| 4 · frontend | **in progress on `gui-rework/phase-4-intake`.** Phase 2 landed the library, five stages, director panel, job tray, approvals and image thumbnails/estimate/generate. This slice adds MP3 intake, schema-3 creation, LRC import, the adaptive skeleton button, ambient storyboard empty state, a same-origin upload guard and the corrected write-origin policy. Still open: Remotion Player preview, waveform and draggable boundaries, error toasts, the 390/900/1280 keyboard pass; deleting the interim Studio. |
 | 5 · render cleanup | not started |
 | 6 · polish | not started |
 
@@ -93,6 +93,27 @@ settings file; a live Track-stage chat turn answered correctly.
   and a runner that serialised every project because it awaited jobs inline.
 - The brief's B4/B6/B7 regression definitions are not in the repository. The
   owner waived them on 25 Oct 2026 and accepted the route/timing gate as Phase 2.
+
+## Phase 4 intake slice (25 Oct 2026)
+
+- `POST /api/projects` takes an MP3 body plus title/aspect/mode/budget query
+  parameters, probes it, creates a schema-3 project through the engine intake and
+  migration, adds the first cap entry and queues a free local analysis job.
+- The origin guard now accepts the actual loopback port and the Vite dev port,
+  not only 8000; browser writes on a random `uv run studio` port were previously
+  rejected. The audio upload is the one non-JSON write the guard admits.
+- Intake form with drag/drop, title, starting budget, 16:9/9:16 and vocal/
+  instrumental. The new production is selected and opens in Track; Track polls
+  until the analysis job lands.
+- LRC import (`domain/lyrics.py`) keeps only the user's explicit `[mm:ss.xx]`
+  tags and closes the last segment at the track duration; no positions are
+  invented. Story exposes direction and style so a fresh brief can be approved.
+- Storyboard empty state is a 200 marker (no console 404) and can create the
+  adaptive timing skeleton without asking the user to certify measured evidence
+  in a guided production.
+- End-to-end in a throwaway projects directory: upload a generated 3 s MP3 →
+  project created → analysis succeeded (~117 BPM estimate) → LRC imported →
+  brief approved → adaptive skeleton created. No paid call.
 
 ## Acceptance per phase
 

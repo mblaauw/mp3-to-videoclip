@@ -406,7 +406,7 @@ def _creative_scene(creative: CreativeProfile, scene_id: str | None):
 
 def _require_default_style_core(project: Project, brief: Brief):
     """Validate, never inject or rewrite: older and explicitly custom looks stay intact."""
-    if project.prompt_version != 2 or project.style_preset != profiles.STYLE_PRESET_ID:
+    if not prompt_look_first(project) or project.style_preset != profiles.STYLE_PRESET_ID:
         return
     if digest(profiles.DEFAULT_STYLE) != profiles.STYLE_BENCHMARK["style_core_hash"]:
         raise ValueError(
@@ -920,7 +920,10 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
         local = read_json(root / STAGE_FILES["analysis"])
         event_frames = []
         if (root / STAGE_FILES["events"]).exists():
-            require_approval(root, "events")
+            # Guided productions treat measured evidence as agent-owned; the
+            # brief already binds the event bytes. Older flows still certify it.
+            if not flow.settings(root)["guided"]:
+                require_approval(root, "events")
             for event in load_events(root).events:
                 if event.timing_basis == "manual":
                     event_frames += [event.frame] + (
