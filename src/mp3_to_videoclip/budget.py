@@ -150,23 +150,33 @@ def read_budget(root: Path) -> dict | None:
     return _schema_budget(root)
 
 
-def commitment(root: Path) -> Decimal:
-    """Reported cost plus unknown reservation for every journal task.
+def split_commitment(root: Path) -> tuple[Decimal, Decimal, int]:
+    """Return reported spend, unresolved reservations and ready paid stills.
 
     A task with neither a cost nor a reservation blocks admission rather than
     silently contributing zero. The report still lists such unpriced tasks.
     """
-    total = Decimal(0)
+    spent = Decimal(0)
+    reserved = Decimal(0)
+    paid_stills = 0
     for task in _journal(root).values():
         if task.get("cost_usd") is not None:
-            total += money(task["cost_usd"])
+            spent += money(task["cost_usd"])
+            if task.get("kind") == "images" and task.get("status") == SUCCESSFUL_STATUS:
+                paid_stills += 1
         elif task.get("reserve_usd") is not None:
-            total += money(task["reserve_usd"])
+            reserved += money(task["reserve_usd"])
         else:
             raise ValueError(
                 "unpriced journal task needs cost/reservation reconciliation before spending"
             )
-    return total
+    return spent, reserved, paid_stills
+
+
+def commitment(root: Path) -> Decimal:
+    """Reported cost plus unknown reservation for every journal task."""
+    spent, reserved, _ = split_commitment(root)
+    return spent + reserved
 
 
 def set_budget(root: Path, cap_usd, note: str, max_corrections: int | None = None) -> dict:

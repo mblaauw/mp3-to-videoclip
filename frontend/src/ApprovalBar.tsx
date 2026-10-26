@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ApprovalState } from "./api";
+import { notifyProjectChanged } from "./shell/projectEvents";
 
 const LABEL: Record<string, string> = {
   approved: "approved",
@@ -54,6 +55,7 @@ export function ApprovalBar({
       setNotes((n) => ({ ...n, [item.stage]: "" }));
       setAttested((current) => ({ ...current, [item.stage]: false }));
       load();
+      notifyProjectChanged();
     } catch (e) {
       setError(String(e));
     } finally {

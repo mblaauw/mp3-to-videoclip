@@ -178,6 +178,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{slug}/archive/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Play Archive Render
+         * @description The delivered render, served read-only without exposing its path.
+         */
+        get: operations["play_archive_render_api_projects__slug__archive_render_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{slug}/archive/stills/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Play Archive Still
+         * @description One preserved still by position; never a caller-supplied path.
+         */
+        get: operations["play_archive_still_api_projects__slug__archive_stills__index__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{slug}/audio": {
         parameters: {
             query?: never;
@@ -888,16 +928,45 @@ export interface components {
              * @default false
              */
             archived: boolean;
+            /** Audio Url */
+            audio_url?: string | null;
             /** Duration */
             duration?: number | null;
             /** Error */
             error?: string | null;
+            /**
+             * Has Analysis
+             * @default false
+             */
+            has_analysis: boolean;
+            /**
+             * Has Lyrics
+             * @default false
+             */
+            has_lyrics: boolean;
             /** Kind */
             kind?: string | null;
+            /** Music Mode */
+            music_mode?: string | null;
+            /** Next Step */
+            next_step?: ("track" | "story" | "storyboard" | "images" | "film") | null;
+            /** Poster Stills */
+            poster_stills?: string[];
+            /** Remaining Usd */
+            remaining_usd?: string | null;
             /** Render */
             render?: string | null;
+            /**
+             * Shots
+             * @default 0
+             */
+            shots: number;
             /** Slug */
             slug: string;
+            /** Stage States */
+            stage_states?: {
+                [key: string]: "done" | "you" | "changed" | "not_ready";
+            };
             /**
              * Still Count
              * @default 0
@@ -905,6 +974,8 @@ export interface components {
             still_count: number;
             /** Title */
             title: string;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1249,6 +1320,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    play_archive_render_api_projects__slug__archive_render_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    play_archive_still_api_projects__slug__archive_stills__index__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

@@ -63,6 +63,9 @@ export type ProjectDetail = {
 export type Budget = {
   cap_usd: string | null;
   committed_usd: string;
+  spent_usd: string;
+  reserved_usd: string;
+  paid_stills: number;
   remaining_usd: string | null;
   history: { at: string; cap_usd: string; reason: string }[];
 };
@@ -529,8 +532,18 @@ export const api = {
       `/api/projects/${slug}/exports`,
     ),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
+  addBudget: (slug: string, amount: string, reason: string) =>
+    request<{ entry: { at: string; cap_usd: string; reason: string }; cap_usd: string }>(
+      `/api/projects/${slug}/budget`,
+      { method: "POST", body: JSON.stringify({ amount, reason }) },
+    ),
   jobs: () => request<Job[]>("/api/jobs"),
   job: (jobId: string) => request<JobDetail>(`/api/jobs/${jobId}`),
+  cancelJob: (jobId: string) =>
+    request<{ cancelled: boolean }>(`/api/jobs/${jobId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   settings: () => request<Settings>("/api/settings"),
   setup: () => request<SetupStatus>("/api/setup"),
   installRenderer: () =>

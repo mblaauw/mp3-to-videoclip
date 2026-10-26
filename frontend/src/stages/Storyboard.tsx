@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { api, type Brief, type Music, type Shot, type ShotKind, type Storyboard } from "../api";
+import { api, type Brief, type Shot, type ShotKind, type Storyboard } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
 import { SHOT_KINDS, isPaidShot, kindMeta, kindOf } from "../shotKinds";
-import { Timeline } from "../Timeline";
+import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
 
 export function StoryboardStage({ slug }: { slug: string }) {
   const [board, setBoard] = useState<Storyboard | null>(null);
@@ -14,7 +14,6 @@ export function StoryboardStage({ slug }: { slug: string }) {
   const [proofIds, setProofIds] = useState<string[]>([]);
   const [savingProof, setSavingProof] = useState(false);
   const [proofMessage, setProofMessage] = useState<string | null>(null);
-  const [music, setMusic] = useState<Music | null>(null);
   const [timingOwned, setTimingOwned] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,13 +27,20 @@ export function StoryboardStage({ slug }: { slug: string }) {
       .then((data: Brief) => setProofIds(data.creative?.proof_shot_ids || []))
       .catch(() => setProofIds([]));
     api
-      .track(slug)
-      .then((data) => setMusic(data.music))
-      .catch(() => setMusic(null));
-    api
       .edit(slug)
       .then((data) => setTimingOwned(data.present))
       .catch(() => setTimingOwned(false));
+  }, [slug]);
+
+  useEffect(() => {
+    const reload = () => {
+      api
+        .storyboard(slug)
+        .then((data) => setBoard("available" in data ? null : data))
+        .catch((caught) => setError(String(caught)));
+    };
+    window.addEventListener(PROJECT_CHANGED, reload);
+    return () => window.removeEventListener(PROJECT_CHANGED, reload);
   }, [slug]);
 
   const edit = (id: string, field: keyof Shot, value: unknown) => {
@@ -91,6 +97,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
       setBoard(await api.createSkeleton(slug));
       setDraft({});
       setRevision((value) => value + 1);
+      notifyProjectChanged();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -119,6 +126,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
       setProofIds(result.proof_shot_ids);
       setProofMessage("Brief changed — approve it again in Story before the board.");
       setRevision((value) => value + 1);
+      notifyProjectChanged();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -136,16 +144,12 @@ export function StoryboardStage({ slug }: { slug: string }) {
       setBoard(updated);
       setDraft({});
       setRevision((value) => value + 1);
+      notifyProjectChanged();
     } catch (e) {
       setError(String(e));
     } finally {
       setSaving(false);
     }
-  };
-
-  const boardChanged = (next: Storyboard) => {
-    setBoard(next);
-    setRevision((value) => value + 1);
   };
 
   return (
@@ -190,21 +194,13 @@ export function StoryboardStage({ slug }: { slug: string }) {
       <div className="card">
         {board ? (
           <>
-            <h3>Timeline</h3>
+            <h3>Shots</h3>
             {timingOwned && (
               <p className="meta">
-                Timing and motion are owned by the Film cut. Change them in Film → Cut
-                report; this timeline is read-only.
+                Timing and motion are owned by the Film cut. Change them in Film → Cut;
+                the spine below shows the current cuts.
               </p>
             )}
-            <Timeline
-              slug={slug}
-              board={board}
-              music={music}
-              readOnly={timingOwned}
-              onChange={boardChanged}
-              onError={setError}
-            />
             <div className="table-scroll">
             <table>
             <thead>

@@ -76,6 +76,11 @@ def committed(root: Path) -> Decimal:
     return engine_budget.commitment(root)
 
 
+def split_commitment(root: Path) -> tuple[Decimal, Decimal, int]:
+    """Reported spend, unresolved reservations and ready paid stills."""
+    return engine_budget.split_commitment(root)
+
+
 def remaining(root: Path) -> Decimal | None:
     current = cap(root)
     return None if current is None else current - committed(root)

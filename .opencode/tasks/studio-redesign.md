@@ -6,6 +6,7 @@ screenshots), with `05-update-42a33cf.md` overriding 01–04 where they differ.
 Base: `main` at `42a33cf` (T0–T5 merged).
 P0 branch: `studio-redesign/p0-correctness`, merged as PR #24 (`1a3800e`).
 P1 branch: `studio-redesign/p1-foundations`, merged as PR #25 (`71406aa`).
+P2 branch: `studio-redesign/p2-shell`.
 
 ## Objective
 
@@ -52,7 +53,7 @@ logic stay authoritative in the existing engine modules.
 | --- | --- | --- |
 | P0 | K13 vocal promo/advert brief approval; K2 real blocking stage | Complete (PR #24, `1a3800e`) |
 | P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Complete (PR #25, `71406aa`) |
-| P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Not started |
+| P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Complete (PR pending) |
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Not started |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Not started |
 | P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | Not started |
@@ -169,7 +170,99 @@ P1 verified on `studio-redesign/p1-foundations` at the final working tree:
 P1 shipped in PR #25, squash-merged as `71406aa` on 26 Oct 2026. CI (`check`)
 passed in 4m15s before the merge.
 
+## P2 — shell, library, spine
+
+### Scope
+
+- Hash routes `#/` (library), `#/:slug/:stage` and `#/archive/:slug`; remove the
+  left rail.
+- `TopBar` with the mark, title/breadcrumb, stepper, budget chip/popover, jobs
+  popover, director toggle and settings entry.
+- `NextStepBar` backed by one pure `nextStep(stage, project, approvals, images,
+  budget)` function with executable tests for every rule.
+- Library with poster mosaics, cheap stage states, next-step copy, *New film*
+  modal, MP3 drop target, *Delivered* section and a read-only archive player.
+- `ProjectSummary` adds `poster_stills`, `stage_states`, `next_step`,
+  `remaining_usd`, `updated_at`, `audio_url`, `shots`, `music_mode`,
+  `has_analysis` and `has_lyrics`.
+- One `PlayerProvider` (single `<audio>`, shared time) and a `Spine` with
+  waveform, filmstrip, sections and playhead. Boundary dragging moved out of
+  `Timeline.tsx`, which is deleted; Storyboard now owns cut editing.
+- Film's Remotion `LivePlayer` follows the shared time and play state.
+- Director drawer restyled; open by default above 1180 px, overlay below.
+- K12: `GET /budget` reports `spent_usd`, `reserved_usd` and `paid_stills`
+  alongside `committed_usd`.
+- Read-only archive media routes so the library never exposes filesystem paths.
+
+### Decisions
+
+- Library summaries stay cheap: approval records plus artifact mtimes, never full
+  gate hashes per card. Approval endpoints remain authoritative.
+- Inside a production the top bar's stage states are derived from the loaded
+  approval states, so the stepper and the next-step bar cannot disagree. The
+  library keeps the cheap summary heuristic.
+- Archive render and stills are addressed by `/archive/render` and
+  `/archive/stills/<index>`; the render is served with byte-range support for the
+  video player.
+- `nextStep` is plain TypeScript under `frontend/src/shell/nextStep.ts`; its 28
+  rules run under Node's native TypeScript stripping
+  (`npm test --prefix frontend`), so no test dependency was added.
+- `POST /budget` records a new absolute cap, as the engine already did. The
+  popover therefore computes `current cap + amount` and labels the action *Add to
+  budget*; it never lowers the cap by treating the amount as the total.
+- No progress is invented: running jobs with no reported units keep an
+  indeterminate bar and the copy says "working…".
+
+### Acceptance
+
+- At 1440, 900 and 390 px the library and every stage show the top bar,
+  next-step bar (where applicable) and the spine, with no page-level horizontal
+  overflow.
+- Playing in Track and switching to Film preserves the shared time.
+- Moving a boundary on the spine updates the Storyboard and its approval state.
+- Every route renders without a console error or a request with status ≥ 400.
+- Archive playback and stills work without exposing a path.
+
+## P2 evidence
+
+P2 verified on `studio-redesign/p2-shell` at the final working tree:
+
+- `uv run pytest -q`: **919 passed, 1 skipped** (123.22 s). New coverage in
+  `tests/test_api_library.py`: summary stage states/next step, poster image
+  routes, K12 spend/reserve/paid-still split, archive summary and read-only
+  render/still routes.
+- `uv run ruff check .`: clean. `uv run ruff format --check .`: 220 files already
+  formatted.
+- `npm run build --prefix frontend`: clean, 80 modules. `npm test --prefix
+  frontend`: **28 passed**.
+- Live Studio on a `/tmp/opencode` fixture (a copy of `zero-bars`, with the two
+  frozen films symlinked read-only) served the library and every stage. The
+  direct OpenCode browser tab is 1000×700, so 1440×900 and 390×844 were measured
+  through a same-origin iframe harness; there was no page-level horizontal
+  overflow at any size, the spine sat at the viewport bottom, and the library
+  grid was 3 / 2 / 1 columns at 1440 / 900 / 390.
+- The director is a 380 px static column at 1440 and a full-height overlay at
+  900 and 390 (`position: fixed`, 380 px and 390 px wide), with no overflow.
+- Playback evidence: seeking the shared audio to 60.0 s moved the Remotion player
+  to frame 1440 (24 fps); playing from Track and switching to Film kept the time
+  and the player within two frames. Moving the first Storyboard boundary one
+  frame right changed `a001` from 114 to 115 frames and `a002` to start at 115
+  through the API, and the table and approval state followed.
+- Budget evidence: the popover showed 82 paid stills, $2.88 spent, $0 reserved
+  and $5.12 of $8.00 left; adding $1.00 produced a $9.00 cap, $6.12 remaining and
+  a new history entry. No paid provider call was made.
+- Route sweep (library, Track, Story, Storyboard, Images, Film, archive): no
+  console errors and no requests with status ≥ 400. Archive render and stills
+  returned 200/206; media `failed` entries were aborted range streams after the
+  browser buffered enough, not HTTP errors.
+- Fixture limitation: copying `zero-bars` without preserving mtimes made the
+  cheap library heuristic call already-approved stages "changed"; the shell's
+  authoritative approval states stayed "approved". This confirms why the
+  library uses the cheap summary and the film shell uses the approval endpoints.
+- No production under `projects/` was modified; all mutations happened in the
+  `/tmp` fixture. No Playwright dependency was added.
+
 ## Next
 
-P2 — shell, routes, library, top bar, next-step bar, budget/jobs popovers, spine
-and director drawer.
+P3 — Track and Story: facts row, editable section names, plain-text lyrics,
+brief card, excerpt band, credits card and one-click approval.

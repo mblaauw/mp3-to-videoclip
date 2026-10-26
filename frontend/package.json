@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test": "node --test tests/nextStep.test.ts",
     "preview": "vite preview",
     "api:types": "uv run --project .. python ../scripts/dump_openapi.py ../frontend/openapi.json && openapi-typescript openapi.json -o src/api/schema.d.ts"
   },

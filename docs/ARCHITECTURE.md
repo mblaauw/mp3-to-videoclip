@@ -186,6 +186,26 @@ The old hand-written `ThreadingHTTPServer` and its Python-string UI were removed
 in the Phase 4 cleanup. `cli.py` remains for engine tasks that do not have a GUI
 yet: transcription, the listening pass, backups, signing and render maintenance.
 
+The Studio shell is hash-routed: `#/` is the library, `#/:slug/:stage` is a
+production and `#/archive/:slug` is a delivered, read-only film. `GET
+/api/projects` returns one `ProjectSummary` per production with poster stills,
+cheap stage states, the next step, remaining budget and an update time; the
+library uses those without re-hashing every gate. Inside a production one
+`PlayerProvider` owns the only `<audio>` element and the shared time store.
+`spine/Spine.tsx` draws the waveform, filmstrip, sections and playhead from that
+store, and Storyboard owns boundary dragging (the old `Timeline.tsx` is gone).
+Film's Remotion `LivePlayer` seeks from the same time, so switching stages keeps
+the playhead. The director is a drawer that is open by default above 1180 px and
+an overlay below it; approvals and library refreshes travel over a
+`studio:project-changed` event.
+
+Archived productions never pass through `project_root`; dedicated
+`/api/projects/<slug>/archive/render` and `/archive/stills/<index>` routes serve
+their bytes read-only, so no filesystem path is exposed. `GET /budget` reports
+`spent_usd`, `reserved_usd` and `paid_stills` separately from
+`committed_usd`; the budget popover reads the current cap before posting a
+top-up as the new cap.
+
 ## Director gateway
 
 The Writer/Editor gateway is an app-owned OpenCode v2 process, not the user's

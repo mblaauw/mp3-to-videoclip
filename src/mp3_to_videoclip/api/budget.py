@@ -14,11 +14,15 @@ router = APIRouter(prefix="/api/projects/{slug}", tags=["budget"])
 async def get_budget(slug: str, request: Request):
     root = project_root(request, slug)
     cap = budget.cap(root)
-    committed = budget.committed(root)
+    spent, reserved, paid_stills = budget.split_commitment(root)
+    committed = spent + reserved
     remaining = budget.remaining(root)
     return {
         "cap_usd": budget.fmt(cap) if cap is not None else None,
         "committed_usd": budget.fmt(committed),
+        "spent_usd": budget.fmt(spent),
+        "reserved_usd": budget.fmt(reserved),
+        "paid_stills": paid_stills,
         "remaining_usd": budget.fmt(remaining) if remaining is not None else None,
         "history": budget.history(root),
     }

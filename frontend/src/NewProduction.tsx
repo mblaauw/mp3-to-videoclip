@@ -48,12 +48,18 @@ const FALLBACK_PRESETS: StylePreset[] = [
 export function NewProduction({
   onCreated,
   onCancel,
+  initialFile = null,
 }: {
   onCreated: (slug: string) => void;
   onCancel: () => void;
+  initialFile?: File | null;
 }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState("");
+  const [file, setFile] = useState<File | null>(initialFile);
+  const [title, setTitle] = useState(
+    initialFile
+      ? initialFile.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim()
+      : "",
+  );
   const [aspect, setAspect] = useState("16:9");
   const [mode, setMode] = useState("vocal");
   const [budget, setBudget] = useState("5.00");

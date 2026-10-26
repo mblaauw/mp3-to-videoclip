@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.api._helpers import project_root, valid_slug
+from mp3_to_videoclip.domain import archive
 from mp3_to_videoclip.storage import inside, read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["film"])
@@ -190,6 +191,43 @@ async def list_exports(slug: str, request: Request):
         "exports": _films(root / "renders"),
         "previews": _films(root / "previews"),
     }
+
+
+def _archive_root(request: Request, slug: str) -> Path:
+    root = Path(getattr(request.app.state, "projects_dir", "projects")) / slug
+    if not valid_slug(slug) or not root.is_dir() or not archive.is_archived(root):
+        raise HTTPException(status_code=404, detail="archived film not found")
+    return root
+
+
+@router.get("/archive/render")
+async def play_archive_render(slug: str, request: Request):
+    """The delivered render, served read-only without exposing its path."""
+    root = _archive_root(request, slug)
+    film = archive.read(root)
+    if film.render is None or not film.render.is_file():
+        raise HTTPException(status_code=404, detail="archived render is missing")
+    if not film.render.resolve().is_relative_to(root.resolve()):
+        raise HTTPException(status_code=404, detail="archived render is missing")
+    return FileResponse(
+        film.render,
+        media_type="video/mp4",
+        filename=film.render.name,
+        content_disposition_type="inline",
+    )
+
+
+@router.get("/archive/stills/{index}")
+async def play_archive_still(slug: str, index: int, request: Request):
+    """One preserved still by position; never a caller-supplied path."""
+    root = _archive_root(request, slug)
+    film = archive.read(root)
+    if index < 0 or index >= len(film.stills):
+        raise HTTPException(status_code=404, detail="archived still not found")
+    target = film.stills[index]
+    if not target.is_file() or not target.resolve().is_relative_to(root.resolve()):
+        raise HTTPException(status_code=404, detail="archived still is missing")
+    return FileResponse(target, content_disposition_type="inline")
 
 
 @router.get("/film/{kind}/{name}")

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Budget, type BudgetDecision, type ImageEstimate, type ImageShot } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { kindMeta } from "../shotKinds";
+import { notifyProjectChanged } from "../shell/projectEvents";
 
 type Card = Omit<Budget, "history">;
 
@@ -100,6 +101,7 @@ export function ImagesStage({ slug }: { slug: string }) {
       });
       setDraft(shot.id, { note: "", inspected: false });
       load();
+      notifyProjectChanged();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -195,6 +197,7 @@ export function ImagesStage({ slug }: { slug: string }) {
         setEstimate(null);
         setDecision(null);
         if (res.budget) setBudget(res.budget);
+        notifyProjectChanged();
         setTimeout(load, 2500);
       }
     } catch (e) {
@@ -436,6 +439,7 @@ async function selectVersion(
   try {
     await api.selectImage(slug, shotId, version);
     reload();
+    notifyProjectChanged();
   } catch (e) {
     setError(String(e));
   }
