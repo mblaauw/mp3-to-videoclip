@@ -7,6 +7,8 @@ the existing typed human action, so the expected hash and a note are mandatory.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -29,20 +31,40 @@ STAGES = (
 )
 
 
+def _missing_stage(root: Path, exc: FileNotFoundError, stage: str) -> str:
+    """Name the artifact that actually failed, not the stage being inspected."""
+    filename = getattr(exc, "filename", None)
+    if filename:
+        try:
+            relative = Path(str(filename)).resolve().relative_to(root.resolve()).as_posix()
+        except (OSError, ValueError):
+            relative = None
+        if relative:
+            for name, stored in P.STAGE_FILES.items():
+                if stored == relative:
+                    return name
+    try:
+        return P.effective_upstream(root, stage) or stage
+    except Exception:  # noqa: BLE001 - keep the approval state readable
+        return stage
+
+
 def _approval(root, stage: str) -> dict:
     record = read_json(root / "work" / "approvals.json").get(stage)
     try:
         current = P.stage_hash(root, stage)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        blocking = "graphics" if stage == "graphics" else _missing_stage(root, exc, stage)
         message = (
             "graphics review has not been prepared; render a current base and record the review"
             if stage == "graphics"
-            else f"{stage} is not ready; its artifact has not been created"
+            else f"{blocking} is missing; its artifact has not been created"
         )
         return {
             "stage": stage,
             "state": "unavailable",
             "error": message,
+            "blocking_stage": blocking,
             "at": (record or {}).get("at"),
             "note": (record or {}).get("note"),
         }

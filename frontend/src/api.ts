@@ -393,6 +393,7 @@ export type ApprovalState = {
   at?: string | null;
   note?: string | null;
   error?: string;
+  blocking_stage?: string | null;
 };
 
 export type BudgetDecision = {
