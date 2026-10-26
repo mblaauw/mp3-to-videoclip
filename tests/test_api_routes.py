@@ -89,6 +89,18 @@ def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
         first = client.get("/api/settings").json()
         assert first["llm_api_key"] == ""
         assert first["has_llm_api_key"] is False
+        assert first["image_reserve_usd"] == 0.05
+        assert {item["id"] for item in first["shot_kinds"]} == {
+            "scene",
+            "product",
+            "upload",
+            "card",
+            "bridge",
+            "split",
+            "reprise",
+            "logo",
+            "end_card",
+        }
         assert {item["id"] for item in first["style_presets"]} == {
             "photographic-painted-v2",
             "clean-photographic-v1",

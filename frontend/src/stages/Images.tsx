@@ -1,446 +1,824 @@
-import { useEffect, useRef, useState } from "react";
-import { api, type Budget, type BudgetDecision, type ImageEstimate, type ImageShot } from "../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  api,
+  type ApprovalState,
+  type Brief,
+  type Budget,
+  type ImageReview,
+  type ImageShot,
+  type Music,
+  type Storyboard,
+} from "../api";
 import { ApprovalBar } from "../ApprovalBar";
-import { kindMeta } from "../shotKinds";
+import { PaidCard } from "../images/PaidCard";
+import { usePaidImages } from "../images/paid";
 import { notifyProjectChanged } from "../shell/projectEvents";
+import type { NextAction } from "../shell/nextStep";
+import { kindMeta } from "../shotKinds";
+import { Button } from "../ui";
 
 type Card = Omit<Budget, "history">;
+type Filter = "all" | "review" | "redo" | "stale" | "missing" | "kept" | "made";
+type PaidRequest = NonNullable<NextAction["paid"]>;
 
-export function ImagesStage({ slug }: { slug: string }) {
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "review", label: "To review" },
+  { id: "redo", label: "Redo" },
+  { id: "stale", label: "Older prompt" },
+  { id: "missing", label: "Not made" },
+  { id: "kept", label: "Kept" },
+  { id: "made", label: "Made here" },
+];
+
+function clock(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+function money(value: string | null | undefined): string {
+  const number = Number(value || 0);
+  return number.toFixed(2);
+}
+
+function sourceUrl(slug: string, shot: ImageShot): string | null {
+  if (shot.plate) return shot.plate;
+  if (shot.selected === null) return null;
+  return `/api/projects/${slug}/images/${encodeURIComponent(shot.owner)}/${shot.selected}`;
+}
+
+function statusOf(shot: ImageShot): { tone: string; label: string } {
+  if (shot.local) return { tone: "made", label: "Made here" };
+  if (shot.selected === null) return { tone: "missing", label: "Not made" };
+  if (shot.stale) return { tone: "stale", label: "Older prompt" };
+  if (shot.review?.verdict === "accept") return { tone: "kept", label: "Kept" };
+  if (shot.review?.verdict === "reject") return { tone: "redo", label: "Redo" };
+  if (shot.review?.verdict === "uncertain") return { tone: "review", label: "Check" };
+  return { tone: "review", label: "To review" };
+}
+
+function matches(shot: ImageShot, filter: Filter): boolean {
+  if (filter === "all") return true;
+  if (filter === "made") return shot.local;
+  if (shot.local) return false;
+  if (filter === "missing") return shot.selected === null;
+  if (filter === "stale") return shot.stale;
+  if (shot.selected === null) return false;
+  if (filter === "kept") return !shot.stale && shot.review?.verdict === "accept";
+  if (filter === "redo") return shot.review?.verdict === "reject";
+  return (
+    !shot.stale &&
+    shot.review?.verdict !== "accept" &&
+    shot.review?.verdict !== "reject"
+  );
+}
+
+export function ImagesStage({
+  slug,
+  reserve,
+  pendingPaid,
+  onPendingConsumed,
+}: {
+  slug: string;
+  reserve: string;
+  pendingPaid: PaidRequest | null;
+  onPendingConsumed: () => void;
+}) {
   const [shots, setShots] = useState<ImageShot[]>([]);
   const [budget, setBudget] = useState<Card | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [reserve, setReserve] = useState("0.05");
-  const [regenerate, setRegenerate] = useState(false);
-  const [estimate, setEstimate] = useState<ImageEstimate | null>(null);
-  const [decision, setDecision] = useState<BudgetDecision | null>(null);
-  const [uploadsConfirmed, setUploadsConfirmed] = useState(false);
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [approvals, setApprovals] = useState<Record<string, ApprovalState>>({});
+  const [proofIds, setProofIds] = useState<string[]>([]);
+  const [board, setBoard] = useState<Storyboard | null>(null);
+  const [music, setMusic] = useState<Music | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [redoOpen, setRedoOpen] = useState<string | null>(null);
+  const [redoNote, setRedoNote] = useState("");
+  const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [reviewing, setReviewing] = useState<string | null>(null);
-  const [reviewDrafts, setReviewDrafts] = useState<
-    Record<
-      string,
-      { verdict: "accept" | "reject" | "uncertain"; note: string; inspected: boolean }
-    >
-  >({});
   const [revision, setRevision] = useState(0);
-  const initialized = useRef(false);
+  const consumed = useRef<string | null>(null);
+  const refreshTimer = useRef<number | null>(null);
+  const refreshPending = useRef(false);
 
-  const load = () => {
-    api
-      .images(slug)
-      .then((d) => {
-        setShots(d.shots);
-        setRevision((value) => value + 1);
-        if (!initialized.current) {
-          initialized.current = true;
-          setSelected(
-            new Set(
-              d.shots
-                .filter((s) => s.paid && s.owner === s.id && !s.versions.length)
-                .map((s) => s.owner),
-            ),
-          );
-        }
-      })
-      .catch((e) => setError(String(e)));
-    api
-      .budget(slug)
-      .then((b) => setBudget(b))
-      .catch(() => setBudget(null));
-  };
-
-  useEffect(() => {
-    initialized.current = false;
-    setSelected(new Set());
-    setEstimate(null);
-    setDecision(null);
-    setMessage(null);
-    setError(null);
-    setReviewDrafts({});
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const load = useCallback(async () => {
+    const [imagesResult, budgetResult, approvalResult, briefResult, boardResult, trackResult] =
+      await Promise.allSettled([
+        api.images(slug),
+        api.budget(slug),
+        api.approvals(slug, ["proof", "stills"]),
+        api.brief(slug),
+        api.storyboard(slug),
+        api.track(slug),
+      ]);
+    if (imagesResult.status === "fulfilled") setShots(imagesResult.value.shots);
+    else setError(String(imagesResult.reason));
+    if (budgetResult.status === "fulfilled") setBudget(budgetResult.value);
+    if (approvalResult.status === "fulfilled") {
+      const map: Record<string, ApprovalState> = {};
+      for (const state of approvalResult.value.stages) map[state.stage] = state;
+      setApprovals(map);
+    }
+    if (briefResult.status === "fulfilled") {
+      const brief = briefResult.value as Brief;
+      setProofIds(brief.creative?.proof_shot_ids || []);
+    }
+    if (boardResult.status === "fulfilled") {
+      setBoard("available" in boardResult.value ? null : boardResult.value);
+    }
+    if (trackResult.status === "fulfilled") setMusic(trackResult.value.music);
+    setRevision((value) => value + 1);
   }, [slug]);
 
-  const draftFor = (id: string) =>
-    reviewDrafts[id] || { verdict: "accept" as const, note: "", inspected: false };
+  useEffect(() => {
+    setFilter("all");
+    setActiveId(null);
+    setRedoOpen(null);
+    setError(null);
+    consumed.current = null;
+    void load();
+  }, [load]);
 
-  const setDraft = (
-    id: string,
-    patch: Partial<{ verdict: "accept" | "reject" | "uncertain"; note: string; inspected: boolean }>,
-  ) => {
-    setReviewDrafts((current) => ({
-      ...current,
-      [id]: { ...draftFor(id), ...patch },
-    }));
+  const paid = usePaidImages(slug, reserve, () => {
+    void load();
+  });
+
+  const scheduleRefresh = () => {
+    if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+    refreshPending.current = true;
+    refreshTimer.current = window.setTimeout(() => {
+      refreshTimer.current = null;
+      refreshPending.current = false;
+      void load();
+      notifyProjectChanged();
+    }, 800);
   };
 
-  const saveReview = async (shot: ImageShot) => {
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      if (refreshPending.current) notifyProjectChanged();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!pendingPaid) return;
+    const key = `${pendingPaid.scope}:${pendingPaid.ids.join(",")}`;
+    if (consumed.current === key) {
+      onPendingConsumed();
+      return;
+    }
+    consumed.current = key;
+    void paid.request(pendingPaid.ids, pendingPaid.scope, false);
+    onPendingConsumed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPaid]);
+
+  const visible = shots.filter((shot) => matches(shot, filter));
+  const counts: Record<Filter, number> = {
+    all: shots.length,
+    review: shots.filter((shot) => matches(shot, "review")).length,
+    redo: shots.filter((shot) => matches(shot, "redo")).length,
+    stale: shots.filter((shot) => matches(shot, "stale")).length,
+    missing: shots.filter((shot) => matches(shot, "missing")).length,
+    kept: shots.filter((shot) => matches(shot, "kept")).length,
+    made: shots.filter((shot) => matches(shot, "made")).length,
+  };
+
+  const paidShots = shots.filter((shot) => shot.paid);
+  const kept = paidShots.filter((shot) => !shot.stale && shot.review?.verdict === "accept").length;
+  const proof = approvals.proof;
+  const proofApproved = proof?.state === "approved";
+  const proofShots = shots.filter((shot) => proofIds.includes(shot.id));
+  const proofMissing = proofShots.filter((shot) => shot.selected === null);
+  const missing = paidShots.filter((shot) => shot.selected === null);
+  const older = paidShots.filter((shot) => shot.stale);
+  const visibleMissing = visible.filter((shot) => !shot.local && shot.selected === null);
+  const visibleOlder = visible.filter((shot) => shot.stale);
+
+  const activeIndex = visible.findIndex((shot) => shot.id === activeId);
+  const current = activeIndex >= 0 ? visible[activeIndex] : null;
+  const shotById = new Map((board?.shots || []).map((shot) => [shot.id, shot]));
+  const currentShot = current ? shotById.get(current.id) : undefined;
+  const fps = board?.fps || 24;
+  const sectionAt = (seconds: number) => {
+    const section = (music?.sections || []).find(
+      (item) => seconds >= Number(item.start) && seconds < Number(item.end),
+    );
+    if (!section) return null;
+    return (
+      section.name ||
+      (section.label && section.label !== "unreviewed" ? section.label : null)
+    );
+  };
+
+  const price = (count: number) => money(String(Number(reserve) * count));
+
+  const nextUnreviewed = (id: string) => {
+    const start = shots.findIndex((shot) => shot.id === id);
+    for (let step = 1; step < shots.length; step += 1) {
+      const shot = shots[(start + step) % shots.length];
+      if (
+        shot.paid &&
+        shot.selected !== null &&
+        !shot.stale &&
+        shot.review?.verdict !== "accept"
+      ) {
+        return shot.id;
+      }
+    }
+    return null;
+  };
+
+  const open = (id: string) => {
+    setActiveId(id);
+    setRedoOpen(null);
+    setRedoNote("");
+  };
+
+  const move = (offset: number) => {
+    if (!visible.length) return;
+    const index = visible.findIndex((shot) => shot.id === activeId);
+    const next = visible[Math.min(Math.max(index + offset, 0), visible.length - 1)];
+    if (next) {
+      open(next.id);
+      const tile = document.querySelector(`[data-still="${next.id}"]`);
+      tile?.scrollIntoView({ block: "nearest" });
+    }
+  };
+
+  const keep = async (shot: ImageShot) => {
+    if (shot.local || shot.selected === null) return;
+    if (shot.stale) {
+      setError("This still was made from an older prompt. Remake it before keeping it.");
+      return;
+    }
+    const next = nextUnreviewed(shot.id);
+    if (shot.review?.verdict === "accept") {
+      setActiveId(next);
+      return;
+    }
+    if (working === shot.id) return;
     const version = shot.selected;
-    const draft = draftFor(shot.id);
-    if (version === null) {
-      setError("Select a version before reviewing it.");
-      return;
-    }
-    if (!draft.note.trim() || !draft.inspected) {
-      setError("Record what you inspected and confirm the exact bytes before saving a review.");
-      return;
-    }
-    setReviewing(shot.id);
+    setWorking(shot.id);
     setError(null);
     try {
       await api.reviewImage(slug, {
         shot_id: shot.id,
         version,
-        verdict: draft.verdict,
-        note: draft.note.trim(),
+        verdict: "accept",
         inspected: true,
       });
-      setDraft(shot.id, { note: "", inspected: false });
-      load();
+      const chosen = shot.versions.find((item) => item.version === version);
+      const review: ImageReview = {
+        shot_id: shot.owner,
+        version,
+        sha256: chosen?.sha256 || "",
+        input_hash: chosen?.input_hash || "",
+        verdict: "accept",
+        note: "",
+        reviewer: "studio",
+        inspected: true,
+        at: new Date().toISOString(),
+      };
+      setShots((current) =>
+        current.map((item) => (item.id === shot.id ? { ...item, review } : item)),
+      );
+      setActiveId(next);
+      setWorking(null);
+      scheduleRefresh();
+    } catch (caught) {
+      setError(String(caught));
+      setWorking(null);
+    }
+  };
+
+  const redo = (shot: ImageShot) => {
+    if (shot.local || shot.selected === null) return;
+    setRedoOpen(shot.id);
+    setRedoNote("");
+    setError(null);
+  };
+
+  const submitRedo = async (shot: ImageShot, remake: boolean) => {
+    if (shot.local || shot.selected === null) return;
+    setWorking(shot.id);
+    setError(null);
+    try {
+      await api.reviewImage(slug, {
+        shot_id: shot.id,
+        version: shot.selected,
+        verdict: "reject",
+        note: redoNote.trim(),
+        inspected: true,
+      });
       notifyProjectChanged();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setReviewing(null);
-    }
-  };
-
-  const clearQuote = () => {
-    setEstimate(null);
-    setDecision(null);
-    setError(null);
-  };
-
-  const toggle = (id: string) => {
-    clearQuote();
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectMissing = () => {
-    clearQuote();
-    setSelected(
-      new Set(
-        shots
-          .filter((s) => s.paid && s.owner === s.id && !s.versions.length)
-          .map((s) => s.owner),
-      ),
-    );
-  };
-
-  const selectAll = () => {
-    clearQuote();
-    setSelected(new Set(shots.filter((s) => s.paid && s.owner === s.id).map((s) => s.owner)));
-  };
-
-  const clearSelection = () => {
-    clearQuote();
-    setSelected(new Set());
-  };
-
-  const runEstimate = async () => {
-    if (!selected.size) return;
-    setBusy("estimate");
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await api.imageEstimate(slug, {
-        shot_ids: [...selected],
-        reserve_usd: reserve,
-        scope: "stills",
-        regenerate,
-      });
-      if (res.error || !res.estimate || !res.decision) {
-        setEstimate(null);
-        setDecision(null);
-        setError(res.error || "estimate failed");
-      } else {
-        setEstimate(res.estimate);
-        setDecision(res.decision);
-        if (res.budget) setBudget(res.budget);
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const generate = async () => {
-    if (!estimate) return;
-    setBusy("generate");
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await api.generateImages(slug, {
-        quote_id: estimate.quote_id,
-        note: note.trim(),
-        uploads_confirmed: uploadsConfirmed,
-      });
-      if (res.error) {
-        setError(res.error);
-      } else if (res.needs_budget) {
-        const suggested = res.decision?.suggested_usd;
-        setError(
-          `The cap does not cover this batch${suggested ? `; add $${suggested} to continue` : ""}.`,
+      await load();
+      setRedoOpen(null);
+      setActiveId(null);
+      setRedoNote("");
+      window.dispatchEvent(
+        new CustomEvent("studio:ask-director", {
+          detail: {
+            text: `Shot ${shot.id}: ${redoNote.trim() || "please rewrite this still."}`,
+          },
+        }),
+      );
+      if (remake) {
+        await paid.request(
+          [shot.id],
+          proofIds.includes(shot.id) ? "proof" : "stills",
+          true,
         );
-      } else {
-        setMessage(`Queued ${res.tasks} stills, $${res.reserve_usd} reserved.`);
-        setEstimate(null);
-        setDecision(null);
-        if (res.budget) setBudget(res.budget);
-        notifyProjectChanged();
-        setTimeout(load, 2500);
       }
-    } catch (e) {
-      setError(String(e));
+    } catch (caught) {
+      setError(String(caught));
     } finally {
-      setBusy(null);
+      setWorking(null);
     }
   };
+
+  const selectVersion = async (shot: ImageShot, version: number) => {
+    if (shot.selected === version) return;
+    setWorking(shot.id);
+    setError(null);
+    try {
+      await api.selectImage(slug, shot.id, version);
+      notifyProjectChanged();
+      await load();
+    } catch (caught) {
+      setError(String(caught));
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const make = (ids: string[], scope: "proof" | "stills") => {
+    setError(null);
+    void paid.request(ids, scope, false);
+  };
+
+  const makeFromLightbox = (ids: string[], scope: "proof" | "stills") => {
+    setActiveId(null);
+    make(ids, scope);
+    window.setTimeout(() => {
+      document.querySelector(".images-toolbar")?.scrollIntoView({ block: "start" });
+    }, 180);
+  };
+
+  const keyboard = useRef({ keep, redo, move, close: () => setActiveId(null) });
+  keyboard.current = { keep, redo, move, close: () => setActiveId(null) };
+
+  useEffect(() => {
+    if (!activeId) return;
+    const onKey = (event: KeyboardEvent) => {
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        keyboard.current.close();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        keyboard.current.move(1);
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        keyboard.current.move(-1);
+      } else if (event.key.toLowerCase() === "k" && current) {
+        event.preventDefault();
+        void keyboard.current.keep(current);
+      } else if (event.key.toLowerCase() === "r" && current) {
+        event.preventDefault();
+        keyboard.current.redo(current);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeId, current]);
+
+  const styleState = (shot: ImageShot) => statusOf(shot).label;
 
   return (
     <>
-      <h2>Images</h2>
-      <p className="sub">
-        Generated stills per shot. Local cards, splits, bridges, logos and end cards are rendered
-        from the board and cost nothing; they appear here for inspection but cannot be selected for
-        a paid batch.
-      </p>
-      {error && <p className="error">{error}</p>}
-      {message && <p className="message">{message}</p>}
-
-      <div className="card">
-        <h3>Budget</h3>
-        <div className="pre">
-          cap {budget?.cap_usd ?? "—"} · committed {budget?.committed_usd ?? "—"} · remaining{" "}
-          {budget?.remaining_usd ?? "—"}
+      <div className="stage-head images-head">
+        <div>
+          <h1>Images</h1>
+          <p>
+            The style check first, then the full set. Local cards, splits, bridges, logos
+            and end cards are made on this computer and cost nothing.
+          </p>
+        </div>
+        <div className="images-budget">
+          <b>${money(budget?.remaining_usd ?? null)} left</b>
+          <span>
+            kept {kept} of {paidShots.length} paid stills
+            {counts.made ? ` · ${counts.made} made here` : ""}
+          </span>
         </div>
       </div>
+      {error && <p className="error">{error}</p>}
+      <ApprovalBar
+        slug={slug}
+        stages={["proof", "stills"]}
+        refresh={revision}
+        onApproved={() => void load()}
+      />
 
-      <ApprovalBar slug={slug} stages={["proof", "stills"]} refresh={revision} />
-
-      <div className="card">
-        <h3>Generate ({selected.size} selected)</h3>
-        <div className="toolbar">
-          <button onClick={selectMissing}>Select missing</button>
-          <button onClick={selectAll}>Select all</button>
-          <button onClick={clearSelection} disabled={!selected.size}>
-            Clear
-          </button>
-          <label className="inline">
-            reserve / shot $
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={reserve}
-              onChange={(e) => {
-                clearQuote();
-                setReserve(e.target.value);
-              }}
-            />
-          </label>
-          <label className="inline">
-            <input
-              type="checkbox"
-              checked={regenerate}
-              onChange={(e) => {
-                clearQuote();
-                setRegenerate(e.target.checked);
-              }}
-            />
-            regenerate unchanged
-          </label>
-          <button onClick={runEstimate} disabled={!selected.size || busy !== null}>
-            {busy === "estimate" ? "Quoting…" : "Estimate"}
-          </button>
-        </div>
-
-        {estimate && decision && (
-          <div className="quote">
-            <div className="pre">
-              {estimate.tasks} new still{estimate.tasks === 1 ? "" : "s"} · $
-              {estimate.reserve_usd} reserved
-              {decision.ok
-                ? ` · fits the cap (remaining $${decision.remaining ?? "—"})`
-                : ` · needs $${decision.suggested_usd ?? "more"} more`}
-            </div>
-            {estimate.uploads_required && (
-              <label className="inline">
-                <input
-                  type="checkbox"
-                  checked={uploadsConfirmed}
-                  onChange={(e) => setUploadsConfirmed(e.target.checked)}
-                />
-                reference images may be uploaded to the provider
-              </label>
+      {proofIds.length > 0 && !proofApproved && (
+        <section className="style-check images-style-check">
+          <div className="style-check-say">
+            <b>Style check · {proofIds.length} hard shots first</b>
+            <span>When they look right, make the rest. Only these three are paid now.</span>
+          </div>
+          <div className="style-shots">
+            {proofShots.map((shot) => {
+              const src = sourceUrl(slug, shot);
+              return (
+                <button
+                  type="button"
+                  className={`style-shot ${statusOf(shot).tone}`}
+                  key={shot.id}
+                  onClick={() => {
+                    setFilter("all");
+                    open(shot.id);
+                  }}
+                >
+                  {src ? <img src={src} alt="" loading="lazy" /> : <span className="hatch" />}
+                  <span>
+                    <b>{shot.id}</b>
+                    <em>{styleState(shot)}</em>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="style-check-actions">
+            {proofMissing.length > 0 ? (
+              <Button
+                variant="primary"
+                size="small"
+                disabled={paid.busy}
+                onClick={() =>
+                  make(
+                    proofMissing.map((shot) => shot.id),
+                    "proof",
+                  )
+                }
+              >
+                Make {proofMissing.length} style still{proofMissing.length === 1 ? "" : "s"} · $
+                {price(proofMissing.length)}
+              </Button>
+            ) : (
+              <span className="hint">
+                Keep all three, then approve the style check above.
+              </span>
             )}
-            <input
-              className="note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="note for the spending record (optional)"
-            />
+          </div>
+        </section>
+      )}
+
+      <div className="images-toolbar">
+        <div className="filter-chips" role="group" aria-label="Filter stills">
+          {FILTERS.map((item) => (
             <button
-              onClick={generate}
-              disabled={
-                !decision.ok ||
-                busy !== null ||
-                (estimate.uploads_required && !uploadsConfirmed)
+              key={item.id}
+              type="button"
+              className={`filter-chip ${filter === item.id ? "on" : ""}`}
+              aria-pressed={filter === item.id}
+              onClick={() => setFilter(item.id)}
+              disabled={item.id === "made" && counts.made === 0}
+            >
+              {item.label} <b>{counts[item.id]}</b>
+            </button>
+          ))}
+        </div>
+        <div className="images-actions">
+          {proofApproved && missing.length > 0 && (
+            <Button
+              variant="primary"
+              size="small"
+              disabled={paid.busy}
+              onClick={() =>
+                make(
+                  missing.map((shot) => shot.id),
+                  "stills",
+                )
               }
             >
-              {busy === "generate" ? "Authorizing…" : `Generate ${estimate.tasks} stills`}
-            </button>
-          </div>
-        )}
+              Make all {missing.length} missing · ${price(missing.length)}
+            </Button>
+          )}
+          {proofApproved && older.length > 0 && (
+            <Button
+              size="small"
+              disabled={paid.busy}
+              onClick={() =>
+                make(
+                  older.map((shot) => shot.id),
+                  "stills",
+                )
+              }
+            >
+              Remake {older.length} from older prompts · ${price(older.length)}
+            </Button>
+          )}
+          {visibleMissing.length === 1 && (
+            <Button
+              size="small"
+              disabled={paid.busy}
+              onClick={() => make([visibleMissing[0].id], proofApproved ? "stills" : "proof")}
+            >
+              Make {visibleMissing[0].id} · ${price(1)}
+            </Button>
+          )}
+          {visibleOlder.length === 1 && proofApproved && (
+            <Button
+              size="small"
+              disabled={paid.busy}
+              onClick={() => make([visibleOlder[0].id], "stills")}
+            >
+              Remake {visibleOlder[0].id} · ${price(1)}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {shots.length ? (
-        shots.map((s) => (
-          <div className="card" key={s.id}>
-            <h3>
-              {s.paid ? (
-                <label className="inline">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(s.owner)}
-                    onChange={() => toggle(s.owner)}
-                  />
-                  {s.id}
-                </label>
-              ) : (
-                <span>
-                  {kindMeta(s.kind).icon} {s.id}
+      {paid.quote && (
+        <div className="paid-dock">
+          <PaidCard
+            quote={paid.quote}
+            busy={paid.busy}
+            onTopUp={paid.topUp}
+            onConfirm={paid.confirm}
+            onCancel={paid.clear}
+          />
+        </div>
+      )}
+      {(paid.message || paid.error) && (
+        <p className={paid.error ? "error" : "message"}>{paid.error || paid.message}</p>
+      )}
+
+      {visible.length ? (
+        <div className="contact-sheet">
+          {visible.map((shot) => {
+            const src = sourceUrl(slug, shot);
+            const status = statusOf(shot);
+            return (
+              <button
+                type="button"
+                key={shot.id}
+                data-still={shot.id}
+                className={`still-tile ${status.tone}`}
+                onClick={() => open(shot.id)}
+                aria-label={`Open ${shot.id}, ${status.label}`}
+              >
+                {src ? (
+                  <img src={src} alt="" loading="lazy" />
+                ) : (
+                  <span className="still-missing">
+                    <span>{kindMeta(shot.kind).icon}</span>
+                    <span>Not made yet</span>
+                  </span>
+                )}
+                <span className="still-tags">
+                  <span className={`still-pill ${status.tone}`}>{status.label}</span>
+                  {!shot.local && shot.versions.length > 1 && (
+                    <span className="still-pill count">{shot.versions.length} versions</span>
+                  )}
                 </span>
-              )}{" "}
-              {s.owner !== s.id && <span className="meta">reprise of {s.owner} · </span>}
-              {s.local
-                ? `${kindMeta(s.kind).label} · local`
-                : `${s.versions.length} version${s.versions.length === 1 ? "" : "s"}`}
-            </h3>
-            <p className="meta">
-              {s.local
-                ? "Rendered locally from the board; no Runware task, budget or image review."
-                : s.review
-                  ? `Last review: ${s.review.verdict} v${s.review.version}`
-                  : "No review of this shot yet."}
-            </p>
-            <div className="versions">
-              {s.local && s.plate ? (
-                <figure className="version selected">
-                  <img src={s.plate} alt={`${s.id} local ${s.kind}`} loading="lazy" />
-                  <figcaption>
-                    <span className="meta">
-                      {kindMeta(s.kind).label} plate · {s.message || "no message"}
-                    </span>
-                  </figcaption>
-                </figure>
-              ) : s.versions.length ? (
-                s.versions.map((v) => (
-                  <figure
-                    key={v.version}
-                    className={v.version === s.selected ? "version selected" : "version"}
-                  >
-                    <img
-                      src={`/api/projects/${slug}/images/${encodeURIComponent(s.owner)}/${v.version}`}
-                      alt={`${s.id} version ${v.version}`}
-                      loading="lazy"
-                      onClick={() => selectVersion(slug, s.owner, v.version, load, setError)}
-                    />
-                    <figcaption>
-                      <button
-                        className={v.version === s.selected ? "active" : ""}
-                        onClick={() => selectVersion(slug, s.owner, v.version, load, setError)}
-                        disabled={v.version === s.selected}
-                      >
-                        v{v.version}
-                        {v.version === s.selected ? " selected" : ""}
-                      </button>
-                      <span className="meta">{v.path.split("/").slice(-1)[0]}</span>
-                    </figcaption>
-                  </figure>
-                ))
-              ) : (
-                "No versions yet."
-              )}
+                <span className="still-foot">
+                  <b>{shot.id}</b>
+                  <span>
+                    {shotById.get(shot.id)?.purpose ||
+                      shot.message ||
+                      kindMeta(shot.kind).label}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="empty">
+          {shots.length ? "Nothing in this filter." : "No storyboard or assets yet."}
+        </p>
+      )}
+
+      {current && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label={`Still ${current.id}`}>
+          <header className="lightbox-head">
+            <div>
+              <b>{current.id}</b>
+              <span>
+                {currentShot
+                  ? `${clock(currentShot.start_frame / fps)} · ${(
+                      currentShot.duration_frames / fps
+                    ).toFixed(1)} s${
+                      sectionAt(currentShot.start_frame / fps)
+                        ? ` · ${sectionAt(currentShot.start_frame / fps)}`
+                        : ""
+                    }`
+                  : kindMeta(current.kind).label}
+              </span>
             </div>
-            {s.paid && s.versions.length > 0 && (
-              <div className="review">
-                <div className="review-controls">
-                  <select
-                    aria-label={`Review verdict for ${s.id}`}
-                    value={draftFor(s.id).verdict}
-                    onChange={(e) =>
-                      setDraft(s.id, {
-                        verdict: e.target.value as "accept" | "reject" | "uncertain",
-                      })
-                    }
+            <span className="lightbox-count">
+              {activeIndex + 1} of {visible.length}
+            </span>
+            <button
+              type="button"
+              className="lightbox-close"
+              onClick={() => setActiveId(null)}
+              aria-label="Close the lightbox"
+            >
+              ×
+            </button>
+          </header>
+
+          <div className={`lightbox-stage ${statusOf(current).tone}`}>
+            {sourceUrl(slug, current) ? (
+              <img src={sourceUrl(slug, current) || ""} alt={`${current.id} still`} />
+            ) : (
+              <div className="lightbox-missing">
+                <span>{kindMeta(current.kind).icon}</span>
+                <b>Not made yet</b>
+                <p>
+                  {current.local
+                    ? "This kind is made on this computer from the board."
+                    : `Make it for $${reserve} when you are ready.`}
+                </p>
+                {!current.local && (
+                  <Button
+                    variant="primary"
+                    disabled={paid.busy}
+                    onClick={() => {
+                      makeFromLightbox(
+                        [current.id],
+                        proofIds.includes(current.id) && !proofApproved ? "proof" : "stills",
+                      );
+                    }}
                   >
-                    <option value="accept">accept</option>
-                    <option value="reject">reject</option>
-                    <option value="uncertain">uncertain</option>
-                  </select>
-                  <input
-                    aria-label={`Review note for ${s.id}`}
-                    value={draftFor(s.id).note}
-                    onChange={(e) => setDraft(s.id, { note: e.target.value })}
-                    placeholder="what did you inspect, and why this verdict?"
-                  />
-                  <label className="inline">
-                    <input
-                      type="checkbox"
-                      checked={draftFor(s.id).inspected}
-                      onChange={(e) => setDraft(s.id, { inspected: e.target.checked })}
-                    />
-                    inspected the exact bytes
-                  </label>
-                  <button
-                    onClick={() => saveReview(s)}
-                    disabled={
-                      reviewing === s.id ||
-                      s.selected === null ||
-                      !draftFor(s.id).note.trim() ||
-                      !draftFor(s.id).inspected
-                    }
-                  >
-                    {reviewing === s.id
-                      ? "Saving…"
-                      : `Save review of v${s.selected ?? "—"}`}
-                  </button>
-                </div>
+                    Make this still · ${reserve}
+                  </Button>
+                )}
               </div>
             )}
+            <span className={`still-pill ${statusOf(current).tone}`}>
+              {statusOf(current).label}
+            </span>
           </div>
-        ))
-      ) : (
-        <p className="empty">No storyboard or assets yet.</p>
+
+          <footer className="lightbox-foot">
+            <div className="lightbox-copy">
+              <b>
+                {currentShot?.purpose || current.message || kindMeta(current.kind).label}
+              </b>
+              {current.message && <span className="lightbox-message">{current.message}</span>}
+              {current.text?.length > 0 && <p>{current.text.join(" · ")}</p>}
+              {currentShot?.image_prompt && (
+                <p className="lightbox-prompt">{currentShot.image_prompt}</p>
+              )}
+              <span className="hint">
+                {current.local
+                  ? "Rendered locally from the board; no paid task and no review."
+                  : current.stale
+                    ? "Made from an older prompt. Remake it, or review the new prompt first."
+                    : current.review
+                      ? `Last review: ${current.review.verdict} v${current.review.version}`
+                      : "Not reviewed yet."}
+              </span>
+            </div>
+
+            {!current.local && current.versions.length > 0 && (
+              <div className="version-row" aria-label="Versions">
+                {current.versions.map((version) => (
+                  <button
+                    type="button"
+                    key={version.version}
+                    className={`version-pick ${
+                      version.version === current.selected ? "on" : ""
+                    }`}
+                    disabled={working === current.id}
+                    onClick={() => void selectVersion(current, version.version)}
+                    aria-pressed={version.version === current.selected}
+                  >
+                    v{version.version}
+                    <img
+                      src={`/api/projects/${slug}/images/${encodeURIComponent(current.owner)}/${
+                        version.version
+                      }`}
+                      alt=""
+                      loading="lazy"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!current.local && current.selected !== null && (
+              <div className="lightbox-keys">
+                {redoOpen === current.id ? (
+                  <div className="redo-box">
+                    <label className="ui-field">
+                      <span>What should change? The Writer rewrites the prompt.</span>
+                      <textarea
+                        rows={2}
+                        value={redoNote}
+                        onChange={(event) => setRedoNote(event.target.value)}
+                        placeholder="Keep the light, change the pose… (optional)"
+                        maxLength={2000}
+                      />
+                    </label>
+                    <div className="row-actions">
+                      <Button
+                        size="small"
+                        disabled={working === current.id}
+                        onClick={() => void submitRedo(current, false)}
+                      >
+                        {working === current.id ? "Saving…" : "Redo · send to Writer"}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="primary"
+                        disabled={working === current.id || paid.busy}
+                        onClick={() => void submitRedo(current, true)}
+                      >
+                        Remake · ${reserve}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="quiet"
+                        onClick={() => {
+                          setRedoOpen(null);
+                          setRedoNote("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      size="small"
+                      variant="primary"
+                      disabled={working === current.id || current.stale}
+                      title={
+                        current.stale
+                          ? "Made from an older prompt; remake it first."
+                          : "Keep this exact version"
+                      }
+                      onClick={() => void keep(current)}
+                    >
+                      Keep <kbd>K</kbd>
+                    </Button>
+                    <Button
+                      size="small"
+                      disabled={working === current.id}
+                      onClick={() => redo(current)}
+                    >
+                      Redo <kbd>R</kbd>
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="quiet"
+                      disabled={paid.busy}
+                      onClick={() => {
+                        makeFromLightbox(
+                          [current.id],
+                          proofIds.includes(current.id) && !proofApproved
+                            ? "proof"
+                            : "stills",
+                        );
+                      }}
+                    >
+                      Remake · ${reserve}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+            {current.local && (
+              <span className="hint">Made here, free. No Keep or Redo.</span>
+            )}
+            {!current.local && current.selected === null && (
+              <span className="hint">Make this still before reviewing it.</span>
+            )}
+            <div className="lightbox-nav">
+              <Button size="small" variant="quiet" onClick={() => move(-1)}>
+                ←
+              </Button>
+              <Button size="small" variant="quiet" onClick={() => move(1)}>
+                →
+              </Button>
+              <span className="hint">
+                {current.local || current.selected === null
+                  ? "← → move · Esc close"
+                  : "K keep · R redo · Esc close"}
+              </span>
+            </div>
+          </footer>
+        </div>
       )}
     </>
   );
-}
-
-async function selectVersion(
-  slug: string,
-  shotId: string,
-  version: number,
-  reload: () => void,
-  setError: (value: string | null) => void,
-) {
-  setError(null);
-  try {
-    await api.selectImage(slug, shotId, version);
-    reload();
-    notifyProjectChanged();
-  } catch (e) {
-    setError(String(e));
-  }
 }

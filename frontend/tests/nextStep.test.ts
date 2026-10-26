@@ -40,6 +40,8 @@ const images = (overrides: Partial<ImageFacts> = {}): ImageFacts => ({
   selected: 4,
   kept: 4,
   missing: 0,
+  missing_ids: [],
+  reserve_usd: "0.05",
   ...overrides,
 });
 
@@ -333,12 +335,42 @@ test("images ask for the missing pictures after the style check", () => {
       storyboard: { state: "approved" },
       proof: { state: "approved" },
     }),
-    images({ missing: 2, kept: 2, selected: 2 }),
+    images({
+      missing: 2,
+      kept: 2,
+      selected: 2,
+      missing_ids: ["s003", "s004"],
+      reserve_usd: "0.05",
+    }),
     budget,
   );
   assert.match(step.title, /Make 2 missing pictures/);
   assert.match(step.detail || "", /5\.00/);
-  assert.equal(step.actions[0].target, "pictures");
+  assert.equal(step.actions[0].target, "make-missing");
+  assert.equal(step.actions[0].label, "Make all 2 missing · $0.10");
+  assert.deepEqual(step.actions[0].paid, { ids: ["s003", "s004"], scope: "stills" });
+});
+
+test("a single missing still is named with its price", () => {
+  const step = nextStep(
+    "images",
+    project({ stage_states: states({ story: "done", storyboard: "done", images: "you" }) }),
+    approvals({
+      brief: { state: "approved" },
+      storyboard: { state: "approved" },
+      proof: { state: "approved" },
+    }),
+    images({
+      missing: 1,
+      kept: 3,
+      selected: 3,
+      missing_ids: ["s033"],
+      reserve_usd: "0.04",
+    }),
+    budget,
+  );
+  assert.equal(step.actions[0].target, "make-missing");
+  assert.equal(step.actions[0].label, "Make s033 · $0.04");
 });
 
 test("images ask for review when every picture exists", () => {

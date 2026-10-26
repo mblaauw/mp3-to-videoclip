@@ -288,6 +288,57 @@ def test_review_refuses_stale_inputs_and_accepts_the_proof_set(client, project):
     )
 
 
+def test_images_flag_a_selected_still_made_from_an_older_prompt(client, project):
+    add_assets(project)
+    listed = client.get("/api/projects/production/images").json()["shots"]
+    assert listed
+    assert all(shot["stale"] is False for shot in listed)
+
+    target = listed[0]
+    board = client.get("/api/projects/production/storyboard").json()
+    shot = next(item for item in board["shots"] if item["id"] == target["id"])
+    prompt = shot.get("image_prompt") or shot["purpose"]
+    patched = client.patch(
+        "/api/projects/production/storyboard/shots",
+        json={"changes": [{"id": target["id"], "image_prompt": prompt + " with new grain"}]},
+    )
+    assert patched.status_code == 200, patched.text
+
+    after = client.get("/api/projects/production/images").json()["shots"]
+    by_id = {shot["id"]: shot for shot in after}
+    assert by_id[target["id"]]["stale"] is True
+    assert by_id[target["id"]]["selected"] == target["selected"]
+    assert all(shot["stale"] is False for shot in after if shot["id"] != target["id"])
+
+
+def test_local_shots_list_a_plate_and_never_look_stale(client, project):
+    board = client.get("/api/projects/production/storyboard").json()
+    target = board["shots"][0]["id"]
+    patched = client.patch(
+        "/api/projects/production/storyboard/shots",
+        json={
+            "changes": [
+                {
+                    "id": target,
+                    "kind": "card",
+                    "message": "LOCAL TITLE",
+                    "text": ["MADE HERE"],
+                }
+            ]
+        },
+    )
+    assert patched.status_code == 200, patched.text
+
+    after = client.get("/api/projects/production/images").json()["shots"]
+    card = next(shot for shot in after if shot["id"] == target)
+    assert card["local"] is True
+    assert card["paid"] is False
+    assert card["stale"] is False
+    assert card["versions"] == []
+    assert card["plate"] == f"/api/projects/production/plates/{target}"
+    assert client.get(card["plate"]).status_code == 200
+
+
 def test_reviews_unlock_the_proof_approval(client, project):
     from mp3_to_videoclip import production as P
 

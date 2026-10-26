@@ -10,6 +10,7 @@ export type NextTarget =
   | "brief"
   | "preview"
   | "render"
+  | "make-missing"
   | "pictures";
 
 export type NextAction = {
@@ -19,6 +20,8 @@ export type NextAction = {
   target?: NextTarget;
   /** Approve this stage directly with its already-returned expected hash. */
   approve?: string;
+  /** A priced image batch: the bar already showed the reserve total. */
+  paid?: { ids: string[]; scope: "proof" | "stills" };
 };
 
 export type NextStep = {
@@ -51,6 +54,8 @@ export type ImageFacts = {
   selected: number;
   kept: number;
   missing: number;
+  missing_ids?: string[];
+  reserve_usd?: string;
 };
 
 export type BudgetFacts = {
@@ -324,13 +329,30 @@ function imagesStep(
   }
   const left = budget.remaining_usd ? ` Budget left ${budget.remaining_usd}.` : "";
   if (images.missing > 0) {
+    const ids = images.missing_ids || [];
+    const reserve = Number(images.reserve_usd || "0.05");
+    const total = (images.missing * reserve).toFixed(2);
+    const label =
+      images.missing === 1 && ids.length === 1
+        ? `Make ${ids[0]} · $${total}`
+        : `Make all ${images.missing} missing · $${total}`;
     return {
       tone: "you",
       title: `Style check approved. Make ${images.missing} missing ${
         images.missing === 1 ? "picture" : "pictures"
       }.`,
       detail: `Only paid scene and generated shots cost money.${left}`,
-      actions: [{ label: "Go to Images", target: "pictures", kind: "primary" }],
+      actions:
+        ids.length === images.missing
+          ? [
+              {
+                label,
+                target: "make-missing",
+                kind: "primary",
+                paid: { ids, scope: "stills" },
+              },
+            ]
+          : [{ label: "Go to Images", target: "pictures", kind: "primary" }],
     };
   }
   if (images.kept < images.total) {
