@@ -171,6 +171,17 @@ reservation. Rendering, analysis and verification are local and free.
 library, jobs and settings; `frontend/` is the Vite/React Studio; `jobs/` runs
 local work with per-project serialisation. `launcher.py` is `uv run studio`.
 
+The frontend starts from the neutral `styles/tokens.css` palette and a
+self-hosted Schibsted Grotesk variable font; `ui/` holds the token-only
+`Button`, `IconButton`, `StatusDot`, `Pill`, `Seg`, `Chip` and `Field`
+primitives. The shell keeps one `/api/events` EventSource open for jobs, with
+JSON payloads and reconnect/backoff; there is no polling. Job progress stays
+indeterminate until the runner reports real units. `src/api/schema.d.ts` is
+generated with `npm run api:types` from the app's OpenAPI document and types the
+routes that declare response models; legacy untyped routes keep explicit
+hand-written types. Every API 4xx/5xx is `{detail, code}`; the frontend parses
+it into `ApiError` and maps stable codes to user-facing copy.
+
 The old hand-written `ThreadingHTTPServer` and its Python-string UI were removed
 in the Phase 4 cleanup. `cli.py` remains for engine tasks that do not have a GUI
 yet: transcription, the listening pass, backups, signing and render maintenance.

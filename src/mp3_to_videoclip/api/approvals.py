@@ -8,16 +8,39 @@ the existing typed human action, so the expected hash and a note are mandatory.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.api.errors import error_response
 from mp3_to_videoclip.domain import approvals
 from mp3_to_videoclip.storage import read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["approvals"])
+
+
+class ApprovalStateOut(BaseModel):
+    stage: str
+    state: Literal["approved", "stale", "missing", "unavailable"]
+    expected_hash: str | None = None
+    at: str | None = None
+    note: str | None = None
+    error: str | None = None
+    blocking_stage: str | None = None
+
+
+class ApprovalsOut(BaseModel):
+    stages: list[ApprovalStateOut]
+
+
+class ApprovalOut(BaseModel):
+    approved: str
+    record: dict[str, Any] = Field(default_factory=dict)
+    generated: bool = False
+
 
 STAGES = (
     "analysis",
@@ -91,7 +114,7 @@ def _approval(root, stage: str) -> dict:
     }
 
 
-@router.get("/approvals")
+@router.get("/approvals", response_model=ApprovalsOut)
 async def get_approvals(slug: str, request: Request, stages: str | None = None):
     root = project_root(request, slug)
     wanted = STAGES
@@ -100,12 +123,16 @@ async def get_approvals(slug: str, request: Request, stages: str | None = None):
     return {"stages": [_approval(root, stage) for stage in wanted]}
 
 
-@router.post("/approvals/{stage}")
+@router.post("/approvals/{stage}", response_model=ApprovalOut)
 async def approve_stage(slug: str, stage: str, request: Request, payload: dict):
     root = project_root(request, slug)
     try:
         return approvals.approve_stage(root, stage, payload)
     except approvals.ApprovalError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=exc.status)
+        code = {
+            404: "approval_not_found",
+            409: "approval_stale",
+        }.get(exc.status, "approval_invalid")
+        return error_response(str(exc), code, exc.status)
     except ValueError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=400)
+        return error_response(str(exc), "approval_invalid", 400)

@@ -2,54 +2,58 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
+
+from mp3_to_videoclip.api.errors import ApiError
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
-@router.get("")
+class JobProgress(BaseModel):
+    done: int = 0
+    total: int = 0
+    unit: str = ""
+
+
+class JobOut(BaseModel):
+    id: str
+    kind: str
+    project: str
+    status: str
+    progress: JobProgress
+    cost_usd: float
+    error: str | None = None
+    started_at: float | None = None
+    finished_at: float | None = None
+
+
+class JobDetailOut(JobOut):
+    log: list[str] = Field(default_factory=list)
+
+
+class CancelOut(BaseModel):
+    cancelled: bool
+
+
+@router.get("", response_model=list[JobOut])
 async def list_jobs(request: Request, project: str | None = None):
     runner = request.app.state.runner
-    jobs = runner.list_jobs(project=project)
-    return [
-        {
-            "id": j.id,
-            "kind": j.kind,
-            "project": j.project,
-            "status": j.status,
-            "progress": j.progress,
-            "cost_usd": j.cost_usd,
-            "error": j.error,
-            "started_at": j.started_at,
-            "finished_at": j.finished_at,
-        }
-        for j in jobs
-    ]
+    return runner.list_jobs(project=project)
 
 
-@router.get("/{job_id}")
+@router.get("/{job_id}", response_model=JobDetailOut)
 async def get_job(job_id: str, request: Request):
     runner = request.app.state.runner
     job = runner.get(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="job not found")
-    return {
-        "id": job.id,
-        "kind": job.kind,
-        "project": job.project,
-        "status": job.status,
-        "progress": job.progress,
-        "cost_usd": job.cost_usd,
-        "log": job.log,
-        "error": job.error,
-        "started_at": job.started_at,
-        "finished_at": job.finished_at,
-    }
+        raise ApiError(404, "job not found", "job_not_found")
+    return job
 
 
-@router.post("/{job_id}/cancel")
+@router.post("/{job_id}/cancel", response_model=CancelOut)
 async def cancel_job(job_id: str, request: Request):
     runner = request.app.state.runner
     if not runner.cancel(job_id):
-        raise HTTPException(status_code=404, detail="job not found or already finished")
+        raise ApiError(404, "job not found or already finished", "job_not_found")
     return {"cancelled": True}

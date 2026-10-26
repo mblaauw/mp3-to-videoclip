@@ -50,7 +50,7 @@ logic stay authoritative in the existing engine modules.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | P0 | K13 vocal promo/advert brief approval; K2 real blocking stage | Complete (PR #24, `1a3800e`) |
-| P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Not started |
+| P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Complete; PR pending |
 | P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Not started |
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Not started |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Not started |
@@ -104,7 +104,68 @@ P0 verified on `studio-redesign/p0-correctness` at the final working tree:
 P0 shipped in PR #24, squash-merged as `1a3800e` on 26 Oct 2026. CI (`check`)
 passed in 4m46s before the merge.
 
+## P1 — foundations
+
+### Scope
+
+- Copy the handover tokens to `frontend/src/styles/tokens.css`, self-host
+  Schibsted Grotesk 5.3.0, and keep the old screen variables as aliases so no
+  stage breaks while it is rebuilt.
+- Add token-only `ui/` primitives and use them in the jobs tray.
+- Replace the 3-second jobs polling with one `/api/events` EventSource, a jobs
+  store with reconnect/backoff, and honest indeterminate progress.
+- Generate `frontend/src/api/schema.d.ts` from the app's OpenAPI document with
+  `npm run api:types`; add response models for the routes touched and alias
+  those generated types in `api.ts`.
+- K11: every 4xx/5xx is `{detail, code}`; the frontend throws a typed `ApiError`
+  and maps stable codes to copy.
+
+### Constraints
+
+- No money, timing, rendering or approval-hash change.
+- No paid provider call.
+- No new dependency beyond `@fontsource-variable/schibsted-grotesk@5.3.0` and
+  `openapi-typescript` 7.x.
+
+### Acceptance
+
+- Existing screens render with the new font and tokens.
+- A queued job reaches the tray over SSE; polling is gone; no progress is
+  invented.
+- `npm run api:types` is reproducible and `npm run build` type-checks.
+- Every tested API failure returns `{detail, code}`.
+
+## P1 evidence
+
+P1 verified on `studio-redesign/p1-foundations` at the final working tree:
+
+- `uv run pytest -q`: **915 passed, 1 skipped** (102.84 s). New coverage:
+  eight envelope cases in `tests/test_api_errors.py` (including a hidden 500)
+  and a JSON `hello` parse in `tests/test_api_routes.py`.
+- `uv run ruff check .`: clean. `uv run ruff format --check .`: 219 files already
+  formatted.
+- `npm run api:types`: regenerated from the app OpenAPI document; `JobOut`,
+  `JobDetailOut`, `JobProgress`, `CancelOut`, `ApprovalStateOut`, `ApprovalsOut`
+  and `ApprovalOut` are generated types now used by `api.ts`.
+- `npm run build --prefix frontend`: clean, 67 modules; the two Schibsted
+  Grotesk woff2 files are emitted into `dist`.
+- Live Studio on port 8931 with `/tmp/opencode/t4-player`: the browser reported
+  the Schibsted font loaded, the neutral `rgb(27, 28, 31)` surround, and no
+  console errors. A local analysis upload produced a queued job that appeared in
+  the tray as `analysis · Done` through SSE. The first live probe exposed that
+  `sse-starlette` was sending Python dict reprs; the stream now emits JSON and
+  the regression parses the `data:` line.
+- Error envelope spot checks: `POST .../chat` with no body returned
+  `{"detail":"message required","code":"bad_request"}`; missing projects, jobs,
+  validation failures, stale/invalid approvals and the missing director key all
+  returned their stable codes.
+- No paid provider call was made; test uploads went to the `/tmp` fixture, not
+  `projects/`.
+- Browser evidence was collected before the browser tool was temporarily removed
+  from the session catalog and again after it returned. No Playwright dependency
+  was added.
+
 ## Next
 
-P1 — foundations: tokens/font, UI primitives, SSE jobs store, generated API
-types, and stable error codes.
+P2 — shell, routes, library, top bar, next-step bar, budget/jobs popovers, spine
+and director drawer.
