@@ -109,7 +109,12 @@ def _music(root: Path) -> str:
     return text
 
 
-def build_context(slug: str, projects_dir: Path | None = None, stage: str | None = None) -> str:
+def build_context(
+    slug: str,
+    projects_dir: Path | None = None,
+    stage: str | None = None,
+    context: dict | None = None,
+) -> str:
     """Compact project snapshot for the director's system prompt."""
     from mp3_to_videoclip import production as P
     from mp3_to_videoclip.models import Storyboard
@@ -149,6 +154,16 @@ def build_context(slug: str, projects_dir: Path | None = None, stage: str | None
         ]
         if stage:
             lines.append(f"- Current stage: {stage}")
+        if context:
+            lines.append("")
+            lines.append("## Session context")
+            if context.get("stage"):
+                lines.append(f"- Stage when asked: {context['stage']}")
+            if isinstance(context.get("time"), (int, float)):
+                lines.append(f"- Playhead: {float(context['time']):.2f}s")
+            selected = context.get("selected_shots") or []
+            if selected:
+                lines.append("- Selected shots: " + ", ".join(selected))
         lines.append("")
         lines.append("## Brief")
         if brief.intent is not None:

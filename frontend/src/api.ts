@@ -281,8 +281,22 @@ export type IntakePayload = {
 };
 
 export type Settings = {
+  gateway?: "opencode" | "direct";
+  opencode_bin?: string;
+  opencode_workspace?: string;
+  writer_model?: string;
+  editor_model?: string;
+  llm_model?: string;
+  llm_base_url?: string;
+  has_llm_api_key?: boolean;
+  has_runware_api_key?: boolean;
+  brand_name?: string;
+  brand_partner?: string;
   default_budget_usd?: number;
   image_reserve_usd?: number;
+  default_credit_roles?: string[];
+  remotion_dir?: string;
+  ffmpeg_path?: string;
   style_presets?: StylePreset[];
   kinds?: KindProfile[];
   shot_kinds?: {
@@ -449,6 +463,96 @@ export type EditSummary = {
   present: boolean;
   edit?: EditPayload;
   report: EditReport;
+};
+
+/** The readable cut Film renders. Labels and section names come from the engine. */
+export type CutReason = {
+  kind: string;
+  label: string;
+  reason: string;
+};
+
+export type CutSection = {
+  id: string;
+  name: string;
+  feel: string;
+  start_frame: number;
+  end_frame: number;
+  techniques: string[];
+};
+
+export type CutShot = {
+  shot_id: string;
+  kind: ShotKind;
+  section_id: string | null;
+  section_name: string | null;
+  start_frame: number;
+  duration_frames: number;
+  seconds: number;
+  transition: { type: string; frames: number; label: string; reason: string };
+  motion: { type: string; label: string; reason: string };
+  accents: { frame: number; type: string; label: string; reason: string }[];
+  text: { id: string; text: string; style: string; in_frame: number; out_frame: number }[];
+  reasons: CutReason[];
+  reason: string;
+};
+
+export type CutSummary = {
+  available: boolean;
+  present: boolean;
+  edit: EditPayload | null;
+  sections: CutSection[];
+  shots: CutShot[];
+  techniques: { name: string; count: number; reasons: string[]; reasoned: boolean }[];
+  counts: EditReport["counts"];
+  hard: EditFinding[];
+  warnings: EditFinding[];
+  notes: string;
+  grade: string | null;
+};
+
+export type HistorySnapshot = {
+  hash: string;
+  at: number;
+  bytes: number;
+};
+
+export type HistoryList = {
+  artifact: string;
+  snapshots: HistorySnapshot[];
+};
+
+export type HistoryRestore = {
+  artifact: string;
+  restored: string;
+  previous: string;
+};
+
+export type DeliveryLine = {
+  id: string;
+  label: string;
+  stage: "track" | "story" | "storyboard" | "images" | "film";
+  state: "done" | "you" | "blocked" | "optional";
+  required: boolean;
+  detail: string;
+  reason: string | null;
+  expected_hash: string | null;
+};
+
+export type DeliveryChecklist = {
+  signature_required: boolean;
+  preview_required: boolean;
+  can_final: boolean;
+  lines: DeliveryLine[];
+  stills: { kept: number; total: number };
+  outstanding: string[];
+};
+
+export type SettingsTest = {
+  ok: boolean;
+  kind: "runware" | "opencode";
+  message: string;
+  version?: string;
 };
 
 /** Generated from the typed `/api/jobs` response models. */
@@ -633,6 +737,17 @@ export const api = {
     ),
   preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
   edit: (slug: string) => request<EditSummary>(`/api/projects/${slug}/edit`),
+  editSummary: (slug: string) =>
+    request<CutSummary>(`/api/projects/${slug}/edit/summary`),
+  checklist: (slug: string) =>
+    request<DeliveryChecklist>(`/api/projects/${slug}/film/checklist`),
+  history: (slug: string, artifact: string) =>
+    request<HistoryList>(`/api/projects/${slug}/history/${artifact}`),
+  restoreHistory: (slug: string, artifact: string) =>
+    request<HistoryRestore>(`/api/projects/${slug}/history/${artifact}/restore`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   rating: (slug: string, artifact: ArtifactName) =>
     request<RatingSummary>(`/api/projects/${slug}/ratings?artifact=${artifact}`),
   rate: (slug: string, artifact: ArtifactName, rating: "up" | "down", note: string) =>
@@ -668,6 +783,16 @@ export const api = {
       body: JSON.stringify({}),
     }),
   settings: () => request<Settings>("/api/settings"),
+  saveSettings: (body: Record<string, unknown>) =>
+    request<Settings>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  testSettings: (kind: "runware" | "opencode") =>
+    request<SettingsTest>("/api/settings/test", {
+      method: "POST",
+      body: JSON.stringify({ kind }),
+    }),
   setup: () => request<SetupStatus>("/api/setup"),
   installRenderer: () =>
     request<{ installed: boolean; already_present: boolean; output: string }>(

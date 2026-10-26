@@ -2,19 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type ProjectSummary } from "./api";
 import { ArchiveShell, FilmShell, LibraryShell } from "./shell/FilmShell";
 import { goArchive, goFilm, goLibrary, useHashRoute } from "./shell/route";
-import { PROJECT_CHANGED } from "./shell/projectEvents";
-import { toast } from "./toast";
+import { notifyProjectChanged, PROJECT_CHANGED } from "./shell/projectEvents";
+import { SettingsDialog } from "./shell/SettingsDialog";
 import { ToastTray } from "./ToastTray";
-
-function settingsNotice() {
-  toast("Settings is coming with the director pass.");
-}
 
 export function App() {
   const route = useHashRoute();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const openSettings = () => setSettingsOpen(true);
 
   const refresh = useCallback(async () => {
     try {
@@ -39,6 +37,16 @@ export function App() {
     goFilm(slug, "track");
   };
 
+  const dialog = settingsOpen ? (
+    <SettingsDialog
+      onClose={() => setSettingsOpen(false)}
+      onSaved={() => {
+        void refresh();
+        notifyProjectChanged();
+      }}
+    />
+  ) : null;
+
   if (route.kind === "library") {
     return (
       <>
@@ -49,8 +57,9 @@ export function App() {
           onOpen={(slug, stage) => goFilm(slug, stage)}
           onArchive={goArchive}
           onCreated={(slug) => void created(slug)}
-          onSettings={settingsNotice}
+          onSettings={openSettings}
         />
+        {dialog}
         <ToastTray />
       </>
     );
@@ -78,7 +87,8 @@ export function App() {
   if (route.kind === "archive") {
     return (
       <>
-        <ArchiveShell project={selected} onBack={goLibrary} onSettings={settingsNotice} />
+        <ArchiveShell project={selected} onBack={goLibrary} onSettings={openSettings} />
+        {dialog}
         <ToastTray />
       </>
     );
@@ -92,7 +102,9 @@ export function App() {
         stage={route.stage}
         onNavigate={(stage) => goFilm(selected.slug, stage)}
         onProjectsChanged={() => void refresh()}
+        onSettings={openSettings}
       />
+      {dialog}
       <ToastTray />
     </>
   );

@@ -38,6 +38,10 @@ export type ProjectFacts = {
   has_lyrics?: boolean;
   has_message?: boolean;
   has_cta?: boolean;
+  /** Present on library summaries: whether delivery needs the graphics pass. */
+  signature_required?: boolean | null;
+  /** Present on library summaries: whether the stills gate sits behind preview. */
+  preview_required?: boolean;
   stage_states?: Partial<Record<Stage, StageState>>;
 };
 
@@ -391,7 +395,7 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
     };
   }
   const preview = approval(approvals, "preview");
-  if (!preview || preview.state !== "approved") {
+  if (project.preview_required !== false && (!preview || preview.state !== "approved")) {
     return {
       tone: preview?.state === "stale" ? "changed" : "you",
       title:
@@ -403,7 +407,7 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
     };
   }
   const graphics = approval(approvals, "graphics");
-  if (!graphics || graphics.state !== "approved") {
+  if (project.signature_required !== false && (!graphics || graphics.state !== "approved")) {
     return {
       tone: graphics?.state === "stale" ? "changed" : "you",
       title:

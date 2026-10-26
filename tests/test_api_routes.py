@@ -127,6 +127,41 @@ def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
         assert load_settings().brand_name == "Other"
 
 
+def test_settings_tests_are_free_and_report_the_runware_key(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from mp3_to_videoclip.config import Settings
+
+    monkeypatch.setattr("mp3_to_videoclip.api.settings.effective_settings", lambda: Settings())
+    with api_client(tmp_path) as client:
+        missing = client.post("/api/settings/test", json={"kind": "runware"})
+        assert missing.status_code == 200
+        assert missing.json()["ok"] is False
+        assert "Runware key" in missing.json()["message"]
+        assert client.post("/api/settings/test", json={"kind": "nope"}).status_code == 400
+
+    monkeypatch.setattr(
+        "mp3_to_videoclip.api.settings.effective_settings",
+        lambda: Settings(gateway="opencode"),
+    )
+    monkeypatch.setattr(
+        "mp3_to_videoclip.director.opencode.discover_binary",
+        lambda configured: "/fake/opencode",
+    )
+
+    def fake_run(command, capture_output=True, text=True, timeout=15):
+        if command[-1] == "--version":
+            return SimpleNamespace(returncode=0, stdout="opencode v2.0.28\n", stderr="")
+        return SimpleNamespace(returncode=0, stdout="OpenCode Go stored\n", stderr="")
+
+    monkeypatch.setattr("mp3_to_videoclip.api.settings.subprocess.run", fake_run)
+    with api_client(tmp_path) as client:
+        ready = client.post("/api/settings/test", json={"kind": "opencode"})
+        assert ready.status_code == 200
+        assert ready.json()["ok"] is True
+        assert "signed in" in ready.json()["message"]
+
+
 def test_track_read_lyrics_write_and_local_analysis(client, project, monkeypatch):
     track = client.get("/api/projects/production/track").json()
     assert track["music"]["duration"] == 2.0
@@ -234,6 +269,10 @@ def test_missing_storyboard_is_an_empty_state(client, project):
     response = client.get("/api/projects/production/storyboard")
     assert response.status_code == 200
     assert response.json() == {"available": False}
+    summary = client.get("/api/projects/production/edit/summary")
+    assert summary.status_code == 200
+    assert summary.json()["present"] is False
+    assert summary.json()["counts"] == {"shots": 0}
 
 
 def test_storyboard_boundary_update_keeps_later_cuts_in_place(client):
@@ -307,6 +346,99 @@ def test_adaptive_skeleton_uses_guided_evidence_without_extra_approvals(client, 
     board = created.json()
     assert board["total_frames"] == 48
     assert board["shots"][0]["start_frame"] == 0
+
+
+def test_film_checklist_tracks_the_real_final_gate(client, project, monkeypatch):
+    add_assets(project)
+
+    def approve(stage: str):
+        state = next(
+            item
+            for item in client.get("/api/projects/production/approvals").json()["stages"]
+            if item["stage"] == stage
+        )
+        return client.post(
+            f"/api/projects/production/approvals/{stage}",
+            json={
+                "expected_hash": state["expected_hash"],
+                "note": f"Reviewed {stage}",
+                "confirmed": True,
+            },
+        )
+
+    checked = client.get("/api/projects/production/film/checklist")
+    assert checked.status_code == 200, checked.text
+    body = checked.json()
+    assert body["can_final"] is False
+    assert body["signature_required"] is False
+    assert body["preview_required"] is False
+    assert body["stills"] == {"kept": 0, "total": 4}
+    assert [line["id"] for line in body["lines"]] == [
+        "story",
+        "storyboard",
+        "stills",
+        "titles",
+    ]
+    assert body["lines"][0]["state"] == "you"
+    assert body["lines"][2]["detail"] == "0 of 4 paid stills kept."
+    assert body["lines"][3]["state"] == "optional"
+
+    assert approve("brief").status_code == 200
+    assert approve("storyboard").status_code == 200
+    for shot in P.load_board(project).shots:
+        assert (
+            client.post(
+                "/api/projects/production/images/review",
+                json={
+                    "shot_id": shot.id,
+                    "version": 1,
+                    "verdict": "accept",
+                    "note": "",
+                    "inspected": True,
+                },
+            ).status_code
+            == 200
+        )
+    assert approve("proof").status_code == 200
+
+    before_stills = client.get("/api/projects/production/film/checklist").json()
+    assert before_stills["can_final"] is False
+    stills = next(line for line in before_stills["lines"] if line["id"] == "stills")
+    assert stills["state"] == "you"
+    assert before_stills["stills"] == {"kept": 4, "total": 4}
+    blocked = client.post("/api/projects/production/render", json={"kind": "final"})
+    assert blocked.status_code == 400
+    assert "stills needs current user approval" in blocked.text
+
+    assert approve("stills").status_code == 200
+    after = client.get("/api/projects/production/film/checklist").json()
+    assert after["can_final"] is True
+    assert after["outstanding"] == []
+    assert all(line["state"] in ("done", "optional") for line in after["lines"])
+
+    submitted: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        client.app.state.runner,
+        "submit",
+        lambda kind, slug, factory: submitted.append((kind, slug)) or "job-final",
+    )
+    queued = client.post("/api/projects/production/render", json={"kind": "final"})
+    assert queued.status_code == 200, queued.text
+    assert queued.json()["status"] == "queued"
+    assert submitted == [("render", "production")]
+
+
+def test_film_checklist_shows_the_preview_gate_for_unguided_films(tmp_path):
+    root = make_api_project(tmp_path)
+    (root / "work" / "guided-flow.json").unlink()
+    with api_client(tmp_path) as client:
+        body = client.get("/api/projects/production/film/checklist").json()
+    assert body["preview_required"] is True
+    assert "preview" in [line["id"] for line in body["lines"]]
+    preview = next(line for line in body["lines"] if line["id"] == "preview")
+    assert preview["state"] == "blocked"
+    assert "approval" in preview["reason"]
+    assert body["can_final"] is False
 
 
 def test_film_graphics_render_and_exports(client, project, monkeypatch):
@@ -480,6 +612,24 @@ def test_director_chat_reads_and_streams(client, monkeypatch):
     assert streamed.status_code == 200
     events = [json.loads(line) for line in streamed.text.splitlines() if line]
     assert [event["kind"] for event in events] == ["text", "done"]
+
+
+def test_director_context_is_bounded_and_typed(client):
+    for payload, needle in (
+        ({"context": {"time": -1}}, "seconds"),
+        ({"context": {"spreadsheet": 1}}, "unexpected"),
+        ({"context": {"stage": "warp"}}, "stage"),
+        ({"context": {"selected_shots": ["../../etc/passwd"]}}, "shot IDs"),
+        ({"context": {"selected_shots": ["s001"] * 9}}, "shot IDs"),
+    ):
+        response = client.post("/api/projects/production/chat", json={"message": "hi", **payload})
+        assert response.status_code == 400, response.text
+        assert needle in response.text
+    bad_role = client.post(
+        "/api/projects/production/chat", json={"message": "hi", "role": "critic"}
+    )
+    assert bad_role.status_code == 400
+    assert "writer or editor" in bad_role.text
 
 
 def test_intake_keeps_a_custom_look_when_no_preset_is_selected(client, project):

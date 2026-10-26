@@ -259,9 +259,15 @@ export function StoryStage({
 
   return (
     <>
-      <div className="stage-head">
-        <h1>Story</h1>
-        <p>Pick a direction, shape the story and set the look every picture will share.</p>
+      <div className="stage-head story-head">
+        <div>
+          <h1>Story</h1>
+          <p>Pick a direction, shape the story and set the look every picture will share.</p>
+        </div>
+        <div className="stage-ratings" aria-label="Rate the story artifacts">
+          <ArtifactRating slug={slug} artifact="brief" />
+          <ArtifactRating slug={slug} artifact="treatments" />
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
       {loading && !brief && <p className="hint">Reading the current story…</p>}
@@ -436,17 +442,6 @@ export function StoryStage({
         refresh={revision}
         onApproved={() => setRevision((value) => value + 1)}
       />
-
-      <section className="stage-block ratings-block">
-        <h2>Evaluation</h2>
-        <p className="hint">
-          Thumbs are evaluation signals, stored with the prompt revision that wrote the artifact.
-        </p>
-        <div className="ratings-grid">
-          <ArtifactRating slug={slug} artifact="brief" />
-          <ArtifactRating slug={slug} artifact="treatments" />
-        </div>
-      </section>
     </>
   );
 }

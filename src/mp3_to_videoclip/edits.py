@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .models import (
+    EditAccent,
     EditDecisionList,
     EditMotion,
     EditSection,
@@ -27,6 +28,57 @@ from .storage import digest, read_json, read_optional, write_json
 EDIT = "work/edit.json"
 HARD = "hard"
 WARNING = "warning"
+
+TRANSITION_LABELS = {
+    "cut": "Cut",
+    "fade": "Fade",
+    "wipe_left": "Wipe left",
+    "wipe_right": "Wipe right",
+    "dip_to_black": "Dip to black",
+    "dip_to_white": "Dip to white",
+    "whip_pan": "Whip pan",
+    "push": "Push",
+    "slide": "Slide",
+}
+MOTION_LABELS = {
+    "hold": "Hold",
+    "push_in": "Push in",
+    "pull_back": "Pull back",
+    "pan_left": "Pan left",
+    "pan_right": "Pan right",
+}
+ACCENT_LABELS = {"punch_in": "Punch in", "flash": "Flash", "light_leak": "Light leak"}
+
+
+def transition_label(value: EditTransition) -> str:
+    label = TRANSITION_LABELS.get(value.type, value.type.replace("_", " ").title())
+    if value.frames:
+        return f"{label} {value.frames} f"
+    return label
+
+
+def motion_label(value: EditMotion) -> str:
+    return MOTION_LABELS.get(value.type, value.type.replace("_", " ").title())
+
+
+def accent_label(value: EditAccent) -> str:
+    return ACCENT_LABELS.get(value.type, value.type.replace("_", " ").title())
+
+
+def _section_names(root: Path) -> list[str]:
+    """Measured sections with their human names, in measured order."""
+    from .domain import music_notes
+
+    music = read_optional(root / "work" / "music.json")
+    if not isinstance(music, dict):
+        return []
+    named = music_notes.apply_names(music, music_notes.read(root)) or {}
+    return [
+        str(item.get("name") or music_notes.default_name(index))
+        for index, item in enumerate(named.get("sections") or [])
+        if isinstance(item, dict)
+    ]
+
 
 # Storyboard fields that belong to the edit once work/edit.json exists.
 EDIT_OWNED = {
@@ -108,6 +160,9 @@ def save_edit(
     edit = value if isinstance(value, EditDecisionList) else EditDecisionList.model_validate(value)
     edit.check_board(board)
     edit_path(root).parent.mkdir(parents=True, exist_ok=True)
+    from .domain import history
+
+    history.snapshot(root, "edit")
     write_json(edit_path(root), edit.model_dump(by_alias=True))
     if record:
         P._record_prompt_write(root, "edit")
@@ -805,4 +860,158 @@ def summary(root: Path, edit: EditDecisionList | None = None) -> dict:
         "present": True,
         "edit": edit.model_dump(by_alias=True),
         "report": value,
+    }
+
+
+def cut_summary(root: Path, edit: EditDecisionList | None = None) -> dict:
+    """The cut list Film shows: human joins, moves, reasons and section names.
+
+    The edit bytes stay authoritative; this is a read-only presentation layer so
+    the UI never decodes engine keys or computes timing of its own.
+    """
+    from . import production as P
+
+    if not (root / "work" / "storyboard.json").is_file():
+        return {
+            "available": False,
+            "present": False,
+            "edit": None,
+            "sections": [],
+            "shots": [],
+            "techniques": [],
+            "counts": {"shots": 0},
+            "hard": [],
+            "warnings": [],
+            "notes": "",
+            "grade": None,
+        }
+    board = P.load_board(root)
+    project = P.load_project(root)
+    edit = edit if edit is not None else load_edit(root, board=board)
+    if edit is None:
+        return {
+            "available": False,
+            "present": False,
+            "edit": None,
+            "sections": [],
+            "shots": [],
+            "techniques": [],
+            "counts": {"shots": len(board.shots)},
+            "hard": [],
+            "warnings": [],
+            "notes": "",
+            "grade": None,
+        }
+
+    value = report(root, edit=edit, board=board, project=project)
+    names = _section_names(root)
+    windows = _section_windows(edit, board.total_frames)
+    sections = []
+    for index, (section, start, end) in enumerate(windows):
+        sections.append(
+            {
+                "id": section.id,
+                "name": names[index] if index < len(names) else (section.feel or section.id),
+                "feel": section.feel,
+                "start_frame": start,
+                "end_frame": end,
+                "techniques": list(section.techniques),
+            }
+        )
+
+    content = {shot.id: shot for shot in board.shots}
+    shots = []
+    for shot in edit.shots:
+        source = content.get(shot.shot_id)
+        home_index = next(
+            (
+                index
+                for index, (_, start, end) in enumerate(windows)
+                if start <= shot.start_frame < end
+            ),
+            len(windows) - 1 if windows else -1,
+        )
+        home = sections[home_index] if home_index >= 0 else None
+        reasons = []
+        if shot.transition_in.reason:
+            reasons.append(
+                {
+                    "kind": "transition",
+                    "label": transition_label(shot.transition_in),
+                    "reason": shot.transition_in.reason,
+                }
+            )
+        if shot.motion.reason:
+            reasons.append(
+                {
+                    "kind": "motion",
+                    "label": motion_label(shot.motion),
+                    "reason": shot.motion.reason,
+                }
+            )
+        for accent in shot.accents:
+            if accent.reason:
+                reasons.append(
+                    {
+                        "kind": "accent",
+                        "label": accent_label(accent),
+                        "reason": accent.reason,
+                    }
+                )
+        shots.append(
+            {
+                "shot_id": shot.shot_id,
+                "kind": source.kind if source else "scene",
+                "section_id": home["id"] if home else None,
+                "section_name": home["name"] if home else None,
+                "start_frame": shot.start_frame,
+                "duration_frames": shot.duration_frames,
+                "seconds": round(shot.duration_frames / project.fps, 3),
+                "transition": {
+                    "type": shot.transition_in.type,
+                    "frames": shot.transition_in.frames,
+                    "label": transition_label(shot.transition_in),
+                    "reason": shot.transition_in.reason,
+                },
+                "motion": {
+                    "type": shot.motion.type,
+                    "label": motion_label(shot.motion),
+                    "reason": shot.motion.reason,
+                },
+                "accents": [
+                    {
+                        "frame": accent.frame,
+                        "type": accent.type,
+                        "label": accent_label(accent),
+                        "reason": accent.reason,
+                    }
+                    for accent in shot.accents
+                ],
+                "text": [
+                    {
+                        "id": item.id,
+                        "text": item.text,
+                        "style": item.style,
+                        "in_frame": item.in_frame,
+                        "out_frame": item.out_frame,
+                    }
+                    for item in shot.text
+                ],
+                "reasons": reasons,
+                "reason": reasons[0]["reason"] if reasons else "",
+            }
+        )
+
+    return {
+        "available": True,
+        "present": True,
+        "edit": edit.model_dump(by_alias=True),
+        "sections": sections,
+        "shots": shots,
+        "techniques": value["techniques"],
+        "counts": value["counts"],
+        "hard": value["hard"],
+        "warnings": value["warnings"],
+        "notes": edit.notes,
+        "grade": edit.grade.preset,
     }

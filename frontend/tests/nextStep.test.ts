@@ -507,3 +507,34 @@ test("film reports a delivered final", () => {
   assert.equal(step.tone, "done");
   assert.match(step.title, /Delivered/);
 });
+
+test("film skips the preview and titles when this production has neither gate", () => {
+  const step = nextStep(
+    "film",
+    project({
+      signature_required: false,
+      preview_required: false,
+      stage_states: states({ story: "done", storyboard: "done", images: "done", film: "you" }),
+    }),
+    approvals({ stills: { state: "approved" } }),
+    images(),
+    budget,
+  );
+  assert.equal(step.tone, "done");
+  assert.match(step.title, /Ready to deliver/);
+});
+
+test("film keeps the preview gate when the production records one", () => {
+  const step = nextStep(
+    "film",
+    project({
+      signature_required: false,
+      preview_required: true,
+      stage_states: states({ story: "done", storyboard: "done", images: "done", film: "you" }),
+    }),
+    approvals({ stills: { state: "approved" } }),
+    images(),
+    budget,
+  );
+  assert.match(step.title, /Watch the preview/);
+});

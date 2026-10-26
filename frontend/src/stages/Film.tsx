@@ -1,10 +1,25 @@
-import { Suspense, lazy, useEffect, useState } from "react";
-import { api, type Budget, type EditSummary, type GraphicsReview } from "../api";
-import { ApprovalBar } from "../ApprovalBar";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  api,
+  type CutSection,
+  type CutShot,
+  type CutSummary,
+  type DeliveryChecklist,
+  type DeliveryLine,
+  type GraphicsReview,
+  type ImageShot,
+  type Storyboard,
+} from "../api";
 import { ArtifactRating } from "../ArtifactRating";
 import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
+import type { Stage } from "../shell/nextStep";
+import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
+import { SHOW_EDIT_FILE } from "../shell/SettingsDialog";
 import { usePlayer } from "../spine/player";
+import { CreditsCard } from "../story/CreditsCard";
+import { ShotThumb } from "../storyboard/ShotThumb";
+import { Button } from "../ui";
 
 const LivePlayer = lazy(() => import("../LivePlayer"));
 
@@ -20,77 +35,155 @@ type LiveState = {
   stale: number;
 };
 
-export function FilmStage({ slug }: { slug: string }) {
+function clock(seconds: number): string {
+  const value = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+}
+
+function duration(seconds: number): string {
+  return `${seconds.toFixed(1)} s`;
+}
+
+function films(name: string): string {
+  return name.replace(/^.*-v(\d+)\.mp4$/, "v$1");
+}
+
+function reviewKey(value: GraphicsReview | null): string {
+  if (!value) return "none";
+  return `${value.available}:${value.current}:${value.samples?.length ?? 0}`;
+}
+
+export function FilmStage({
+  slug,
+  onNavigate,
+}: {
+  slug: string;
+  onNavigate: (stage: Stage) => void;
+}) {
   const player = usePlayer();
+  const [tab, setTab] = useState<"cut" | "files">("cut");
   const [previews, setPreviews] = useState<string[]>([]);
   const [exports, setExports] = useState<string[]>([]);
   const [selected, setSelected] = useState<FilmFile | null>(null);
   const [live, setLive] = useState<LiveState | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
-  const [budget, setBudget] = useState<Budget | null>(null);
   const [graphics, setGraphics] = useState<GraphicsReview | null>(null);
   const [rendererReady, setRendererReady] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cut, setCut] = useState<EditSummary | null>(null);
-  const [cutText, setCutText] = useState("");
-  const [cutBusy, setCutBusy] = useState<string | null>(null);
+  const [cut, setCut] = useState<CutSummary | null>(null);
+  const [checklist, setChecklist] = useState<DeliveryChecklist | null>(null);
+  const [checklistError, setChecklistError] = useState<string | null>(null);
+  const [board, setBoard] = useState<Storyboard | null>(null);
+  const [images, setImages] = useState<ImageShot[]>([]);
   const [revision, setRevision] = useState(0);
+  const [previewAttested, setPreviewAttested] = useState(false);
+  const [inspected, setInspected] = useState(false);
+  const [samplesOpen, setSamplesOpen] = useState(false);
+  const [sampleIndex, setSampleIndex] = useState(0);
+  const [showEditFile, setShowEditFile] = useState(
+    () => window.localStorage.getItem(SHOW_EDIT_FILE) === "1",
+  );
+  const graphicsKey = useRef("");
+  const previewsKey = useRef("");
 
-  const applyCut = (value: EditSummary) => {
-    setCut(value);
-    if (value.present && value.edit) {
-      setCutText(JSON.stringify(value.edit, null, 2));
+  const applyFiles = useCallback((value: { exports: string[]; previews: string[] }) => {
+    previewsKey.current = value.previews.join("|");
+    setPreviews(value.previews);
+    setExports(value.exports);
+    setSelected((current) => {
+      const all = [
+        ...value.previews.map((name) => ({ kind: "previews" as const, name })),
+        ...value.exports.map((name) => ({ kind: "renders" as const, name })),
+      ];
+      if (current && all.some((file) => file.kind === current.kind && file.name === current.name)) {
+        return current;
+      }
+      return all[0] || null;
+    });
+  }, []);
+
+  const load = useCallback(async () => {
+    const [
+      filesResult,
+      cutResult,
+      checklistResult,
+      boardResult,
+      imagesResult,
+      graphicsResult,
+    ] = await Promise.allSettled([
+      api.exports(slug),
+      api.editSummary(slug),
+      api.checklist(slug),
+      api.storyboard(slug),
+      api.images(slug),
+      api.graphicsReview(slug),
+    ]);
+    if (filesResult.status === "fulfilled") applyFiles(filesResult.value);
+    if (cutResult.status === "fulfilled") setCut(cutResult.value);
+    else setCut(null);
+    if (checklistResult.status === "fulfilled") {
+      setChecklist(checklistResult.value);
+      setChecklistError(null);
     } else {
-      setCutText("");
+      setChecklist(null);
+      setChecklistError(String(checklistResult.reason));
     }
-  };
+    if (boardResult.status === "fulfilled") {
+      setBoard("shots" in boardResult.value ? boardResult.value : null);
+    }
+    if (imagesResult.status === "fulfilled") setImages(imagesResult.value.shots);
+    if (graphicsResult.status === "fulfilled") {
+      setGraphics(graphicsResult.value);
+      graphicsKey.current = reviewKey(graphicsResult.value);
+    } else {
+      setGraphics(null);
+    }
+  }, [applyFiles, slug]);
 
-  const load = () => {
-    api
-      .exports(slug)
-      .then((d) => {
-        setPreviews(d.previews);
-        setExports(d.exports);
-        setSelected((current) => {
-          const all = [
-            ...d.previews.map((name) => ({ kind: "previews" as const, name })),
-            ...d.exports.map((name) => ({ kind: "renders" as const, name })),
-          ];
-          if (current && all.some((f) => f.kind === current.kind && f.name === current.name)) {
-            return current;
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    // Renders are background jobs. Poll only the cheap file and sample lists;
+    // the full checklist re-hashes every accepted still and must not run on a timer.
+    const id = window.setInterval(() => {
+      void Promise.allSettled([api.exports(slug), api.graphicsReview(slug)]).then(
+        ([filesResult, reviewResult]) => {
+          if (filesResult.status === "fulfilled") {
+            const changed =
+              filesResult.value.previews.join("|") !== previewsKey.current;
+            applyFiles(filesResult.value);
+            if (changed) {
+              void load();
+              return;
+            }
           }
-          return all[0] || null;
-        });
-      })
-      .catch(() => {
-        setPreviews([]);
-        setExports([]);
-      });
-    api
-      .budget(slug)
-      .then(setBudget)
-      .catch(() => setBudget(null));
-    api
-      .graphicsReview(slug)
-      .then(setGraphics)
-      .catch(() => setGraphics(null));
-  };
+          if (reviewResult.status === "fulfilled") {
+            const next = reviewKey(reviewResult.value);
+            if (next !== graphicsKey.current) {
+              graphicsKey.current = next;
+              setGraphics(reviewResult.value);
+              void load();
+            }
+          }
+        },
+      );
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [applyFiles, load, slug]);
 
   useEffect(() => {
-    load();
-    // A render is a background job; keep watching until its file appears.
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
-  }, [slug]);
-
-  useEffect(() => {
-    api
-      .edit(slug)
-      .then(applyCut)
-      .catch(() => setCut(null));
-  }, [slug]);
+    const refresh = () => {
+      setShowEditFile(window.localStorage.getItem(SHOW_EDIT_FILE) === "1");
+      setRevision((value) => value + 1);
+      void load();
+    };
+    window.addEventListener(PROJECT_CHANGED, refresh);
+    return () => window.removeEventListener(PROJECT_CHANGED, refresh);
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,330 +216,768 @@ export function FilmStage({ slug }: { slug: string }) {
         });
         setLiveError(null);
       })
-      .catch((e) => {
+      .catch((caught) => {
         if (cancelled) return;
         setLive(null);
-        setLiveError(`Live preview unavailable: ${String(e)}`);
+        setLiveError(`Live preview unavailable: ${String(caught)}`);
       });
     return () => {
       cancelled = true;
     };
   }, [slug, revision]);
 
+  useEffect(() => {
+    if (!samplesOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSamplesOpen(false);
+      if (event.key === "ArrowRight") {
+        setSampleIndex((index) =>
+          Math.min(index + 1, Math.max((graphics?.samples?.length || 1) - 1, 0)),
+        );
+      }
+      if (event.key === "ArrowLeft") setSampleIndex((index) => Math.max(index - 1, 0));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [samplesOpen, graphics?.samples?.length]);
+
   const seedCut = async () => {
-    setCutBusy("seed");
+    setBusy("seed");
     setError(null);
+    setNotice(null);
     try {
-      const value = await api.seedEdit(slug);
-      applyCut(value);
-      setRevision((current) => current + 1);
-      setMessage("Timing now lives in the edit list; the storyboard keeps content.");
-    } catch (e) {
-      setError(String(e));
+      await api.seedEdit(slug);
+      setCut(await api.editSummary(slug));
+      setNotice("The Editor cut the film. Timing now comes from the cut.");
+      setRevision((value) => value + 1);
+      notifyProjectChanged();
+      await load();
+    } catch (caught) {
+      setError(String(caught));
     } finally {
-      setCutBusy(null);
-    }
-  };
-
-  const saveCut = async () => {
-    setCutBusy("save");
-    setError(null);
-    try {
-      const parsed = JSON.parse(cutText) as unknown;
-      const value = await api.saveEdit(slug, parsed);
-      applyCut(value);
-      setRevision((current) => current + 1);
-      setMessage(value.report.ok ? "Cut saved; the report has no hard findings." : "Cut saved; fix the hard findings.");
-    } catch (e) {
-      setError(`Cut not saved: ${String(e)}`);
-    } finally {
-      setCutBusy(null);
-    }
-  };
-
-  const refreshCut = async () => {
-    setCutBusy("report");
-    setError(null);
-    try {
-      applyCut(await api.edit(slug));
-      setRevision((current) => current + 1);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setCutBusy(null);
+      setBusy(null);
     }
   };
 
   const render = async (kind: "preview" | "base" | "final") => {
     setBusy(kind);
     setError(null);
-    setMessage(
-      `${kind === "final" ? "Final" : kind === "base" ? "Base" : "Preview"} queued; it appears here when the job finishes.`,
+    setNotice(
+      `${
+        kind === "final" ? "Final render" : kind === "base" ? "Titles check" : "Preview"
+      } queued. It appears in Rendered files when the job finishes.`,
     );
     try {
       await api.render(slug, kind);
-      load();
-    } catch (e) {
-      setError(String(e));
-      setMessage(null);
+      notifyProjectChanged();
+      await load();
+    } catch (caught) {
+      setError(String(caught));
+      setNotice(null);
     } finally {
       setBusy(null);
     }
   };
 
-  const src = selected
-    ? `/api/projects/${slug}/film/${selected.kind}/${encodeURIComponent(selected.name)}`
-    : null;
+  const approvePreview = async (line: DeliveryLine) => {
+    if (!line.expected_hash || !previewAttested) return;
+    setBusy("preview-approval");
+    setError(null);
+    try {
+      await api.approve(slug, "preview", {
+        expected_hash: line.expected_hash,
+        note: "",
+        confirmed: true,
+        preview_watched: true,
+      });
+      setPreviewAttested(false);
+      setNotice("Preview approved.");
+      notifyProjectChanged();
+      await load();
+    } catch (caught) {
+      setError(String(caught));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const approveTitles = async (line: DeliveryLine) => {
+    if (!line.expected_hash || !inspected) return;
+    setBusy("titles-approval");
+    setError(null);
+    try {
+      await api.approve(slug, "graphics", {
+        expected_hash: line.expected_hash,
+        note: "",
+        confirmed: true,
+        inspected: true,
+      });
+      setInspected(false);
+      setSamplesOpen(false);
+      setNotice("Titles approved.");
+      notifyProjectChanged();
+      await load();
+    } catch (caught) {
+      setError(String(caught));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const files: FilmFile[] = [
     ...previews.map((name) => ({ kind: "previews" as const, name })),
     ...exports.map((name) => ({ kind: "renders" as const, name })),
   ];
+  const src = selected
+    ? `/api/projects/${slug}/film/${selected.kind}/${encodeURIComponent(selected.name)}`
+    : null;
+
+  const boardById = useMemo(
+    () => new Map((board?.shots || []).map((shot) => [shot.id, shot])),
+    [board],
+  );
+  const imageById = useMemo(
+    () => new Map(images.map((image) => [image.id, image])),
+    [images],
+  );
+
+  const groups = useMemo(() => {
+    if (!cut?.present) return [];
+    const sections: { section: CutSection; shots: CutShot[] }[] = cut.sections.map(
+      (section) => ({
+        section,
+        shots: cut.shots.filter((shot) => shot.section_id === section.id),
+      }),
+    );
+    const placed = new Set(sections.flatMap((group) => group.shots.map((shot) => shot.shot_id)));
+    const orphan = cut.shots.filter((shot) => !placed.has(shot.shot_id));
+    if (orphan.length) {
+      sections.push({
+        section: {
+          id: "between",
+          name: "Between sections",
+          feel: "",
+          start_frame: orphan[0].start_frame,
+          end_frame: orphan[orphan.length - 1].start_frame + orphan[orphan.length - 1].duration_frames,
+          techniques: [],
+        },
+        shots: orphan,
+      });
+    }
+    return sections.filter((group) => group.shots.length > 0);
+  }, [cut]);
+
+  const fps = board?.fps || 24;
+  const currentCutShot = cut?.shots.find(
+    (shot) =>
+      player.time >= shot.start_frame / fps &&
+      player.time < (shot.start_frame + shot.duration_frames) / fps,
+  );
+  const currentBoardShot = currentCutShot
+    ? boardById.get(currentCutShot.shot_id)
+    : board?.shots.find(
+        (shot) =>
+          player.time >= shot.start_frame / fps &&
+          player.time < (shot.start_frame + shot.duration_frames) / fps,
+      );
+  const currentPicture = currentBoardShot ? imageById.get(currentBoardShot.id) : undefined;
+  const line = (id: string) => checklist?.lines.find((item) => item.id === id) || null;
+  const titlesLine = line("titles");
+  const stillsDone = line("stills")?.state === "done";
+  const samples = graphics?.samples || [];
+  const canApproveTitles =
+    !!titlesLine &&
+    titlesLine.state !== "done" &&
+    titlesLine.state !== "optional" &&
+    !!titlesLine.expected_hash &&
+    graphics?.current !== false &&
+    inspected;
+  const finalHint = checklist
+    ? checklist.can_final
+      ? "Every gate is approved. The final render is a local job."
+      : `Still needed: ${checklist.outstanding.join(" · ")}`
+    : "Reading the delivery gates…";
 
   return (
     <>
-      <h2>Film</h2>
-      <p className="sub">Watch the render, check the budget and download the export.</p>
-      {error && <p className="error">{error}</p>}
-      {message && <p className="message">{message}</p>}
-
-      <div className="card">
-        <h3>Cut report</h3>
-        {cut?.present ? (
-          <>
-            <p className="meta">
-              {cut.report.counts.shots ?? 0} shots · {cut.report.counts.cuts ?? 0} cuts ·{" "}
-              {cut.report.counts.holds ?? 0} holds (
-              {Math.round((cut.report.counts.hold_ratio ?? 0) * 100)}%) ·{" "}
-              {cut.report.counts.accents ?? 0} accents ·{" "}
-              {cut.report.counts.flashes ?? 0} flashes ·{" "}
-              {cut.report.hard.length === 0
-                ? "no hard findings"
-                : `${cut.report.hard.length} hard finding${cut.report.hard.length === 1 ? "" : "s"}`}
-            </p>
-            {(cut.report.hard.length > 0 || cut.report.warnings.length > 0) && (
-              <div className="pre">
-                {cut.report.hard.map((finding) => (
-                  <div key={`hard-${finding.code}-${finding.shot_id ?? ""}-${finding.message}`}>
-                    HARD {finding.code}: {finding.message}
-                  </div>
-                ))}
-                {cut.report.warnings.map((finding) => (
-                  <div key={`warn-${finding.code}-${finding.shot_id ?? ""}-${finding.message}`}>
-                    warning {finding.code}: {finding.message}
-                  </div>
-                ))}
-              </div>
-            )}
-            {cut.report.sections.length > 0 && (
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Section</th>
-                      <th>Frames</th>
-                      <th>Energy</th>
-                      <th>Cuts / 10s</th>
-                      <th>Holds</th>
-                      <th>Flashes</th>
-                      <th>Plan</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cut.report.sections.map((section) => (
-                      <tr key={section.id}>
-                        <td>{section.id}</td>
-                        <td>
-                          {section.start_frame}–{section.end_frame}
-                        </td>
-                        <td>{section.energy ?? "—"}</td>
-                        <td>
-                          {section.density_per_10s} / {section.target_density_per_10s}
-                        </td>
-                        <td>
-                          {section.holds}/{section.shots}
-                        </td>
-                        <td>{section.flashes}</td>
-                        <td>{section.techniques.join(", ") || section.feel}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {cut.report.techniques.length > 0 && (
-              <p className="meta">
-                Techniques:{" "}
-                {cut.report.techniques
-                  .map(
-                    (item) =>
-                      `${item.name} ×${item.count}${item.reasoned ? "" : " (no stated reason)"}`,
-                  )
-                  .join(" · ")}
-              </p>
-            )}
-            <button onClick={refreshCut} disabled={cutBusy !== null}>
-              {cutBusy === "report" ? "Reading…" : "Re-run report"}
-            </button>{" "}
-            <details>
-              <summary>Edit JSON</summary>
-              <textarea
-                value={cutText}
-                onChange={(event) => setCutText(event.target.value)}
-                rows={16}
-                spellCheck={false}
-                style={{ width: "100%", fontFamily: "monospace" }}
-              />
-              <button onClick={saveCut} disabled={cutBusy !== null}>
-                {cutBusy === "save" ? "Saving…" : "Save cut"}
-              </button>
-            </details>
-            <ArtifactRating slug={slug} artifact="edit" />
-          </>
-        ) : (
-          <>
-            <p className="meta">
-              Timing is still the storyboard's. Seed an edit to move order, spans, motion,
-              transitions, accents, text timing and grade into <code>work/edit.json</code>.
-            </p>
-            <button onClick={seedCut} disabled={cutBusy !== null}>
-              {cutBusy === "seed" ? "Seeding…" : "Move timing into an edit"}
-            </button>
-          </>
-        )}
-      </div>
-
-      <div className="card live-preview">
-        <h3>Live preview</h3>
-        {live ? (
-          <>
-            <Suspense fallback={<p className="empty">Loading the player…</p>}>
-              <LivePlayer
-                input={live.input}
-                audio={null}
-                durationInFrames={live.durationInFrames}
-                fps={live.fps}
-                width={live.width}
-                height={live.height}
-                time={player.time}
-                playing={player.playing}
-              />
-            </Suspense>
-            <p className="meta">
-              {live.input.shots.filter((shot) => shot.src).length} of {live.input.shots.length}{" "}
-              stills loaded · same timing, camera and transitions as the render
-              {live.stale > 0
-                ? ` · ${live.stale} selected still${live.stale === 1 ? " is" : "s are"} older than the storyboard`
-                : ""}
-            </p>
-          </>
-        ) : (
-          <p className="empty">{liveError ?? "No storyboard yet."}</p>
-        )}
-      </div>
-
-      <div className="card player">
-        <h3>Screen</h3>
-        {src && selected ? (
-          <>
-            <video
-              key={src}
-              controls
-              playsInline
-              preload="metadata"
-              aria-label="Rendered film"
-              src={src}
-            />
-            <div className="film-meta">
-              <span>
-                {selected.kind === "renders" ? "final" : "preview"} · {selected.name}
-              </span>
-              <a href={src} download={selected.name}>
-                download
-              </a>
-            </div>
-          </>
-        ) : (
-          <p className="empty">No renders yet. A preview is local and free.</p>
-        )}
-        {files.length > 0 && (
-          <div className="files">
-            {files.map((file) => (
-              <button
-                key={`${file.kind}/${file.name}`}
-                className={
-                  selected?.kind === file.kind && selected?.name === file.name ? "active" : ""
-                }
-                onClick={() => setSelected(file)}
-              >
-                {file.kind === "renders" ? "final" : "preview"} ·{" "}
-                {file.name.replace(/^.*-v(\d+)\.mp4$/, "v$1")}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        <h3>Budget</h3>
-        <div className="pre">
-          cap {budget?.cap_usd ?? "—"} · committed {budget?.committed_usd ?? "—"} · remaining{" "}
-          {budget?.remaining_usd ?? "—"}
+      <div className="stage-head film-head">
+        <div>
+          <h1>Film</h1>
+          <p>
+            Watch the cut, check the titles on real frames and render delivery. Everything
+            runs on this computer.
+          </p>
+        </div>
+        <div className="board-tabs" role="group" aria-label="Film view">
+          <Button
+            size="small"
+            variant={tab === "cut" ? "primary" : "quiet"}
+            aria-pressed={tab === "cut"}
+            onClick={() => setTab("cut")}
+          >
+            Cut
+          </Button>
+          <Button
+            size="small"
+            variant={tab === "files" ? "primary" : "quiet"}
+            aria-pressed={tab === "files"}
+            onClick={() => setTab("files")}
+          >
+            Rendered files
+          </Button>
         </div>
       </div>
+      {error && <p className="error">{error}</p>}
+      {notice && <p className="message">{notice}</p>}
 
       <RendererSetup onReady={setRendererReady} />
 
-      {graphics?.available && (
-        <div className="card">
-          <h3>Graphics review</h3>
-          <p className="meta">
-            {graphics.current
-              ? "These preflight frames are current. Inspect every sample, then approve graphics."
-              : graphics.reason || "The graphics review is stale; render a current base."}
-          </p>
-          {graphics.warning && <p className="meta">{graphics.warning}</p>}
-          <div className="versions">
-            {(graphics.samples || []).map((sample) => (
-              <figure className="version" key={sample.name}>
-                <a href={sample.url} target="_blank" rel="noreferrer">
-                  <img src={sample.url} alt={`Graphics preflight ${sample.name}`} loading="lazy" />
-                </a>
-                <figcaption className="meta">{sample.name}</figcaption>
-              </figure>
-            ))}
-          </div>
-          {!graphics.samples?.length && <p className="empty">No reviewed samples are present.</p>}
+      {tab === "cut" ? (
+        <div className="film-cut">
+          {rendererReady !== false && (
+            <section className="delivery-card">
+              <header>
+                <div>
+                  <h2>Ready to deliver</h2>
+                  <p>
+                    {checklist?.can_final
+                      ? "All gates are approved."
+                      : "Each line is a real gate; the final stays disabled until they pass."}
+                  </p>
+                </div>
+                {checklist && (
+                  <span className={`delivery-state ${checklist.can_final ? "ready" : ""}`}>
+                    {checklist.can_final ? "Ready" : `${checklist.outstanding.length} to go`}
+                  </span>
+                )}
+              </header>
+              <ul className="check-list">
+                {(checklist?.lines || []).map((item) => (
+                  <li key={item.id} className={`check-item ${item.state}`}>
+                    <span className="check-mark" aria-hidden="true">
+                      {item.state === "done" ? "✓" : item.state === "optional" ? "–" : "•"}
+                    </span>
+                    <div className="check-copy">
+                      <b>{item.label}</b>
+                      <span>{item.detail}</span>
+                      {item.state !== "done" && item.reason && item.id !== "stills" && (
+                        <em>{item.reason}</em>
+                      )}
+                      {item.id === "preview" &&
+                        item.state !== "done" &&
+                        item.expected_hash && (
+                          <span className="check-attest">
+                            <label className="check-line">
+                              <input
+                                type="checkbox"
+                                checked={previewAttested}
+                                onChange={(event) => setPreviewAttested(event.target.checked)}
+                              />
+                              I watched it continuously with the actual music
+                            </label>
+                            <Button
+                              size="small"
+                              disabled={!previewAttested || busy !== null}
+                              onClick={() => void approvePreview(item)}
+                            >
+                              {busy === "preview-approval" ? "Approving…" : "Approve preview"}
+                            </Button>
+                          </span>
+                        )}
+                      {item.id === "preview" && item.state !== "done" && !item.expected_hash && (
+                        <span className="check-attest">
+                          <Button
+                            size="small"
+                            variant="primary"
+                            disabled={busy !== null}
+                            onClick={() => void render("preview")}
+                          >
+                            {busy === "preview" ? "Queueing…" : "Watch preview"}
+                          </Button>
+                        </span>
+                      )}
+                      {item.id === "titles" && item.state !== "done" && item.state !== "optional" && (
+                        <span className="check-attest">
+                          {samples.length > 0 && (
+                            <>
+                              <button
+                                type="button"
+                                className="samples-strip"
+                                onClick={() => {
+                                  setSampleIndex(0);
+                                  setSamplesOpen(true);
+                                }}
+                                aria-label="Open the graphics samples"
+                              >
+                                {samples.slice(0, 4).map((sample) => (
+                                  <img key={sample.name} src={sample.url} alt="" loading="lazy" />
+                                ))}
+                              </button>
+                              <label className="check-line">
+                                <input
+                                  type="checkbox"
+                                  checked={inspected}
+                                  onChange={(event) => setInspected(event.target.checked)}
+                                />
+                                I inspected every sample
+                              </label>
+                              <Button
+                                size="small"
+                                disabled={!canApproveTitles || busy !== null}
+                                onClick={() => void approveTitles(item)}
+                              >
+                                {busy === "titles-approval" ? "Approving…" : "Approve titles"}
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            size="small"
+                            variant={samples.length ? "quiet" : "primary"}
+                            disabled={!stillsDone || busy !== null}
+                            title={
+                              stillsDone
+                                ? "Render a base and read the real title frames"
+                                : "Approve every still first."
+                            }
+                            onClick={() => void render("base")}
+                          >
+                            {busy === "base" ? "Queueing…" : "Check titles"}
+                          </Button>
+                        </span>
+                      )}
+                    </div>
+                    {item.id === "story" && item.state !== "done" && (
+                      <Button size="small" variant="quiet" onClick={() => onNavigate("story")}>
+                        Go to Story
+                      </Button>
+                    )}
+                    {item.id === "storyboard" && item.state !== "done" && (
+                      <Button
+                        size="small"
+                        variant="quiet"
+                        onClick={() => onNavigate("storyboard")}
+                      >
+                        Go to Storyboard
+                      </Button>
+                    )}
+                    {item.id === "stills" && item.state !== "done" && (
+                      <Button size="small" variant="quiet" onClick={() => onNavigate("images")}>
+                        Go to Images
+                      </Button>
+                    )}
+                  </li>
+                ))}
+                {!checklist && (
+                  <li className="check-item blocked">
+                    {checklistError
+                      ? "The delivery gates cannot be read yet. Make the story and storyboard first."
+                      : "Reading the gates…"}
+                  </li>
+                )}
+              </ul>
+              <footer>
+                <Button
+                  variant="primary"
+                  disabled={!checklist?.can_final || busy !== null}
+                  onClick={() => void render("final")}
+                >
+                  {busy === "final" ? "Queueing…" : "Render final"}
+                </Button>
+                <span className="hint">{finalHint}</span>
+              </footer>
+            </section>
+          )}
+
+          <section className="cut-section">
+            <header className="cut-head">
+              <div>
+                <h2>{cut?.present ? "The cut" : "The film cut"}</h2>
+                <p>
+                  {cut?.present
+                    ? "How each shot arrives, what moves, and why. The cut owns timing."
+                    : "The storyboard owns timing until the Editor cuts the film."}
+                </p>
+              </div>
+              <ArtifactRating slug={slug} artifact="edit" />
+            </header>
+
+            {!board ? (
+              <div className="card seed-cut">
+                <h3>The storyboard comes first</h3>
+                <p>
+                  Film reads the cut from the approved storyboard. Make the storyboard,
+                  then let the Editor cut it.
+                </p>
+                <div className="row-actions">
+                  <Button variant="primary" onClick={() => onNavigate("storyboard")}>
+                    Go to Storyboard
+                  </Button>
+                </div>
+              </div>
+            ) : !cut?.present ? (
+              <div className="card seed-cut">
+                <h3>Let the Editor cut it</h3>
+                <p>
+                  The film already plays with the storyboard's timing. Move order, spans,
+                  motion, transitions, accents and grade into a cut to shape it.
+                </p>
+                <div className="row-actions">
+                  <Button
+                    variant="primary"
+                    disabled={busy !== null}
+                    onClick={() => void seedCut()}
+                  >
+                    {busy === "seed" ? "Cutting…" : "Make a first cut"}
+                  </Button>
+                  <Button variant="quiet" onClick={() => setTab("files")}>
+                    Keep the storyboard timing
+                  </Button>
+                </div>
+                <p className="hint">
+                  Keeping it costs nothing and keeps every current approval valid.
+                </p>
+              </div>
+            ) : (
+              <>
+                {cut.hard.length > 0 && (
+                  <div className="cut-findings hard">
+                    <b>
+                      {cut.hard.length} hard finding{cut.hard.length === 1 ? "" : "s"}
+                    </b>
+                    {cut.hard.map((finding) => (
+                      <span key={`${finding.code}-${finding.shot_id || ""}-${finding.message}`}>
+                        {finding.shot_id ? `${finding.shot_id}: ` : ""}
+                        {finding.message}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {cut.warnings.length > 0 && (
+                  <div className="cut-findings">
+                    <b>
+                      {cut.warnings.length} warning{cut.warnings.length === 1 ? "" : "s"}
+                    </b>
+                    {cut.warnings.map((finding) => (
+                      <span key={`${finding.code}-${finding.shot_id || ""}-${finding.message}`}>
+                        {finding.shot_id ? `${finding.shot_id}: ` : ""}
+                        {finding.message}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="cut-facts">
+                  <span>{cut.counts.shots ?? 0} shots</span>
+                  <span>{cut.counts.cuts ?? 0} cuts</span>
+                  <span>
+                    {cut.counts.holds ?? 0} holds (
+                    {Math.round((cut.counts.hold_ratio || 0) * 100)}%)
+                  </span>
+                  <span>{cut.counts.accents ?? 0} accents</span>
+                  {cut.grade && <span>Grade: {cut.grade}</span>}
+                </div>
+                {cut.techniques.length > 0 && (
+                  <div className="cut-techniques" aria-label="Techniques in this cut">
+                    {cut.techniques.map((technique) => (
+                      <span
+                        className="technique"
+                        key={technique.name}
+                        title={technique.reasons.join(" · ") || undefined}
+                      >
+                        {technique.name}
+                        {technique.count > 1 ? ` ×${technique.count}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {cut.notes && <p className="cut-notes">{cut.notes}</p>}
+
+                <div className="cut-sections">
+                  {groups.map((group) => (
+                    <section className="cut-group" key={group.section.id}>
+                      <header>
+                        <h3>{group.section.name}</h3>
+                        <span className="hint">
+                          {clock(group.section.start_frame / fps)}–
+                          {clock(group.section.end_frame / fps)} · {group.shots.length}{" "}
+                          {group.shots.length === 1 ? "shot" : "shots"}
+                        </span>
+                      </header>
+                      <div className="cut-list">
+                        {group.shots.map((shot) => {
+                          const source = boardById.get(shot.shot_id);
+                          return (
+                            <article className="cut-shot" key={shot.shot_id}>
+                              {source ? (
+                                <ShotThumb
+                                  slug={slug}
+                                  shot={source}
+                                  image={imageById.get(source.id)}
+                                  className="cut-thumb"
+                                />
+                              ) : (
+                                <div className="cut-thumb shot-thumb" />
+                              )}
+                              <div className="cut-shot-body">
+                                <div className="cut-shot-line">
+                                  <b>{shot.shot_id}</b>
+                                  <span>{clock(shot.start_frame / fps)}</span>
+                                  <span>{duration(shot.seconds)}</span>
+                                  <span className="cut-arrival">{shot.transition.label}</span>
+                                  <span className="cut-motion">{shot.motion.label}</span>
+                                </div>
+                                <p className="cut-shot-job">
+                                  {source?.message || source?.purpose || "No shot content."}
+                                </p>
+                                <div className="cut-shot-tags">
+                                  {shot.accents.map((accent) => (
+                                    <span className="accent" key={`${accent.frame}-${accent.type}`}>
+                                      {accent.label}
+                                    </span>
+                                  ))}
+                                  {shot.text.map((item) => (
+                                    <span className="cut-text" key={item.id}>
+                                      “{item.text}”
+                                    </span>
+                                  ))}
+                                </div>
+                                {shot.reasons.length > 0 && (
+                                  <div className="cut-why">
+                                    {shot.reasons.map((reason) => (
+                                      <span key={`${reason.kind}-${reason.label}-${reason.reason}`}>
+                                        <b>{reason.label}</b> {reason.reason}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+
+                {cut.edit && showEditFile && (
+                  <details className="cut-json">
+                    <summary>Edit file (read-only)</summary>
+                    <pre>{JSON.stringify(cut.edit, null, 2)}</pre>
+                  </details>
+                )}
+              </>
+            )}
+          </section>
+
+          <section className="card live-preview">
+            <header className="live-head">
+              <div>
+                <h3>Live preview</h3>
+                <p className="hint">
+                  Free, marked and local. Same timing, camera and transitions as the render.
+                </p>
+              </div>
+              {currentBoardShot && (
+                <div className="live-now">
+                  <b>{currentBoardShot.id}</b>
+                  <span>{currentBoardShot.message || currentBoardShot.purpose}</span>
+                  {currentPicture?.stale && <em>Older prompt</em>}
+                </div>
+              )}
+            </header>
+            {live ? (
+              <>
+                <Suspense fallback={<p className="empty">Loading the player…</p>}>
+                  <LivePlayer
+                    input={live.input}
+                    audio={null}
+                    durationInFrames={live.durationInFrames}
+                    fps={live.fps}
+                    width={live.width}
+                    height={live.height}
+                    time={player.time}
+                    playing={player.playing}
+                  />
+                </Suspense>
+                <p className="hint">
+                  {live.input.shots.filter((shot) => shot.src).length} of{" "}
+                  {live.input.shots.length} stills loaded
+                  {live.stale > 0
+                    ? ` · ${live.stale} selected still${
+                        live.stale === 1 ? " is" : "s are"
+                      } older than the storyboard`
+                    : ""}
+                </p>
+              </>
+            ) : (
+              <p className="empty">{liveError ?? "No storyboard yet."}</p>
+            )}
+          </section>
+
+          <CreditsCard slug={slug} />
+        </div>
+      ) : (
+        <div className="film-files">
+          <section className="card player">
+            <header className="files-head">
+              <h2>Screen</h2>
+              {selected && (
+                <span className="hint">
+                  {selected.kind === "renders" ? "final" : "preview"} · {selected.name}
+                </span>
+              )}
+            </header>
+            {src && selected ? (
+              <>
+                <video
+                  key={src}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  aria-label="Rendered film"
+                  src={src}
+                />
+                <div className="film-meta">
+                  <a href={src} download={selected.name}>
+                    Download {selected.name}
+                  </a>
+                </div>
+              </>
+            ) : (
+              <p className="empty">
+                No renders yet. A preview is local and free; the checklist queues one.
+              </p>
+            )}
+            <div className="row-actions">
+              <Button
+                size="small"
+                disabled={busy !== null}
+                onClick={() => void render("preview")}
+              >
+                {busy === "preview" ? "Queueing…" : "Watch a new preview"}
+              </Button>
+              <Button
+                size="small"
+                variant="quiet"
+                disabled={!checklist?.can_final || busy !== null}
+                onClick={() => void render("final")}
+              >
+                {busy === "final" ? "Queueing…" : "Render final"}
+              </Button>
+            </div>
+          </section>
+
+          <section className="files-section">
+            <header className="files-head">
+              <div>
+                <h2>Rendered files</h2>
+                <p className="hint">Newest first. Previews are marked; finals are delivery.</p>
+              </div>
+            </header>
+            {files.length === 0 ? (
+              <p className="empty">Nothing rendered yet.</p>
+            ) : (
+              <ul className="file-list">
+                {files.map((file) => {
+                  const href = `/api/projects/${slug}/film/${file.kind}/${encodeURIComponent(
+                    file.name,
+                  )}`;
+                  const active =
+                    selected?.kind === file.kind && selected?.name === file.name;
+                  return (
+                    <li key={`${file.kind}/${file.name}`} className={active ? "active" : ""}>
+                      <span className={`file-kind ${file.kind}`}>
+                        {file.kind === "renders" ? "final" : "preview"}
+                      </span>
+                      <span className="file-name">
+                        {films(file.name)}
+                        <em>{file.name}</em>
+                      </span>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setSelected(file);
+                          setTab("files");
+                        }}
+                      >
+                        Play
+                      </Button>
+                      <a className="file-download" href={href} download={file.name}>
+                        Download
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
       )}
 
-      <div className="card render-card">
-        <h3>Render</h3>
-        <button
-          onClick={() => render("preview")}
-          disabled={busy !== null || rendererReady === false}
+      {samplesOpen && samples.length > 0 && (
+        <div
+          className="samples-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Graphics samples"
         >
-          {busy === "preview" ? "Queueing…" : "Render preview"}
-        </button>{" "}
-        <button
-          onClick={() => render("base")}
-          disabled={busy !== null || rendererReady === false}
-        >
-          {busy === "base" ? "Queueing…" : "Render base"}
-        </button>{" "}
-        <button
-          onClick={() => render("final")}
-          disabled={busy !== null || rendererReady === false}
-        >
-          {busy === "final" ? "Queueing…" : "Render final"}
-        </button>
-        <p className="meta">
-          Preview is free and marked. A base carries the stills edit without graphics and
-          creates the review samples above. A final composes the approved graphics onto that
-          base and needs both the stills and graphics approvals.
-        </p>
-      </div>
-
-      <ApprovalBar slug={slug} stages={["preview", "graphics"]} />
+          <header>
+            <b>{samples[sampleIndex]?.name || "Sample"}</b>
+            <span>
+              {sampleIndex + 1} of {samples.length}
+            </span>
+            <button
+              type="button"
+              className="lightbox-close"
+              aria-label="Close the samples"
+              onClick={() => setSamplesOpen(false)}
+            >
+              ×
+            </button>
+          </header>
+          <div className="samples-stage">
+            <img src={samples[sampleIndex]?.url} alt={`Graphics sample ${sampleIndex + 1}`} />
+          </div>
+          <footer>
+            <Button
+              size="small"
+              variant="quiet"
+              onClick={() => setSampleIndex((index) => Math.max(index - 1, 0))}
+            >
+              ←
+            </Button>
+            <Button
+              size="small"
+              variant="quiet"
+              onClick={() =>
+                setSampleIndex((index) => Math.min(index + 1, samples.length - 1))
+              }
+            >
+              →
+            </Button>
+            <label className="check-line">
+              <input
+                type="checkbox"
+                checked={inspected}
+                onChange={(event) => setInspected(event.target.checked)}
+              />
+              I inspected every sample
+            </label>
+            {titlesLine && (
+              <Button
+                size="small"
+                variant="primary"
+                disabled={!canApproveTitles || busy !== null}
+                onClick={() => void approveTitles(titlesLine)}
+              >
+                {busy === "titles-approval" ? "Approving…" : "Approve titles"}
+              </Button>
+            )}
+            <Button size="small" variant="quiet" onClick={() => setSamplesOpen(false)}>
+              Close
+            </Button>
+          </footer>
+        </div>
+      )}
     </>
   );
 }

@@ -1,0 +1,91 @@
+/* Inline artifact ratings: evaluate in one click, note only when it needs work. */
+
+.rating-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: var(--t-12);
+}
+.rating-label {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.rating-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--t-12);
+  line-height: 1.2;
+}
+.rating-btn:hover:not(:disabled) {
+  border-color: var(--ink-2);
+  color: var(--ink);
+}
+.rating-btn.on.good {
+  border-color: var(--sage);
+  background: var(--sage-wash);
+  color: var(--sage);
+}
+.rating-btn.on.bad {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  color: var(--gold);
+}
+.rating-btn:disabled {
+  opacity: 0.55;
+}
+.rating-saved {
+  color: var(--sage);
+  font-size: var(--t-12);
+}
+.rating-stale {
+  color: var(--violet);
+  font-size: var(--t-12);
+}
+.rating-pending {
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.rating-error {
+  color: var(--red);
+  font-size: var(--t-12);
+}
+.rating-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  margin-top: 2px;
+}
+.rating-note input {
+  flex: 1;
+  min-width: 12ch;
+  max-width: 42ch;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-12);
+}
+.rating-note input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+.rating-note-save {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--t-12);
+}

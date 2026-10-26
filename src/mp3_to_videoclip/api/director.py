@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -95,6 +96,47 @@ def _line(event) -> str:
     )
 
 
+def _context(payload: dict) -> dict | None:
+    value = payload.get("context")
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=400, detail="context must be an object")
+    unknown = set(value) - {"stage", "time", "selected_shots"}
+    if unknown:
+        raise HTTPException(status_code=400, detail="unexpected context fields")
+    context: dict = {}
+    stage = value.get("stage")
+    if stage is not None:
+        if not isinstance(stage, str) or stage not in (
+            "track",
+            "story",
+            "storyboard",
+            "images",
+            "film",
+        ):
+            raise HTTPException(status_code=400, detail="context stage is invalid")
+        context["stage"] = stage
+    time = value.get("time")
+    if time is not None:
+        if isinstance(time, bool) or not isinstance(time, (int, float)) or time < 0:
+            raise HTTPException(status_code=400, detail="context time must be seconds")
+        context["time"] = float(time)
+    selected = value.get("selected_shots")
+    if selected is not None:
+        if (
+            not isinstance(selected, list)
+            or len(selected) > 8
+            or not all(
+                isinstance(item, str) and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", item)
+                for item in selected
+            )
+        ):
+            raise HTTPException(status_code=400, detail="context selected_shots must be shot IDs")
+        context["selected_shots"] = selected
+    return context
+
+
 @router.get("/chat")
 async def get_chat(slug: str, request: Request):
     from mp3_to_videoclip.director.conversation import load_messages
@@ -114,6 +156,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
     settings = effective_settings()
     stage = payload.get("stage")
     role = _role(payload, stage)
+    context = _context(payload)
     project = P.load_project(root, verify_source=False)
     bundle = prompt_suite.assemble(
         root,
@@ -123,7 +166,9 @@ async def post_chat(slug: str, request: Request, payload: dict):
         style_preset=project.style_preset,
     )
     promptlog.remember(root, bundle.meta)
-    system = bundle.text + "\n\n---\n\n" + build_context(slug, root.parent, stage=stage)
+    system = (
+        bundle.text + "\n\n---\n\n" + build_context(slug, root.parent, stage=stage, context=context)
+    )
 
     if settings.gateway == "opencode":
         try:

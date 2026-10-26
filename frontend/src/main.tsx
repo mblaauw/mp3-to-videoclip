@@ -8,6 +8,9 @@ import "./stages/stages.css";
 import "./shell/shell.css";
 import "./storyboard/storyboard.css";
 import "./images/images.css";
+import "./film/film.css";
+import "./shell/settings.css";
+import "./rating.css";
 import { App } from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
