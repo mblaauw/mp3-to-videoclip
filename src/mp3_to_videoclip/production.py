@@ -1134,9 +1134,19 @@ def resolved_assets(root: Path, ids: list[str] | None = None) -> list[RenderShot
 
 
 def effective_upstream(root: Path, stage: str) -> str | None:
-    """Instrumental briefs do not depend on lyrics; creative stills depend on preview."""
-    if stage == "brief" and load_project(root).music_mode in ("instrumental", "music-led"):
-        return "analysis"
+    """Return the real parent artifact for a stage's current production kind.
+
+    Promo and advert briefs are built from the measured song and the intent, not
+    from a lyrics map: only music videos have a lyrics stage. Instrumental and
+    music-led music videos likewise depend on analysis. Creative stills depend on
+    the watched preview when that gate applies.
+    """
+    if stage == "brief":
+        project = load_project(root)
+        if project.kind not in (None, "music_video"):
+            return "analysis"
+        if project.music_mode in ("instrumental", "music-led"):
+            return "analysis"
     if stage == "stills" and is_creative(root) and flow.settings(root)["preview_gate"]:
         return "preview"
     return UPSTREAM[stage]
