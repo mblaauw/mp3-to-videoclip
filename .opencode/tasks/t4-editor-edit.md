@@ -87,7 +87,9 @@ the Film page showed 10 shots, 9 cuts, 30% holds, 1 flash, no hard findings and
 16 reasoned techniques, and the Player DOM rendered the shots, warm-night grade
 and edit payload. No paid provider call was made.
 
-PR: pending final commit and push.
+PR #22 squash-merged as `e08f311` on 2026-10-26; CI check passed in 2m53s.
+The branch commit `4d62143` and the merge tree are identical. No paid provider
+call was made.
 
 ## Safe stops
 
@@ -98,4 +100,5 @@ PR: pending final commit and push.
 
 ## Status
 
-Implementation complete pending final revision checks, app start and PR review.
+Complete. T4 shipped in PR #22. The only remaining items are explicitly outside
+this phase: live paid Writer/Editor evaluation and Zero Bars content completion.
