@@ -16,6 +16,8 @@ never every line), and abstract (rhythm, colour and motion as the subject).
 
 Keep generated scenes dominant. On-screen text is rare: the title, the artist,
 and a few selected lyric hits. Pacing follows the song; a held shot is earned by
-the music and by depth in the frame. The default opening/closing package is the
-25-second opening plus 40-second credits, editable in settings. Music videos keep
-that signature requirement unless the owner changes it.
+the music and by depth in the frame. Use a card, split, bridge or reprise where
+it does a real job; a designed insert is not a cheaper scene. The default
+opening/closing package is the 25-second opening plus 40-second credits, editable
+in settings. Music videos keep that signature requirement unless the owner
+changes it.

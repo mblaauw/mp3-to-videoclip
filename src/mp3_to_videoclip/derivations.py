@@ -57,6 +57,10 @@ def adopt_derivative(
             f"{shot.id} is an editorial reprise of {shot.asset_shot_id}; "
             f"adopt the version on {shot.asset_shot_id} instead"
         )
+    from . import shotkinds
+
+    if shotkinds.is_local(shot):
+        raise ValueError(f"{shot.id} is a local {shot.kind} shot; it has no generated version")
 
     try:
         with Image.open(source) as image:

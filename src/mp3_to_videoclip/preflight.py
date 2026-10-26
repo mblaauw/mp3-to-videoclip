@@ -19,6 +19,7 @@ def strict_workflow(root: Path):
 
 def manifest(root: Path, ids=None):
     from . import production as P
+    from . import shotkinds
     from .references import validate_import
 
     project, brief, board = P.load_project(root), P.load_brief(root), P.load_board(root)
@@ -33,6 +34,8 @@ def manifest(root: Path, ids=None):
 
     for shot in board.shots:
         if shot.id not in chosen:
+            continue
+        if shot.asset_shot_id is None and shotkinds.is_local(shot):
             continue
         owner = next(s for s in board.shots if s.id == (shot.asset_shot_id or shot.id))
         spec = P.image_spec(root, owner)

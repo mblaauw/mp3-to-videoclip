@@ -13,7 +13,7 @@ from uuid import uuid4
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
-from . import budget, operations
+from . import budget, operations, shotkinds
 from .models import Lyrics, Segment
 from .production import (
     has_placeholders,
@@ -126,7 +126,7 @@ def quote_images(
     allowed = (
         proof_ids(board, brief)
         if scope == "proof"
-        else [s.id for s in board.shots if s.asset_shot_id is None]
+        else [s.id for s in board.shots if shotkinds.is_paid(s)]
     )
     if scope == "stills":
         # Guided creative full sets gate on the style check; recorded v2 projects
@@ -147,9 +147,7 @@ def quote_images(
         raise ValueError("reserve a positive per-shot allowance")
     # Both guards run before the provider schema GET or any submit: legacy projects
     # with no preflight module and no budget keep their old behaviour.
-    spend_ids = [
-        shot.id for shot in board.shots if shot.id in chosen and shot.asset_shot_id is None
-    ]
+    spend_ids = [shot.id for shot in board.shots if shot.id in chosen and shotkinds.is_paid(shot)]
     _validate_before_spend(root, spend_ids)
     budget.require_correction_cycles(root, spend_ids)
     own = client is None
@@ -171,7 +169,7 @@ def quote_images(
     journal = read_json(root / "work/tasks.json")
     tasks = []
     for shot in board.shots:
-        if shot.id not in chosen or shot.asset_shot_id is not None:
+        if shot.id not in chosen or not shotkinds.is_paid(shot):
             continue
         if has_placeholders(shot):
             raise ValueError("finish the storyboard's creative placeholders first")

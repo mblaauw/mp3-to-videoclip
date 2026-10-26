@@ -9,8 +9,10 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip import promptlog
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.config import effective_settings
+from mp3_to_videoclip.director import prompts as prompt_suite
 from mp3_to_videoclip.director.context import build_context
 from mp3_to_videoclip.director.llm import DirectorLLM
 from mp3_to_videoclip.director.loop import run_turn
@@ -70,7 +72,7 @@ def close_gateways() -> None:
 def _role(payload: dict, stage: str | None) -> str:
     role = payload.get("role")
     if role is None:
-        role = "editor" if stage == "film" else "writer"
+        role = prompt_suite.role_for_stage(stage)
     if role not in ("writer", "editor"):
         raise HTTPException(status_code=400, detail="role must be writer or editor")
     return role
@@ -112,11 +114,15 @@ async def post_chat(slug: str, request: Request, payload: dict):
     stage = payload.get("stage")
     role = _role(payload, stage)
     project = P.load_project(root, verify_source=False)
-    system = (
-        build_context(slug, root.parent, stage=stage)
-        + "\n\n"
-        + _system_prompt(stage, kind=project.kind, style_preset=project.style_preset, role=role)
+    bundle = prompt_suite.assemble(
+        root,
+        stage,
+        role=role,
+        kind=project.kind,
+        style_preset=project.style_preset,
     )
+    promptlog.remember(root, bundle.meta)
+    system = bundle.text + "\n\n---\n\n" + build_context(slug, root.parent, stage=stage)
 
     if settings.gateway == "opencode":
         try:
@@ -164,6 +170,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
                         message,
                         system,
                         model=model,
+                        prompt_meta=bundle.meta,
                     ):
                         yield _line(event)
                 finally:
@@ -183,7 +190,14 @@ async def post_chat(slug: str, request: Request, payload: dict):
     async def stream():
         runner = getattr(request.app.state, "runner", None)
         async for event in run_turn(
-            llm, root, slug, message, system, runner=runner, projects_dir=root.parent
+            llm,
+            root,
+            slug,
+            message,
+            system,
+            runner=runner,
+            projects_dir=root.parent,
+            prompt_meta=bundle.meta,
         ):
             yield _line(event)
 
@@ -199,30 +213,15 @@ def _system_prompt(
     kind: str | None = None,
     style_preset: str | None = None,
     role: str | None = None,
+    task: str | None = None,
 ) -> str:
-    """The shared director prompt plus the stage, kind and task blocks."""
-    from mp3_to_videoclip import kinds, styles
-
-    prompts = Path(__file__).resolve().parent.parent / "director" / "prompts"
-    base = prompts / "system.md"
-    text = base.read_text() if base.is_file() else "You are the director."
-    if stage in STAGES:
-        guide = prompts / f"{stage}.md"
-        if guide.is_file():
-            text += "\n\n---\n\n" + guide.read_text()
-    if kind is not None:
-        block = kinds.prompt(kind)
-        if block:
-            text += "\n\n---\n\n" + block
-    if role == "writer" and stage == "story":
-        task = prompts / "writer" / "brief.md"
-        if task.is_file():
-            text += "\n\n---\n\n" + task.read_text()
-    if style_preset is not None and kind is not None:
-        try:
-            chosen = styles.preset(style_preset)
-        except ValueError:
-            chosen = None
-        if chosen is not None:
-            text += f"\n\n---\n\nStyle preset: {chosen.name}. {chosen.description}"
-    return text
+    """Preview the assembled prompt without a project; project data is added live."""
+    root = Path("__prompt_preview__")
+    return prompt_suite.assemble(
+        root,
+        stage,
+        role=role,
+        kind=kind,
+        style_preset=style_preset,
+        task=task,
+    ).text

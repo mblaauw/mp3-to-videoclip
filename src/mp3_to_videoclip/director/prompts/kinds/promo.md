@@ -14,9 +14,10 @@ the reveal.
 
 The default mix is scenes, product or place stills, and a few message cards.
 Supers land on key beats, stay short and concrete, and never duplicate what the
-picture already says. The pace is medium; build to one reveal instead of adding a
-second idea. A promo may use the whole track or an excerpt of roughly 30–120
-seconds.
+picture already says. A designed card or end card is a first-class shot, not a
+decoration over a generated frame. The pace is medium; build to one reveal
+instead of adding a second idea. A promo may use the whole track or an excerpt of
+roughly 30–120 seconds.
 
 Open with a short title and close with an end card. Credits are optional, and the
 25/40 music-video signature package is not required.

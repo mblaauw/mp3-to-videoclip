@@ -1,0 +1,39 @@
+{
+  "name": "slow-instrumental",
+  "kind": "music_video",
+  "music_mode": "instrumental",
+  "duration": 240.0,
+  "lyrics": [],
+  "intent": {
+    "kind": "music_video",
+    "about": "A house by the sea, seen at the hour when the tide turns.",
+    "performance": false
+  },
+  "music": {
+    "estimated_tempo_bpm": 72,
+    "sections": [
+      {"start": 0, "end": 40, "label": "opening"},
+      {"start": 40, "end": 96, "label": "drift"},
+      {"start": 96, "end": 150, "label": "turn"},
+      {"start": 150, "end": 204, "label": "return"},
+      {"start": 204, "end": 240, "label": "close"}
+    ],
+    "beats": [0.0, 0.83, 1.67, 2.5],
+    "energy_curve": [
+      {"time": 0, "energy": 0.1},
+      {"time": 40, "energy": 0.25},
+      {"time": 96, "energy": 0.4},
+      {"time": 150, "energy": 0.55},
+      {"time": 204, "energy": 0.25},
+      {"time": 240, "energy": 0.1}
+    ]
+  },
+  "stills": [
+    {"shot_id": "s001", "colors": ["#D9D2C3", "#6E8B99"]},
+    {"shot_id": "s002", "colors": ["#A9B7B5", "#F4F1E8"]},
+    {"shot_id": "s003", "colors": ["#5F7478", "#D4AE6A"]},
+    {"shot_id": "s004", "colors": ["#C7C0AF", "#101820"]},
+    {"shot_id": "s005", "colors": ["#8FA1A0", "#F4F1E8"]},
+    {"shot_id": "s006", "colors": ["#6B7C80", "#D8FF3E"]}
+  ]
+}

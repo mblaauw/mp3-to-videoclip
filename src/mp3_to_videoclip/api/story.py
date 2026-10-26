@@ -47,7 +47,27 @@ async def get_treatments(slug: str, request: Request):
         return {"treatments": []}
     import json
 
-    return json.loads(path.read_text())
+    value = json.loads(path.read_text())
+    if "concepts" in value:
+        treatments = P.load_treatments(root)
+        assert treatments is not None
+        concepts = [concept.model_dump() for concept in treatments.concepts]
+        return {
+            "treatments": concepts,
+            "concepts": concepts,
+            "chosen_id": treatments.chosen_id,
+        }
+    return value
+
+
+@router.put("/treatments")
+async def put_treatments(slug: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    try:
+        treatments = P.update_treatments(root, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return treatments.model_dump()
 
 
 def _intake_payload(root: Path, *, analysis_needed: bool = False) -> dict:

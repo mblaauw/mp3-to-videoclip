@@ -1,0 +1,43 @@
+{
+  "name": "energetic-vocal",
+  "kind": "music_video",
+  "music_mode": "vocal",
+  "duration": 180.0,
+  "lyrics": [
+    {"at": 14.0, "text": "the city keeps a light on"},
+    {"at": 42.0, "text": "forward ever, backward never"},
+    {"at": 96.0, "text": "the city keeps a light on"}
+  ],
+  "intent": {
+    "kind": "music_video",
+    "about": "A night courier carries a record across a city that will not sleep.",
+    "performance": false
+  },
+  "music": {
+    "estimated_tempo_bpm": 124,
+    "sections": [
+      {"start": 0, "end": 18, "label": "intro"},
+      {"start": 18, "end": 62, "label": "verse"},
+      {"start": 62, "end": 102, "label": "chorus"},
+      {"start": 102, "end": 134, "label": "verse"},
+      {"start": 134, "end": 168, "label": "chorus"},
+      {"start": 168, "end": 180, "label": "outro"}
+    ],
+    "beats": [0.0, 0.48, 0.97, 1.45],
+    "energy_curve": [
+      {"time": 0, "energy": 0.2},
+      {"time": 62, "energy": 0.8},
+      {"time": 102, "energy": 0.45},
+      {"time": 134, "energy": 0.9},
+      {"time": 180, "energy": 0.3}
+    ]
+  },
+  "stills": [
+    {"shot_id": "s001", "colors": ["#0B1015", "#D8FF3E"]},
+    {"shot_id": "s002", "colors": ["#161821", "#F4F1E8"]},
+    {"shot_id": "s003", "colors": ["#1C2A39", "#D4AE6A"]},
+    {"shot_id": "s004", "colors": ["#0E1B24", "#6E8B99"]},
+    {"shot_id": "s005", "colors": ["#231A16", "#D8FF3E"]},
+    {"shot_id": "s006", "colors": ["#101820", "#F4F1E8"]}
+  ]
+}

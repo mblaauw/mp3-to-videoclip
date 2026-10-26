@@ -13,8 +13,8 @@ anything: the phase record owns its decisions and the rework is complete.
   authorization. Money logic lives in the task journal — keep it strict.
 - One commit per numbered task, one PR per phase. Each phase ends with `pytest`
   and `ruff` green and an app that starts.
-- Do not edit `.opencode/skills/`: it is craft input for the director prompts and
-  is deleted once distilled.
+- `.opencode/skills/` was distilled into `director/prompts/` and deleted in T3.
+  Do not recreate it as a runtime prompt source.
 
 ## Checks
 

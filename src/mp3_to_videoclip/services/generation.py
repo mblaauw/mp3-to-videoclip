@@ -22,11 +22,22 @@ def estimate(
 ) -> dict:
     """Quote the selected shots at live schema/pricing; saves the quote."""
     from mp3_to_videoclip import production as P
+    from mp3_to_videoclip import shotkinds
     from mp3_to_videoclip.storage import project_lock
 
     # The Images screen may pass a reprise shot ID. Generation is owned by the
     # source asset, so quote the owner once and never the alias as a second task.
     board = P.load_board(root)
+    by_id = {shot.id: shot for shot in board.shots}
+    local = [
+        shot_id
+        for shot_id in shot_ids
+        if shot_id in by_id
+        and shotkinds.is_local(by_id[shot_id])
+        and by_id[shot_id].asset_shot_id is None
+    ]
+    if local:
+        raise ValueError("local shot(s) need no Runware task: " + ", ".join(sorted(set(local))))
     owners = {shot.id: (shot.asset_shot_id or shot.id) for shot in board.shots}
     normalized: list[str] = []
     for shot_id in shot_ids:

@@ -492,6 +492,7 @@ async def run_gateway_turn(
     model: str,
     timeout: float = 900.0,
     warmup_delay: float = WARMUP_DELAY,
+    prompt_meta: dict | None = None,
 ) -> AsyncIterator[TurnEvent]:
     """Run one Studio turn through the gateway and persist the text history.
 
@@ -523,7 +524,10 @@ async def run_gateway_turn(
     if entry is None and hasattr(client, "set_model"):
         await client.set_model(session_id, model)
 
-    append_message(root, {"role": "user", "content": message})
+    entry = {"role": "user", "content": message}
+    if prompt_meta is not None:
+        entry["prompt"] = prompt_meta
+    append_message(root, entry)
     prompt_text = f"{context.strip()}\n\n---\n\n{message.strip()}" if context.strip() else message
     events = client.events()
     done = False

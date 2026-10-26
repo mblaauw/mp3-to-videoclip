@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import flow, kinds, profiles, styles
+from . import flow, kinds, localplate, profiles, shotkinds, styles
 from .branding import brand_hash, load_brand
 from .models import (
     AudioWindow,
@@ -20,6 +20,7 @@ from .models import (
     RenderShot,
     Shot,
     Storyboard,
+    Treatments,
 )
 from .render import audio_seconds, probe
 from .storage import digest, file_hash, inside, read_json, read_optional, write_json
@@ -406,7 +407,43 @@ def update_brief(root: Path, patch: dict) -> Brief:
     if not history.exists():
         write_json(history, previous_value)
     write_json(root / "brief.json", brief.model_dump())
+    _record_prompt_write(root, "brief")
     return brief
+
+
+def update_treatments(root: Path, payload: dict) -> Treatments:
+    """Write exactly three structurally distinct concepts as one validated artifact."""
+    if not isinstance(payload, dict):
+        raise ValueError("treatments must be a JSON object")
+    try:
+        treatments = Treatments.model_validate(payload)
+    except ValueError as exc:
+        raise ValueError(f"treatments are invalid: {exc}") from exc
+    value = treatments.model_dump()
+    path = root / "work" / "treatments.json"
+    previous = read_optional(path)
+    if previous == value:
+        return treatments
+    if isinstance(previous, dict):
+        history = root / f"work/treatments-history/{digest(previous)}.json"
+        if not history.exists():
+            write_json(history, previous)
+    write_json(path, value)
+    _record_prompt_write(root, "treatments")
+    return treatments
+
+
+def load_treatments(root: Path) -> Treatments | None:
+    path = root / "work" / "treatments.json"
+    if not path.is_file():
+        return None
+    return Treatments.model_validate(read_json(path))
+
+
+def _record_prompt_write(root: Path, artifact: str) -> None:
+    from . import promptlog
+
+    promptlog.record(root, artifact)
 
 
 def apply_intake(
@@ -605,6 +642,25 @@ def validate_board(root: Path, board: Storyboard, *, verify_source: bool = True)
                 raise ValueError(
                     "reused image must name a different, existing source shot (no chains/cycles)"
                 )
+        if shot.kind == "split":
+            known = {s.id for s in board.shots}
+            for pane in shot.panes:
+                if pane.shot_id not in known:
+                    raise ValueError(f"unknown split pane {pane.shot_id!r} in shot {shot.id}")
+                source = next(s for s in board.shots if s.id == pane.shot_id)
+                if source.kind == "split":
+                    raise ValueError("split panes cannot themselves be splits")
+        if shot.kind == "upload" and shot.asset is not None:
+            if not inside(root, shot.asset).is_file():
+                raise ValueError(f"upload asset is missing for shot {shot.id}")
+        if shot.kind == "product" and shot.product_ref is not None:
+            if shot.product_ref not in references and not inside(root, shot.product_ref).is_file():
+                raise ValueError(
+                    f"product_ref {shot.product_ref!r} is neither a known reference nor a file"
+                )
+        if shot.kind == "product" and shot.asset is not None:
+            if not inside(root, shot.asset).is_file():
+                raise ValueError(f"product asset is missing for shot {shot.id}")
     return board
 
 
@@ -635,6 +691,7 @@ def update_shots(root: Path, changes: list[dict]) -> tuple[Storyboard, list[str]
     updated = validate_board(root, candidate)
     if changed:
         write_json(root / STAGE_FILES["storyboard"], updated.model_dump())
+        _record_prompt_write(root, "storyboard")
     return updated, changed
 
 
@@ -692,10 +749,29 @@ def brief_references(root: Path, brief: Brief) -> list[dict]:
 
 def _legacy_image_spec(root: Path, project: Project, brief: Brief, shot: Shot) -> dict:
     refs = character_refs(root, brief, shot.character_ids)
+    product_line = ""
+    if shot.product_ref is not None:
+        path = inside(root, shot.product_ref)
+        with Image.open(path) as image:
+            image.verify()
+        refs.append({"path": shot.product_ref, "sha256": file_hash(path)})
+        product_line = (
+            "Product reference: preserve the supplied product's geometry, label, colour and "
+            "material; describe its placement and angle."
+        )
+    refs = list({item["path"]: item for item in refs}.values())
     limit = _reference_cap(project)
     if len(refs) > limit:
         raise ValueError(f"this production permits at most {limit} reference images per shot")
     descriptions = [c.description for c in brief.characters if c.id in shot.character_ids]
+    bridge_line = ""
+    if shot.kind == "bridge" and shot.bridge is not None and shot.bridge.match is not None:
+        match = shot.bridge.match
+        bridge_line = (
+            f"Bridge match: align {match.type} at normalized anchor "
+            f"({match.anchor[0]:.2f}, {match.anchor[1]:.2f})."
+            + (f" {match.note}" if match.note else "")
+        )
     prompt = "\n".join(
         filter(
             None,
@@ -704,6 +780,8 @@ def _legacy_image_spec(root: Path, project: Project, brief: Brief, shot: Shot) -
                 brief.direction,
                 *brief.visual_rules,
                 shot.image_prompt,
+                bridge_line,
+                product_line,
                 *descriptions,
                 "Avoid: " + "; ".join(brief.avoid) if brief.avoid else "",
             ],
@@ -769,8 +847,22 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
     bound_ids = list(
         dict.fromkeys([*shot.reference_ids, *scene_ids, *creative.global_reference_ids])
     )
+    by_id = {r.id: r for r in creative.references}
+    product_refs: list[dict] = []
+    product_role = ""
+    if shot.product_ref is not None:
+        if shot.product_ref in by_id:
+            product_refs = reference_refs(root, brief, [shot.product_ref])
+            product_role = by_id[shot.product_ref].description
+        else:
+            path = inside(root, shot.product_ref)
+            with Image.open(path) as image:
+                image.verify()
+            product_refs = [{"path": shot.product_ref, "sha256": file_hash(path)}]
+            product_role = "the supplied product"
     refs = character_refs(root, brief, shot.character_ids, shot.character_states)
     refs += reference_refs(root, brief, bound_ids)
+    refs += product_refs
     refs = list({item["path"]: item for item in refs}.values())
     limit = _reference_cap(project)
     if len(refs) > limit:
@@ -781,7 +873,6 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
         raise ValueError(
             "this legacy production permits at most four reference images per shot; the live schema may require fewer"
         )
-    by_id = {r.id: r for r in creative.references}
     characters = []
     for character in brief.characters:
         if character.id not in shot.character_ids:
@@ -815,12 +906,26 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
                 f"Image {index}: {role} reference; do not copy incidental pose or background."
             )
         characters.extend(roles)
+    if product_role:
+        characters.append(
+            "Product reference: preserve the supplied product's geometry, label, colour and "
+            f"material; describe its placement and angle. Product: {product_role}"
+        )
+    bridge_line = ""
+    if shot.kind == "bridge" and shot.bridge is not None and shot.bridge.match is not None:
+        match = shot.bridge.match
+        bridge_line = (
+            f"Bridge match: align {match.type} at normalized anchor "
+            f"({match.anchor[0]:.2f}, {match.anchor[1]:.2f})."
+            + (f" {match.note}" if match.note else "")
+        )
     prompt = "\n".join(
         filter(
             None,
             [
                 creative.look if prompt_look_first(project) else "",
                 shot.image_prompt,
+                bridge_line,
                 "Framing: " + FRAMING_TEXT[shot.framing] if shot.framing else "",
                 "Must show: " + "; ".join(shot.must_show) if shot.must_show else "",
                 scene.description if scene else "",
@@ -846,6 +951,10 @@ def image_spec(root: Path, shot: Shot, *, verify_source: bool = True) -> dict:
         board = load_board(root, verify_source=verify_source)
         source = next(s for s in board.shots if s.id == shot.asset_shot_id)
         return image_spec(root, source, verify_source=verify_source)
+    if shotkinds.is_local(shot):
+        raise ValueError(
+            f"shot {shot.id} is a local {shot.kind} shot; it has no image-generation spec"
+        )
     project = load_project(root, verify_source=verify_source)
     brief = load_brief(root)
     if brief.creative is None:
@@ -854,6 +963,14 @@ def image_spec(root: Path, shot: Shot, *, verify_source: bool = True) -> dict:
         spec = _legacy_image_spec(root, project, brief, shot)
     else:
         spec = _creative_image_spec(root, project, brief, shot)
+    # New kind metadata is included only when non-default, so legacy exact specs
+    # and approved input hashes stay untouched.
+    if shot.kind != "scene":
+        spec["kind"] = shot.kind
+    if shot.product_ref is not None:
+        spec["product_ref"] = shot.product_ref
+    if shot.bridge is not None:
+        spec["bridge"] = shot.bridge.model_dump()
     # Missing fields stay missing: old approved image input hashes are untouched.
     if (
         project.image_model is not None
@@ -871,24 +988,38 @@ def image_spec(root: Path, shot: Shot, *, verify_source: bool = True) -> dict:
 
 
 def proof_ids(board: Storyboard, brief: Brief | None = None) -> list[str]:
-    """Legacy positional proof selection, or the new explicit creative selection."""
+    """Legacy positional proof selection, or the new explicit creative selection.
+
+    Only generated source shots can be proof: a card, split, logo or end card is
+    inspected in the live Player from its deterministic local plate and never
+    enters a paid quote or an accepted-image review.
+    """
+    paid_sources = [
+        shot for shot in board.shots if shot.asset_shot_id is None and shotkinds.is_paid(shot)
+    ]
+    has_local = any(shot.asset_shot_id is None and shotkinds.is_local(shot) for shot in board.shots)
     if brief is not None and brief.creative is not None:
         selected = list(brief.creative.proof_shot_ids)
-        source_ids = {s.id for s in board.shots if s.asset_shot_id is None}
+        source_ids = {shot.id for shot in paid_sources}
         expected = min(3, len(source_ids))
         if len(selected) != expected:
             raise ValueError(
                 f"the creative profile must name exactly {expected} explicit proof shot IDs"
             )
         if len(set(selected)) != len(selected) or not set(selected) <= source_ids:
-            raise ValueError("proof shot IDs must be unique, known storyboard IDs")
+            raise ValueError("proof shot IDs must be unique, known generated storyboard IDs")
         return selected
-    return list(
-        dict.fromkeys(
-            board.shots[i].asset_shot_id or board.shots[i].id
-            for i in [0, len(board.shots) // 2, len(board.shots) - 1]
+    if not has_local:
+        return list(
+            dict.fromkeys(
+                board.shots[i].asset_shot_id or board.shots[i].id
+                for i in [0, len(board.shots) // 2, len(board.shots) - 1]
+            )
         )
-    )
+    if not paid_sources:
+        return []
+    indexes = [0, len(paid_sources) // 2, len(paid_sources) - 1]
+    return list(dict.fromkeys(paid_sources[i].id for i in indexes))
 
 
 def _current_proof_ids(root: Path, board: Storyboard) -> list[str]:
@@ -908,6 +1039,7 @@ def set_proof_ids(root: Path, shot_ids: list[str]) -> list[str]:
     brief.creative.proof_shot_ids = list(shot_ids)
     proof_ids(board, brief)
     write_json(root / STAGE_FILES["brief"], brief.model_dump())
+    _record_prompt_write(root, "proof-shots")
     return list(brief.creative.proof_shot_ids)
 
 
@@ -917,23 +1049,59 @@ def has_placeholders(shot: Shot) -> bool:
         re.match(r"^\s*(?:todo|tbd|placeholder)(?:\s*[:\-]|\s*$)", value, re.I)
         for value in (
             shot.purpose,
+            shot.message,
             shot.image_prompt,
             shot.motion_prompt,
             shot.music_context,
             shot.lyric_context,
+            *shot.text,
             *shot.must_show,
         )
     )
 
 
+def _local_plate(root: Path, project: Project, shot: Shot) -> Path:
+    """Render a local kind; splits resolve their pane stills first."""
+    sources: dict[str, Path] = {}
+    if shot.kind == "split":
+        for pane in shot.panes:
+            resolved = resolved_assets(root, [pane.shot_id])
+            sources[pane.shot_id] = Path(resolved[0].image)
+    asset = None
+    if shot.asset is not None:
+        try:
+            asset = inside(root, shot.asset)
+        except ValueError:
+            asset = None
+    return localplate.render(root, project, shot, asset=asset, sources=sources)
+
+
+def local_plate_path(root: Path, shot_id: str) -> Path:
+    """Resolve one non-paid shot to its current deterministic plate."""
+    board = load_board(root)
+    shot = next((candidate for candidate in board.shots if candidate.id == shot_id), None)
+    if shot is None:
+        raise ValueError(f"unknown shot {shot_id}")
+    if shot.asset_shot_id is not None or not shotkinds.is_local(shot):
+        raise ValueError(f"shot {shot_id} is not a local plate")
+    return _local_plate(root, load_project(root), shot)
+
+
 def resolved_assets(root: Path, ids: list[str] | None = None) -> list[RenderShot]:
     board = load_board(root)
+    project = load_project(root)
     assets = read_json(root / "work/assets.json")
     result = []
     for shot in board.shots:
         if ids is not None and shot.id not in ids:
             continue
-        owner_id = shot.asset_shot_id or shot.id
+        if shot.asset_shot_id is not None:
+            owner_id = shot.asset_shot_id
+        elif shotkinds.is_local(shot):
+            result.append(RenderShot(shot=shot, image=str(_local_plate(root, project, shot))))
+            continue
+        else:
+            owner_id = shot.id
         entry = assets.get(owner_id, {})
         chosen = next(
             (v for v in entry.get("versions", []) if v["version"] == entry.get("selected")), None
@@ -1041,6 +1209,26 @@ def check_preview_binding(root: Path, report: dict):
         raise ValueError("reviewed preview movie changed; re-render and review")
 
 
+def _local_proof_entries(root: Path, board: Storyboard, project: Project) -> list[dict]:
+    """Bind local plate bytes where they can render, otherwise their definition.
+
+    A split whose pane stills do not exist yet cannot be photographed; the proof
+    gate still binds the shot definition, and the later stills gate binds the
+    actual plate bytes.
+    """
+    entries = []
+    for shot in board.shots:
+        if shot.asset_shot_id is not None or shotkinds.is_paid(shot):
+            continue
+        try:
+            path = _local_plate(root, project, shot)
+        except (OSError, ValueError):
+            entries.append({"id": shot.id, "definition": digest(shot.model_dump())})
+        else:
+            entries.append({"id": shot.id, "image": file_hash(path)})
+    return entries
+
+
 def stage_hash(root: Path, stage: str) -> str:
     project = load_project(root)
     upstream = effective_upstream(root, stage)
@@ -1072,13 +1260,18 @@ def stage_hash(root: Path, stage: str) -> str:
                 value["listening"] = stage_hash(root, "listening")
     else:
         board = load_board(root)
-        shots = resolved_assets(root, _current_proof_ids(root, board) if stage == "proof" else None)
-        value = [{"id": s.shot.id, "image": file_hash(Path(s.image))} for s in shots]
-        if stage == "proof" and creative_workflow(project):
-            value = [
-                {**item, "input_hash": digest(image_spec(root, rs.shot))}
-                for item, rs in zip(value, shots, strict=True)
-            ]
+        if stage == "proof":
+            shots = resolved_assets(root, _current_proof_ids(root, board))
+            value = [{"id": s.shot.id, "image": file_hash(Path(s.image))} for s in shots]
+            if creative_workflow(project):
+                value = [
+                    {**item, "input_hash": digest(image_spec(root, rs.shot))}
+                    for item, rs in zip(value, shots, strict=True)
+                ]
+            value += _local_proof_entries(root, board, project)
+        else:
+            shots = resolved_assets(root)
+            value = [{"id": s.shot.id, "image": file_hash(Path(s.image))} for s in shots]
     return digest({"project": project_payload(project), "upstream": parent, "content": value})
 
 
@@ -1122,7 +1315,9 @@ def require_approval(root: Path, stage: str):
 
         board = load_board(root)
         ids = (
-            proof_ids(board, load_brief(root)) if stage == "proof" else [s.id for s in board.shots]
+            proof_ids(board, load_brief(root))
+            if stage == "proof"
+            else [s.id for s in board.shots if shotkinds.is_paid(s)]
         )
         require_accepted(root, ids)
 
@@ -1229,7 +1424,9 @@ def approve(
 
         board = load_board(root)
         ids = (
-            proof_ids(board, load_brief(root)) if stage == "proof" else [s.id for s in board.shots]
+            proof_ids(board, load_brief(root))
+            if stage == "proof"
+            else [s.id for s in board.shots if shotkinds.is_paid(s)]
         )
         require_accepted(root, ids)
     approvals = read_json(root / "work/approvals.json")

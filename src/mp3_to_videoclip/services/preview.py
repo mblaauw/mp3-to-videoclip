@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip import shotkinds
 from mp3_to_videoclip.branding import pack_hash, render_brand_plate
 from mp3_to_videoclip.remotion import data_url
 from mp3_to_videoclip.storage import digest, inside, read_json
@@ -50,10 +51,21 @@ def player_input(root: Path, slug: str) -> dict:
                 )
                 if key in dumped
             },
+            "kind": shot.kind,
             "image": MISSING_IMAGE,
             "src": None,
             "still_current": False,
         }
+        if shot.asset_shot_id is None and shotkinds.is_local(shot):
+            try:
+                resolved = P.resolved_assets(root, [shot.id])[0]
+                value["image"] = Path(resolved.image).name
+                value["src"] = f"/api/projects/{slug}/plates/{shot.id}"
+                value["still_current"] = True
+            except (OSError, ValueError):
+                placeholders.append(shot.id)
+            shots.append(value)
+            continue
         if chosen is not None:
             path = inside(root, chosen["path"])
             value["image"] = path.name

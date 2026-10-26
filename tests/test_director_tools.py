@@ -306,3 +306,47 @@ def test_get_images_refuses_more_than_eight_shots(tmp_path):
     assert isinstance(result, tools.ToolResult)
     assert result.images == ()
     assert "at most 8" in json.loads(result.text)["error"]
+
+
+def test_update_treatments_validates_and_writes_three_distinct_routes(tmp_path):
+    root = make_api_project(tmp_path)
+    payload = {
+        "concepts": [
+            {
+                "id": f"c{index}",
+                "title": f"Route {index}",
+                "structure": structure,
+                "logline": "A courier crosses the city with a record.",
+                "why": "The measured chorus earns the arrival.",
+                "world": "Night streets, practical light, one record.",
+                "shape": ["open", "lose", "search", "arrive"],
+                "signature_moment": "The label becomes a street lamp.",
+                "risk": "The city may read as generic.",
+            }
+            for index, structure in enumerate(("narrative", "demonstration", "three reasons"))
+        ]
+    }
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_treatments",
+                {"slug": "production", **payload},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert len(result["concepts"]) == 3
+    assert read_json(root / "work/treatments.json")["concepts"][0]["id"] == "c0"
+
+    duplicate = json.loads(json.dumps(payload))
+    duplicate["concepts"][1]["structure"] = "narrative"
+    failed = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_treatments",
+                {"slug": "production", **duplicate},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "different structures" in failed["error"]
