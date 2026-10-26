@@ -46,4 +46,7 @@ async def create_skeleton(slug: str, request: Request, payload: dict | None = No
     from mp3_to_videoclip.storage import write_json
 
     write_json(root / "work" / "storyboard.json", board.model_dump())
+    from mp3_to_videoclip import promptlog
+
+    promptlog.record(root, "storyboard-skeleton")
     return board.model_dump()

@@ -68,7 +68,7 @@ def _settings(gateway="opencode", key=""):
 
 
 def test_chat_routes_a_writer_turn_through_the_gateway(tmp_path, monkeypatch):
-    make_api_project(tmp_path)
+    root = make_api_project(tmp_path)
     fake = FakeClient()
     monkeypatch.setattr(director_api, "effective_settings", lambda: _settings())
 
@@ -89,6 +89,14 @@ def test_chat_routes_a_writer_turn_through_the_gateway(tmp_path, monkeypatch):
     assert fake.created == 2
     assert fake.models == ["openai/gpt-6.1-sol"]
     assert fake.closed is True
+
+    from mp3_to_videoclip.director.conversation import load_messages
+
+    user_turn = load_messages(root)[0]
+    assert user_turn["role"] == "user"
+    assert user_turn["prompt"]["task"] == "brief"
+    assert user_turn["prompt"]["hash"]
+    assert user_turn["prompt"]["files"]
 
 
 def test_chat_uses_the_editor_role_for_the_film_stage(tmp_path, monkeypatch):

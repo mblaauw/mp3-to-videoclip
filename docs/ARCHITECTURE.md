@@ -27,9 +27,12 @@ projects/<slug>/
   work/audio/           derived excerpt WAV for promo/advert (source stays untouched)
   work/music.json       measured beats/energy/sections
   work/lyrics.json      supplied or transcribed lyrics (drafts until reviewed)
-  work/storyboard.json  shots: stable ID, frames, purpose, prompt, camera
-  work/assets.json      versions per shot: path, sha256, input_hash, selected
+  work/storyboard.json  shots: stable ID, frames, kind, purpose, message, text, prompt, camera
+  work/assets.json      generated versions per shot: path, sha256, input_hash, selected
+  work/local-plates/    deterministic cards, splits, bridges, logos and end cards
   work/tasks.json       paid-task journal (reservation before submit)
+  work/prompt-current.json / prompt-artifacts.jsonl
+                        assembled prompt hash and file versions per turn/write
   renders/, previews/   versioned outputs plus a report JSON
   work/reviews/         graphics review material (not the verdict record)
 ```
@@ -69,6 +72,43 @@ verbatim and is the only protected preset; choosing it or inheriting it still
 requires the core at the start of `creative.look`. Custom looks and the other
 presets are not prefixed with that core.
 
+## Writer/Editor prompts
+
+Every prompt file starts with a `version:` front-matter block. The app assembles
+one task at a time: `writer|editor/system.md`, `shared/truth.md`,
+`kinds/<kind>.md`, `styles/<preset>.md` (Writer only), the task file and its
+worked example. `director/prompts.py` chooses the task deterministically from
+the stage and the artifacts already written: Story moves from brief to concepts
+to script to revise; Storyboard loads the board task; Images loads prompts or
+review; Track and Film route to the Editor. The assembled text is under 2,000
+words per Writer task, excluding the project snapshot appended by the API.
+
+`work/prompt-current.json` carries the assembled hash and every file version for
+the current turn; `work/prompt-artifacts.jsonl` appends the same metadata when a
+tool writes the brief, treatments, proof shots or storyboard. Chat history keeps
+the metadata on the user turn. A bad output can therefore be traced to the exact
+prompt revision without changing any artifact schema or approval hash.
+
+## Shot kinds and local plates
+
+`shotkinds.py` owns the only paid/local decision. `scene`, generated `product`
+and `bridge.mode=generated` compile an image spec and may enter a quote. `card`,
+`upload`, `split`, `reprise`, `logo`, `end_card`, designed `bridge` and a
+`product` with an uploaded `asset` are local: Pillow renders a deterministic
+full-frame PNG under `work/local-plates/`, keyed by the shot definition, project
+size, source panes and `LOCAL_PLATE_VERSION`. The renderer and the Player receive
+ordinary image files, so no Remotion primitive is added.
+
+`Shot.kind`, `message`, `text`, `bridge`, `product_ref`, `panes` and `asset` are
+dropped from serialization while they hold defaults. Legacy shots, briefs and
+approval hashes therefore stay byte-stable. `proof_ids`, `quote_images`,
+`reviews.require_accepted` and preflight operate on paid kinds only; the proof
+stage hash also binds local plate bytes where they can render (or the shot
+definition for a split whose panes do not exist yet), and the stills stage binds
+every local plate. `GET /api/projects/<slug>/plates/<shot_id>` serves the local
+file; the Player points local shots at that URL and keeps paid shots on the
+existing image route.
+
 ## Money and evidence
 
 The journal is the only thing that protects real money, so it stays strict: a
@@ -94,8 +134,8 @@ free loopback port with a per-launch `OPENCODE_SERVER_PASSWORD` (Basic user
 `opencode`), checks `GET /api/info` and refuses anything outside 2.1.4–2.1.x.
 The 2.0.x line fails GPT-6.1 Sol with an auto-compaction error. On macOS the
 gateway prefers the desktop app's CLI when `opencode` on PATH is older. It runs
-from a dedicated workspace, so this repository's `AGENTS.md` and skills never
-enter the agent prompt.
+from a dedicated workspace, so this repository's `AGENTS.md` and prompt files
+never enter the agent prompt.
 
 The workspace config defines two primary agents, `writer` and `editor`, with
 models from Settings. On 2.1.x a blanket `*` deny is a hard deny that overrides

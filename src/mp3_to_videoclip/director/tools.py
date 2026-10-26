@@ -57,6 +57,56 @@ TOOLS: list[dict] = [
     ),
     _tool("get_lyrics", "Read the lyrics.", {"slug": {"type": "string"}}, ["slug"]),
     _tool(
+        "get_treatments",
+        "Read the three concepts and the chosen concept ID, if any.",
+        {"slug": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
+        "update_treatments",
+        "Write exactly three structurally different concepts. Returns the saved artifact.",
+        {
+            "slug": {"type": "string"},
+            "concepts": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "title": {"type": "string"},
+                        "structure": {"type": "string"},
+                        "logline": {"type": "string"},
+                        "why": {"type": "string"},
+                        "world": {"type": "string"},
+                        "shape": {
+                            "type": "array",
+                            "minItems": 4,
+                            "maxItems": 6,
+                            "items": {"type": "string"},
+                        },
+                        "signature_moment": {"type": "string"},
+                        "risk": {"type": "string"},
+                    },
+                    "required": [
+                        "id",
+                        "title",
+                        "structure",
+                        "logline",
+                        "why",
+                        "world",
+                        "shape",
+                        "signature_moment",
+                        "risk",
+                    ],
+                },
+            },
+            "chosen_id": {"type": "string"},
+        },
+        ["slug", "concepts"],
+    ),
+    _tool(
         "get_images",
         "Inspect up to eight selected stills as thumbnails. Use this before reviewing images.",
         {
@@ -182,6 +232,15 @@ def _dispatch(
         path = root / "work" / "lyrics.json"
         return read_json(path) if path.is_file() else {"available": False}
 
+    if name == "get_treatments":
+        treatments = P.load_treatments(root)
+        return treatments.model_dump() if treatments is not None else {"concepts": []}
+
+    if name == "update_treatments":
+        return P.update_treatments(
+            root, {key: value for key, value in arguments.items() if key != "slug"}
+        ).model_dump()
+
     if name == "get_images":
         return _get_images(root, arguments.get("shot_ids") or [])
 
@@ -199,6 +258,9 @@ def _dispatch(
             arguments.get("timing"),
         )
         write_json(root / "work" / "storyboard.json", board.model_dump())
+        from mp3_to_videoclip import promptlog
+
+        promptlog.record(root, "storyboard-skeleton")
         return board.model_dump()
 
     if name == "generate_images":

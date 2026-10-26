@@ -109,11 +109,11 @@ commit. No test makes a paid call.
 
 ```text
 src/mp3_to_videoclip/    engine: models, timing, generation, renderer, CLI
+  director/prompts/      versioned Writer/Editor prompts, kinds, styles, examples
 renderers/remotion/      pinned Remotion renderer (render.mjs)
 projects/                productions (gitignored, never deleted, never rewritten in place)
 backups/                 metadata snapshots and private archives (gitignored)
 docs/ARCHITECTURE.md     how the pieces fit together
-.opencode/skills/        craft notes kept until they are distilled into director prompts
 ```
 
 ## How it fits together

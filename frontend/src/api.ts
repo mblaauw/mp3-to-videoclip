@@ -69,16 +69,41 @@ export type Budget = {
   history: { at: string; cap_usd: string; reason: string }[];
 };
 
+export type ShotKind =
+  | "scene"
+  | "product"
+  | "upload"
+  | "card"
+  | "bridge"
+  | "split"
+  | "reprise"
+  | "logo"
+  | "end_card";
+
 export type Shot = {
   id: string;
   start_frame: number;
   duration_frames: number;
+  kind?: ShotKind;
   purpose: string;
-  image_prompt: string;
+  message?: string;
+  image_prompt?: string;
+  text?: string[];
   camera: string;
   dissolve_frames: number;
   framing: string | null;
   asset_shot_id: string | null;
+  asset?: string | null;
+  product_ref?: string | null;
+  bridge?: {
+    mode: "designed" | "generated";
+    match?: {
+      type: "shape" | "colour" | "position";
+      anchor: [number, number];
+      note?: string;
+    } | null;
+  } | null;
+  panes?: { shot_id: string; crop?: { zoom: number; x: number; y: number } }[];
   must_show: string[];
   scene_id: string | null;
 };
@@ -163,6 +188,12 @@ export type ImageReview = {
 export type ImageShot = {
   id: string;
   owner: string;
+  kind: ShotKind;
+  paid: boolean;
+  local: boolean;
+  plate: string | null;
+  message: string;
+  text: string[];
   selected: number | null;
   versions: ImageVersion[];
   review: ImageReview | null;

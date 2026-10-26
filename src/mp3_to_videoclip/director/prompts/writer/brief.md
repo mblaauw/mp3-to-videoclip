@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: brief
 role: writer
 ---
@@ -18,7 +18,7 @@ block. You are not writing the treatment yet; you are making the job unambiguous
 
 ## Output
 
-Patch the brief through `clipstudio_update_brief`:
+Patch the brief through `update_brief`:
 
 ```json
 {"intent": {

@@ -50,7 +50,10 @@ def _budget(root: Path) -> str:
 
 def _still_status(root: Path, shot, assets: dict) -> str:
     from mp3_to_videoclip import production as P
+    from mp3_to_videoclip import shotkinds
 
+    if shot.asset_shot_id is None and shotkinds.is_local(shot):
+        return f"local {shot.kind} (no paid still)"
     owner = shot.asset_shot_id or shot.id
     entry = assets.get(owner, {}) if isinstance(assets, dict) else {}
     versions = entry.get("versions", []) if isinstance(entry, dict) else []
@@ -195,7 +198,7 @@ def build_context(slug: str, projects_dir: Path | None = None, stage: str | None
             end = (shot.start_frame + shot.duration_frames) / project.fps
             alias = f" (reprise of {shot.asset_shot_id})" if shot.asset_shot_id else ""
             shot_lines.append(
-                f"- {shot.id}{alias} {start:.1f}-{end:.1f}s "
+                f"- {shot.id}{alias} [{shot.kind}] {start:.1f}-{end:.1f}s "
                 f"{shot.framing or 'framing unset'} | {status} | {_clip(shot.purpose, 100)}"
             )
         current = sum(1 for value in statuses if value.startswith("current"))

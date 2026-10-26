@@ -9,11 +9,16 @@ REVIEWS = "work/reviews.json"
 
 def _version(root, shot_id, version):
     from . import production as P
+    from . import shotkinds
 
     board = P.load_board(root)
     shot = next((s for s in board.shots if s.id == shot_id), None)
     if shot is None:
         raise ValueError("unknown review shot")
+    if shotkinds.is_local(shot) and shot.asset_shot_id is None:
+        raise ValueError(
+            f"{shot.kind} shot {shot.id} is rendered locally; there is no image to review"
+        )
     owner = shot.asset_shot_id or shot.id
     assets = read_json(root / "work/assets.json")
     entry = assets.get(owner, {})
@@ -81,9 +86,17 @@ def verdict_for(root: Path, shot_id: str, version=None):
 
 def require_accepted(root: Path, shot_ids):
     from . import production as P
+    from . import shotkinds
 
+    board = P.load_board(root)
+    by_id = {shot.id: shot for shot in board.shots}
     for sid in shot_ids:
-        shot, _, chosen = _version(root, sid, None)
+        shot = by_id.get(sid)
+        if shot is None:
+            raise ValueError(f"unknown review shot {sid}")
+        if shotkinds.is_local(shot):
+            continue
+        _, _, chosen = _version(root, sid, None)
         verdict = verdict_for(root, sid)
         if (
             chosen["input_hash"] != digest(P.image_spec(root, shot))

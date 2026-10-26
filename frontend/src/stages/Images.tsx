@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type Budget, type BudgetDecision, type ImageEstimate, type ImageShot } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import { kindMeta } from "../shotKinds";
 
 type Card = Omit<Budget, "history">;
 
@@ -38,7 +39,7 @@ export function ImagesStage({ slug }: { slug: string }) {
           setSelected(
             new Set(
               d.shots
-                .filter((s) => s.owner === s.id && !s.versions.length)
+                .filter((s) => s.paid && s.owner === s.id && !s.versions.length)
                 .map((s) => s.owner),
             ),
           );
@@ -126,14 +127,16 @@ export function ImagesStage({ slug }: { slug: string }) {
     clearQuote();
     setSelected(
       new Set(
-        shots.filter((s) => s.owner === s.id && !s.versions.length).map((s) => s.owner),
+        shots
+          .filter((s) => s.paid && s.owner === s.id && !s.versions.length)
+          .map((s) => s.owner),
       ),
     );
   };
 
   const selectAll = () => {
     clearQuote();
-    setSelected(new Set(shots.filter((s) => s.owner === s.id).map((s) => s.owner)));
+    setSelected(new Set(shots.filter((s) => s.paid && s.owner === s.id).map((s) => s.owner)));
   };
 
   const clearSelection = () => {
@@ -205,8 +208,9 @@ export function ImagesStage({ slug }: { slug: string }) {
     <>
       <h2>Images</h2>
       <p className="sub">
-        Versions per shot. Select the one to render, then record an accepted review of the
-        exact bytes; proof and stills approvals require them.
+        Generated stills per shot. Local cards, splits, bridges, logos and end cards are rendered
+        from the board and cost nothing; they appear here for inspection but cannot be selected for
+        a paid batch.
       </p>
       {error && <p className="error">{error}</p>}
       {message && <p className="message">{message}</p>}
@@ -301,24 +305,43 @@ export function ImagesStage({ slug }: { slug: string }) {
         shots.map((s) => (
           <div className="card" key={s.id}>
             <h3>
-              <label className="inline">
-                <input
-                  type="checkbox"
-                  checked={selected.has(s.owner)}
-                  onChange={() => toggle(s.owner)}
-                />
-                {s.id}
-              </label>{" "}
+              {s.paid ? (
+                <label className="inline">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(s.owner)}
+                    onChange={() => toggle(s.owner)}
+                  />
+                  {s.id}
+                </label>
+              ) : (
+                <span>
+                  {kindMeta(s.kind).icon} {s.id}
+                </span>
+              )}{" "}
               {s.owner !== s.id && <span className="meta">reprise of {s.owner} · </span>}
-              {s.versions.length} version{s.versions.length === 1 ? "" : "s"}
+              {s.local
+                ? `${kindMeta(s.kind).label} · local`
+                : `${s.versions.length} version${s.versions.length === 1 ? "" : "s"}`}
             </h3>
             <p className="meta">
-              {s.review
-                ? `Last review: ${s.review.verdict} v${s.review.version}`
-                : "No review of this shot yet."}
+              {s.local
+                ? "Rendered locally from the board; no Runware task, budget or image review."
+                : s.review
+                  ? `Last review: ${s.review.verdict} v${s.review.version}`
+                  : "No review of this shot yet."}
             </p>
             <div className="versions">
-              {s.versions.length ? (
+              {s.local && s.plate ? (
+                <figure className="version selected">
+                  <img src={s.plate} alt={`${s.id} local ${s.kind}`} loading="lazy" />
+                  <figcaption>
+                    <span className="meta">
+                      {kindMeta(s.kind).label} plate · {s.message || "no message"}
+                    </span>
+                  </figcaption>
+                </figure>
+              ) : s.versions.length ? (
                 s.versions.map((v) => (
                   <figure
                     key={v.version}
@@ -347,7 +370,7 @@ export function ImagesStage({ slug }: { slug: string }) {
                 "No versions yet."
               )}
             </div>
-            {s.versions.length > 0 && (
+            {s.paid && s.versions.length > 0 && (
               <div className="review">
                 <div className="review-controls">
                   <select

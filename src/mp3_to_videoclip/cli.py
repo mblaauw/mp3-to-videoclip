@@ -594,23 +594,39 @@ def execute(args):
                 "approved": False,
             }
         if cmd == "prompts":
+            from . import shotkinds
+
             board = production.load_board(root)
             ids = args.shots.split(",") if args.shots else [s.id for s in board.shots]
             if len(set(ids)) != len(ids) or not set(ids) <= {s.id for s in board.shots}:
                 raise ValueError("unknown or duplicate shot IDs")
-            return {
-                "generated": False,
-                "shots": [
+            shots = []
+            for shot in board.shots:
+                if shot.id not in ids:
+                    continue
+                if shot.asset_shot_id is None and shotkinds.is_local(shot):
+                    shots.append(
+                        {
+                            "id": shot.id,
+                            "kind": shot.kind,
+                            "purpose": shot.purpose,
+                            "must_show": shot.must_show,
+                            "paid": False,
+                            "note": "local plate; no image-generation spec",
+                        }
+                    )
+                    continue
+                shots.append(
                     {
-                        "id": s.id,
-                        "purpose": s.purpose,
-                        "must_show": s.must_show,
-                        "spec": production.image_spec(root, s),
+                        "id": shot.id,
+                        "kind": shot.kind,
+                        "purpose": shot.purpose,
+                        "must_show": shot.must_show,
+                        "paid": True,
+                        "spec": production.image_spec(root, shot),
                     }
-                    for s in board.shots
-                    if s.id in ids
-                ],
-            }
+                )
+            return {"generated": False, "shots": shots}
         if cmd == "preview":
             production.require_approval(root, "storyboard")
             board = production.load_board(root)

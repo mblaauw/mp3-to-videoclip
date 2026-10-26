@@ -39,13 +39,17 @@ async def run_turn(
     max_tool_calls: int = MAX_TOOL_CALLS,
     runner=None,
     projects_dir=None,
+    prompt_meta: dict | None = None,
 ) -> AsyncIterator[TurnEvent]:
     messages = load_messages(root)
     messages, summary = compact_messages(messages)
     if summary:
         system = (system + "\n\n" + summary).strip()
     messages.append({"role": "user", "content": user_message})
-    append_message(root, {"role": "user", "content": user_message})
+    entry = {"role": "user", "content": user_message}
+    if prompt_meta is not None:
+        entry["prompt"] = prompt_meta
+    append_message(root, entry)
 
     tool_calls = 0
     while tool_calls < max_tool_calls:

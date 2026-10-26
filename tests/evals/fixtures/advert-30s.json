@@ -1,0 +1,56 @@
+{
+  "name": "advert-30s",
+  "kind": "advert",
+  "music_mode": "vocal",
+  "duration": 30.0,
+  "source_duration": 120.0,
+  "audio_window": {"start": 62.0, "end": 92.0, "fade_in": 0.0, "fade_out": 1.5},
+  "lyrics": [
+    {"at": 63.0, "text": "forward ever"},
+    {"at": 78.0, "text": "the city keeps a light on"}
+  ],
+  "intent": {
+    "kind": "advert",
+    "objective": "pre-save the single 'Forward Ever' before 14 Nov",
+    "audience": "existing listeners, 18-34, on YouTube",
+    "message": "The new single is out 14 Nov - pre-save now",
+    "reasons": ["first release in two years", "recorded live in one take"],
+    "tone": ["urgent", "warm", "nocturnal"],
+    "mandatories": ["logo end card", "release date", "pre-save URL"],
+    "avoid": ["stock-photo smiles"],
+    "cta": {"text": "Pre-save now", "url": "https://example.com"},
+    "length_seconds": 30,
+    "audio_window": {"start": 62.0, "end": 92.0, "fade_in": 0.0, "fade_out": 1.5}
+  },
+  "allowed_facts": [
+    "Forward Ever",
+    "14 Nov",
+    "first release in two years",
+    "recorded live in one take",
+    "Pre-save now",
+    "https://example.com"
+  ],
+  "music": {
+    "estimated_tempo_bpm": 124,
+    "sections": [
+      {"start": 0, "end": 4, "label": "hook"},
+      {"start": 4, "end": 14, "label": "verse"},
+      {"start": 14, "end": 24, "label": "chorus"},
+      {"start": 24, "end": 30, "label": "close"}
+    ],
+    "beats": [0.0, 0.48, 0.97, 1.45],
+    "energy_curve": [
+      {"time": 0, "energy": 0.55},
+      {"time": 14, "energy": 0.85},
+      {"time": 24, "energy": 0.5},
+      {"time": 30, "energy": 0.25}
+    ]
+  },
+  "stills": [
+    {"shot_id": "s001", "colors": ["#0B1015", "#D8FF3E"]},
+    {"shot_id": "s004", "colors": ["#1C2A39", "#D4AE6A"]},
+    {"shot_id": "s006", "colors": ["#161821", "#F4F1E8"]},
+    {"shot_id": "s009", "colors": ["#231A16", "#D8FF3E"]},
+    {"shot_id": "s011", "colors": ["#101820", "#6E8B99"]}
+  ]
+}

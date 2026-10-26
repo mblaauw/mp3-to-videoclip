@@ -11,6 +11,17 @@ NATIVE_SIZE_MAX = 4096
 NATIVE_SIZE_RATIO_TOLERANCE = 0.01
 
 Kind = Literal["music_video", "promo", "advert"]
+ShotKind = Literal[
+    "scene",
+    "product",
+    "upload",
+    "card",
+    "bridge",
+    "split",
+    "reprise",
+    "logo",
+    "end_card",
+]
 
 
 def native_size_problem(value: list[int], width: int, height: int) -> str | None:
@@ -318,11 +329,78 @@ class Intent(Model):
         return value
 
 
+class ScriptBeat(Model):
+    """One row of the Writer's beat script; empty cells are omitted from bytes."""
+
+    time_range: str = Field(default="", max_length=40)
+    picture: str = Field(default="", max_length=600)
+    text: str = Field(default="", max_length=240)
+    music: str = Field(default="", max_length=240)
+
+    @model_validator(mode="after")
+    def useful(self):
+        if not any((self.time_range, self.picture, self.text, self.music)):
+            raise ValueError("a script beat needs at least one non-empty cell")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        return {key: value for key, value in handler(self).items() if value != ""}
+
+
+class Concept(Model):
+    """One genuinely different route for the film, before the treatment is chosen."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    title: str = Field(min_length=1, max_length=120)
+    structure: str = Field(min_length=1, max_length=80)
+    logline: str = Field(min_length=1, max_length=300)
+    why: str = Field(min_length=1, max_length=500)
+    world: str = Field(min_length=1, max_length=700)
+    shape: list[str] = Field(min_length=4, max_length=6)
+    signature_moment: str = Field(min_length=1, max_length=300)
+    risk: str = Field(min_length=1, max_length=300)
+
+    @model_validator(mode="after")
+    def useful(self):
+        if any(not value.strip() for value in self.shape):
+            raise ValueError("every concept shape beat needs text")
+        return self
+
+
+class Treatments(Model):
+    """Three structurally distinct routes; the Writer may mark one chosen."""
+
+    schema_version: Literal[1] = 1
+    concepts: list[Concept] = Field(min_length=3, max_length=3)
+    chosen_id: str | None = None
+
+    @model_validator(mode="after")
+    def distinct(self):
+        ids = [concept.id for concept in self.concepts]
+        if len(set(ids)) != len(ids):
+            raise ValueError("concept IDs must be unique")
+        structures = [concept.structure.strip().casefold() for concept in self.concepts]
+        if len(set(structures)) != len(structures):
+            raise ValueError("three concepts need three different structures")
+        if self.chosen_id is not None and self.chosen_id not in ids:
+            raise ValueError("chosen_id must name a concept")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("chosen_id") is None:
+            value.pop("chosen_id", None)
+        return value
+
+
 class Brief(Model):
     intent: Intent | None = None
     direction: str = ""
     style: str = ""
     treatment: str = ""
+    script: list[ScriptBeat] = Field(default_factory=list, max_length=40)
     visual_rules: list[str] = Field(default_factory=list)
     avoid: list[str] = Field(default_factory=list)
     characters: list[Character] = Field(default_factory=list)
@@ -333,6 +411,8 @@ class Brief(Model):
         value = handler(self)
         if value.get("intent") is None:
             value.pop("intent", None)
+        if not value.get("script"):
+            value.pop("script", None)
         return value
 
 
@@ -363,14 +443,59 @@ class PostEffects(Model):
     vignette: float = Field(default=0, ge=0, le=0.3)
 
 
+class BridgeMatch(Model):
+    """The explicit alignment a Writer plans and the Editor can execute."""
+
+    type: Literal["shape", "colour", "position"] = "shape"
+    anchor: list[float] = Field(default_factory=lambda: [0.5, 0.5], min_length=2, max_length=2)
+    note: str = Field(default="", max_length=300)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("note") == "":
+            value.pop("note", None)
+        return value
+
+    @model_validator(mode="after")
+    def anchor_inside_frame(self):
+        if any(value < 0 or value > 1 for value in self.anchor):
+            raise ValueError("bridge anchor is normalized 0..1")
+        return self
+
+
+class BridgePlan(Model):
+    """Designed bridges are local plates; generated bridges are paid stills."""
+
+    mode: Literal["designed", "generated"] = "designed"
+    match: BridgeMatch | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("match") is None:
+            value.pop("match", None)
+        return value
+
+
+class Pane(Model):
+    """One source shot and its crop in a split composition."""
+
+    shot_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    crop: Framing = Field(default_factory=Framing)
+
+
 class Shot(Model):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
     start_frame: int = Field(ge=0)
     duration_frames: int = Field(gt=0)
+    kind: ShotKind = "scene"
     purpose: str = Field(min_length=1)
+    message: str = Field(default="", max_length=400)
     lyric_context: str = ""
     music_context: str = ""
-    image_prompt: str = Field(min_length=1)
+    image_prompt: str = ""
+    text: list[str] = Field(default_factory=list, max_length=8)
     motion_prompt: str = ""
     camera: Literal["hold", "zoom_in", "zoom_out", "pan_left", "pan_right"] = "zoom_in"
     dissolve_frames: int = Field(default=0, ge=0)
@@ -385,6 +510,10 @@ class Shot(Model):
     post_effects: PostEffects | None = None
     transition: Literal["fade", "wipe_left", "wipe_right"] | None = None
     asset_shot_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    asset: str | None = Field(default=None, min_length=1, max_length=300)
+    product_ref: str | None = Field(default=None, min_length=1, max_length=300)
+    bridge: BridgePlan | None = None
+    panes: list[Pane] = Field(default_factory=list, max_length=3)
     character_states: dict[str, str] = Field(default_factory=dict)
     state_requirements: dict[str, dict[str, str]] = Field(default_factory=dict)
 
@@ -397,7 +526,73 @@ class Shot(Model):
         for key in ("camera_keyframes", "post_effects", "transition"):
             if value.get(key) is None:
                 value.pop(key, None)
+        # New fields are dropped while default so legacy approval hashes do not move.
+        if value.get("kind") == "scene":
+            value.pop("kind", None)
+        for key, empty in (
+            ("message", ""),
+            ("text", []),
+            ("bridge", None),
+            ("product_ref", None),
+            ("panes", []),
+            ("asset", None),
+            ("image_prompt", ""),
+        ):
+            if value.get(key) == empty:
+                value.pop(key, None)
         return value
+
+    @model_validator(mode="after")
+    def check_kind(self):
+        if self.kind == "reprise" and self.asset_shot_id is None:
+            raise ValueError("a reprise shot needs asset_shot_id")
+        if self.kind == "upload" and self.asset is None:
+            raise ValueError("an upload shot needs a project-relative asset")
+        if self.kind == "product" and not (self.product_ref or self.asset):
+            raise ValueError("a product shot needs a product_ref or an uploaded asset")
+        if self.product_ref is not None and self.kind != "product":
+            raise ValueError("product_ref only belongs to a product shot")
+        if self.kind == "split":
+            if not 2 <= len(self.panes) <= 3:
+                raise ValueError("a split shot needs two or three panes")
+            ids = [pane.shot_id for pane in self.panes]
+            if len(set(ids)) != len(ids):
+                raise ValueError("split panes must name different shots")
+            if self.id in ids:
+                raise ValueError("a split shot cannot include itself as a pane")
+        elif self.panes:
+            raise ValueError("panes only belong to a split shot")
+        if self.kind == "bridge":
+            if self.bridge is None:
+                raise ValueError("a bridge shot needs a bridge plan")
+            if self.bridge.match is None:
+                raise ValueError("a bridge shot needs an explicit match")
+            if self.bridge.mode == "generated" and not self.image_prompt.strip():
+                raise ValueError("a generated bridge needs an image prompt")
+            if self.bridge.mode == "designed" and not (self.text or self.message.strip()):
+                raise ValueError("a designed bridge needs a message or on-screen text")
+        elif self.bridge is not None:
+            raise ValueError("bridge plans only belong to a bridge shot")
+        if self.text and any(not value.strip() or len(value) > 160 for value in self.text):
+            raise ValueError("on-screen text lines must be 1-160 characters")
+        if self.kind in ("card", "end_card") and not (self.text or self.message.strip()):
+            raise ValueError(f"a {self.kind} shot needs a message or on-screen text")
+        generated = self.kind in ("scene", "product", "bridge")
+        if self.kind == "product" and self.asset is not None:
+            generated = False
+        if self.kind == "bridge" and self.bridge is not None:
+            generated = self.bridge.mode == "generated"
+        if generated and not self.image_prompt.strip():
+            raise ValueError("generated shots need an image prompt")
+        if self.asset is not None and self.kind not in (
+            "upload",
+            "product",
+            "card",
+            "logo",
+            "end_card",
+        ):
+            raise ValueError("an uploaded asset belongs to upload, product, card, logo or end_card")
+        return self
 
     @model_validator(mode="after")
     def check_render_controls(self):

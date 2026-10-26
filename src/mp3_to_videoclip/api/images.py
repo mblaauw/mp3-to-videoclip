@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip import reviews, services
+from mp3_to_videoclip import reviews, services, shotkinds
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.domain import budget
 from mp3_to_videoclip.storage import inside
@@ -36,20 +36,40 @@ async def get_images(slug: str, request: Request):
         for shot in board.shots:
             owner = shot.asset_shot_id or shot.id
             entry = assets.get(owner, {})
+            local = shotkinds.is_local(shot)
+            local_plate = local and shot.asset_shot_id is None
             try:
-                review = reviews.verdict_for(root, shot.id)
+                review = None if local_plate else reviews.verdict_for(root, shot.id)
             except (OSError, ValueError):
                 review = None
             shots.append(
                 {
                     "id": shot.id,
                     "owner": owner,
-                    "selected": entry.get("selected"),
-                    "versions": entry.get("versions", []),
+                    "kind": shot.kind,
+                    "paid": shotkinds.is_paid(shot),
+                    "local": local,
+                    "plate": (f"/api/projects/{slug}/plates/{shot.id}" if local_plate else None),
+                    "message": shot.message,
+                    "text": shot.text,
+                    "selected": None if local_plate else entry.get("selected"),
+                    "versions": [] if local_plate else entry.get("versions", []),
                     "review": review,
                 }
             )
     return {"shots": shots}
+
+
+@router.get("/plates/{shot_id}")
+async def get_plate(slug: str, shot_id: str, request: Request):
+    root = project_root(request, slug)
+    try:
+        target = P.local_plate_path(root, shot_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="local plate is missing")
+    return FileResponse(target)
 
 
 @router.get("/images/{owner}/{version}")

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, type Brief, type Music, type Shot, type Storyboard } from "../api";
+import { api, type Brief, type Music, type Shot, type ShotKind, type Storyboard } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import { SHOT_KINDS, isPaidShot, kindMeta, kindOf } from "../shotKinds";
 import { Timeline } from "../Timeline";
 
 export function StoryboardStage({ slug }: { slug: string }) {
@@ -30,8 +31,51 @@ export function StoryboardStage({ slug }: { slug: string }) {
       .catch(() => setMusic(null));
   }, [slug]);
 
-  const edit = (id: string, field: keyof Shot, value: string | number) => {
+  const edit = (id: string, field: keyof Shot, value: unknown) => {
     setDraft((d) => ({ ...d, [id]: { ...d[id], [field]: value } }));
+  };
+
+  const patch = (id: string, value: Partial<Shot>) => {
+    setDraft((d) => ({ ...d, [id]: { ...d[id], ...value } }));
+  };
+
+  const changeKind = (shot: Shot, value: string) => {
+    const kind = value as ShotKind;
+    const next: Partial<Shot> = { kind };
+    if (kind === "bridge") {
+      next.bridge =
+        shot.bridge ?? {
+          mode: "designed",
+          match: { type: "shape", anchor: [0.5, 0.5], note: "" },
+        };
+    } else {
+      next.bridge = null;
+    }
+    if (kind === "split") {
+      const candidates =
+        board?.shots
+          .filter((item) => item.id !== shot.id && kindOf(item) !== "split")
+          .map((item) => item.id) ?? [];
+      next.panes =
+        shot.panes && shot.panes.length
+          ? shot.panes
+          : candidates.slice(0, 2).map((shot_id) => ({ shot_id }));
+    } else {
+      next.panes = [];
+    }
+    if (kind === "reprise") {
+      next.asset_shot_id =
+        shot.asset_shot_id ??
+        board?.shots.find((item) => item.id !== shot.id && !item.asset_shot_id)?.id ??
+        null;
+    }
+    if (!["upload", "product", "card", "logo", "end_card"].includes(kind)) {
+      next.asset = null;
+    }
+    if (isPaidShot({ ...shot, ...next }) && !shot.image_prompt?.trim()) {
+      next.image_prompt = shot.purpose;
+    }
+    patch(shot.id, next);
   };
 
   const create = async () => {
@@ -48,7 +92,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
     }
   };
 
-  const sourceShots = board?.shots.filter((shot) => !shot.asset_shot_id) || [];
+  const sourceShots = board?.shots.filter((shot) => isPaidShot(shot)) || [];
   const expectedProof = Math.min(3, sourceShots.length);
 
   const toggleProof = (id: string) => {
@@ -102,12 +146,12 @@ export function StoryboardStage({ slug }: { slug: string }) {
     <>
       <h2>Storyboard</h2>
       <p className="sub">
-        Integer-frame timeline, stable shot IDs. Edit purpose, prompt, framing or camera; save to
-        update the board.
+        Integer-frame timeline, stable shot IDs. Choose each shot's kind, job, message and
+        on-screen text; only scene and generated product/bridge shots cost money.
       </p>
       {error && <p className="error">{error}</p>}
       <ApprovalBar slug={slug} stages={["storyboard"]} refresh={revision} />
-      {board && (
+      {board && expectedProof > 0 && (
         <div className="card">
           <h3>
             Proof shots ({proofIds.length} of {expectedProof})
@@ -154,18 +198,40 @@ export function StoryboardStage({ slug }: { slug: string }) {
               <tr>
                 <th>Shot</th>
                 <th>Frames</th>
+                <th>Kind</th>
                 <th>Purpose</th>
+                <th>Message</th>
+                <th>Text</th>
                 <th>Prompt</th>
                 <th>Framing</th>
                 <th>Camera</th>
               </tr>
             </thead>
             <tbody>
-              {board.shots.map((s) => (
+              {board.shots.map((s) => {
+                const current = { ...s, ...draft[s.id] } as Shot;
+                const paid = isPaidShot(current);
+                return (
                 <tr key={s.id}>
                   <td>{s.id}</td>
                   <td>
                     {s.start_frame}–{s.start_frame + s.duration_frames}
+                  </td>
+                  <td>
+                    <span className="kind-badge" title={kindMeta(kindOf(current)).hint}>
+                      {kindMeta(kindOf(current)).icon}
+                    </span>
+                    <select
+                      aria-label={`Kind for ${s.id}`}
+                      value={kindOf(current)}
+                      onChange={(e) => changeKind(s, e.target.value)}
+                    >
+                      {SHOT_KINDS.map((kind) => (
+                        <option key={kind.id} value={kind.id}>
+                          {kind.icon} {kind.label}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <input
@@ -174,8 +240,34 @@ export function StoryboardStage({ slug }: { slug: string }) {
                     />
                   </td>
                   <td>
+                    <input
+                      value={(draft[s.id]?.message ?? s.message ?? "") as string}
+                      onChange={(e) => edit(s.id, "message", e.target.value)}
+                    />
+                  </td>
+                  <td>
                     <textarea
-                      value={(draft[s.id]?.image_prompt ?? s.image_prompt) as string}
+                      aria-label={`On-screen text for ${s.id}`}
+                      placeholder="one line per card line"
+                      value={(draft[s.id]?.text ?? s.text ?? []).join("\n")}
+                      onChange={(e) =>
+                        edit(
+                          s.id,
+                          "text",
+                          e.target.value
+                            .split("\n")
+                            .map((line) => line.trim())
+                            .filter(Boolean),
+                        )
+                      }
+                    />
+                  </td>
+                  <td>
+                    <textarea
+                      aria-label={`Prompt for ${s.id}`}
+                      placeholder={paid ? "Describe the decisive still" : "Local kind — no generated image"}
+                      disabled={!paid}
+                      value={(draft[s.id]?.image_prompt ?? s.image_prompt ?? "") as string}
                       onChange={(e) => edit(s.id, "image_prompt", e.target.value)}
                     />
                   </td>
@@ -204,7 +296,8 @@ export function StoryboardStage({ slug }: { slug: string }) {
                     </select>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
             </div>
