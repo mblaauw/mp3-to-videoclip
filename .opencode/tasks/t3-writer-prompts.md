@@ -1,7 +1,7 @@
 # T3 — Writer prompts and shot kinds
 
-Status: verification complete; live Writer eval not run (no spend authorization)
-Revision: branch `director/t3-prompts`
+Status: complete (merged); live Writer eval pending owner authorization
+Revision: merged as 253da6b (PR #21), from branch commit a4d141f
 Authorized: 2026-10-26, owner said "continue and do the whole of T3".
 
 ## Objective
@@ -155,3 +155,9 @@ file as its `SKILL.md`; no skill reference file remains a runtime prompt source.
   the Writer tools or JSON.
 - The Editor's structured edit list and renderer primitives remain T4; the Film
   prompt says so and plans in the reply for now.
+
+## Merge
+
+PR #21 squash-merged as `253da6b`; the branch commit `a4d141f` and the merge
+tree are identical (`b3bc0e0`). CI check passed in 4m31s. No paid provider call
+was made. The branch was deleted after merge.
