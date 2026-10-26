@@ -205,9 +205,18 @@ class Lyrics(Model):
     language: str | None = None
     provider: str
     model: str
-    segments: list[Segment]
+    segments: list[Segment] = Field(default_factory=list)
+    # Plain text is a real artifact: the words without invented positions.
+    lines: list[str] = Field(default_factory=list)
     words: list[dict] = Field(default_factory=list)
     warning: str = "Sung lyrics and timestamps are unverified until reviewed."
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if not value.get("lines"):
+            value.pop("lines", None)
+        return value
 
 
 class CharacterState(Model):

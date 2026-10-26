@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.api.errors import error_response
-from mp3_to_videoclip.domain import approvals
+from mp3_to_videoclip.domain import approval_changes, approvals
 from mp3_to_videoclip.storage import read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["approvals"])
@@ -30,6 +30,7 @@ class ApprovalStateOut(BaseModel):
     note: str | None = None
     error: str | None = None
     blocking_stage: str | None = None
+    reason: str | None = None
 
 
 class ApprovalsOut(BaseModel):
@@ -105,12 +106,19 @@ def _approval(root, stage: str) -> dict:
         state = "stale"
     else:
         state = "approved"
+    reason = None
+    if state == "stale":
+        try:
+            reason = approval_changes.for_stage(root, stage, record).get("reason")
+        except (OSError, ValueError):
+            reason = None
     return {
         "stage": stage,
         "state": state,
         "expected_hash": current,
         "at": (record or {}).get("at"),
         "note": (record or {}).get("note"),
+        "reason": reason,
     }
 
 
@@ -121,6 +129,16 @@ async def get_approvals(slug: str, request: Request, stages: str | None = None):
     if stages:
         wanted = tuple(stage for stage in stages.split(",") if stage in STAGES)
     return {"stages": [_approval(root, stage) for stage in wanted]}
+
+
+@router.get("/approvals/{stage}/changes")
+async def get_approval_changes(slug: str, stage: str, request: Request):
+    """The reason and a short before/after diff for a changed decision."""
+    if stage not in P.UPSTREAM:
+        return error_response("unknown approval stage", "approval_not_found", 404)
+    root = project_root(request, slug)
+    record = read_json(root / "work" / "approvals.json").get(stage)
+    return approval_changes.for_stage(root, stage, record)
 
 
 @router.post("/approvals/{stage}", response_model=ApprovalOut)

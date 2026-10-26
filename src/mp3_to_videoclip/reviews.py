@@ -35,7 +35,7 @@ def record_review(
     version: int,
     verdict: str,
     *,
-    note: str,
+    note: str | None = None,
     reviewer: str,
     inspected=False,
 ):
@@ -46,8 +46,9 @@ def record_review(
 
     if verdict not in ("accept", "reject", "uncertain"):
         raise ValueError("review verdict must be accept, reject or uncertain")
-    if not note.strip() or not reviewer.strip() or inspected is not True:
-        raise ValueError("review needs an inspection acknowledgement, reviewer and reason")
+    note = (note or "").strip() or None
+    if (note is not None and len(note) > 2000) or not reviewer.strip() or inspected is not True:
+        raise ValueError("review needs an inspection acknowledgement, reviewer and a valid note")
     shot, owner, chosen = _version(root, shot_id, version)
     if verdict == "accept" and chosen["input_hash"] != digest(P.image_spec(root, shot)):
         raise ValueError("cannot accept an image generated from stale inputs")

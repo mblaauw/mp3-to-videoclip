@@ -26,11 +26,18 @@ export function StoryboardStage({ slug }: { slug: string }) {
       .brief(slug)
       .then((data: Brief) => setProofIds(data.creative?.proof_shot_ids || []))
       .catch(() => setProofIds([]));
+  }, [slug]);
+
+  useEffect(() => {
+    if (!board) {
+      setTimingOwned(false);
+      return;
+    }
     api
       .edit(slug)
       .then((data) => setTimingOwned(data.present))
       .catch(() => setTimingOwned(false));
-  }, [slug]);
+  }, [board, slug]);
 
   useEffect(() => {
     const reload = () => {
@@ -110,21 +117,23 @@ export function StoryboardStage({ slug }: { slug: string }) {
 
   const toggleProof = (id: string) => {
     setProofMessage(null);
-    setProofIds((current) => {
-      if (current.includes(id)) return current.filter((value) => value !== id);
-      if (current.length >= expectedProof) return current;
-      return [...current, id];
-    });
+    const next = proofIds.includes(id)
+      ? proofIds.filter((value) => value !== id)
+      : proofIds.length >= expectedProof
+        ? proofIds
+        : [...proofIds, id];
+    setProofIds(next);
+    if (next.length === expectedProof) void saveProof(next);
   };
 
-  const saveProof = async () => {
-    if (!board || proofIds.length !== expectedProof) return;
+  const saveProof = async (ids = proofIds) => {
+    if (!board || ids.length !== expectedProof) return;
     setSavingProof(true);
     setError(null);
     try {
-      const result = await api.setProofShots(slug, proofIds);
+      const result = await api.setProofShots(slug, ids);
       setProofIds(result.proof_shot_ids);
-      setProofMessage("Brief changed — approve it again in Story before the board.");
+      setProofMessage("Style-check shots changed. The story needs your approval again.");
       setRevision((value) => value + 1);
       notifyProjectChanged();
     } catch (e) {
@@ -164,30 +173,29 @@ export function StoryboardStage({ slug }: { slug: string }) {
       {board && expectedProof > 0 && (
         <div className="card">
           <h3>
-            Proof shots ({proofIds.length} of {expectedProof})
+            Style-check shots ({proofIds.length} of {expectedProof})
           </h3>
           <p className="meta">
             Pick the hardest identity or interaction to inspect first, not the safest portrait.
+            Changing a star asks for the story to be approved again.
           </p>
           <div className="proof-list">
             {sourceShots.map((shot) => (
-              <label key={shot.id}>
+              <label key={shot.id} className={proofIds.includes(shot.id) ? "chosen" : ""}>
+                <span aria-hidden="true" className="star">
+                  ★
+                </span>
                 <input
                   type="checkbox"
                   checked={proofIds.includes(shot.id)}
                   onChange={() => toggleProof(shot.id)}
-                  disabled={!proofIds.includes(shot.id) && proofIds.length >= expectedProof}
+                  disabled={savingProof || (!proofIds.includes(shot.id) && proofIds.length >= expectedProof)}
                 />
                 {shot.id}
               </label>
             ))}
           </div>
-          <button
-            onClick={saveProof}
-            disabled={savingProof || proofIds.length !== expectedProof}
-          >
-            {savingProof ? "Saving…" : "Save proof shots"}
-          </button>
+          {savingProof && <p className="meta">Saving the style-check shots…</p>}
           {proofMessage && <p className="message">{proofMessage}</p>}
         </div>
       )}

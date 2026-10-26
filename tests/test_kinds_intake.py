@@ -87,21 +87,21 @@ def test_advert_intake_matches_the_brief_example(tmp_path, fake_probe):
     assert (root / "media" / "song.mp3").read_bytes() == b"ID3fake"
 
 
-def test_advert_requires_objective_message_cta_and_length(tmp_path, fake_probe):
+def test_advert_requires_message_cta_and_length(tmp_path, fake_probe):
     source = _source(tmp_path)
     base = {
         "title": "Missing facts",
         "kind": "advert",
         "length_seconds": 30,
     }
-    with pytest.raises(ValueError, match="objective"):
+    with pytest.raises(ValueError, match="message"):
         intake.create_from_upload(tmp_path / "projects", source, **base)
     with pytest.raises(ValueError, match="call to action"):
         intake.create_from_upload(
             tmp_path / "projects",
             source,
             **base,
-            intent={"objective": "launch", "message": "out now"},
+            intent={"message": "out now"},
         )
     with pytest.raises(ValueError, match="target length"):
         intake.create_from_upload(
@@ -110,7 +110,6 @@ def test_advert_requires_objective_message_cta_and_length(tmp_path, fake_probe):
             title="No length",
             kind="advert",
             intent={
-                "objective": "launch",
                 "message": "out now",
                 "cta": {"text": "Buy"},
             },

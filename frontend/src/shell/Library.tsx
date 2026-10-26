@@ -31,6 +31,14 @@ function clock(seconds: number | null | undefined): string {
 
 function nextLabel(project: ProjectSummary): string {
   if (!project.next_step) return "Delivered";
+  if (project.next_step === "track") {
+    if (!project.has_analysis) return "Measure the song";
+    const needsLyrics =
+      project.music_mode === "vocal" &&
+      (project.kind === null || project.kind === undefined || project.kind === "music_video");
+    if (needsLyrics && !project.has_lyrics) return "Add the lyrics";
+    return "Continue to Story";
+  }
   const state = project.stage_states?.[project.next_step];
   if (state === "changed") return `${NEXT_LABEL[project.next_step] || "Review"} again`;
   return NEXT_LABEL[project.next_step] || `Continue to ${stageLabel(project.next_step as Stage)}`;

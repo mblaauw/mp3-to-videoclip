@@ -104,8 +104,10 @@ async def review_image(slug: str, request: Request, payload: dict):
         raise HTTPException(status_code=400, detail="choose a valid image version")
     if verdict not in ("accept", "reject", "uncertain"):
         raise HTTPException(status_code=400, detail="verdict must be accept, reject or uncertain")
-    if not isinstance(note, str) or not 1 <= len(note.strip()) <= 2000:
-        raise HTTPException(status_code=400, detail="record a review note (1-2000 characters)")
+    if note is None:
+        note = ""
+    if not isinstance(note, str) or len(note.strip()) > 2000:
+        raise HTTPException(status_code=400, detail="a review note may be at most 2000 characters")
     if inspected is not True:
         raise HTTPException(
             status_code=400, detail="confirm that you inspected the exact image bytes"
@@ -116,7 +118,7 @@ async def review_image(slug: str, request: Request, payload: dict):
             shot_id,
             version,
             verdict,
-            note=note.strip(),
+            note=note.strip() or None,
             reviewer="studio",
             inspected=True,
         )

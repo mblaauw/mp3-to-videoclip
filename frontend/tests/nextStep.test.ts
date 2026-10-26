@@ -86,6 +86,18 @@ test("track asks for lyrics on a vocal song without them", () => {
   assert.equal(step.actions[0].to, "track");
 });
 
+test("a vocal advert does not demand lyrics", () => {
+  const step = nextStep(
+    "track",
+    project({ kind: "advert", has_lyrics: false }),
+    approvals(),
+    images(),
+    budget,
+  );
+  assert.equal(step.tone, "done");
+  assert.equal(step.actions[0].to, "story");
+});
+
 test("track is ready once analysis and lyrics exist", () => {
   const step = nextStep("track", project(), approvals(), images(), budget);
   assert.equal(step.tone, "done");
@@ -144,18 +156,60 @@ test("story asks for approval when the brief is unapproved", () => {
   const step = nextStep("story", project(), approvals(), images(), budget);
   assert.match(step.title, /approve it/);
   assert.equal(step.actions[0].target, "approval");
+  assert.equal(step.actions[0].approve, "brief");
 });
 
-test("story reports a stale approval", () => {
+test("story asks for lyrics before an unapproved brief even when the file is empty", () => {
+  const step = nextStep(
+    "story",
+    project({ has_lyrics: false }),
+    approvals({ brief: { state: "missing" } }),
+    images(),
+    budget,
+  );
+  assert.match(step.title, /lyrics first/);
+  assert.equal(step.actions[0].to, "track");
+});
+
+test("story reports the real reason and the diff action when stale", () => {
   const step = nextStep(
     "story",
     project({ stage_states: states({ story: "changed" }) }),
-    approvals({ brief: { state: "stale" } }),
+    approvals({
+      brief: {
+        state: "stale",
+        reason: "The style-check shots moved to s002, s018 and s033.",
+      },
+    }),
     images(),
     budget,
   );
   assert.equal(step.tone, "changed");
   assert.match(step.title, /changed/);
+  assert.match(step.detail || "", /style-check shots moved/);
+  assert.deepEqual(step.actions[0], { label: "See what changed", target: "changes" });
+  assert.equal(step.actions[1].approve, "brief");
+});
+
+test("an advert asks for its message and call to action before the story", () => {
+  const step = nextStep(
+    "story",
+    project({
+      kind: "advert",
+      has_message: false,
+      has_cta: false,
+      stage_states: states({ story: "you" }),
+    }),
+    approvals({ brief: { state: "missing" } }),
+    images(),
+    budget,
+  );
+  assert.match(step.title, /make people do/);
+  assert.deepEqual(step.actions[0], {
+    label: "Edit brief",
+    target: "brief",
+    kind: "primary",
+  });
 });
 
 test("story continues to storyboard when approved", () => {

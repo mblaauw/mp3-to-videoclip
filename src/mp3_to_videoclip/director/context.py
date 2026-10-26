@@ -82,16 +82,20 @@ def _still_status(root: Path, shot, assets: dict) -> str:
 
 
 def _music(root: Path) -> str:
+    from mp3_to_videoclip.domain import music_notes
+
     music = read_optional(root / "work" / "music.json")
     if not isinstance(music, dict):
         return "not analysed"
     sections = music.get("sections") or []
+    names = music_notes.names_by_start(root)
     labels = []
     try:
         labels = [
-            f"{item.get('label')} {float(item.get('start', 0)):.0f}-{float(item.get('end', 0)):.0f}s"
-            for item in sections
-            if isinstance(item, dict) and item.get("label")
+            f"{names.get(round(float(item.get('start', 0)), 3)) or music_notes.default_name(index)} "
+            f"{float(item.get('start', 0)):.0f}-{float(item.get('end', 0)):.0f}s"
+            for index, item in enumerate(sections)
+            if isinstance(item, dict)
         ]
     except (TypeError, ValueError):
         labels = []

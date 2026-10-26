@@ -65,8 +65,8 @@ def test_wrong_hash_is_rejected_and_nothing_is_saved(tmp_path):
         assert "brief" not in read_json(root / "work/approvals.json")
 
 
-def test_approval_needs_a_note_and_confirmation(tmp_path):
-    _, client = _client(tmp_path)
+def test_approval_allows_an_optional_note_but_requires_confirmation(tmp_path):
+    root, client = _client(tmp_path)
     with client:
         brief = _stage(client.get("/api/projects/production/approvals").json(), "brief")
         base = {"expected_hash": brief["expected_hash"], "note": "ok", "confirmed": True}
@@ -77,13 +77,19 @@ def test_approval_needs_a_note_and_confirmation(tmp_path):
             ).status_code
             == 400
         )
-        assert (
-            client.post(
-                "/api/projects/production/approvals/brief",
-                json={**base, "note": "  "},
-            ).status_code
-            == 400
+        blank = client.post(
+            "/api/projects/production/approvals/brief",
+            json={**base, "note": "  "},
         )
+        assert blank.status_code == 200, blank.text
+        assert blank.json()["record"]["note"] is None
+        omitted = client.post(
+            "/api/projects/production/approvals/brief",
+            json={"expected_hash": brief["expected_hash"], "confirmed": True},
+        )
+        assert omitted.status_code == 200, omitted.text
+        assert omitted.json()["record"]["note"] is None
+        assert read_json(root / "work/approvals.json")["brief"]["note"] is None
 
 
 def test_a_budget_topup_does_not_invalidate_a_creative_approval(tmp_path):

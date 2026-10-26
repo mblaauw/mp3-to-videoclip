@@ -4,6 +4,7 @@ import "@fontsource-variable/schibsted-grotesk";
 import "./styles/tokens.css";
 import "./styles.css";
 import "./ui/ui.css";
+import "./stages/stages.css";
 import "./shell/shell.css";
 import { App } from "./App";
 

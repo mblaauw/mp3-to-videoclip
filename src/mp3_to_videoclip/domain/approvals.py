@@ -32,8 +32,10 @@ def _body(body, allowed, hash_key):
     if body.get("confirmed") is not True:
         raise ApprovalError("explicit review confirmation is required")
     note = body.get("note")
-    if not isinstance(note, str) or not 1 <= len(note.strip()) <= 2000:
-        raise ApprovalError("record a decision note (1–2000 characters)")
+    if note is None:
+        note = ""
+    if not isinstance(note, str) or len(note.strip()) > 2000:
+        raise ApprovalError("a decision note may be at most 2000 characters")
     if not isinstance(body.get(hash_key), str) or not re.fullmatch(r"[0-9a-f]{64}", body[hash_key]):
         raise ApprovalError("the reviewed content hash is required")
     return note.strip()
