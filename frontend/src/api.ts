@@ -122,14 +122,64 @@ export type MusicWindow = {
   level_db?: number;
 };
 
+export type LyricSegment = {
+  start: number;
+  end: number;
+  text: string;
+  flags?: string[];
+};
+
+export type Lyrics = {
+  language?: string | null;
+  provider: string;
+  model: string;
+  segments: LyricSegment[];
+  lines?: string[];
+  warning?: string;
+};
+
 export type Music = {
   duration?: number;
   estimated_tempo_bpm?: number | null;
   beats?: number[];
   energy_curve?: { time: number; energy: number }[];
   fine_windows?: MusicWindow[];
-  sections?: { start: number; end: number; label: string }[];
+  sections?: {
+    start: number;
+    end: number;
+    label?: string;
+    name?: string;
+    energy?: number;
+  }[];
   warnings?: string[];
+};
+
+export type TrackData = {
+  music: Music | null;
+  lyrics: Lyrics | null;
+  music_mode: string | null;
+  kind: string;
+  duration: number;
+  source_duration: number;
+  section_names: { start: number; name: string }[];
+};
+
+export type Concept = {
+  id: string;
+  title: string;
+  structure: string;
+  logline: string;
+  why: string;
+  world: string;
+  shape: string[];
+  signature_moment: string;
+  risk: string;
+};
+
+export type TreatmentsPayload = {
+  treatments: Concept[];
+  concepts?: Concept[];
+  chosen_id?: string | null;
 };
 
 export type Intent = {
@@ -158,12 +208,22 @@ export type Brief = {
   treatment?: string;
   visual_rules?: string[];
   avoid?: string[];
-  characters?: { id: string; identity?: string; description?: string }[];
+  characters?: {
+    id: string;
+    identity?: string;
+    description?: string;
+    permission_confirmed?: boolean;
+    references?: string[];
+    states?: Record<string, unknown>;
+  }[];
   creative?: {
     mode?: string;
     look?: string;
     image_rules?: string[];
     proof_shot_ids?: string[];
+    world?: string;
+    references?: unknown[];
+    scenes?: unknown[];
   } | null;
 };
 
@@ -385,6 +445,31 @@ export type ApprovalState = Schemas["ApprovalStateOut"];
 export type ApprovalsResponse = Schemas["ApprovalsOut"];
 export type ApprovalResponse = Schemas["ApprovalOut"];
 
+export type ApprovalChange = {
+  field: string;
+  before: string;
+  after: string;
+};
+
+export type ApprovalChanges = {
+  available: boolean;
+  reason: string | null;
+  changes: ApprovalChange[];
+};
+
+export type CreditCard = [string, string];
+
+export type GraphicsSpec = {
+  available: boolean;
+  guided?: boolean;
+  spec?: {
+    credit_roles_confirmed?: boolean;
+    credits?: { cards?: CreditCard[]; lockup?: string };
+    warning?: string;
+    [key: string]: unknown;
+  };
+};
+
 export type BudgetDecision = {
   ok: boolean;
   needs_budget: boolean;
@@ -434,7 +519,7 @@ export const api = {
       music_mode: string;
       budget: string;
       kind: string;
-      style_preset: string;
+      style_preset?: string;
       objective?: string;
       message?: string;
       cta_text?: string;
@@ -452,8 +537,8 @@ export const api = {
       music_mode: meta.music_mode,
       budget: meta.budget,
       kind: meta.kind,
-      style_preset: meta.style_preset,
     });
+    if (meta.style_preset) params.set("style_preset", meta.style_preset);
     if (meta.kind !== "music_video") {
       params.set("objective", meta.objective || "");
       params.set("message", meta.message || "");
@@ -490,7 +575,7 @@ export const api = {
   intake: (slug: string) => request<IntakePayload>(`/api/projects/${slug}/intake`),
   updateIntake: (
     slug: string,
-    body: { intent: Intent; style_preset: string; audio_window: AudioWindow | null },
+    body: { intent?: Intent; style_preset?: string; audio_window?: AudioWindow | null },
   ) =>
     request<IntakePayload>(`/api/projects/${slug}/intake`, {
       method: "PUT",
@@ -498,16 +583,40 @@ export const api = {
     }),
   storyboard: (slug: string) =>
     request<Storyboard | { available: false }>(`/api/projects/${slug}/storyboard`),
-  track: (slug: string) =>
-    request<{
-      music: Music | null;
-      lyrics: unknown;
-      music_mode: string | null;
-      kind: string;
-    }>(`/api/projects/${slug}/track`),
+  track: (slug: string) => request<TrackData>(`/api/projects/${slug}/track`),
+  musicNotes: (slug: string) =>
+    request<{ sections: { start: number; name: string }[] }>(
+      `/api/projects/${slug}/music-notes`,
+    ),
+  saveMusicNotes: (slug: string, sections: { start: number; name: string }[]) =>
+    request<{ sections: { start: number; name: string }[] }>(
+      `/api/projects/${slug}/music-notes`,
+      { method: "PUT", body: JSON.stringify({ sections }) },
+    ),
+  setMusicMode: (slug: string, music_mode: "vocal" | "instrumental") =>
+    request<{ music_mode: string }>(`/api/projects/${slug}/music-mode`, {
+      method: "PUT",
+      body: JSON.stringify({ music_mode }),
+    }),
+  treatments: (slug: string) =>
+    request<TreatmentsPayload>(`/api/projects/${slug}/treatments`),
+  putTreatments: (slug: string, payload: { concepts: Concept[]; chosen_id?: string | null }) =>
+    request<{ concepts: Concept[]; chosen_id?: string | null }>(
+      `/api/projects/${slug}/treatments`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    ),
   images: (slug: string) => request<{ shots: ImageShot[] }>(`/api/projects/${slug}/images`),
   graphicsReview: (slug: string) =>
     request<GraphicsReview>(`/api/projects/${slug}/graphics-review`),
+  graphics: (slug: string) => request<GraphicsSpec>(`/api/projects/${slug}/graphics`),
+  saveCredits: (slug: string, cards: CreditCard[], useAsTemplate = false) =>
+    request<{ cards: CreditCard[]; confirmed: boolean }>(
+      `/api/projects/${slug}/graphics/credits`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ cards, use_as_template: useAsTemplate }),
+      },
+    ),
   preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
   edit: (slug: string) => request<EditSummary>(`/api/projects/${slug}/edit`),
   rating: (slug: string, artifact: ArtifactName) =>
@@ -554,10 +663,10 @@ export const api = {
   chat: (slug: string) => request<{ messages: unknown[] }>(`/api/projects/${slug}/chat`),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
-  saveLyrics: (slug: string, lrc: string) =>
-    request<{ status?: string; segments?: number; error?: string }>(
+  saveLyrics: (slug: string, text: string) =>
+    request<{ status?: string; segments?: number; lines?: number; error?: string }>(
       `/api/projects/${slug}/lyrics`,
-      { method: "PUT", body: JSON.stringify({ lrc }) },
+      { method: "PUT", body: JSON.stringify({ text }) },
     ),
   setProofShots: (slug: string, shot_ids: string[]) =>
     request<{ proof_shot_ids: string[] }>(`/api/projects/${slug}/proof-shots`, {
@@ -585,7 +694,7 @@ export const api = {
       shot_id: string;
       version: number;
       verdict: "accept" | "reject" | "uncertain";
-      note: string;
+      note?: string;
       inspected: boolean;
     },
   ) =>
@@ -626,12 +735,14 @@ export const api = {
     request<ApprovalsResponse>(
       `/api/projects/${slug}/approvals?stages=${encodeURIComponent(stages.join(","))}`,
     ),
+  approvalChanges: (slug: string, stage: string) =>
+    request<ApprovalChanges>(`/api/projects/${slug}/approvals/${stage}/changes`),
   approve: (
     slug: string,
     stage: string,
     body: {
       expected_hash: string;
-      note: string;
+      note?: string;
       confirmed: true;
       preview_watched?: boolean;
       inspected?: boolean;

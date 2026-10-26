@@ -3,13 +3,22 @@
 export type Stage = "track" | "story" | "storyboard" | "images" | "film";
 export type StageState = "done" | "you" | "changed" | "not_ready" | "running";
 export type NextTone = "done" | "you" | "changed" | "error";
-export type NextTarget = "analysis" | "approval" | "preview" | "render" | "pictures";
+export type NextTarget =
+  | "analysis"
+  | "approval"
+  | "changes"
+  | "brief"
+  | "preview"
+  | "render"
+  | "pictures";
 
 export type NextAction = {
   label: string;
   kind?: "primary" | "default" | "quiet";
   to?: Stage;
   target?: NextTarget;
+  /** Approve this stage directly with its already-returned expected hash. */
+  approve?: string;
 };
 
 export type NextStep = {
@@ -24,6 +33,8 @@ export type ProjectFacts = {
   music_mode?: string | null;
   has_analysis?: boolean;
   has_lyrics?: boolean;
+  has_message?: boolean;
+  has_cta?: boolean;
   stage_states?: Partial<Record<Stage, StageState>>;
 };
 
@@ -31,6 +42,8 @@ export type ApprovalFacts = {
   state: "approved" | "stale" | "missing" | "unavailable";
   error?: string | null;
   blocking_stage?: string | null;
+  expected_hash?: string | null;
+  reason?: string | null;
 };
 
 export type ImageFacts = {
@@ -70,9 +83,16 @@ function stateOf(project: ProjectFacts, stage: Stage): StageState | undefined {
 function trackIsReady(project: ProjectFacts): boolean {
   if (stateOf(project, "track") === "done") return true;
   if (project.has_analysis === true) {
-    return project.music_mode !== "vocal" || project.has_lyrics === true;
+    return !needsLyrics(project) || project.has_lyrics === true;
   }
   return false;
+}
+
+function needsLyrics(project: ProjectFacts): boolean {
+  return (
+    project.music_mode === "vocal" &&
+    (project.kind === null || project.kind === undefined || project.kind === "music_video")
+  );
 }
 
 function storyIsDone(project: ProjectFacts, approvals: ApprovalMap): boolean {
@@ -83,8 +103,8 @@ function boardIsDone(project: ProjectFacts, approvals: ApprovalMap): boolean {
   return stateOf(project, "storyboard") === "done" || approved(approvals, "storyboard");
 }
 
-function approvedAction(label: string): NextAction[] {
-  return [{ label, target: "approval", kind: "primary" }];
+function approvedAction(label: string, stage?: string): NextAction[] {
+  return [{ label, target: "approval", kind: "primary", ...(stage ? { approve: stage } : {}) }];
 }
 
 function continueTo(stage: Stage, label: string): NextAction[] {
@@ -108,7 +128,7 @@ function trackStep(project: ProjectFacts): NextStep {
       actions: [{ label: "Run analysis", target: "analysis", kind: "primary" }],
     };
   }
-  if (project.music_mode === "vocal" && project.has_lyrics === false) {
+  if (needsLyrics(project) && project.has_lyrics === false) {
     return {
       tone: "you",
       title: "Add the lyrics before approving the story.",
@@ -156,6 +176,18 @@ function storyStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
       actions: [{ label: "Go to Story", to: "story", kind: "primary" }],
     };
   }
+  if (
+    !storyIsDone(project, approvals) &&
+    needsLyrics(project) &&
+    project.has_lyrics === false
+  ) {
+    return {
+      tone: "you",
+      title: "Add the lyrics first — the story is checked against them.",
+      detail: "Track holds the words the Writer must work from.",
+      actions: [{ label: "Go to Track", to: "track", kind: "primary" }],
+    };
+  }
   if (storyIsDone(project, approvals)) {
     return {
       tone: "done",
@@ -172,19 +204,41 @@ function storyStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
       actions: [{ label: "Write the story", to: "story", kind: "primary" }],
     };
   }
+  if (
+    (!brief || brief.state === "missing") &&
+    project.kind !== null &&
+    project.kind !== undefined &&
+    project.kind !== "music_video" &&
+    (project.has_message === false ||
+      (project.kind === "advert" && project.has_cta === false))
+  ) {
+    return {
+      tone: "you",
+      title:
+        project.kind === "advert"
+          ? "Say what the advert should make people do."
+          : "Say what the promo is about.",
+      detail: "The Brief card on Story holds the facts the film must not invent.",
+      actions: [{ label: "Edit brief", target: "brief", kind: "primary" }],
+    };
+  }
   if (brief?.state === "stale" || stateOf(project, "story") === "changed") {
     return {
       tone: "changed",
       title: "The story changed since you approved it.",
-      detail: brief?.error || "Read the current version before approving it again.",
-      actions: approvedAction("Approve story"),
+      detail:
+        brief?.reason || brief?.error || "Read the current version before approving it again.",
+      actions: [
+        { label: "See what changed", target: "changes" },
+        { label: "Approve story", target: "approval", kind: "primary", approve: "brief" },
+      ],
     };
   }
   return {
     tone: "you",
     title: "Read the story and approve it.",
-    detail: "Approval unlocks the storyboard.",
-    actions: approvedAction("Approve story"),
+    detail: "Approval unlocks the storyboard. A note is optional.",
+    actions: approvedAction("Approve story", "brief"),
   };
 }
 

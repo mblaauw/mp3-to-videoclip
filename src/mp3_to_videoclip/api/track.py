@@ -1,4 +1,4 @@
-"""Track stage: music analysis, lyrics, transcription."""
+"""Track stage: music analysis, section names, lyrics, music mode."""
 
 from __future__ import annotations
 
@@ -9,9 +9,12 @@ from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
-from mp3_to_videoclip.storage import inside
+from mp3_to_videoclip.domain import music_notes
+from mp3_to_videoclip.storage import inside, project_lock, read_json, read_optional, write_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["track"])
+
+MAX_LYRICS_BYTES = 200_000
 
 
 @router.get("/audio")
@@ -44,21 +47,63 @@ async def get_excerpt(slug: str, request: Request):
 @router.get("/track")
 async def get_track(slug: str, request: Request):
     root = project_root(request, slug)
-    music = None
-    music_path = root / "work" / "music.json"
-    if music_path.is_file():
-        music = __import__("json").loads(music_path.read_text())
-    lyrics = None
-    lyrics_path = root / "work" / "lyrics.json"
-    if lyrics_path.is_file():
-        lyrics = __import__("json").loads(lyrics_path.read_text())
+    music = read_optional(root / "work" / "music.json")
+    notes = music_notes.read(root)
+    if isinstance(music, dict):
+        music = music_notes.apply_names(music, notes)
+    lyrics = read_optional(root / "work" / "lyrics.json")
     project = P.load_project(root)
     return {
         "music": music,
         "lyrics": lyrics,
         "music_mode": project.music_mode,
         "kind": project.kind or "music_video",
+        "duration": project.duration,
+        "source_duration": project.source_duration or project.duration,
+        "section_names": notes["sections"],
     }
+
+
+@router.get("/music-notes")
+async def get_music_notes(slug: str, request: Request):
+    return music_notes.read(project_root(request, slug))
+
+
+@router.put("/music-notes")
+async def put_music_notes(slug: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    try:
+        return music_notes.save(root, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/music-mode")
+async def set_music_mode(slug: str, request: Request, payload: dict):
+    """Record whether the track has leading vocals.
+
+    The mode changes which gate the brief depends on, so it is locked once a
+    story exists rather than silently keeping a stale approval alive.
+    """
+    if not isinstance(payload, dict) or set(payload) - {"music_mode"}:
+        raise HTTPException(status_code=400, detail="music mode must be a JSON object")
+    mode = payload.get("music_mode")
+    if mode not in ("vocal", "instrumental"):
+        raise HTTPException(status_code=400, detail="music mode must be vocal or instrumental")
+    root = project_root(request, slug)
+    with project_lock(root):
+        project = P.load_project(root)
+        records = read_json(root / "work" / "approvals.json")
+        if isinstance(records, dict) and isinstance(records.get("brief"), dict):
+            raise HTTPException(
+                status_code=409,
+                detail="the story is already approved; start a new film to change the music mode",
+            )
+        if project.music_mode == mode:
+            return {"music_mode": mode}
+        project = project.model_copy(update={"music_mode": mode})
+        write_json(root / "project.json", project.model_dump())
+    return {"music_mode": mode}
 
 
 @router.post("/analyze")
@@ -80,15 +125,26 @@ async def analyze(slug: str, request: Request):
 
 @router.put("/lyrics")
 async def update_lyrics(slug: str, request: Request, payload: dict):
-    from mp3_to_videoclip.domain.lyrics import parse_lrc, save_lyrics
+    from mp3_to_videoclip.domain.lyrics import parse_lrc, parse_lyrics_text, save_lyrics
     from mp3_to_videoclip.models import Lyrics
 
     root = project_root(request, slug)
     project = P.load_project(root)
     if project.kind not in (None, "music_video"):
         raise HTTPException(status_code=400, detail="lyrics are a music-video intake")
-    if "lrc" in payload:
-        if not isinstance(payload["lrc"], str) or len(payload["lrc"]) > 200_000:
+    if "text" in payload:
+        raw = payload["text"]
+        if not isinstance(raw, str) or len(raw.encode("utf-8")) > MAX_LYRICS_BYTES:
+            raise HTTPException(status_code=400, detail="paste a reasonable amount of lyrics")
+        try:
+            lyrics = parse_lyrics_text(raw, project.duration)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    elif "lrc" in payload:
+        if (
+            not isinstance(payload["lrc"], str)
+            or len(payload["lrc"].encode("utf-8")) > MAX_LYRICS_BYTES
+        ):
             return {"error": "paste a reasonable amount of lyrics"}
         try:
             lyrics = parse_lrc(payload["lrc"], project.duration)
@@ -100,4 +156,7 @@ async def update_lyrics(slug: str, request: Request, payload: dict):
         except ValueError as exc:
             return {"error": str(exc)}
     save_lyrics(root, lyrics)
-    return {"status": "saved", "segments": len(lyrics.segments)}
+    result = {"status": "saved", "segments": len(lyrics.segments)}
+    if lyrics.lines:
+        result["lines"] = len(lyrics.lines)
+    return result

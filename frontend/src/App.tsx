@@ -87,6 +87,7 @@ export function App() {
   return (
     <>
       <FilmShell
+        key={selected.slug}
         project={selected}
         stage={route.stage}
         onNavigate={(stage) => goFilm(selected.slug, stage)}

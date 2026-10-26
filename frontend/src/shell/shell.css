@@ -771,6 +771,82 @@ body {
   font-size: var(--t-12);
   pointer-events: none;
 }
+.spine-time-label {
+  color: var(--gold);
+  font-size: var(--t-11);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.spine-window {
+  position: absolute;
+  top: 24px;
+  bottom: 8px;
+  z-index: 2;
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  background: rgba(217, 179, 108, 0.12);
+  pointer-events: none;
+  overflow: hidden;
+}
+.spine-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(to right, rgba(27, 28, 31, 0.75), transparent);
+}
+.spine-fade.out {
+  right: 0;
+  background: linear-gradient(to left, rgba(27, 28, 31, 0.75), transparent);
+}
+.spine-window-label {
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  color: var(--gold);
+  font-size: var(--t-11);
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.spine-window-handle {
+  position: absolute;
+  top: 16px;
+  bottom: 4px;
+  width: 20px;
+  margin-left: -10px;
+  padding: 0;
+  z-index: 4;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.spine-window-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 8px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--gold);
+  box-shadow: 0 0 0 1px var(--well);
+}
+.spine-window-handle:hover::after,
+.spine-window-handle:focus-visible::after,
+.spine-window-handle.dragging::after {
+  left: 7px;
+  width: 6px;
+  background: var(--gold-strong);
+}
+.spine-window-handle:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+.spine-window-handle:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
 .spine-strip {
   position: relative;
   height: 40px;

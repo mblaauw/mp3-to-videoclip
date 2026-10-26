@@ -20,11 +20,34 @@ KINDS = ("preview", "base", "final")
 
 @router.get("/graphics")
 async def get_graphics(slug: str, request: Request):
+    from mp3_to_videoclip import flow
+
     root = project_root(request, slug)
     path = root / "work" / "graphics-spec.json"
     if not path.is_file():
         return {"available": False}
-    return {"available": True, "spec": read_json(path)}
+    return {"available": True, "spec": read_json(path), "guided": flow.guided(root)}
+
+
+@router.put("/graphics/credits")
+async def put_graphics_credits(slug: str, request: Request, payload: dict):
+    """Confirm this film's factual closing roles (guided late credits)."""
+    from mp3_to_videoclip import signature
+
+    if not isinstance(payload, dict) or set(payload) - {"cards", "use_as_template"}:
+        raise HTTPException(status_code=400, detail="credits need a cards list")
+    root = project_root(request, slug)
+    if not (root / "work" / "graphics-spec.json").is_file():
+        raise HTTPException(status_code=404, detail="this film has no credits package")
+    try:
+        cards = signature.save_credits(
+            root,
+            payload.get("cards"),
+            use_as_template=payload.get("use_as_template", False),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"cards": cards, "confirmed": True}
 
 
 @router.get("/graphics-review")

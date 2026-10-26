@@ -99,7 +99,6 @@ def create_from_upload(
         missing = [
             label
             for label, field in (
-                ("objective", intent_value.objective),
                 ("message", intent_value.message),
                 ("call to action", intent_value.cta.text if intent_value.cta else ""),
             )

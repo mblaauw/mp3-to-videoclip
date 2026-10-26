@@ -2,7 +2,15 @@
 
 from pathlib import Path
 
-from .storage import digest, file_hash, inside, read_json, read_optional, write_json
+from .storage import (
+    digest,
+    file_hash,
+    inside,
+    project_lock,
+    read_json,
+    read_optional,
+    write_json,
+)
 
 NAMES = "MAHA KALA  ×  VJDJ69"
 FILMSTRIP_NAMES = "MAHA KALA  ◆  VJDJ69"
@@ -109,6 +117,43 @@ def validate_spec(root: Path, project) -> dict:
         ):
             raise ValueError("credit cards require a confirmed nonempty role and name")
     return spec
+
+
+def save_credits(root: Path, cards, *, use_as_template: bool = False) -> list:
+    """Record the film's factual roles for a guided production.
+
+    Late credits are deliberately outside the brief hash for guided films, so a
+    factual correction here cannot silently invalidate image approvals. Older
+    productions keep credits inside their brief decision and are refused.
+    """
+    from . import flow
+
+    if not flow.guided(root):
+        raise ValueError(
+            "this film records credits inside its brief approval; ask your agent to "
+            "revise the signature and approve the story again"
+        )
+    if type(use_as_template) is not bool:
+        raise ValueError("use_as_template must be a boolean")
+    raw = _valid_cards(cards)
+    if raw is None:
+        raise ValueError("record at least one factual role/name pair, at most 40")
+    normalized = []
+    for card in raw:
+        role, name = (value.strip() for value in card)
+        if len(role) > 120 or len(name) > 120:
+            raise ValueError("a credit role or name must be at most 120 characters")
+        normalized.append([role, name])
+    with project_lock(root):
+        spec = read_json(root / SPEC)
+        spec.setdefault("credits", {})
+        spec["credits"]["cards"] = normalized
+        spec["credit_roles_confirmed"] = True
+        spec.pop("warning", None)
+        write_json(root / SPEC, spec)
+        if use_as_template:
+            write_json(root / "work/credits-template.json", {"cards": normalized})
+    return normalized
 
 
 def prepare_review(root: Path, base: Path, project) -> dict:

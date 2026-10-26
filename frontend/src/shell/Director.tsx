@@ -30,12 +30,14 @@ export function Director({
   slug,
   stage,
   open,
+  prefill = null,
   onClose,
   onSettings,
 }: {
   slug: string;
   stage: Stage;
   open: boolean;
+  prefill?: { text: string; at: number } | null;
   onClose: () => void;
   onSettings: () => void;
 }) {
@@ -49,6 +51,7 @@ export function Director({
     editor: "the configured Editor",
   });
   const stopRef = useRef<AbortController | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const writer = ["story", "storyboard", "images"].includes(stage);
   const role = writer ? "Writer" : "Editor";
@@ -65,6 +68,16 @@ export function Director({
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!prefill?.text) return;
+    setText(prefill.text);
+    const element = composerRef.current;
+    if (element) {
+      element.focus();
+      element.setSelectionRange(prefill.text.length, prefill.text.length);
+    }
+  }, [prefill?.at, prefill?.text]);
 
   useEffect(() => {
     api
@@ -187,6 +200,7 @@ export function Director({
         </div>
         <div className="composer-row">
           <textarea
+            ref={composerRef}
             value={text}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {

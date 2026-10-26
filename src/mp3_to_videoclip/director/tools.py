@@ -243,13 +243,17 @@ def _dispatch(
         return edits.summary(root, edit)
 
     if name == "get_music_summary":
+        from mp3_to_videoclip.domain import music_notes
+
         path = root / "work" / "music.json"
         if not path.is_file():
             return {"available": False}
         data = read_json(path)
         return {
             "estimated_tempo_bpm": data.get("estimated_tempo_bpm"),
-            "sections": data.get("sections"),
+            "sections": (music_notes.apply_names(data, music_notes.read(root)) or {}).get(
+                "sections"
+            ),
             "warnings": data.get("warnings"),
         }
 

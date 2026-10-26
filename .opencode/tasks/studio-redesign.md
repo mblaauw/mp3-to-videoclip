@@ -7,6 +7,7 @@ Base: `main` at `42a33cf` (T0–T5 merged).
 P0 branch: `studio-redesign/p0-correctness`, merged as PR #24 (`1a3800e`).
 P1 branch: `studio-redesign/p1-foundations`, merged as PR #25 (`71406aa`).
 P2 branch: `studio-redesign/p2-shell`, merged as PR #26 (`d437b37`).
+P3 branch: `studio-redesign/p3-track-story`.
 
 ## Objective
 
@@ -33,8 +34,8 @@ logic stay authoritative in the existing engine modules.
   edit — as compact inline controls. Do not collapse to the three spots named in
   the handover.
 - **Credits:** add a credits confirmation card to Story before brief approval;
-  keep the full `CreditsEditor` on Film for later changes. The signature gate is
-  not relaxed and no credit is invented.
+  the full `CreditsEditor` mentioned for Film remains a later P5 surface. The
+  signature gate is not relaxed and no credit is invented.
 - **Browser verification:** do not add Playwright. Use the OpenCode browser tool
   for the phase sweeps and record the evidence. If committed browser tests are
   wanted later, that is a separate dependency decision.
@@ -54,7 +55,7 @@ logic stay authoritative in the existing engine modules.
 | P0 | K13 vocal promo/advert brief approval; K2 real blocking stage | Complete (PR #24, `1a3800e`) |
 | P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Complete (PR #25, `71406aa`) |
 | P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Complete (PR #26, `d437b37`) |
-| P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Not started |
+| P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | In review (`studio-redesign/p3-track-story`) |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Not started |
 | P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | Not started |
 | P6 | Empty/loading/error states, responsive and accessibility pass | Not started |
@@ -266,7 +267,193 @@ P2 shipped in PR #26, squash-merged as `d437b37` on 26 Oct 2026. CI (`check`)
 passed in 4m31s before the merge; the first two runs were killed by a slow apt
 mirror while installing ffmpeg, so the job timeout was raised to 30 minutes.
 
+## P3 — Track, Story and the excerpt band
+
+### Scope
+
+- **Track** facts row (length, estimated tempo, measured sections, Vocals /
+  Instrumental), editable section names, lyrics view, plain-text or LRC paste,
+  `Edit lyrics`, and *Transcribe instead* only while the lyrics are empty.
+- **Story** Brief card for promo and advert, three concept cards and a chosen
+  concept, treatment autosave, Direction and Style fields, Look card with the
+  kind's allowed presets, Characters card, Credits card, one-click approval with
+  an optional note, and the changed banner with a reason and *See what changed*.
+- **Spine** excerpt band on Story: full-source peaks, gold start/end handles,
+  live local draft, commit through `PUT /intake`, fades shown on the band.
+- **New film** dialog: kind-specific fields, handover lengths, no 9:16, no style
+  preset. Promo 30/60/90 s; advert 6/15/30/60 s.
+- **Next step:** a vocal music video without words asks for lyrics before story
+  approval; a promo/advert asks for its message and CTA; a stale brief carries
+  its real reason and offers *See what changed*.
+- **Director:** *Ask for three more* and *Ask the Writer…* prefill the composer;
+  the director context and music tool read the human section names.
+
+### Backend changes
+
+- `Lyrics.lines`: untimed plain text is a real artifact. The serializer omits
+  `lines` when empty, so existing files and hashes do not move.
+- `PUT /lyrics` accepts `{text}`, detects LRC by timestamps, and refuses a mixed
+  timed/untimed paste instead of silently dropping lines. It still accepts
+  `{lrc}` and a full `Lyrics` model, and still refuses non-music-video kinds.
+- `GET/PUT /music-notes` store `{sections: [{start, name}]}` in
+  `work/music-notes.json`; `music.json` is never rewritten. `PUT /music-mode`
+  records Vocals/Instrumental and refuses the change once a brief is approved.
+- `PUT /graphics/credits` confirms factual late credits for guided productions;
+  `GET /graphics` adds `guided` so the UI can keep older productions read-only.
+  The optional *Use these roles for new films* writes `work/credits-template.json`.
+- Approval and image-review notes are optional and stored as `null`, never as
+  fabricated text. The explicit confirmation/inspection flags stay mandatory.
+- Approval snapshots live in `work/approval-snapshots/` and only explain a stale
+  decision; `GET /approvals/{stage}/changes` returns a short before/after diff.
+  The approval hash and gates are unchanged.
+- `ProjectSummary.has_lyrics` requires actual words (`segments` or `lines`), not
+  just a `work/lyrics.json` file. `_stage_states` uses the same rule.
+- `intake.create_from_upload` requires an advert's message and CTA only; the
+  objective moved to Story. A promo/advert has no lyrics upstream (P0).
+- Director context and `get_music_summary` use names from `music-notes.json`,
+  falling back to `Section N` only when no name was saved.
+
+### Decisions
+
+- Section names are a separate naming layer. Renaming a section must never
+  rewrite a measured sample or change the analysis bytes an approval binds.
+- Plain text is stored as lines without positions. LRC is used only when every
+  lyric line carries a timestamp; metadata lines (`[ar:…]`, `[ti:…]`) are ignored.
+- The excerpt is editable only before a storyboard exists. Once a cut exists,
+  Story shows the band read-only with the reason, and no failing request is sent.
+- The player source changes only on a committed window. Dragging updates the
+  readout and the gold band immediately, then commits on pointer release or a
+  short keyboard debounce.
+- Credits are late-bound for guided films because the signature is deliberately
+  outside their brief hash. Older productions keep credits inside the brief and
+  see a read-only explanation. The Story card is the only credits editor in this
+  build; a fuller Film editor stays for P5.
+- *Transcribe instead* explains that paid transcription is not enabled in this
+  build. No route, quote or provider call was added.
+- Story gained editable Direction and Style fields: a fresh advert otherwise
+  cannot pass the existing brief gate, which requires both.
+- FilmShell is keyed by slug so switching productions cannot reuse the previous
+  board's shots or request its images under the new slug.
+- The library's Track card distinguishes *Measure the song* (no analysis) from
+  *Add the lyrics* (analysis done, vocal music video missing words).
+
+### Acceptance
+
+- A vocal production without lyrics shows *Add the lyrics first — the story is
+  checked against them.* in the Story bar, not "artifact has not been created".
+- Approving the story is one click; the stored note is `null` when none is typed.
+- Editing the treatment shows *Saved* within the autosave window and there is no
+  Save button.
+- Moving a style-check star in Storyboard turns the Story step violet and the bar
+  names the reason; *See what changed* shows the proof-list diff.
+- The Credits card confirms the guided film's cards and refuses a non-guided film
+  without pretending to edit it.
+- The excerpt start/end handles commit a new window before a board exists and are
+  absent with a plain reason after one exists.
+- Track, Story, Storyboard, Images, Film and the library render without a console
+  error or a request with status ≥ 400.
+- At 1440, 900 and 390 px the shell, next-step bar and spine stay inside the
+  viewport with no page-level horizontal overflow.
+
+## P3 evidence
+
+Verified on `studio-redesign/p3-track-story` (base `260cf9d`) at the final working
+tree:
+
+- `uv run pytest -q`: **931 passed, 1 skipped** (110.71 s). New coverage in
+  `tests/test_api_p3_track_story.py` for plain text without invented times, LRC
+  and metadata, a refused mixed paste, section names outside `music.json`, the
+  music-mode lock, guided vs. recorded-v2 credits, treatment and star-change
+  reasons, optional review notes, and the empty-lyrics library summary.
+- `uv run ruff check .`: clean. `uv run ruff format --check .`: 223 files already
+  formatted.
+- `npm run build --prefix frontend`: clean, 84 modules. `npm test --prefix
+  frontend`: **31 passed**. `npm run api:types --prefix frontend` regenerated the
+  schema; no additional schema change was needed.
+- Live Studio on port 8938 with fixtures under `/tmp/opencode/p3-projects`:
+  `night-signal` (fresh advert, later a six-shot board), `fresh-advert` (advert
+  with three concept cards), `stars` (guided copy of `zero-bars`), `no-lyrics`
+  (vocal copy without words) and `legacy` (a copy without the guided marker).
+
+Browser evidence:
+
+- **Track on an advert:** 0:30 length, about 129 BPM, 2 measured sections, no
+  lyrics requirement. The lyrics panel says the advert is built from its message
+  and ending; no *Transcribe* action is offered for a non-music-video.
+- **Track on a vocal film without words:** *Not added yet*, an empty paste box,
+  and *Transcribe instead · $0.05*. Pasting three plain lines saved
+  `lines: [3]` with `segments: []` and the warning that no timestamps were
+  invented; the Transcribe action disappeared and the bar became *Track is
+  ready.* The Story bar before this read *Add the lyrics first — the story is
+  checked against them.*
+- **Section names:** renaming the first section saved
+  `work/music-notes.json` (`Opening`, then the measured starts) and showed
+  *Saved*; the `music.json` hash stayed `59989aee…`. The Track API returns the
+  names and the director summary reads them.
+- **Brief card:** the collapsed sentence read *Advert · 30.0 s — Night Signal is
+  out Friday — for an audience to name — ends on Pre-save now →
+  https://example.com · Look: Clean photographic*. *Edit* revealed The point /
+  Who and how / Ending; changing Audience and leaving the field saved through
+  `PUT /intake` and showed *Saved*.
+- **Concepts:** three cards rendered from `work/treatments.json`; choosing the
+  second made it the only gold card and persisted `chosen_id: signal-room`.
+  *Ask for three more* opened the Director with the revision prompt prefilled.
+- **Treatment and fields:** typing a new treatment autosaved after 800 ms with
+  *Saved* and no button; Direction and Style saved through the same debounce.
+- **One-click approval:** the Story bar's *Approve story* posted the expected
+  hash and produced `state: approved`, `note: null`, and *Story approved.*
+  No note was required.
+- **Changed banner:** editing the approved treatment produced
+  `state: stale`, reason *The treatment changed.*, the bar *The story changed
+  since you approved it.* and a before → after Treatment diff.
+- **Style-check star move:** moving the selection to s001, s002 and s003 in
+  Storyboard produced reason *The style-check shots moved to s001, s002 and
+  s003.*, `state: stale`, the Story step class `changed` with
+  `ui-dot--changed` (violet), and the same reason in the Story bar and diff panel.
+- **Credits:** on guided `stars`, the Story card confirmed
+  `[MUSIC, MAHA KALA]` and `[FILM DIRECTION, VJDJ69]`; the API returned
+  `credit_roles_confirmed: true` and the same cards. On `legacy` (no guided
+  marker) the card explained that credits live inside the story approval and
+  offered no edit control.
+- **Excerpt band:** a fresh advert showed the full 239.8 s source with a gold
+  0–30 s band and both handles. Moving the end to 29.75 s committed
+  `PUT /intake`; the summary read 29.8 s and the audio source became
+  `?v=0-29.75-0-1.5`. Once a storyboard existed, the band stayed visible but the
+  handles disappeared and the hint explained that the cut fixes the excerpt;
+  no failing `PUT /intake` was sent.
+- **New film:** the dialog offered no 9:16 and no style preset. Promo showed
+  Title / One message / Length (30, 60, 90) / Budget; Advert showed the same plus
+  Call to action and lengths 6, 15, 30, 60.
+- **Route sweep:** 15 routes across the five fixture productions plus the
+  library, 204 captured requests, 0 dropped, no console messages and no request
+  with status ≥ 400. The earlier sweep found that FilmShell/Storyboard called
+  `/edit` on a board-less project; the call is now made only after a board exists.
+- **Responsive geometry** through a same-origin iframe at 1440 / 900 / 390 px:
+  `scrollWidth == clientWidth` at every size. Story used two columns
+  (536 + 397 px) at 1440 and one column at 900/390; the next bar was 69 / 69 /
+  142 px tall; the spine was 132 / 132 / 96 px and ended exactly at the viewport
+  bottom. No stage control was clipped at 390 px; the storyboard table scrolls
+  inside its own container.
+- **Library labels:** a vocal music video with analysis but no words reads *Add
+  the lyrics*; a fresh advert without analysis reads *Measure the song*; an
+  approved-but-changed story reads *Approve the story again*.
+
+Limitations:
+
+- Paid transcription is not wired. The *Transcribe instead* action is only a
+  quiet explanation; no quote, upload or provider call exists in this build.
+- Change reasons and diffs only exist for approvals recorded after P3. Older
+  approvals show the generic reason and state that the change predates the log.
+- The full credits editor mentioned for Film is not part of this build; Story is
+  the only credits surface until P5.
+- The browser tool can measure layout but its screenshot capture required a
+  visible desktop window that was not available in this session, so responsive
+  evidence is geometry and DOM state rather than images.
+- All mutations happened in `/tmp/opencode/p3-projects`; no production under
+  `projects/` was modified. No paid provider call was made and no Playwright
+  dependency was added.
+
 ## Next
 
-P3 — Track and Story: facts row, editable section names, plain-text lyrics,
-brief card, excerpt band, credits card and one-click approval.
+P4 — Storyboard and Images: picture cards grouped by Track section, table and
+inspector, style-check stars, contact sheet and lightbox, priced actions.

@@ -54,6 +54,17 @@ def _mtime(path: Path) -> float:
         return 0.0
 
 
+def _has_lyrics_words(path: Path) -> bool:
+    """A lyrics file only counts when it holds words, timed or plain."""
+    if not path.is_file():
+        return False
+    try:
+        value = read_json(path)
+    except (OSError, ValueError):
+        return False
+    return isinstance(value, dict) and bool(value.get("segments") or value.get("lines"))
+
+
 def _newest(paths: list[Path]) -> float:
     return max((_mtime(path) for path in paths), default=0.0)
 
@@ -104,7 +115,11 @@ def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
     assets_path = root / "work" / "assets.json"
     reviews_path = root / "work" / "reviews.json"
 
-    track_ready = music_path.is_file() and (project.music_mode != "vocal" or lyrics_path.is_file())
+    track_ready = music_path.is_file() and (
+        project.music_mode != "vocal"
+        or (project.kind not in (None, "music_video"))
+        or _has_lyrics_words(lyrics_path)
+    )
     states: dict[str, str] = {"track": "done" if track_ready else "you"}
 
     if not brief_path.is_file():
@@ -241,7 +256,7 @@ async def list_projects(request: Request):
                     shots=shots,
                     music_mode=project.music_mode,
                     has_analysis=(entry / P.STAGE_FILES["analysis"]).is_file(),
-                    has_lyrics=(entry / P.STAGE_FILES["lyrics"]).is_file(),
+                    has_lyrics=_has_lyrics_words(entry / P.STAGE_FILES["lyrics"]),
                     poster_stills=_poster_stills(entry, entry.name, assets),
                     stage_states=states,
                     next_step=_next_step(states),

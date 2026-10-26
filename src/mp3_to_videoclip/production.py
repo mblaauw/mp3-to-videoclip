@@ -1380,8 +1380,9 @@ def approve(
     preview_watched: bool = False,
     review_confirmed: bool | None = None,
 ):
-    if not note.strip():
+    if via != "studio" and not note.strip():
         raise ValueError("record the user's approval decision in --note")
+    note = note.strip() or None
     if via == "studio" and review_confirmed is not True:
         raise ValueError("Studio decisions require explicit review confirmation")
     if via == "studio" and stage == "preview" and preview_watched is not True:
@@ -1395,7 +1396,7 @@ def approve(
     if stage == "lyrics":
         lyrics = Lyrics.model_validate(read_json(root / STAGE_FILES[stage]))
         project = load_project(root)
-        if not lyrics.segments:
+        if not lyrics.segments and not lyrics.lines:
             raise ValueError("empty lyrics cannot be approved for this vocal project")
         for segment in lyrics.segments:
             if segment.end > project.duration + 0.1:
@@ -1470,6 +1471,17 @@ def approve(
     current = stage_hash(root, stage)
     if expected_hash is not None and current != expected_hash:
         raise ValueError("stage changed during review; inspect its current artifacts again")
+    if stage in ("brief", "storyboard"):
+        # The decision binds the hash; this copy only lets Studio explain what
+        # changed afterwards. It is never read by the gate itself.
+        write_json(
+            root / "work/approval-snapshots" / f"{stage}-{current}.json",
+            {
+                "stage": stage,
+                "hash": current,
+                "artifact": read_json(root / STAGE_FILES[stage]),
+            },
+        )
     approvals[stage] = {"hash": current, "at": now(), "note": note}
     if via is not None:
         approvals[stage].update(

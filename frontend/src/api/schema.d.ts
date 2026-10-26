@@ -178,6 +178,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{slug}/approvals/{stage}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approval Changes
+         * @description The reason and a short before/after diff for a changed decision.
+         */
+        get: operations["get_approval_changes_api_projects__slug__approvals__stage__changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{slug}/archive/render": {
         parameters: {
             query?: never;
@@ -444,6 +464,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{slug}/graphics/credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Graphics Credits
+         * @description Confirm this film's factual closing roles (guided late credits).
+         */
+        put: operations["put_graphics_credits_api_projects__slug__graphics_credits_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{slug}/images": {
         parameters: {
             query?: never;
@@ -574,6 +614,47 @@ export interface paths {
         get?: never;
         /** Update Lyrics */
         put: operations["update_lyrics_api_projects__slug__lyrics_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{slug}/music-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Music Mode
+         * @description Record whether the track has leading vocals.
+         *
+         *     The mode changes which gate the brief depends on, so it is locked once a
+         *     story exists rather than silently keeping a stale approval alive.
+         */
+        put: operations["set_music_mode_api_projects__slug__music_mode_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{slug}/music-notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Music Notes */
+        get: operations["get_music_notes_api_projects__slug__music_notes_get"];
+        /** Put Music Notes */
+        put: operations["put_music_notes_api_projects__slug__music_notes_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -838,6 +919,8 @@ export interface components {
             expected_hash?: string | null;
             /** Note */
             note?: string | null;
+            /** Reason */
+            reason?: string | null;
             /** Stage */
             stage: string;
             /**
@@ -1320,6 +1403,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_approval_changes_api_projects__slug__approvals__stage__changes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                stage: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1919,6 +2034,43 @@ export interface operations {
             };
         };
     };
+    put_graphics_credits_api_projects__slug__graphics_credits_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_images_api_projects__slug__images_get: {
         parameters: {
             query?: never;
@@ -2200,6 +2352,111 @@ export interface operations {
         };
     };
     update_lyrics_api_projects__slug__lyrics_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_music_mode_api_projects__slug__music_mode_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_music_notes_api_projects__slug__music_notes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_music_notes_api_projects__slug__music_notes_put: {
         parameters: {
             query?: never;
             header?: never;
