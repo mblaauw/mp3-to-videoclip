@@ -8,6 +8,7 @@ P0 branch: `studio-redesign/p0-correctness`, merged as PR #24 (`1a3800e`).
 P1 branch: `studio-redesign/p1-foundations`, merged as PR #25 (`71406aa`).
 P2 branch: `studio-redesign/p2-shell`, merged as PR #26 (`d437b37`).
 P3 branch: `studio-redesign/p3-track-story` (merged as PR #27, `4fe6a6b`).
+P4 branch: `studio-redesign/p4-storyboard-images`.
 
 ## Objective
 
@@ -56,7 +57,7 @@ logic stay authoritative in the existing engine modules.
 | P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Complete (PR #25, `71406aa`) |
 | P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Complete (PR #26, `d437b37`) |
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Complete (PR #27, `4fe6a6b`) |
-| P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Not started |
+| P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | In review (`studio-redesign/p4-storyboard-images`) |
 | P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | Not started |
 | P6 | Empty/loading/error states, responsive and accessibility pass | Not started |
 
@@ -456,7 +457,184 @@ Limitations:
 P3 shipped in PR #27, squash-merged as `4fe6a6b` on 26 Oct 2026. CI (`check`)
 passed in 3m17s before the merge.
 
+## P4 — Storyboard and Images
+
+### Scope
+
+- **Storyboard pictures:** cards grouped by the named Track sections, with a
+  designed plate for every local kind, a real still for generated kinds, a small
+  kind label, the job/message caption and on-screen text. Only paid source shots
+  carry the price dot; local kinds say *Made here, free*.
+- **Pictures/Table toggle:** one *Kind* column in the table, thumbnails, no
+  Message or Text columns (both live in the inspector), and an *Edit* action on
+  every row.
+- **Inspector:** replaces the Director in the side column while a shot is open.
+  Kind, job, message, text, prompt, must-show, framing, camera, transition,
+  product/upload reference, reprise source, bridge mode/match and split panes;
+  only the fields the kind validates are shown. Autosaves at 700 ms and on blur,
+  with prev/next and close, and no save button.
+- **Style check:** star toggles on cards and in the table. The set still has to
+  name exactly the required number; moving it saves once complete and marks the
+  story stale with the real reason.
+- **Images:** style-check panel while proof is unapproved, filter chips with
+  counts, contact sheet of `StillTile`s, and a full-screen lightbox with K / R /
+  ← / → / Esc, version picking, note-free Keep, Redo with *what should change*,
+  and a priced Remake.
+- **Priced batches:** *Make the style check*, *Make all missing*, *Remake older
+  prompts*, *Make this still* and *Remake* each estimate and generate after one
+  click and show their reserve total first. `needs_budget` renders the top-up
+  card; adding to the budget resumes the same quote. The next-step bar carries
+  the same priced action and hands the batch to Images once.
+- **Local plates:** cards, logos and end cards appear in Images from
+  `/plates/{shot_id}` with *Made here*, no version picker and no review. Paid and
+  style-check counts ignore them.
+
+### Backend changes
+
+- `Settings.image_reserve_usd` (default `0.05`, 0.01–10.00) is exposed by
+  `GET /settings`; the Studio shell reads it once and passes it to Storyboard
+  and Images. There is no reserve field on screen.
+- `GET /images` adds `stale` by comparing the selected version's `input_hash`
+  with the current `P.image_spec`. A selected still made from an older prompt is
+  `stale`; local plates are never stale.
+- `GET /settings` also exposes `shot_kinds` from the authoritative
+  `shotkinds.public_kinds()`; the inspector falls back to the same table if the
+  response is unavailable.
+
+### Decisions
+
+- The stale flag is presentation only. It never rewrites assets, reviews or the
+  approval hashes, and accepting a stale version is still refused by the engine.
+- Local kinds are identified by `shotkinds.is_paid`/`is_local`, never by a UI
+  list, so product-with-asset, designed bridge, reprise and split follow the
+  engine exactly.
+- The style-check set cannot be saved at two of three: `P.set_proof_ids` requires
+  exactly the expected count. The UI shows the incomplete set and saves when the
+  third star is picked, matching the engine.
+- The inspector sends only fields the current kind validates and keeps the old
+  prompt on a paid shot; changing a prompt therefore shows *Older prompt* until
+  a remake, rather than silently invalidating or rewriting the picture.
+- Autosaves are sequenced. A newer save supersedes an older response, and the
+  draft only clears fields whose sent value still matches, so choosing a select
+  while a text save is in flight cannot drop either edit.
+- Keep in the lightbox is the inspection: `inspected: true`, no note, and it
+  advances to the next unreviewed still. Redo stores an optional note as the
+  `reject` note, opens the Director with the shot and note prefilled, and the
+  paid *Remake* is a separate, priced action.
+- `POST /budget` remains an absolute cap. The top-up card therefore adds the
+  engine's suggested amount to the current cap before retrying the same quote;
+  it never treats the suggestion as the total.
+- A batch handed over by the next-step bar is kept in the shell and consumed once
+  by Images. Reloading the stage cannot enqueue it twice.
+
+### Acceptance
+
+- Twenty stills can be reviewed with twenty K presses and the arrow keys, with no
+  note or checkbox for each; each writes `accepted` with `inspected: true` and a
+  null note.
+- Every paid button names its price before the click, and a batch that does not
+  fit the cap shows the top-up card instead of an error.
+- Adding the suggested amount resumes the quoted batch without a second click.
+- Cards, logos and end cards show designed plates on Storyboard, appear in the
+  Images contact sheet as *Made here*, and are absent from the paid style-check
+  and kept counts.
+- The Pictures/Table views, inspector and lightbox render without console errors
+  or requests with status ≥ 400 at 1440, 900 and 390 px with no page-level
+  horizontal overflow.
+
+## P4 evidence
+
+Verified on `studio-redesign/p4-storyboard-images` (base `a683c1e`) at the final
+working tree:
+
+- `uv run pytest -q`: **933 passed, 1 skipped** (104.55 s). New coverage for
+  `image_reserve_usd`, `shot_kinds`, `stale` after a prompt change and local
+  plates in `GET /images`.
+- `uv run ruff check .`: clean. `uv run ruff format --check .`: 223 files already
+  formatted.
+- `npm run build --prefix frontend`: clean, 90 modules. `npm test --prefix
+  frontend`: **32 passed**. `npm run api:types --prefix frontend` regenerated the
+  schema; the new fields are settings payload values rather than typed route
+  bodies.
+- Live Studio on port 8938 with the P3 fixtures plus `p4-mixed-a`, a copy of
+  `no-lyrics` with `a001` as a card, `a002` as a logo, `a003` as an end card and
+  the `a004`/`a005` assets removed. Its brief, storyboard and proof are approved;
+  the budget cap was lowered to expose the top-up card.
+
+Browser evidence:
+
+- **Storyboard pictures:** 79 cards in the ten named Track sections (Opening,
+  Section 2 …), with the three converted shots showing *CARD*, *LOGO* and *END
+  CARD* designed plates and *Made here, free*. The style strip showed three
+  starred shots. At 1440 the grid was four 236 px columns, at 900 three 266 px,
+  at 390 two 166 px; no card or control was clipped.
+- **Table:** 79 rows with thumbnail, in–out, length, one kind label, job, cost,
+  star and *Edit*. At 1440 and 900 the table’s `scrollWidth` equalled its
+  `clientWidth` (no horizontal scroll); at 390 it scrolled only inside its own
+  `table-scroll` container.
+- **Inspector:** opening a001 showed the card kind, job, message, on-screen text
+  and only the local fields. Editing the message and framing wrote through
+  `PATCH /storyboard/shots` and showed *Saved*; a rapid message-plus-select edit
+  kept both values. At 1440 the inspector was 400 px beside a 1040 px stage; at
+  390 it became a full-width overlay. No field was clipped.
+- **Star move:** removing b003 and adding b001 saved
+  `[g004-glasshouse-rain-wide, i003-lena-evening, b001-pouch-offer]`, produced
+  `state: stale` with reason *The style-check shots moved to …*, and restored
+  cleanly to the original set before re-approval.
+- **Style check:** three proof stills showed *Kept* in the Images panel. The
+  panel stayed until *Approve style check* was clicked, then disappeared and the
+  toolbar offered *Make all 2 missing · $0.10*. Counts were 79 all (76 paid and
+  3 local), 2 not made and 3 *Made here*.
+- **Local plates:** the three local contact-sheet images loaded from
+  `/api/projects/p4-mixed-a/plates/<shot>` at 1920×1080. The local lightbox
+  showed the plate and *Made here, free. No Keep or Redo*; the missing-shot
+  lightbox showed *Make this still · $0.05* and no review keys.
+- **Lightbox and versions:** b003 showed time, duration, section, *8 of 79*, the
+  job and two version thumbnails. Picking v1 produced *Older prompt* because its
+  `input_hash` no longer matched; picking v2 returned to *Kept, accept v2*.
+- **Twenty stills:** two clean runs of ten K presses, about 420 ms apart, from an
+  unreviewed still added ten accepts each (kept 46 → 56 → 66) and advanced on
+  every press; no shot repeated and the lightbox never closed early. The recorded
+  notes are `null`; the UI sent `inspected: true`. Arrow buttons moved one still
+  per press and Esc closed the lightbox.
+- **Redo:** R opened *What should change? The Writer rewrites the prompt.*
+  Submitting *Redo · send to Writer* stored a `reject` with the typed note
+  *Bring the streetlight back into frame.* and opened the Director with
+  *Shot b007-arrivals-line: Bring the streetlight back into frame.* prefilled.
+- **Priced flow:** with $0.05 left and two $0.05 stills, *Make all 2 missing ·
+  $0.10* produced *This needs $0.10; $0.05 is left in the budget. Add $0.07 to
+  the budget and the batch starts.* and no generate request. The next-step bar
+  carried the same action and handed the batch to Images once. *Make this still ·
+  $0.05* in the missing lightbox closed the overlay and showed the same top-up
+  card, again with only an estimate request.
+- **Top-up resume:** *Add $0.07 to budget* raised the absolute cap from $2.93 to
+  $3.00 and retried the same quote. The generate response was mocked in the page
+  (2 tasks, $0.10 reserved) so the provider was never called; the card closed and
+  the message read *Queued 2 stills · $0.10 reserved.*
+- **Settings reserve:** setting `image_reserve_usd` to 0.06 changed the prices to
+  *Make all 2 missing · $0.12* after a reload; restoring 0.05 returned them to
+  $0.10.
+- **Route sweep:** 258 captured requests across the P4 fixture, `stars`,
+  `no-lyrics`, `fresh-advert` and the library, 0 dropped, no console messages and
+  no request with status ≥ 400. Responsive geometry at 1440 / 900 / 390 had
+  `scrollWidth == clientWidth` at every size; the filter chips wrapped at 390.
+- **Lightbox geometry:** at 1440 the 614 px stage contained a 1043×582 image
+  above the 237 px footer; at 900 and 390 the image stayed inside the stage. No
+  lightbox control was clipped.
+
+Limitations:
+
+- The browser tool cannot capture screenshots without a visible desktop window,
+  so the evidence is DOM state and geometry rather than images.
+- The top-up resume was verified with the generate response mocked at the page's
+  `fetch`; the real provider path was not exercised. All other paid buttons were
+  inspected without clicking. No paid provider call was made.
+- The `p4-mixed-a` fixture is synthetic (three converted local shots and two
+  removed assets) and lives under `/tmp/opencode/p3-projects`; no production
+  under `projects/` was modified.
+- No Playwright dependency was added.
+
 ## Next
 
-P4 — Storyboard and Images: picture cards grouped by Track section, table and
-inspector, style-check stars, contact sheet and lightbox, priced actions.
+P5 — Film: the Cut tab and rendered files, checklist, credits editor, settings,
+director tool cards and history.

@@ -12,7 +12,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip import reviews, services, shotkinds
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.domain import budget
-from mp3_to_videoclip.storage import inside
+from mp3_to_videoclip.storage import digest, inside
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["images"])
 
@@ -42,6 +42,21 @@ async def get_images(slug: str, request: Request):
                 review = None if local_plate else reviews.verdict_for(root, shot.id)
             except (OSError, ValueError):
                 review = None
+            selected = None if local_plate else entry.get("selected")
+            chosen = next(
+                (
+                    version
+                    for version in entry.get("versions", [])
+                    if version.get("version") == selected
+                ),
+                None,
+            )
+            stale = False
+            if chosen is not None and not local:
+                try:
+                    stale = chosen.get("input_hash") != digest(P.image_spec(root, shot))
+                except (OSError, ValueError):
+                    stale = False
             shots.append(
                 {
                     "id": shot.id,
@@ -52,9 +67,10 @@ async def get_images(slug: str, request: Request):
                     "plate": (f"/api/projects/{slug}/plates/{shot.id}" if local_plate else None),
                     "message": shot.message,
                     "text": shot.text,
-                    "selected": None if local_plate else entry.get("selected"),
+                    "selected": selected,
                     "versions": [] if local_plate else entry.get("versions", []),
                     "review": review,
+                    "stale": stale,
                 }
             )
     return {"shots": shots}

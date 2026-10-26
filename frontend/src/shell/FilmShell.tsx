@@ -23,6 +23,7 @@ import { Director } from "./Director";
 import { ArchiveFilm } from "./ArchiveFilm";
 import { Library } from "./Library";
 import { NextStepBar } from "./NextStepBar";
+import { ShotInspector } from "../storyboard/ShotInspector";
 import {
   nextStep,
   type ApprovalFacts,
@@ -36,6 +37,7 @@ import {
 import { notifyProjectChanged, PROJECT_CHANGED } from "./projectEvents";
 import { goLibrary } from "./route";
 import { TopBar } from "./TopBar";
+import { SHOT_KINDS } from "../shotKinds";
 
 const APPROVAL_STAGES = [
   "analysis",
@@ -62,13 +64,16 @@ function approvalMap(states: ApprovalState[]): ApprovalMap {
   return result;
 }
 
-function imageFacts(shots: ImageShot[]): ImageFacts {
+function imageFacts(shots: ImageShot[], reserve: string): ImageFacts {
   const paid = shots.filter((shot) => shot.paid);
+  const missing = paid.filter((shot) => shot.selected === null);
   return {
     total: paid.length,
     selected: paid.filter((shot) => shot.selected !== null).length,
     kept: paid.filter((shot) => shot.review?.verdict === "accept").length,
-    missing: paid.filter((shot) => shot.selected === null).length,
+    missing: missing.length,
+    missing_ids: missing.map((shot) => shot.id),
+    reserve_usd: reserve,
   };
 }
 
@@ -112,6 +117,8 @@ function scrollTo(selector: string, delay = 60) {
   }, delay);
 }
 
+type PaidRequest = NonNullable<NextAction["paid"]>;
+
 function StageView({
   slug,
   stage,
@@ -119,6 +126,10 @@ function StageView({
   audioWindow,
   windowLocked = false,
   onIntakeChange,
+  onInspect,
+  pendingPaid,
+  onPendingConsumed,
+  reserve,
 }: {
   slug: string;
   stage: Stage;
@@ -126,6 +137,10 @@ function StageView({
   audioWindow: AudioWindow | null;
   windowLocked?: boolean;
   onIntakeChange: (intake: IntakePayload) => void;
+  onInspect: (shotId: string) => void;
+  pendingPaid: PaidRequest | null;
+  onPendingConsumed: () => void;
+  reserve: string;
 }) {
   if (stage === "track") return <TrackStage slug={slug} />;
   if (stage === "story")
@@ -138,8 +153,16 @@ function StageView({
         onIntakeChange={onIntakeChange}
       />
     );
-  if (stage === "storyboard") return <StoryboardStage slug={slug} />;
-  if (stage === "images") return <ImagesStage slug={slug} />;
+  if (stage === "storyboard") return <StoryboardStage slug={slug} onInspect={onInspect} />;
+  if (stage === "images")
+    return (
+      <ImagesStage
+        slug={slug}
+        reserve={reserve}
+        pendingPaid={pendingPaid}
+        onPendingConsumed={onPendingConsumed}
+      />
+    );
   return <FilmStage slug={slug} />;
 }
 
@@ -187,7 +210,11 @@ function FilmShellContent({
   const [audioWindow, setAudioWindow] = useState<AudioWindow | null>(null);
   const [windowBusy, setWindowBusy] = useState(false);
   const [editOwnsTiming, setEditOwnsTiming] = useState(false);
+  const [reserve, setReserve] = useState("0.05");
+  const [shotKinds, setShotKinds] = useState<typeof SHOT_KINDS>(SHOT_KINDS);
   const [revision, setRevision] = useState(0);
+  const [inspectorShot, setInspectorShot] = useState<string | null>(null);
+  const [pendingPaid, setPendingPaid] = useState<PaidRequest | null>(null);
   const [directorOpen, setDirectorOpen] = useState(() => window.innerWidth > 1180);
   const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
 
@@ -200,6 +227,7 @@ function FilmShellContent({
       trackResult,
       editResult,
       intakeResult,
+      settingsResult,
     ] = await Promise.allSettled([
       api.approvals(slug, APPROVAL_STAGES),
       api.images(slug),
@@ -208,6 +236,7 @@ function FilmShellContent({
       api.track(slug),
       project.shots > 0 ? api.edit(slug) : Promise.resolve({ present: false }),
       api.intake(slug),
+      api.settings(),
     ]);
     if (approvalResult.status === "fulfilled") {
       setApprovals(approvalMap(approvalResult.value.stages));
@@ -224,6 +253,12 @@ function FilmShellContent({
       setIntake(intakeResult.value);
       setAudioWindow((current) => current ?? intakeResult.value.audio_window);
     }
+    if (settingsResult.status === "fulfilled") {
+      const value = Number(settingsResult.value.image_reserve_usd || 0.05);
+      setReserve((value > 0 ? value : 0.05).toFixed(2));
+      const kinds = settingsResult.value.shot_kinds;
+      if (kinds && kinds.length) setShotKinds(kinds);
+    }
   }, [slug]);
 
   useEffect(() => {
@@ -237,8 +272,29 @@ function FilmShellContent({
   }, []);
 
   useEffect(() => {
+    if (stage !== "storyboard") setInspectorShot(null);
+  }, [stage]);
+
+  useEffect(() => {
+    const pick = (event: Event) => {
+      if (stage !== "storyboard") return;
+      const id = (event as CustomEvent<string>).detail;
+      if (typeof id === "string" && id) setInspectorShot(id);
+    };
+    window.addEventListener("studio:select-shot", pick);
+    return () => window.removeEventListener("studio:select-shot", pick);
+  }, [stage]);
+
+  useEffect(() => {
+    if (inspectorShot && board && !board.shots.some((shot) => shot.id === inspectorShot)) {
+      setInspectorShot(null);
+    }
+  }, [board, inspectorShot]);
+
+  useEffect(() => {
     const ask = (event: Event) => {
       const detail = (event as CustomEvent<{ text?: string }>).detail;
+      setInspectorShot(null);
       setDirectorOpen(true);
       setDirectorPrompt({ text: detail?.text || "", at: Date.now() });
     };
@@ -246,7 +302,7 @@ function FilmShellContent({
     return () => window.removeEventListener("studio:ask-director", ask);
   }, []);
 
-  const facts = imageFacts(images);
+  const facts = imageFacts(images, reserve);
   const authoritative = approvalsLoaded && Object.keys(approvals).length > 0;
   const states = authoritative
     ? derivedStates(project, approvals)
@@ -349,6 +405,13 @@ function FilmShellContent({
       scrollTo(".render-card");
       return;
     }
+    if (action.target === "make-missing") {
+      if (!action.paid) return;
+      setPendingPaid(action.paid);
+      if (stage !== "images") onNavigate("images");
+      scrollTo(".images-body", 180);
+      return;
+    }
     if (action.target === "pictures") {
       if (stage !== "images") onNavigate("images");
       scrollTo(".images-body");
@@ -370,7 +433,14 @@ function FilmShellContent({
             onProjectsChanged();
           }}
           directorOpen={directorOpen}
-          onDirector={() => setDirectorOpen((open) => !open)}
+          onDirector={() => {
+            if (inspectorShot) {
+              setInspectorShot(null);
+              setDirectorOpen(true);
+              return;
+            }
+            setDirectorOpen((open) => !open);
+          }}
         />
         <main className="shell-main">
           <NextStepBar step={step} ready={approvalsLoaded} onAction={act} />
@@ -384,11 +454,30 @@ function FilmShellContent({
                 audioWindow={audioWindow}
                 windowLocked={project.shots > 0}
                 onIntakeChange={setIntake}
+                onInspect={setInspectorShot}
+                pendingPaid={pendingPaid}
+                onPendingConsumed={() => setPendingPaid(null)}
+                reserve={reserve}
               />
             </div>
           </div>
         </main>
-        {directorOpen && (
+        {stage === "storyboard" && inspectorShot ? (
+          <ShotInspector
+            slug={slug}
+            shotId={inspectorShot}
+            board={board}
+            images={images}
+            music={music}
+            kinds={shotKinds}
+            proofIds={intake?.brief?.creative?.proof_shot_ids || []}
+            reserve={reserve}
+            timingOwned={editOwnsTiming}
+            onSelect={setInspectorShot}
+            onBoardChange={setBoard}
+            onClose={() => setInspectorShot(null)}
+          />
+        ) : directorOpen ? (
           <Director
             key={slug}
             slug={slug}
@@ -398,7 +487,7 @@ function FilmShellContent({
             onClose={() => setDirectorOpen(false)}
             onSettings={() => toast("Settings is coming with the director pass.")}
           />
-        )}
+        ) : null}
         <Spine
           slug={slug}
           stage={stage}

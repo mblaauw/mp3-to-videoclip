@@ -93,9 +93,13 @@ export type Shot = {
   camera: string;
   dissolve_frames: number;
   framing: string | null;
+  transition?: "fade" | "wipe_left" | "wipe_right" | null;
   asset_shot_id: string | null;
   asset?: string | null;
   product_ref?: string | null;
+  motion_prompt?: string;
+  music_context?: string;
+  lyric_context?: string;
   bridge?: {
     mode: "designed" | "generated";
     match?: {
@@ -258,6 +262,7 @@ export type ImageShot = {
   selected: number | null;
   versions: ImageVersion[];
   review: ImageReview | null;
+  stale: boolean;
 };
 
 export type IntakePayload = {
@@ -277,8 +282,17 @@ export type IntakePayload = {
 
 export type Settings = {
   default_budget_usd?: number;
+  image_reserve_usd?: number;
   style_presets?: StylePreset[];
   kinds?: KindProfile[];
+  shot_kinds?: {
+    id: ShotKind;
+    label: string;
+    icon: string;
+    paid: boolean;
+    hint: string;
+    purpose: string;
+  }[];
   [key: string]: unknown;
 };
 
