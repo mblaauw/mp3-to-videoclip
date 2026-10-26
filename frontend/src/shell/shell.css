@@ -685,6 +685,175 @@ body {
   border-color: var(--gold);
 }
 
+/* Director roles, tool cards and the one-step undo. */
+.director-gateway {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.role-row {
+  display: flex;
+  gap: 4px;
+  padding: 0 var(--s-4) var(--s-3);
+  border-bottom: 1px solid var(--line-soft);
+}
+.role-row button {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.role-row button:hover {
+  border-color: var(--ink-2);
+  color: var(--ink-2);
+}
+.role-row button.on {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  color: var(--gold);
+}
+.tool-card {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+}
+.tool-card.money {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, var(--gold-wash), var(--raised) 80%);
+}
+.tool-card.failed {
+  border-color: var(--red);
+}
+.tool-card > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tool-card > header b {
+  font-size: var(--t-12);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+}
+.tool-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.tool-dot.run {
+  background: var(--gold);
+}
+.tool-dot.done {
+  background: var(--sage);
+}
+.tool-card.failed .tool-dot.done {
+  background: var(--red);
+}
+.tool-args {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-state {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tool-summary {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-12);
+  line-height: 1.45;
+}
+.tool-card.failed .tool-summary {
+  color: var(--red);
+}
+.tool-detail {
+  font-size: var(--t-12);
+}
+.tool-detail summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tool-detail span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.tool-detail pre {
+  max-height: 160px;
+  overflow: auto;
+  margin: 2px 0 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--well);
+  color: var(--ink-2);
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tool-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: 2px;
+}
+.tool-error {
+  color: var(--red);
+  font-size: var(--t-12);
+}
+.director .context .chip.shot {
+  border-color: var(--gold);
+  color: var(--gold);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.director-error details {
+  font-size: var(--t-12);
+}
+.director-error summary {
+  color: var(--red);
+  cursor: pointer;
+}
+.director-error pre {
+  max-height: 160px;
+  overflow: auto;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--well);
+  color: var(--ink-2);
+  font-size: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.director-error .hint {
+  margin: 0;
+  color: var(--muted);
+}
+
+
 /* ------------------------------------------------------------------ spine */
 .spine {
   grid-area: spine;

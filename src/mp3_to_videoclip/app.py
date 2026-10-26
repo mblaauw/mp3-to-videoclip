@@ -28,6 +28,7 @@ from .api.director import close_gateways
 from .api.director import router as director_router
 from .api.errors import error_code, error_payload, error_response
 from .api.film import router as film_router
+from .api.history import router as history_router
 from .api.images import router as images_router
 from .api.jobs import router as jobs_router
 from .api.projects import router as projects_router
@@ -99,6 +100,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
     app.include_router(storyboard_router)
     app.include_router(images_router)
     app.include_router(film_router)
+    app.include_router(history_router)
     app.include_router(budget_router)
     app.include_router(approvals_router)
     app.include_router(ratings_router)

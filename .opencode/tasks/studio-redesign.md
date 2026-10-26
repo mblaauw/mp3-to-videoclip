@@ -9,6 +9,7 @@ P1 branch: `studio-redesign/p1-foundations`, merged as PR #25 (`71406aa`).
 P2 branch: `studio-redesign/p2-shell`, merged as PR #26 (`d437b37`).
 P3 branch: `studio-redesign/p3-track-story` (merged as PR #27, `4fe6a6b`).
 P4 branch: `studio-redesign/p4-storyboard-images` (merged as PR #28, `575ad17`).
+P5 branch: `studio-redesign/p5-film-director-settings`.
 
 ## Objective
 
@@ -58,7 +59,7 @@ logic stay authoritative in the existing engine modules.
 | P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Complete (PR #26, `d437b37`) |
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Complete (PR #27, `4fe6a6b`) |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Complete (PR #28, `575ad17`) |
-| P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | Not started |
+| P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | In review (`studio-redesign/p5-film-director-settings`) |
 | P6 | Empty/loading/error states, responsive and accessibility pass | Not started |
 
 ## P0 — correctness
@@ -637,7 +638,213 @@ Limitations:
 P4 shipped in PR #28, squash-merged as `575ad17` on 26 Oct 2026. CI (`check`)
 passed in 4m31s before the merge.
 
+## P5 — Film, director cards, settings
+
+### Scope
+
+- **Film tabs:** *Cut* and *Rendered files*. Cut replaces the raw report and the
+  JSON editor; Rendered files keeps the screen, play/download rows and the
+  preview/final actions.
+- **Delivery checklist:** five real lines where they apply — Story, Storyboard,
+  preview (only when the stills gate sits behind it), every still kept and
+  approved, and titles (only for a signature production). *Render final* is
+  disabled unless the engine would accept the same render.
+- **Cut:** no edit → *Let the Editor cut it* with *Make a first cut*
+  (`POST /edit/seed`) and the option to keep the storyboard timing. With an edit
+  → shots grouped by the named Track sections, with thumbnail, time, duration,
+  arrival label, motion, accents, text, and every reason in muted prose.
+  Techniques, counts, grade, hard findings and warnings show above the list.
+  Raw JSON is read-only and only appears with *Settings → Advanced → Show the
+  edit file*.
+- **Live preview:** the Remotion player stays bound to the shared time store and
+  now names the current shot and job under a Cut-aware header.
+- **Credits:** the same `CreditsCard` used by Story is rendered on Film, so Story
+  is no longer the only credits editor. Guided productions can confirm and edit
+  the closing roles from either stage.
+- **Ratings:** one-click *Good* / *Needs work* beside the artifact title. Good
+  saves immediately; Needs work saves immediately and then offers the optional
+  one-line note. All four artifacts (brief, concepts, storyboard, edit) remain.
+- **Settings dialog:** gear in the top bar and *Open settings* from the director
+  error. Sections for Director, Pictures, New films start with, This computer and
+  Advanced. Keys are masked; an empty secret keeps the stored key. *Test
+  OpenCode* and *Test Runware* call the free checks in `POST /settings/test`.
+- **Director:** every `tool` event is a card with its human label, arguments,
+  result summary and details; paid tools render as money cards. Roles switch
+  between *Ask the Writer* and *Ask the Editor* and send `role`; the drawer shows
+  the model and *Direct API* when the gateway is direct. Context chips carry the
+  stage, playhead and selected shot. Mutating tools offer one-step *Undo* through
+  artifact history. A no-key error is an inline card with *Open settings*.
+
+### Backend changes
+
+- `edits.transition_label` / `motion_label` / `accent_label` and
+  `edits.cut_summary`; `GET /edit/summary` returns named sections, per-shot
+  labels, reasons, techniques, counts, findings and the edit payload.
+- `domain/history.py` writes content-addressed snapshots for storyboard and edit
+  (brief, lyrics and treatments already had directories), lists them and restores
+  the newest value that differs from the live artifact. Storyboard restores are
+  re-validated against the brief and any current edit; edit restores against the
+  storyboard. `GET /history/{artifact}` and
+  `POST /history/{artifact}/restore` expose them.
+- `POST /settings/test` performs a free Runware auth check or an OpenCode
+  `--version` + `auth list` check; no model call and no image is made.
+- Director `context` accepts only `stage`, `time` and up to eight `selected_shots`,
+  validates them, and appends a *Session context* block to `build_context`.
+- `GET /film/checklist` computes the delivery lines with the engine's own
+  `require_approval` calls and `requires_signature` / `effective_upstream`.
+  `can_final` is the exact condition used by `POST /render` for a final.
+- `ProjectSummary` now carries `signature_required` and `preview_required`, so the
+  next-step bar can skip optional preview/titles gates without guessing.
+
+### Decisions
+
+- The checklist is computed in the engine, never from UI guesses. `can_final`
+  calls the same gate checks as the final render, so "enabled" and "accepted"
+  cannot drift.
+- Preview and titles appear as required lines only when the production records
+  those gates. On a non-signature production the titles line is informational
+  (*no separate graphics pass*), never a blocker.
+- History restores walk backwards by excluding the live hash. The UI allows one
+  Undo per tool card and disables it afterwards; the API can still walk further
+  for a future history browser.
+- Settings test buttons save first, so they test the key/model currently typed
+  rather than the previously stored one. Empty secret fields are preserved.
+- The next-step bar reads the same `preview_required` / `signature_required`
+  facts as Film, so the bar and the checklist no longer contradict each other.
+- The Cut is a readable surface, not a second JSON editor. Timing and motion
+  changes go through the Editor (the drawer). Inline boundary drags that write
+  `PUT /edit`, and per-shot inline transition controls, are deliberately left out
+  of P5 (see limitations).
+
+### Acceptance
+
+- The delivery checklist reflects the real gate state, and *Render final* is
+  enabled exactly when a final render would be accepted.
+- Every director tool call appears as a card, including money cards for paid
+  tools; mutating calls can be undone once.
+- The “no LLM key” error offers *Open settings* and the dialog saves a new key.
+- Film shows a readable cut with names and reasons, a first-cut card when no edit
+  exists, credits editing, inline ratings and rendered files.
+- No paid provider call is made in any phase.
+
+## P5 evidence
+
+Verified on `studio-redesign/p5-film-director-settings` at the final working tree
+(base `3b61f2d`):
+
+- `uv run pytest -q`: **941 passed, 1 skipped** (105.33 s). New coverage for cut
+  labels and section names, storyboard/edit history restore, settings tests,
+  director context validation, the preview-gated checklist, and the final gate
+  equivalence.
+- `uv run ruff check .`: clean. `uv run ruff format --check .`: 226 files already
+  formatted. `git diff --check`: clean.
+- `npm run build --prefix frontend`: clean. `npm test --prefix frontend`: **34
+  passed**. `npm run api:types --prefix frontend` regenerated the schema with the
+  new summary/checklist fields.
+- Live Studio on port 8939 with an isolated `HOME=/tmp/opencode/p5-home` and the
+  P3 fixtures, so the user's real settings file was never written.
+
+Fixtures:
+
+- `p5-final`: a copy of `no-lyrics` whose `signature_required` is recorded
+  `false`, whose guided marker was re-issued for the new slug, where all 79 paid
+  stills have an accepted review of their current bytes, and whose brief,
+  storyboard, proof and stills are approved. A cut is seeded.
+- `p5-preview`: a copy of `stars` with the guided marker removed, so the preview
+  and graphics gates are the recorded v2 gates.
+- `p4-mixed-a`: the P4 fixture, used to exercise the first-cut card.
+
+Browser evidence:
+
+- **Checklist:** on p5-final the lines read *Story approved*, *Storyboard
+  approved*, *Every still kept and approved — all 79 paid stills are kept*, and
+  *Titles checked on real frames — this film has no separate graphics pass*. The
+  next-step bar read *Ready to deliver* and *Render final* was enabled. On
+  p5-preview the same checklist added *Watched the preview with sound* with a
+  *Watch preview* action; *Check titles* was disabled with the tooltip *Approve
+  every still first*, and *Render final* was disabled.
+- **Gate equivalence:** pytest proves the backend refuses a final with a 400
+  before the stills approval and accepts the same request once the checklist says
+  `can_final`; the runner is stubbed so no render runs. The UI button reads that
+  same `can_final`.
+- **Cut:** after seeding p4-mixed-a, the cut showed 79 shots in the ten named
+  sections (Opening, Section 2 …), technique chips (`breathing hold ×52`,
+  `lateral pan ×16` etc.), per-shot arrival/motion, reasons such as *Hold seeded from
+  the storyboard camera*, and the live preview named `a001-blue-face`.
+- **First cut:** the no-edit card offered *Make a first cut* and *Keep the
+  storyboard timing*; clicking the former wrote `POST /edit/seed` and the cut
+  replaced the empty state. The Film message was *The Editor cut the film. Timing
+  now comes from the cut.* and the final stayed disabled while two stills were
+  missing.
+- **Rendered files:** the tab showed the empty screen state, *Watch a new
+  preview* and *Render final*, with *Nothing rendered yet* and no file rows.
+- **Empty cut:** on `fresh-advert` (no storyboard) Film showed *The storyboard
+  comes first* with *Go to Storyboard* and a checklist explaining the story gate.
+  `GET /edit/summary` returned an empty summary with status 200, so the page made
+  no console error and no request ≥ 400.
+- **Credits:** on p5-final the Film credits card showed the two factual rows.
+  Changing a name and *Confirm credits* sent `PUT /graphics/credits` (200), then
+  the card showed the new value with *Confirmed*; the fixture was restored to its
+  original cards afterwards.
+- **Ratings:** the Cut rating sent *Good* immediately (`aria-pressed="true"`,
+  *Saved*), then *Needs work* immediately and opened the optional note. Saving
+  the note for *The middle section could breathe more.* appended a `down` rating
+  with that note; `GET /ratings?artifact=edit` returned it as `latest`.
+- **Director cards:** a mocked ndjson stream (page `fetch`, no model call)
+  rendered *Read the cut → Read · 79 shots · no hard findings*, *Changed the
+  storyboard → Saved 1 shot: a001-blue-face*, and a money card *Made pictures →
+  Needs $1.00 more before this can run.* The `ask_user` stream produced *Asked
+  you → Faster or slower?* with the card marked Done, not spinning.
+- **Roles and context:** the drawer showed *Writer · GPT 6.1 Sol* on Storyboard,
+  switched to *Editor · Deepseek V4.1 Flash* with *Direct API*, and the captured
+  request body was
+  `{"stage":"storyboard","role":"editor","context":{"stage":"storyboard","time":0,"selected_shots":["a001-blue-face"]}}`.
+- **Undo:** after a real `PATCH /storyboard/shots` change, the mocked
+  `update_shots` card offered *Undo*. Clicking it called
+  `POST /history/storyboard/restore` (200), restored the original purpose and
+  returned the storyboard approval to `approved`; the card then read *Undone* and
+  the button was disabled.
+- **No key:** with the isolated settings file and direct gateway, sending a chat
+  message returned 503 and rendered *The director has no model key.* with *Open
+  settings*. That button opened the dialog with the Director, Pictures, New films
+  start with, This computer and Advanced sections. Saving a dummy Director key
+  showed *Saved*, changed the placeholder to *Stored*, and
+  `GET /api/settings` returned `has_llm_api_key: true`. No model call was made.
+- **Settings test:** *Test OpenCode* saved first and reported *OpenCode was not
+  found on this computer* under the isolated HOME; the fake-binary pytest covers
+  the signed-in and version message. The Runware test was not called against a
+  live key; its missing-key and code mapping are covered by pytest.
+- **Advanced:** *Show the edit file* was off by default. Enabling it and saving
+  made the Cut show a closed *Edit file (read-only)* details block with no
+  textarea. The preference is stored in `localStorage`.
+- **Responsive:** Cut at 1440/900/390 had no page-level overflow and no clipped
+  controls; the thumbnail was 112 px, 112 px and 84 px, the delivery card
+  reflowed to 343 px, and all 79 cut rows rendered. Rendered files also had no overflow. The
+  settings modal at 390 filled 390 × 844 with a visible footer and no clipped
+  field; the director drawer was 390 px wide with its composer visible.
+- **Route sweep:** 272 captured requests across the library, all five p5-final
+  stages, p5-preview Film/Storyboard, the empty `fresh-advert` Film and p4-mixed-a
+  Film. 0 dropped, no console messages and no request with status ≥ 400.
+
+Limitations:
+
+- P5 does not add spine boundary drags that write `PUT /edit`, nor per-shot inline
+  transition/frame controls on the cut. The readable cut is in place and changes
+  go through the Editor; the spine stays read-only when the edit owns timing, as
+  it did before P5. This is a deliberate Phase 6 item.
+- No project in the fixtures has a current graphics review, so the sample
+  lightbox was not exercised with real preflight images. The titles line, its
+  disabled action and the approval route are covered by tests and by the
+  p5-preview checklist.
+- The browser tool cannot capture screenshots without a visible desktop window;
+  the evidence above is DOM state, captured request bodies and geometry.
+- The mocked director stream exercised rendering, role, context and Undo without
+  a model call. No paid provider call, image generation or transcription was
+  made.
+- No Playwright dependency was added.
+
 ## Next
 
-P5 — Film: the Cut tab and rendered files, checklist, credits editor, settings,
-director tool cards and history.
+P6 — empty, loading and error states, the 390/900/1280/1440 responsive pass,
+keyboard-only paths and focus traps, reduced motion, README screenshots, and the
+spine boundary controls that write the edit list.

@@ -179,7 +179,7 @@ export function StoryboardStage({
 
   return (
     <>
-      <div className="stage-head">
+      <div className="stage-head storyboard-head">
         <div>
           <h1>Storyboard</h1>
           <p>
@@ -187,26 +187,29 @@ export function StoryboardStage({
             and on-screen text; only scene and generated product or bridge shots cost money.
           </p>
         </div>
-        {board && (
-          <div className="board-tabs" role="group" aria-label="Storyboard view">
-            <Button
-              size="small"
-              variant={view === "pictures" ? "primary" : "quiet"}
-              aria-pressed={view === "pictures"}
-              onClick={() => setView("pictures")}
-            >
-              Pictures
-            </Button>
-            <Button
-              size="small"
-              variant={view === "table" ? "primary" : "quiet"}
-              aria-pressed={view === "table"}
-              onClick={() => setView("table")}
-            >
-              Table
-            </Button>
-          </div>
-        )}
+        <div className="stage-tools">
+          <ArtifactRating slug={slug} artifact="storyboard" />
+          {board && (
+            <div className="board-tabs" role="group" aria-label="Storyboard view">
+              <Button
+                size="small"
+                variant={view === "pictures" ? "primary" : "quiet"}
+                aria-pressed={view === "pictures"}
+                onClick={() => setView("pictures")}
+              >
+                Pictures
+              </Button>
+              <Button
+                size="small"
+                variant={view === "table" ? "primary" : "quiet"}
+                aria-pressed={view === "table"}
+                onClick={() => setView("table")}
+              >
+                Table
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
       <ApprovalBar slug={slug} stages={["storyboard"]} refresh={revision} />
@@ -414,11 +417,6 @@ export function StoryboardStage({
           )}
         </>
       )}
-
-      <section className="card rating-card">
-        <h3>Rate this storyboard</h3>
-        <ArtifactRating slug={slug} artifact="storyboard" />
-      </section>
     </>
   );
 }

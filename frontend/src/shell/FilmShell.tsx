@@ -130,6 +130,7 @@ function StageView({
   pendingPaid,
   onPendingConsumed,
   reserve,
+  onNavigate,
 }: {
   slug: string;
   stage: Stage;
@@ -141,6 +142,7 @@ function StageView({
   pendingPaid: PaidRequest | null;
   onPendingConsumed: () => void;
   reserve: string;
+  onNavigate: (stage: Stage) => void;
 }) {
   if (stage === "track") return <TrackStage slug={slug} />;
   if (stage === "story")
@@ -163,7 +165,7 @@ function StageView({
         onPendingConsumed={onPendingConsumed}
       />
     );
-  return <FilmStage slug={slug} />;
+  return <FilmStage slug={slug} onNavigate={onNavigate} />;
 }
 
 export function FilmShell({
@@ -171,11 +173,13 @@ export function FilmShell({
   stage,
   onNavigate,
   onProjectsChanged,
+  onSettings,
 }: {
   project: ProjectSummary;
   stage: Stage;
   onNavigate: (stage: Stage) => void;
   onProjectsChanged: () => void;
+  onSettings: () => void;
 }) {
   return (
     <FilmShellContent
@@ -183,6 +187,7 @@ export function FilmShell({
       stage={stage}
       onNavigate={onNavigate}
       onProjectsChanged={onProjectsChanged}
+      onSettings={onSettings}
     />
   );
 }
@@ -192,11 +197,13 @@ function FilmShellContent({
   stage,
   onNavigate,
   onProjectsChanged,
+  onSettings,
 }: {
   project: ProjectSummary;
   stage: Stage;
   onNavigate: (stage: Stage) => void;
   onProjectsChanged: () => void;
+  onSettings: () => void;
 }) {
   const slug = project.slug;
   const { jobs } = useJobs();
@@ -214,6 +221,7 @@ function FilmShellContent({
   const [shotKinds, setShotKinds] = useState<typeof SHOT_KINDS>(SHOT_KINDS);
   const [revision, setRevision] = useState(0);
   const [inspectorShot, setInspectorShot] = useState<string | null>(null);
+  const [directorShots, setDirectorShots] = useState<string[]>([]);
   const [pendingPaid, setPendingPaid] = useState<PaidRequest | null>(null);
   const [directorOpen, setDirectorOpen] = useState(() => window.innerWidth > 1180);
   const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
@@ -314,6 +322,10 @@ function FilmShellContent({
       ["queued", "running"].includes(job.status),
   );
   const shellStates = analysisRunning ? { ...states, track: "running" as const } : states;
+  const inspectShot = (id: string) => {
+    setInspectorShot(id);
+    setDirectorShots([id]);
+  };
   const projectFacts: ProjectFacts = {
     ...project,
     stage_states: shellStates,
@@ -427,7 +439,7 @@ function FilmShellContent({
           budget={budget}
           stageStates={shellStates}
           onNavigate={onNavigate}
-          onSettings={() => toast("Settings is coming with the director pass.")}
+          onSettings={onSettings}
           onBudgetChanged={() => {
             void load();
             onProjectsChanged();
@@ -435,6 +447,7 @@ function FilmShellContent({
           directorOpen={directorOpen}
           onDirector={() => {
             if (inspectorShot) {
+              setDirectorShots([inspectorShot]);
               setInspectorShot(null);
               setDirectorOpen(true);
               return;
@@ -454,10 +467,11 @@ function FilmShellContent({
                 audioWindow={audioWindow}
                 windowLocked={project.shots > 0}
                 onIntakeChange={setIntake}
-                onInspect={setInspectorShot}
+                onInspect={inspectShot}
                 pendingPaid={pendingPaid}
                 onPendingConsumed={() => setPendingPaid(null)}
                 reserve={reserve}
+                onNavigate={onNavigate}
               />
             </div>
           </div>
@@ -473,7 +487,7 @@ function FilmShellContent({
             proofIds={intake?.brief?.creative?.proof_shot_ids || []}
             reserve={reserve}
             timingOwned={editOwnsTiming}
-            onSelect={setInspectorShot}
+            onSelect={inspectShot}
             onBoardChange={setBoard}
             onClose={() => setInspectorShot(null)}
           />
@@ -484,8 +498,11 @@ function FilmShellContent({
             stage={stage}
             open
             prefill={directorPrompt}
+            selectedShots={
+              stage === "storyboard" ? (inspectorShot ? [inspectorShot] : directorShots) : []
+            }
             onClose={() => setDirectorOpen(false)}
-            onSettings={() => toast("Settings is coming with the director pass.")}
+            onSettings={onSettings}
           />
         ) : null}
         <Spine

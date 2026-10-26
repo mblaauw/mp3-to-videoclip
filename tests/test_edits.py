@@ -338,6 +338,85 @@ def test_edit_api_seeds_reports_and_saves(tmp_path):
     assert read_json(root / edits.EDIT)["shots"][1]["motion"]["type"] == "push_in"
 
 
+def test_cut_summary_names_sections_and_labels_every_decision(tmp_path):
+    from mp3_to_videoclip.domain import music_notes
+
+    root = _energetic_root(tmp_path)
+    write_json(
+        root / "work" / "music.json",
+        {
+            "duration": 10.0,
+            "sections": [
+                {"start": 0.0, "end": 5.0, "label": "low"},
+                {"start": 5.0, "end": 10.0, "label": "high"},
+            ],
+        },
+    )
+    music_notes.save(
+        root,
+        {"sections": [{"start": 0.0, "name": "Opening"}, {"start": 5.0, "name": "Chorus"}]},
+    )
+    edits.save_edit(root, _energetic_edit())
+
+    value = edits.cut_summary(root)
+    assert [section["name"] for section in value["sections"]] == ["Opening", "Chorus"]
+    assert value["present"] is True
+    assert value["edit"]["schema_version"] == 1
+    shots = {shot["shot_id"]: shot for shot in value["shots"]}
+    assert shots["s001"]["transition"]["label"] == "Cut"
+    assert shots["s001"]["motion"]["label"] == "Hold"
+    assert shots["s002"]["transition"]["label"] == "Whip pan 4 f"
+    assert shots["s002"]["transition"]["reason"] == "chorus entry"
+    assert shots["s002"]["motion"]["label"] == "Push in"
+    assert shots["s002"]["reason"] == "chorus entry"
+    assert shots["s008"]["accents"][0]["label"] == "Light leak"
+    assert shots["s008"]["accents"][0]["reason"] == "memory warmth"
+    assert shots["s010"]["text"][0]["text"] == "14 NOV"
+    assert shots["s002"]["section_name"] == "Opening"
+    assert shots["s010"]["section_name"] == "Chorus"
+
+
+def test_storyboard_history_restores_the_previous_writes(tmp_path):
+    root = make_api_project(tmp_path)
+    original = P.load_board(root).shots[0].purpose
+    P.update_shots(root, [{"id": "s001", "purpose": "First change"}])
+    P.update_shots(root, [{"id": "s001", "purpose": "Second change"}])
+
+    with api_client(tmp_path) as client:
+        listed = client.get("/api/projects/production/history/storyboard")
+        assert listed.status_code == 200
+        assert len(listed.json()["snapshots"]) >= 2
+        first = client.post("/api/projects/production/history/storyboard/restore", json={})
+        assert first.status_code == 200, first.text
+        assert P.load_board(root).shots[0].purpose == "First change"
+        second = client.post("/api/projects/production/history/storyboard/restore", json={})
+        assert second.status_code == 200, second.text
+        assert P.load_board(root).shots[0].purpose == original
+
+    refused = None
+    with api_client(tmp_path) as client:
+        refused = client.post("/api/projects/production/history/nope/restore", json={})
+    assert refused.status_code == 400
+
+
+def test_edit_history_restores_the_previous_cut(tmp_path):
+    root = _energetic_root(tmp_path)
+    first = _energetic_edit()
+    edits.save_edit(root, first)
+    second = first.model_copy(deep=True)
+    second.shots[0] = second.shots[0].model_copy(
+        update={"motion": EditMotion(type="hold", reason="a later correction")}
+    )
+    edits.save_edit(root, second)
+
+    with api_client(tmp_path) as client:
+        restored = client.post("/api/projects/production/history/edit/restore", json={})
+    assert restored.status_code == 200, restored.text
+    saved = edits.load_edit(root)
+    assert saved is not None
+    assert saved.shots[0].motion.reason == "open on the first accent"
+
+
 def test_split_preview_carries_native_pane_sources(tmp_path):
     root = make_api_project(tmp_path)
     add_assets(root)

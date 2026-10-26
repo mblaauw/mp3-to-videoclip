@@ -125,6 +125,30 @@ async def get_edit(slug: str, request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/film/checklist")
+async def get_delivery_checklist(slug: str, request: Request):
+    """The gates behind *Render final*, computed with the engine's own checks."""
+    from mp3_to_videoclip.domain import delivery
+
+    root = project_root(request, slug)
+    try:
+        return delivery.build(root)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/edit/summary")
+async def get_edit_summary(slug: str, request: Request):
+    """The human-readable cut list Film shows; work/edit.json stays authoritative."""
+    from mp3_to_videoclip import edits
+
+    root = project_root(request, slug)
+    try:
+        return edits.cut_summary(root)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/edit/seed")
 async def seed_edit(slug: str, request: Request):
     """Move timing ownership from the storyboard to a first edit list."""

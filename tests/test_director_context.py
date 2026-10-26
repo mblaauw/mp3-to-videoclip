@@ -47,3 +47,17 @@ def test_context_reports_stale_stills_after_a_brief_change(tmp_path: Path):
     text = build_context("production", tmp_path)
     assert "stale (inputs changed)" in text
     assert "0 current" in text
+
+
+def test_context_carries_the_playhead_and_selected_shots(tmp_path: Path):
+    make_api_project(tmp_path)
+    text = build_context(
+        "production",
+        tmp_path,
+        stage="storyboard",
+        context={"stage": "storyboard", "time": 12.5, "selected_shots": ["s001", "s004"]},
+    )
+    assert "## Session context" in text
+    assert "Stage when asked: storyboard" in text
+    assert "Playhead: 12.50s" in text
+    assert "Selected shots: s001, s004" in text

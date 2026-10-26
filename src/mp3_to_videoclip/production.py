@@ -684,6 +684,9 @@ def update_shots(root: Path, changes: list[dict]) -> tuple[Storyboard, list[str]
                     + " in the Film cut instead"
                 )
     raw = board.model_dump()
+    from .domain import history
+
+    history.snapshot(root, "storyboard", raw)
     by_id = {shot["id"]: shot for shot in raw["shots"]}
     changed: list[str] = []
     for change in changes:

@@ -39,6 +39,8 @@ class ProjectSummary(BaseModel):
     music_mode: str | None = None
     has_analysis: bool = False
     has_lyrics: bool = False
+    signature_required: bool | None = None
+    preview_required: bool = False
     poster_stills: list[str] = Field(default_factory=list)
     stage_states: dict[str, StageWord] = Field(default_factory=dict)
     next_step: StageName | None = None
@@ -239,6 +241,14 @@ async def list_projects(request: Request):
                 remaining = budget.remaining(entry)
             except (OSError, ValueError):
                 remaining = None
+            try:
+                signature_required = P.requires_signature(entry, project)
+            except (OSError, ValueError):
+                signature_required = None
+            try:
+                preview_required = P.effective_upstream(entry, "stills") == "preview"
+            except (OSError, ValueError):
+                preview_required = False
             result.append(
                 ProjectSummary(
                     # Routes are folder-based; never advertise an internal slug
@@ -257,6 +267,8 @@ async def list_projects(request: Request):
                     music_mode=project.music_mode,
                     has_analysis=(entry / P.STAGE_FILES["analysis"]).is_file(),
                     has_lyrics=_has_lyrics_words(entry / P.STAGE_FILES["lyrics"]),
+                    signature_required=signature_required,
+                    preview_required=preview_required,
                     poster_stills=_poster_stills(entry, entry.name, assets),
                     stage_states=states,
                     next_step=_next_step(states),
