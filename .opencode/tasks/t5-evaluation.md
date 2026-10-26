@@ -2,8 +2,8 @@
 
 Authorized: 2026-10-26, owner said "continue and do the whole of T5".
 
-Branch: `director/t5-evaluation`
-Phase record: `.opencode/tasks/gui-rework.md`
+Branch: `director/t5-evaluation` (squash-merged as PR #23, `bbfc646`, 26 Oct 2026)
+Phase record: this file
 Spec: `.opencode/scratch/t1/writer-editor-brief.md`, T5 and *Evaluation*
 
 ## Objective
@@ -72,8 +72,8 @@ Make prompt changes measurable without pretending a model ran when it did not:
 
 ## Evidence
 
-Verification run on `director/t5-evaluation`, 26 Oct 2026, against the final
-working tree:
+Verification run on `director/t5-evaluation` at `c966b6b`, 26 Oct 2026, against
+the final working tree:
 
 - `uv run pytest -q`: **904 passed, 1 skipped**, 4 pre-existing warnings in
   103.60 s.
@@ -115,5 +115,5 @@ working tree:
 
 ## Status
 
-Complete and verified on the branch. PR and squash-merge are recorded on `main`
-after this commit.
+Complete. PR #23 squash-merged into `main` as `bbfc646` on 26 Oct 2026; CI
+(`check`) passed in 4m34s before the merge.
