@@ -7,20 +7,26 @@ runner and the static frontend. The engine stays importable without this layer.
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api.approvals import router as approvals_router
 from .api.budget import router as budget_router
 from .api.director import close_gateways
 from .api.director import router as director_router
+from .api.errors import error_code, error_payload, error_response
 from .api.film import router as film_router
 from .api.images import router as images_router
 from .api.jobs import router as jobs_router
@@ -57,10 +63,34 @@ def _origin_allowed(origin: str, port: int | None) -> bool:
     return parsed.port in (5173, 8000) or parsed.port == port
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_app(projects_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="mp3-to-videoclip Studio", lifespan=lifespan)
     if projects_dir is not None:
         app.state.projects_dir = str(projects_dir)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(_request: Request, exc: StarletteHTTPException):
+        return JSONResponse(
+            error_payload(jsonable_encoder(exc.detail), error_code(exc)),
+            status_code=exc.status_code,
+            headers=exc.headers,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(_request: Request, exc: RequestValidationError):
+        return JSONResponse(
+            error_payload(jsonable_encoder(exc.errors()), "validation_error"),
+            status_code=422,
+        )
+
+    @app.exception_handler(Exception)
+    async def unexpected_error(request: Request, exc: Exception):
+        logger.exception("unhandled API error on %s %s", request.method, request.url.path)
+        return JSONResponse(error_payload("internal error", "internal_error"), status_code=500)
+
     app.include_router(projects_router)
     app.include_router(settings_router)
     app.include_router(setup_router)
@@ -81,7 +111,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
         queue = runner.bus.subscribe()
 
         async def stream():
-            yield {"event": "hello", "data": {"ok": True}}
+            yield {"event": "hello", "data": json.dumps({"ok": True})}
             try:
                 while True:
                     if await request.is_disconnected():
@@ -90,9 +120,14 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
                         # Short wait so a disconnected tab releases the stream promptly;
                         # the heartbeat also keeps local proxies from timing out.
                         msg = await asyncio.wait_for(queue.get(), timeout=2.0)
-                        yield {"event": msg["event"], "data": msg["payload"]}
+                        # sse-starlette stringifies a dict as a Python repr, which
+                        # is not JSON. The browser store parses JSON, so encode it.
+                        yield {
+                            "event": msg["event"],
+                            "data": json.dumps(msg["payload"], default=str),
+                        }
                     except TimeoutError:
-                        yield {"event": "heartbeat", "data": {}}
+                        yield {"event": "heartbeat", "data": "{}"}
             finally:
                 runner.bus.unsubscribe(queue)
 
@@ -110,11 +145,11 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
     async def loopback_and_origin(request: Request, call_next):
         host = (request.headers.get("host") or "").split(":")[0].lower()
         if host not in ("127.0.0.1", "localhost", ""):
-            return JSONResponse({"detail": "loopback only"}, status_code=403)
+            return error_response("loopback only", "loopback_only", 403)
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
             origin = request.headers.get("origin")
             if origin is not None and not _origin_allowed(origin, request.url.port):
-                return JSONResponse({"detail": "origin not allowed"}, status_code=403)
+                return error_response("origin not allowed", "origin_not_allowed", 403)
             content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
             is_upload = request.method == "POST" and request.url.path.rstrip("/") == "/api/projects"
             if (
@@ -124,7 +159,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
                 )
                 and content_type != "application/json"
             ):
-                return JSONResponse({"detail": "JSON required"}, status_code=415)
+                return error_response("JSON required", "json_required", 415)
         return await call_next(request)
 
     @app.get("/api/health")

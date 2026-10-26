@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type Job, type ProjectSummary } from "./api";
+import { api, type ProjectSummary } from "./api";
+import { readApiError } from "./api/errors";
+import { useJobs } from "./jobs/store";
+import { Pill, StatusDot, type PillTone, type StatusTone } from "./ui";
 import { StoryboardStage } from "./stages/Storyboard";
 import { StoryStage } from "./stages/Story";
 import { ImagesStage } from "./stages/Images";
@@ -176,16 +179,9 @@ function Director({
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
-        const text = await res.text();
-        let message = text;
-        try {
-          const parsed = JSON.parse(text);
-          message = parsed.detail || parsed.error || text;
-        } catch {
-          // keep the raw body
-        }
-        toast(message);
-        throw new Error(`${res.status}: ${message}`);
+        const error = await readApiError(res);
+        toast(error.message);
+        throw error;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -272,32 +268,55 @@ function Director({
   );
 }
 
+const JOB_STATUS: Record<string, { tone: StatusTone; pill: PillTone; label: string }> = {
+  queued: { tone: "you", pill: "neutral", label: "Queued" },
+  running: { tone: "run", pill: "you", label: "Running" },
+  succeeded: { tone: "done", pill: "keep", label: "Done" },
+  failed: { tone: "err", pill: "redo", label: "Failed" },
+  cancelled: { tone: "idle", pill: "neutral", label: "Cancelled" },
+  needs_budget: { tone: "you", pill: "you", label: "Needs budget" },
+  interrupted: { tone: "err", pill: "redo", label: "Interrupted" },
+};
+
+function jobProgress(job: { progress: { done: number; total: number; unit: string } }) {
+  const { done, total, unit } = job.progress;
+  // The backend cannot report real progress yet. Never invent a percentage.
+  return total > 0 ? `${done} of ${total} ${unit}`.trim() : "";
+}
+
 function JobTray() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  useEffect(() => {
-    let alive = true;
-    const tick = () =>
-      api
-        .jobs()
-        .then((j) => alive && setJobs(j.slice(0, 8)))
-        .catch(() => {});
-    tick();
-    const id = setInterval(tick, 3000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, []);
+  const { jobs, connection } = useJobs();
+  const visible = jobs.slice(0, 8);
   return (
-    <footer className="tray">
-      {jobs.length ? (
-        jobs.map((j) => (
-          <span key={j.id} className={`chip ${j.status}`}>
-            {j.kind} · {j.status}
-          </span>
-        ))
+    <footer className="tray" aria-label="Background jobs">
+      {visible.length ? (
+        visible.map((job) => {
+          const status = JOB_STATUS[job.status] || {
+            tone: "idle" as const,
+            pill: "neutral" as const,
+            label: job.status,
+          };
+          const progress = jobProgress(job);
+          return (
+            <span className="job-chip" key={job.id} title={job.error || undefined}>
+              <StatusDot tone={status.tone} />
+              <span className="job-name">{job.kind.replaceAll("_", " ")}</span>
+              <Pill tone={status.pill}>{status.label}</Pill>
+              {progress && <span className="job-progress">{progress}</span>}
+              {!progress && job.status === "running" && (
+                <span className="job-progress">working…</span>
+              )}
+              {job.cost_usd > 0 && (
+                <span className="job-progress">${job.cost_usd.toFixed(2)}</span>
+              )}
+            </span>
+          );
+        })
       ) : (
-        <span>No jobs yet.</span>
+        <span>{connection === "retrying" ? "Jobs reconnecting…" : "No jobs yet."}</span>
+      )}
+      {visible.length > 0 && connection === "retrying" && (
+        <span className="job-connection">reconnecting…</span>
       )}
     </footer>
   );

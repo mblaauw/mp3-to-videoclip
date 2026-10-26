@@ -1,0 +1,236 @@
+/* UI primitives: tokens only, no screen-specific rules. */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 36px;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-13);
+  font-weight: var(--w-medium);
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+.ui-btn:hover:not(:disabled) {
+  border-color: #55575f;
+}
+.ui-btn--primary {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--on-gold);
+}
+.ui-btn--primary:hover:not(:disabled) {
+  background: var(--gold-strong);
+  border-color: var(--gold-strong);
+}
+.ui-btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+}
+.ui-btn--quiet:hover:not(:disabled) {
+  background: var(--raised);
+  color: var(--ink);
+}
+.ui-btn--small {
+  min-height: 28px;
+  padding: 0 var(--s-3);
+}
+.ui-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ui-btn--primary:disabled {
+  background: var(--raised);
+  border-color: var(--line);
+  color: var(--muted);
+  opacity: 1;
+}
+
+.ui-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--r-control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font);
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+.ui-icon-btn:hover:not(:disabled),
+.ui-icon-btn[aria-expanded="true"] {
+  background: var(--raised);
+  color: var(--ink);
+}
+.ui-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ui-icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ui-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  background: var(--muted);
+}
+.ui-dot--done {
+  background: var(--sage);
+}
+.ui-dot--you {
+  background: var(--gold);
+}
+.ui-dot--changed {
+  background: var(--violet);
+}
+.ui-dot--run {
+  background: var(--gold);
+  animation: ui-pulse 1.4s var(--ease) infinite;
+}
+.ui-dot--err {
+  background: var(--red);
+}
+@keyframes ui-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink-2);
+  font-size: var(--t-12);
+  font-weight: var(--w-medium);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.ui-pill--keep {
+  background: var(--sage-wash);
+  color: var(--sage);
+}
+.ui-pill--redo {
+  background: var(--red-wash);
+  color: var(--red);
+}
+.ui-pill--old {
+  background: var(--violet-wash);
+  color: var(--violet);
+}
+.ui-pill--you {
+  background: var(--gold-wash);
+  color: var(--gold);
+}
+
+.ui-seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  overflow: hidden;
+}
+.ui-seg button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 6px 12px;
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--t-13);
+}
+.ui-seg button[aria-pressed="true"] {
+  background: var(--raised);
+  color: var(--ink);
+}
+.ui-seg button:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ui-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--t-13);
+  line-height: 1.4;
+}
+.ui-chip[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  color: var(--ink);
+}
+.ui-chip .n {
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.ui-field {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0 0 var(--s-4);
+}
+.ui-field > span,
+.ui-field > label {
+  color: var(--ink-2);
+  font-size: var(--t-13);
+  font-weight: var(--w-medium);
+}
+.ui-field input,
+.ui-field textarea,
+.ui-field select {
+  width: 100%;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  padding: 8px 10px;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-15);
+}
+.ui-field textarea {
+  resize: vertical;
+  line-height: var(--lh-read);
+}
+.ui-field input:focus,
+.ui-field textarea:focus,
+.ui-field select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+.ui-field .ui-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-dot--run {
+    animation: none;
+  }
+}

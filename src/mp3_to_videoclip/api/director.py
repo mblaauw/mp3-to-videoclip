@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import promptlog
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.api.errors import ApiError
 from mp3_to_videoclip.config import effective_settings
 from mp3_to_videoclip.director import prompts as prompt_suite
 from mp3_to_videoclip.director.context import build_context
@@ -129,9 +130,8 @@ async def post_chat(slug: str, request: Request, payload: dict):
             gateway = await get_gateway(settings, root.parent)
         except OpenCodeError as exc:
             if not settings.llm_api_key:
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"OpenCode gateway unavailable: {exc}",
+                raise ApiError(
+                    503, f"OpenCode gateway unavailable: {exc}", "director_unavailable"
                 ) from exc
             gateway = None
         if gateway is not None:
@@ -141,23 +141,25 @@ async def post_chat(slug: str, request: Request, payload: dict):
                 available = await client.model_available(model)
             except Exception as exc:  # noqa: BLE001 - gateway boundary
                 await client.aclose()
-                raise HTTPException(
-                    status_code=503, detail=f"OpenCode gateway unavailable: {exc}"
+                raise ApiError(
+                    503, f"OpenCode gateway unavailable: {exc}", "director_unavailable"
                 ) from exc
             if not available:
                 await client.aclose()
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"model {model} is not available in OpenCode; check Settings",
+                raise ApiError(
+                    503,
+                    f"model {model} is not available in OpenCode; check Settings",
+                    "director_model_unavailable",
                 )
             if hasattr(client, "wait_for_mcp"):
                 try:
                     await client.wait_for_mcp()
                 except Exception as exc:  # noqa: BLE001 - gateway boundary
                     await client.aclose()
-                    raise HTTPException(
-                        status_code=503,
-                        detail=f"clipstudio MCP server did not connect: {exc}",
+                    raise ApiError(
+                        503,
+                        f"clipstudio MCP server did not connect: {exc}",
+                        "director_unavailable",
                     ) from exc
 
             async def gateway_stream():
@@ -179,7 +181,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
             return StreamingResponse(gateway_stream(), media_type="application/x-ndjson")
 
     if not settings.llm_api_key:
-        raise HTTPException(status_code=503, detail="no LLM key configured; open Settings")
+        raise ApiError(503, "no LLM key configured; open Settings", "no_llm_key")
     llm = DirectorLLM(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,

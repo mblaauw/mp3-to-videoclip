@@ -425,12 +425,17 @@ def test_jobs_list_get_and_cancel(client):
     assert client.post("/api/jobs/missing/cancel", json={}).status_code == 404
 
 
-def test_events_stream_starts_with_hello(client):
+def test_events_stream_starts_with_json_hello(client):
     with client.stream("GET", "/api/events") as response:
         assert response.status_code == 200
         lines = response.iter_lines()
         head = [next(lines) for _ in range(4)]
-    assert "hello" in "\n".join(head)
+    text = "\n".join(head)
+    assert "hello" in text
+    data = next(line.split(":", 1)[1].strip() for line in head if line.startswith("data:"))
+    # The frontend parses SSE payloads with JSON.parse; a Python dict repr is
+    # unreadable there and silently drops every job update.
+    assert json.loads(data) == {"ok": True}
 
 
 def test_director_chat_reads_and_streams(client, monkeypatch):

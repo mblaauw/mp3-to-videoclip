@@ -1,16 +1,14 @@
+import type { components } from "./api/schema";
+import { readApiError } from "./api/errors";
 import type { PreviewShot } from "./baseFilm";
 import { toast } from "./toast";
 
-export type ProjectSummary = {
-  slug: string;
-  title: string;
-  duration: number | null;
-  kind?: string | null;
-  archived: boolean;
-  render: string | null;
-  still_count: number;
-  error?: string | null;
-};
+export { ApiError } from "./api/errors";
+
+type Schemas = components["schemas"];
+
+/** Generated from `npm run api:types`; the route returns this model. */
+export type ProjectSummary = Schemas["ProjectSummary"];
 
 export type AudioWindow = {
   start: number;
@@ -376,25 +374,13 @@ export type EditSummary = {
   report: EditReport;
 };
 
-export type Job = {
-  id: string;
-  kind: string;
-  project: string;
-  status: string;
-  progress: { done: number; total: number; unit: string };
-  cost_usd: number;
-  error: string | null;
-};
+/** Generated from the typed `/api/jobs` response models. */
+export type Job = Schemas["JobOut"];
+export type JobDetail = Schemas["JobDetailOut"];
 
-export type ApprovalState = {
-  stage: string;
-  state: "approved" | "stale" | "missing" | "unavailable";
-  expected_hash?: string;
-  at?: string | null;
-  note?: string | null;
-  error?: string;
-  blocking_stage?: string | null;
-};
+export type ApprovalState = Schemas["ApprovalStateOut"];
+export type ApprovalsResponse = Schemas["ApprovalsOut"];
+export type ApprovalResponse = Schemas["ApprovalOut"];
 
 export type BudgetDecision = {
   ok: boolean;
@@ -422,26 +408,15 @@ export type ImageEstimateResponse = {
   error?: string;
 };
 
-async function errorMessage(res: Response): Promise<string> {
-  const text = await res.text();
-  try {
-    const parsed = JSON.parse(text);
-    const detail = parsed.detail || parsed.error || text;
-    return typeof detail === "string" ? detail : JSON.stringify(detail);
-  } catch {
-    return text;
-  }
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
   });
   if (!res.ok) {
-    const message = await errorMessage(res);
-    toast(message);
-    throw new Error(`${res.status}: ${message}`);
+    const error = await readApiError(res);
+    toast(error.message);
+    throw error;
   }
   return (await res.json()) as T;
 }
@@ -492,9 +467,9 @@ export const api = {
       body: file,
     });
     if (!res.ok) {
-      const message = await errorMessage(res);
-      toast(message);
-      throw new Error(`${res.status}: ${message}`);
+      const error = await readApiError(res);
+      toast(error.message);
+      throw error;
     }
     return (await res.json()) as {
       slug: string;
@@ -555,6 +530,7 @@ export const api = {
     ),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
   jobs: () => request<Job[]>("/api/jobs"),
+  job: (jobId: string) => request<JobDetail>(`/api/jobs/${jobId}`),
   settings: () => request<Settings>("/api/settings"),
   setup: () => request<SetupStatus>("/api/setup"),
   installRenderer: () =>
@@ -634,7 +610,7 @@ export const api = {
       body: JSON.stringify(body),
     }),
   approvals: (slug: string, stages: string[]) =>
-    request<{ stages: ApprovalState[] }>(
+    request<ApprovalsResponse>(
       `/api/projects/${slug}/approvals?stages=${encodeURIComponent(stages.join(","))}`,
     ),
   approve: (
@@ -649,7 +625,7 @@ export const api = {
       acknowledge_uncertain?: boolean;
     },
   ) =>
-    request<{ approved: string }>(`/api/projects/${slug}/approvals/${stage}`, {
+    request<ApprovalResponse>(`/api/projects/${slug}/approvals/${stage}`, {
       method: "POST",
       body: JSON.stringify(body),
     }),

@@ -1,0 +1,89 @@
+/*
+ * Studio design tokens — drop into frontend/src/styles/tokens.css and import first.
+ * Neutral graphite surround (images are judged against grey, not tinted navy),
+ * one brand accent (MAHA KALA gold) used for "act here": primary action, playhead,
+ * selection and "needs you". Status colours are reserved for status only.
+ * Font: Schibsted Grotesk (self-host with @fontsource-variable/schibsted-grotesk).
+ */
+:root {
+  color-scheme: dark;
+
+  /* surfaces — neutral, no hue cast */
+  --surround: #1b1c1f;   /* app background, around every picture */
+  --panel: #232428;      /* drawers, spine, inspector */
+  --raised: #2c2d32;     /* inputs, hovered rows, popovers */
+  --line: #3a3b41;       /* borders that separate regions */
+  --line-soft: #2f3035;  /* dividers inside a region */
+  --well: #141518;       /* behind waveforms and players */
+
+  /* text */
+  --ink: #eceae5;
+  --ink-2: #b6b7bc;
+  --muted: #9a9ca3;
+
+  /* accent and status */
+  --gold: #d9b36c;          /* brand · primary action · playhead · needs you */
+  --gold-strong: #e8c88a;   /* hover of gold */
+  --gold-wash: rgba(217, 179, 108, 0.14);
+  --on-gold: #1b1c1f;
+  --sage: #82c29a;          /* done / keep */
+  --sage-wash: rgba(130, 194, 154, 0.14);
+  --violet: #a996f0;        /* made from an older version (outdated) */
+  --violet-wash: rgba(169, 150, 240, 0.16);
+  --red: #ee6e66;           /* error / redo */
+  --red-wash: rgba(238, 110, 102, 0.14);
+
+  /* music sections on the waveform (cycled; never carry status) */
+  --sec-1: #5f7f8c;
+  --sec-2: #7d6f9a;
+  --sec-3: #8b7a5c;
+  --sec-4: #5d8a73;
+  --sec-5: #8a5f6a;
+
+  /* type */
+  --font: "Schibsted Grotesk Variable", "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --t-12: 12px;   /* captions, timecodes on the spine */
+  --t-13: 13px;   /* dense UI: tables, chips, secondary text */
+  --t-15: 15px;   /* body, inputs, buttons */
+  --t-18: 18px;   /* section titles inside a stage */
+  --t-24: 24px;   /* stage title */
+  --t-34: 34px;   /* library title, film title on Film */
+  --lh-tight: 1.2;
+  --lh-ui: 1.45;
+  --lh-read: 1.6; /* treatment and long text */
+  --w-regular: 420;
+  --w-medium: 540;
+  --w-bold: 680;
+
+  /* space (4-pt) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* radius encodes kind: controls 4, pictures 6, surfaces 12 */
+  --r-control: 4px;
+  --r-picture: 6px;
+  --r-surface: 12px;
+
+  /* layout */
+  --topbar-h: 56px;
+  --spine-h: 132px;
+  --director-w: 380px;
+  --inspector-w: 400px;
+  --measure: 68ch;  /* reading width for treatment / long text */
+
+  /* elevation: only for things that float over content */
+  --float: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line);
+
+  /* motion */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur: 0ms; }
+}
