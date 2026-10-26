@@ -1,4 +1,5 @@
-import { Player } from "@remotion/player";
+import { useEffect, useRef } from "react";
+import { Player, type PlayerRef } from "@remotion/player";
 import type { AnyZodObject } from "remotion";
 import { LivePreview, type PreviewProps } from "./LivePreview";
 
@@ -10,21 +11,42 @@ export default function LivePlayer({
   fps,
   width,
   height,
+  time,
+  playing,
 }: PreviewProps & {
   durationInFrames: number;
   fps: number;
   width: number;
   height: number;
+  time?: number;
+  playing?: boolean;
 }) {
+  const playerRef = useRef<PlayerRef>(null);
+  const synced = time !== undefined;
+
+  useEffect(() => {
+    if (!synced) return;
+    const frame = Math.round((time || 0) * fps);
+    const current = playerRef.current?.getCurrentFrame() ?? 0;
+    if (Math.abs(current - frame) > 2) playerRef.current?.seekTo(frame);
+  }, [fps, synced, time]);
+
+  useEffect(() => {
+    if (!synced || playing === undefined) return;
+    if (playing) playerRef.current?.play();
+    else playerRef.current?.pause();
+  }, [playing, synced]);
+
   return (
     <Player<AnyZodObject, PreviewProps>
+      ref={playerRef}
       component={LivePreview}
       inputProps={{ input, audio }}
       durationInFrames={durationInFrames}
       fps={fps}
       compositionWidth={width}
       compositionHeight={height}
-      controls
+      controls={!synced}
       doubleClickToFullscreen
       acknowledgeRemotionLicense
       style={{ width: "100%" }}

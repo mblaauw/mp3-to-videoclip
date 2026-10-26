@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { notifyProjectChanged } from "../shell/projectEvents";
 
 type TrackData = {
   music: any;
@@ -54,6 +55,7 @@ export function TrackStage({ slug }: { slug: string }) {
     try {
       await api.analyze(slug);
       await load();
+      notifyProjectChanged();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -72,6 +74,7 @@ export function TrackStage({ slug }: { slug: string }) {
       } else {
         setLrc("");
         await load();
+        notifyProjectChanged();
       }
     } catch (e) {
       setError(String(e));

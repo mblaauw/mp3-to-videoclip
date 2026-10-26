@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Brief } from "../api";
+import { notifyProjectChanged } from "../shell/projectEvents";
 import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
 import { IntakeCard } from "../IntakeCard";
@@ -48,6 +49,7 @@ export function StoryStage({ slug }: { slug: string }) {
     setTreatment(updated.treatment || "");
     setLook(updated.creative?.look || "");
     setRevision((value) => value + 1);
+    notifyProjectChanged();
   };
 
   const save = async () => {
@@ -68,6 +70,7 @@ export function StoryStage({ slug }: { slug: string }) {
       setTreatment(updated.treatment || "");
       setLook(updated.creative?.look || "");
       setRevision((value) => value + 1);
+      notifyProjectChanged();
     } catch (e) {
       setError(String(e));
     } finally {

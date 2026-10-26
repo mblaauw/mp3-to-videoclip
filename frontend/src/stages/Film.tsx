@@ -4,6 +4,7 @@ import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
 import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
+import { usePlayer } from "../spine/player";
 
 const LivePlayer = lazy(() => import("../LivePlayer"));
 
@@ -20,6 +21,7 @@ type LiveState = {
 };
 
 export function FilmStage({ slug }: { slug: string }) {
+  const player = usePlayer();
   const [previews, setPreviews] = useState<string[]>([]);
   const [exports, setExports] = useState<string[]>([]);
   const [selected, setSelected] = useState<FilmFile | null>(null);
@@ -320,11 +322,13 @@ export function FilmStage({ slug }: { slug: string }) {
             <Suspense fallback={<p className="empty">Loading the player…</p>}>
               <LivePlayer
                 input={live.input}
-                audio={live.audio}
+                audio={null}
                 durationInFrames={live.durationInFrames}
                 fps={live.fps}
                 width={live.width}
                 height={live.height}
+                time={player.time}
+                playing={player.playing}
               />
             </Suspense>
             <p className="meta">
@@ -415,7 +419,7 @@ export function FilmStage({ slug }: { slug: string }) {
         </div>
       )}
 
-      <div className="card">
+      <div className="card render-card">
         <h3>Render</h3>
         <button
           onClick={() => render("preview")}

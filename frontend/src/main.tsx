@@ -4,6 +4,7 @@ import "@fontsource-variable/schibsted-grotesk";
 import "./styles/tokens.css";
 import "./styles.css";
 import "./ui/ui.css";
+import "./shell/shell.css";
 import { App } from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

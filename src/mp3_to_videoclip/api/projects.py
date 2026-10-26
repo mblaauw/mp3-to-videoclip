@@ -4,18 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import valid_slug
-from mp3_to_videoclip.domain import archive
+from mp3_to_videoclip.domain import archive, budget
 from mp3_to_videoclip.storage import read_json, read_optional
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+StageName = Literal["track", "story", "storyboard", "images", "film"]
+StageWord = Literal["done", "you", "changed", "not_ready"]
 
 
 def _projects_dir(request: Request) -> Path:
@@ -30,7 +34,135 @@ class ProjectSummary(BaseModel):
     archived: bool = False
     render: str | None = None
     still_count: int = 0
+    shots: int = 0
     error: str | None = None
+    music_mode: str | None = None
+    has_analysis: bool = False
+    has_lyrics: bool = False
+    poster_stills: list[str] = Field(default_factory=list)
+    stage_states: dict[str, StageWord] = Field(default_factory=dict)
+    next_step: StageName | None = None
+    remaining_usd: str | None = None
+    audio_url: str | None = None
+    updated_at: str | None = None
+
+
+def _mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _newest(paths: list[Path]) -> float:
+    return max((_mtime(path) for path in paths), default=0.0)
+
+
+def _changed_since(record: dict | None, paths: list[Path]) -> bool:
+    """Cheap library signal: an artifact touched after its decision is changed."""
+    if not isinstance(record, dict) or not record.get("at"):
+        return False
+    try:
+        approved = datetime.fromisoformat(str(record["at"]))
+    except ValueError:
+        return False
+    if approved.tzinfo is None:
+        approved = approved.replace(tzinfo=UTC)
+    return _newest(paths) > approved.timestamp() + 1
+
+
+def _poster_stills(root: Path, slug: str, assets: dict) -> list[str]:
+    """First four selected stills, addressed through the image route."""
+    result: list[str] = []
+    for owner, entry in assets.items():
+        if not isinstance(entry, dict):
+            continue
+        chosen = next(
+            (v for v in entry.get("versions", []) if v.get("version") == entry.get("selected")),
+            None,
+        )
+        if not isinstance(chosen, dict) or not isinstance(chosen.get("path"), str):
+            continue
+        if not (root / chosen["path"]).is_file():
+            continue
+        result.append(f"/api/projects/{slug}/images/{owner}/{chosen['version']}")
+        if len(result) == 4:
+            break
+    return result
+
+
+def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
+    """Cheap stage words for the library.
+
+    This deliberately does not re-hash every gate. It uses the recorded decision
+    and artifact mtimes; the approval endpoints remain the authoritative check.
+    """
+    music_path = root / P.STAGE_FILES["analysis"]
+    lyrics_path = root / P.STAGE_FILES["lyrics"]
+    brief_path = root / P.STAGE_FILES["brief"]
+    board_path = root / P.STAGE_FILES["storyboard"]
+    assets_path = root / "work" / "assets.json"
+    reviews_path = root / "work" / "reviews.json"
+
+    track_ready = music_path.is_file() and (project.music_mode != "vocal" or lyrics_path.is_file())
+    states: dict[str, str] = {"track": "done" if track_ready else "you"}
+
+    if not brief_path.is_file():
+        states["story"] = "not_ready"
+    elif not isinstance(approvals.get("brief"), dict):
+        states["story"] = "you"
+    elif _changed_since(approvals.get("brief"), [brief_path]):
+        states["story"] = "changed"
+    else:
+        states["story"] = "done"
+
+    if not board_path.is_file():
+        states["storyboard"] = "not_ready"
+    elif not isinstance(approvals.get("storyboard"), dict):
+        states["storyboard"] = "you"
+    elif _changed_since(approvals.get("storyboard"), [board_path]):
+        states["storyboard"] = "changed"
+    else:
+        states["storyboard"] = "done"
+
+    if not board_path.is_file():
+        states["images"] = "not_ready"
+    elif isinstance(approvals.get("stills"), dict):
+        if _changed_since(approvals.get("stills"), [assets_path, reviews_path]):
+            states["images"] = "changed"
+        else:
+            states["images"] = "done"
+    elif isinstance(approvals.get("proof"), dict):
+        if _changed_since(approvals.get("proof"), [brief_path, assets_path, reviews_path]):
+            states["images"] = "changed"
+        else:
+            states["images"] = "you"
+    else:
+        states["images"] = "you"
+
+    finals = list((root / "renders").glob("*-final-*.mp4"))
+    if finals:
+        states["film"] = "done"
+    elif states["images"] == "done":
+        states["film"] = "you"
+    else:
+        states["film"] = "not_ready"
+
+    return states
+
+
+def _next_step(states: dict[str, str]) -> str | None:
+    for stage in ("track", "story", "storyboard", "images", "film"):
+        if states.get(stage) != "done":
+            return stage
+    return None
+
+
+def _updated_at(root: Path, paths: list[Path]) -> str | None:
+    newest = _newest(paths)
+    if not newest:
+        return None
+    return datetime.fromtimestamp(newest, UTC).isoformat()
 
 
 @router.get("", response_model=list[ProjectSummary])
@@ -48,14 +180,32 @@ async def list_projects(request: Request):
             continue
         if archive.is_archived(entry):
             film = archive.read(entry)
+            poster = [
+                f"/api/projects/{film.slug}/archive/stills/{index}"
+                for index, _still in enumerate(film.stills[:4])
+            ]
+            media = [film.render] if film.render is not None else []
             result.append(
                 ProjectSummary(
                     slug=film.slug,
                     title=film.title,
                     duration=film.duration,
                     archived=True,
-                    render=str(film.render) if film.render else None,
+                    render=film.render.name if film.render is not None else None,
                     still_count=len(film.stills),
+                    shots=len(film.stills),
+                    poster_stills=poster,
+                    stage_states={
+                        stage: "done"
+                        for stage in (
+                            "track",
+                            "story",
+                            "storyboard",
+                            "images",
+                            "film",
+                        )
+                    },
+                    updated_at=_updated_at(entry, [*media, *film.stills]),
                 )
             )
             continue
@@ -63,6 +213,17 @@ async def list_projects(request: Request):
             project = P.load_project(entry)
             assets_path = entry / "work" / "assets.json"
             assets = read_json(assets_path) if assets_path.is_file() else {}
+            approvals_path = entry / "work" / "approvals.json"
+            approvals = read_json(approvals_path) if approvals_path.is_file() else {}
+            states = _stage_states(entry, project, approvals)
+            try:
+                shots = len(P.load_board(entry).shots)
+            except (OSError, ValueError):
+                shots = 0
+            try:
+                remaining = budget.remaining(entry)
+            except (OSError, ValueError):
+                remaining = None
             result.append(
                 ProjectSummary(
                     # Routes are folder-based; never advertise an internal slug
@@ -76,6 +237,29 @@ async def list_projects(request: Request):
                         1
                         for item in assets.values()
                         if isinstance(item, dict) and item.get("selected") is not None
+                    ),
+                    shots=shots,
+                    music_mode=project.music_mode,
+                    has_analysis=(entry / P.STAGE_FILES["analysis"]).is_file(),
+                    has_lyrics=(entry / P.STAGE_FILES["lyrics"]).is_file(),
+                    poster_stills=_poster_stills(entry, entry.name, assets),
+                    stage_states=states,
+                    next_step=_next_step(states),
+                    remaining_usd=budget.fmt(remaining) if remaining is not None else None,
+                    audio_url=(
+                        f"/api/projects/{entry.name}/audio-excerpt"
+                        if project.audio_window is not None
+                        else f"/api/projects/{entry.name}/audio"
+                    ),
+                    updated_at=_updated_at(
+                        entry,
+                        [
+                            entry / "project.json",
+                            entry / P.STAGE_FILES["brief"],
+                            entry / P.STAGE_FILES["storyboard"],
+                            assets_path,
+                            entry / "work" / "reviews.json",
+                        ],
                     ),
                 )
             )
