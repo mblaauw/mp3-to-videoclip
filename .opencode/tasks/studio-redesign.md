@@ -6,7 +6,7 @@ screenshots), with `05-update-42a33cf.md` overriding 01–04 where they differ.
 Base: `main` at `42a33cf` (T0–T5 merged).
 P0 branch: `studio-redesign/p0-correctness`, merged as PR #24 (`1a3800e`).
 P1 branch: `studio-redesign/p1-foundations`, merged as PR #25 (`71406aa`).
-P2 branch: `studio-redesign/p2-shell`.
+P2 branch: `studio-redesign/p2-shell`, merged as PR #26 (`d437b37`).
 
 ## Objective
 
@@ -53,7 +53,7 @@ logic stay authoritative in the existing engine modules.
 | --- | --- | --- |
 | P0 | K13 vocal promo/advert brief approval; K2 real blocking stage | Complete (PR #24, `1a3800e`) |
 | P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Complete (PR #25, `71406aa`) |
-| P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Complete (PR pending) |
+| P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Complete (PR #26, `d437b37`) |
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Not started |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Not started |
 | P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | Not started |
@@ -261,6 +261,10 @@ P2 verified on `studio-redesign/p2-shell` at the final working tree:
   library uses the cheap summary and the film shell uses the approval endpoints.
 - No production under `projects/` was modified; all mutations happened in the
   `/tmp` fixture. No Playwright dependency was added.
+
+P2 shipped in PR #26, squash-merged as `d437b37` on 26 Oct 2026. CI (`check`)
+passed in 4m31s before the merge; the first two runs were killed by a slow apt
+mirror while installing ffmpeg, so the job timeout was raised to 30 minutes.
 
 ## Next
 
