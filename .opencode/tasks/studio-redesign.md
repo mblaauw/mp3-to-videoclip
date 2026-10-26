@@ -9,7 +9,7 @@ P1 branch: `studio-redesign/p1-foundations`, merged as PR #25 (`71406aa`).
 P2 branch: `studio-redesign/p2-shell`, merged as PR #26 (`d437b37`).
 P3 branch: `studio-redesign/p3-track-story` (merged as PR #27, `4fe6a6b`).
 P4 branch: `studio-redesign/p4-storyboard-images` (merged as PR #28, `575ad17`).
-P5 branch: `studio-redesign/p5-film-director-settings`.
+P5 branch: `studio-redesign/p5-film-director-settings` (merged as PR #29, `6bb03c9`).
 
 ## Objective
 
@@ -59,7 +59,7 @@ logic stay authoritative in the existing engine modules.
 | P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Complete (PR #26, `d437b37`) |
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Complete (PR #27, `4fe6a6b`) |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Complete (PR #28, `575ad17`) |
-| P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | In review (`studio-redesign/p5-film-director-settings`) |
+| P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | Complete (PR #29, `6bb03c9`) |
 | P6 | Empty/loading/error states, responsive and accessibility pass | Not started |
 
 ## P0 — correctness
@@ -842,6 +842,9 @@ Limitations:
   a model call. No paid provider call, image generation or transcription was
   made.
 - No Playwright dependency was added.
+
+P5 shipped in PR #29, squash-merged as `6bb03c9` on 26 Oct 2026. CI
+(`check`) passed before the merge.
 
 ## Next
 
