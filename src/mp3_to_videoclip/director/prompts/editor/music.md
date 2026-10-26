@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: music
 role: editor
 ---
@@ -17,6 +17,8 @@ are the first reader of the measured map, not its author.
 - Loudness is not emotional energy.
 - User-supplied lyrics are evidence; transcribed lyrics stay drafts until
   reviewed.
+- Accent and beat candidates carry confidence. Low-confidence accents are not a
+  licence to cut every beat.
 
 ## What to do
 

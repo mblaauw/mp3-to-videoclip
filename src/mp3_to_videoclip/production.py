@@ -669,6 +669,20 @@ def update_shots(root: Path, changes: list[dict]) -> tuple[Storyboard, list[str]
     if not isinstance(changes, list):
         raise ValueError("shot changes must be a list")
     board = load_board(root)
+    from . import edits
+
+    existing_edit = edits.load_edit(root, board=board)
+    if existing_edit is not None:
+        for change in changes:
+            if not isinstance(change, dict):
+                continue
+            owned = set(change) & edits.EDIT_OWNED
+            if owned:
+                raise ValueError(
+                    "work/edit.json owns timing and motion; change "
+                    + ", ".join(sorted(owned))
+                    + " in the Film cut instead"
+                )
     raw = board.model_dump()
     by_id = {shot["id"]: shot for shot in raw["shots"]}
     changed: list[str] = []
@@ -1088,11 +1102,15 @@ def local_plate_path(root: Path, shot_id: str) -> Path:
 
 
 def resolved_assets(root: Path, ids: list[str] | None = None) -> list[RenderShot]:
+    from . import edits
+
     board = load_board(root)
+    edit = edits.load_edit(root, board=board)
+    effective = edit.effective_board(board) if edit is not None else board
     project = load_project(root)
     assets = read_json(root / "work/assets.json")
     result = []
-    for shot in board.shots:
+    for shot in effective.shots:
         if ids is not None and shot.id not in ids:
             continue
         if shot.asset_shot_id is not None:
@@ -1112,7 +1130,7 @@ def resolved_assets(root: Path, ids: list[str] | None = None) -> list[RenderShot
         if file_hash(path) != chosen["sha256"]:
             raise ValueError(f"selected still for {shot.id} changed")
         result.append(RenderShot(shot=shot, image=str(path)))
-    return result
+    return edits.attach_edit(result, edit)
 
 
 def effective_upstream(root: Path, stage: str) -> str | None:
@@ -1153,7 +1171,13 @@ def preview_board_hash(root: Path):
     but cannot change a movie which never displayed that future image.
     """
     value = read_json(root / STAGE_FILES["storyboard"])
+    from . import edits
+
+    board = Storyboard.model_validate(value)
+    edit = edits.load_edit(root, board=board)
     if not creative_workflow(load_project(root)):
+        if edit is not None:
+            return digest({"storyboard": value, "edit": edit.model_dump(by_alias=True)})
         return digest(value)
     keys = (
         "id",
@@ -1166,24 +1190,21 @@ def preview_board_hash(root: Path):
         "dissolve_frames",
         "asset_shot_id",
     )
-    return digest(
-        {
-            "fps": value["fps"],
-            "aspect": value["aspect"],
-            "total_frames": value["total_frames"],
-            "shots": [
-                {
-                    **{k: s.get(k) for k in keys},
-                    **{
-                        k: s[k]
-                        for k in ("camera_keyframes", "post_effects", "transition")
-                        if k in s
-                    },
-                }
-                for s in value["shots"]
-            ],
-        }
-    )
+    payload = {
+        "fps": value["fps"],
+        "aspect": value["aspect"],
+        "total_frames": value["total_frames"],
+        "shots": [
+            {
+                **{k: s.get(k) for k in keys},
+                **{k: s[k] for k in ("camera_keyframes", "post_effects", "transition") if k in s},
+            }
+            for s in value["shots"]
+        ],
+    }
+    if edit is not None:
+        payload["edit"] = edit.model_dump(by_alias=True)
+    return digest(payload)
 
 
 def check_preview_binding(root: Path, report: dict):
@@ -1272,6 +1293,12 @@ def stage_hash(root: Path, stage: str) -> str:
         else:
             shots = resolved_assets(root)
             value = [{"id": s.shot.id, "image": file_hash(Path(s.image))} for s in shots]
+            from . import edits
+
+            if stage == "stills":
+                edit = edits.load_edit(root, board=board)
+                if edit is not None:
+                    value = {"assets": value, "edit": edit.model_dump(by_alias=True)}
     return digest({"project": project_payload(project), "upstream": parent, "content": value})
 
 
@@ -1604,8 +1631,14 @@ def status(root: Path) -> dict:
             approvals[stage] = "approved"
         except (OSError, ValueError, KeyError):
             approvals[stage] = "missing/stale/unapproved"
+    from . import edits
+
+    edit = None
     try:
         board = load_board(root)
+        edit = edits.load_edit(root, board=board)
+        if edit is not None:
+            board = edit.effective_board(board)
         shots = []
         for shot in board.shots:
             try:
@@ -1629,5 +1662,6 @@ def status(root: Path) -> dict:
         "total_frames": project.total_frames,
         "aspect": project.aspect,
         "approvals": approvals,
+        "edit": edit is not None,
         "shots": shots,
     }

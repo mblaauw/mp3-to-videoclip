@@ -7,7 +7,16 @@ import {createHash} from "node:crypto";
 import {existsSync, statSync} from "node:fs";
 import path from "node:path";
 
-import {allocateSpans, postEffectsStyle, transitionName, validateGraphicsPart} from "./timing.mjs";
+import {
+  allocateSpans,
+  flashViolations,
+  postEffectsStyle,
+  transitionName,
+  validateEditShot,
+  validateGrade,
+  validateGraphicsPart,
+  validateSplitPanes,
+} from "./timing.mjs";
 import {validateCompactLayout} from "./compact.mjs";
 
 export const KIND_EXTENSIONS = {base: ".mp4", graphics: ".mov"};
@@ -129,7 +138,7 @@ export function validateRequest(request) {
   }
   const normalized = {kind, output, width, height, fps, frames, assetRoot, chrome, concurrency, input};
   if (kind === "base") {
-    normalized.base = validateBaseInput(input);
+    normalized.base = validateBaseInput(input, fps);
     if (normalized.base.totalFrames !== frames) fail("shot allocations must equal requested frames");
   } else {
     normalized.part = validateGraphicsPart(input.part, frames);
@@ -151,7 +160,7 @@ export function validateRequest(request) {
   return normalized;
 }
 
-export function validateBaseInput(input) {
+export function validateBaseInput(input, fps) {
   if (!Array.isArray(input.shots) || input.shots.length === 0) {
     fail("base input.shots must be a non-empty array");
   }
@@ -182,6 +191,23 @@ export function validateBaseInput(input) {
     if (transition !== undefined && transition !== null) {
       transitionName(transition);
     }
+    if (span.edit !== undefined && span.edit !== null) {
+      validateEditShot(span.edit, span);
+    }
+    if (span.grade !== undefined && span.grade !== null) {
+      validateGrade(span.grade);
+    }
+    if (span.split_panes !== undefined && span.split_panes !== null) {
+      validateSplitPanes(span.split_panes, span.id);
+    }
+  }
+  const flashes = flashViolations(spans, fps);
+  if (flashes.length > 0) {
+    const first = flashes[0];
+    fail(
+      `flash limit exceeded: ${first.frames} flashes inside ${first.window_frames} frames ` +
+        `starting at ${first.start_frame}; at most 3 per second are allowed`,
+    );
   }
   return {spans, totalFrames, preview_placeholders: input.preview_placeholders ?? []};
 }

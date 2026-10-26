@@ -38,7 +38,15 @@ references.
 - Promo/advert excerpt windows with waveform handles and fades. The source MP3 is
   untouched; analysis, the Player and every render use the derived excerpt.
 - A measured waveform under the storyboard; drag a boundary (or use the arrow
-  keys) and both adjacent shots resize without moving later cuts.
+  keys) and both adjacent shots resize without moving later cuts. Once a cut is
+  seeded in Film, timing and motion are edit-owned and this timeline is
+  read-only.
+- An edit decision list (`work/edit.json`) with edit-owned timing, motion,
+  transitions, accents, text timing and grade; the Film stage shows the computed
+  cut report and the Editor receives it before saving. See `docs/EDITING.md`.
+- Shared Remotion primitives for dips, whip pans, pushes, slides, punch-ins,
+  flashes, light leaks, split layouts, five text animations and six grade
+  presets; two-second visual samples are in `docs/primitives/`.
 - Read-only archive view of frozen productions (`domain/archive.py`).
 - Image reviews bound to exact versions and bytes, plus content-bound brief,
   storyboard, proof, preview, stills and graphics approvals in the Studio.

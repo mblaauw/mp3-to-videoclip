@@ -196,6 +196,66 @@ def _tail(lines: list[str], limit: int = 4000) -> str:
     return "".join(lines)[-limit:]
 
 
+def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[dict]:
+    """Compile resolved shots and their edit payload into renderer inputs.
+
+    Pure apart from copying selected bytes into the flat asset cache. Kept
+    separate from the render/subprocess path so the MP4 payload can be tested
+    against the same shape the Player receives.
+    """
+    compiled = []
+    root = Path(workdir).resolve().parent
+    for rs in shots:
+        source = Path(rs.image)
+        sha = file_hash(source)
+        # Copy only the selected bytes; never expose the production directory.
+        with Image.open(source) as image:
+            image.verify()
+        name = sha + source.suffix.lower()
+        target = assets / name
+        if not target.exists():
+            shutil.copyfile(source, target)
+        if file_hash(target) != sha:
+            raise ValueError("Remotion asset cache corruption")
+        entry = {**rs.shot.model_dump(), "image": name, "image_sha256": sha}
+        if rs.edit is not None:
+            entry["edit"] = rs.edit.model_dump(by_alias=True)
+        if rs.grade is not None:
+            entry["grade"] = rs.grade.model_dump(by_alias=True)
+        if rs.shot.kind == "split" and rs.shot.panes:
+            # Native split panes are preferred when every source still is current;
+            # the precomposed local plate remains the fallback.
+            try:
+                from . import production as P
+
+                panes = []
+                for pane in rs.shot.panes:
+                    resolved = P.resolved_assets(root, [pane.shot_id])[0]
+                    pane_path = Path(resolved.image)
+                    pane_sha = file_hash(pane_path)
+                    with Image.open(pane_path) as image:
+                        image.verify()
+                    pane_name = pane_sha + pane_path.suffix.lower()
+                    pane_target = assets / pane_name
+                    if not pane_target.exists():
+                        shutil.copyfile(pane_path, pane_target)
+                    if file_hash(pane_target) != pane_sha:
+                        raise ValueError("Remotion asset cache corruption")
+                    panes.append(
+                        {
+                            "shot_id": pane.shot_id,
+                            "image": pane_name,
+                            "crop": pane.crop.model_dump(),
+                        }
+                    )
+            except (OSError, ValueError):
+                panes = []
+            if panes:
+                entry["split_panes"] = panes
+        compiled.append(entry)
+    return compiled
+
+
 def render_base(
     project: Project,
     shots: list[RenderShot],
@@ -218,20 +278,7 @@ def render_base(
     output.parent.mkdir(parents=True, exist_ok=True)
     assets = Path(workdir).resolve() / "remotion-assets"
     assets.mkdir(parents=True, exist_ok=True)
-    compiled = []
-    for rs in shots:
-        source = Path(rs.image)
-        sha = file_hash(source)
-        # Copy only the selected bytes; never expose the production directory.
-        with Image.open(source) as image:
-            image.verify()
-        name = sha + source.suffix.lower()
-        target = assets / name
-        if not target.exists():
-            shutil.copyfile(source, target)
-        if file_hash(target) != sha:
-            raise ValueError("Remotion asset cache corruption")
-        compiled.append({**rs.shot.model_dump(), "image": name, "image_sha256": sha})
+    compiled = compile_shots(shots, workdir, assets)
     inputs = {
         "shots": compiled,
         "preview_banner": preview_banner,

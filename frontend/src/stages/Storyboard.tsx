@@ -14,6 +14,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
   const [savingProof, setSavingProof] = useState(false);
   const [proofMessage, setProofMessage] = useState<string | null>(null);
   const [music, setMusic] = useState<Music | null>(null);
+  const [timingOwned, setTimingOwned] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,6 +30,10 @@ export function StoryboardStage({ slug }: { slug: string }) {
       .track(slug)
       .then((data) => setMusic(data.music))
       .catch(() => setMusic(null));
+    api
+      .edit(slug)
+      .then((data) => setTimingOwned(data.present))
+      .catch(() => setTimingOwned(false));
   }, [slug]);
 
   const edit = (id: string, field: keyof Shot, value: unknown) => {
@@ -185,10 +190,17 @@ export function StoryboardStage({ slug }: { slug: string }) {
         {board ? (
           <>
             <h3>Timeline</h3>
+            {timingOwned && (
+              <p className="meta">
+                Timing and motion are owned by the Film cut. Change them in Film → Cut
+                report; this timeline is read-only.
+              </p>
+            )}
             <Timeline
               slug={slug}
               board={board}
               music={music}
+              readOnly={timingOwned}
               onChange={boardChanged}
               onError={setError}
             />
@@ -286,6 +298,7 @@ export function StoryboardStage({ slug }: { slug: string }) {
                   <td>
                     <select
                       value={(draft[s.id]?.camera ?? s.camera) as string}
+                      disabled={timingOwned}
                       onChange={(e) => edit(s.id, "camera", e.target.value)}
                     >
                       <option value="hold">hold</option>

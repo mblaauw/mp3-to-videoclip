@@ -260,6 +260,82 @@ export type PreviewInput = {
   stale_shots: string[];
   brand_plate?: string | null;
   brand_duration_frames?: number;
+  grade?: import("./baseFilm").Grade | null;
+};
+
+export type EditFinding = {
+  code: string;
+  message: string;
+  shot_id?: string;
+  section?: string;
+  text_id?: string;
+};
+
+export type EditSectionReport = {
+  id: string;
+  start_frame: number;
+  end_frame: number;
+  feel: string;
+  energy: string | null;
+  target_density_per_10s: number;
+  density_per_10s: number;
+  cuts: number;
+  shots: number;
+  holds: number;
+  accents: number;
+  flashes: number;
+  techniques: string[];
+};
+
+export type EditTechniqueReport = {
+  name: string;
+  count: number;
+  reasons: string[];
+  reasoned: boolean;
+};
+
+export type EditReport = {
+  present: boolean;
+  ok: boolean;
+  hard: EditFinding[];
+  warnings: EditFinding[];
+  hash?: string | null;
+  coverage?: {
+    ok: boolean;
+    start_frame?: number;
+    end_frame?: number;
+    total_frames?: number;
+  };
+  sections: EditSectionReport[];
+  techniques: EditTechniqueReport[];
+  counts: {
+    shots?: number;
+    cuts?: number;
+    holds?: number;
+    hold_ratio?: number;
+    text_layers?: number;
+    accents?: number;
+    flashes?: number;
+    motions?: Record<string, number>;
+    transitions?: Record<string, number>;
+    accents_by_type?: Record<string, number>;
+  };
+  ad?: { applicable: boolean; checks: { id: string; ok: boolean; message: string }[] };
+};
+
+export type EditPayload = {
+  schema_version?: 1;
+  sections: unknown[];
+  shots: import("./baseFilm").EditShot[];
+  grade: import("./baseFilm").Grade;
+  notes?: string;
+};
+
+export type EditSummary = {
+  available: boolean;
+  present: boolean;
+  edit?: EditPayload;
+  report: EditReport;
 };
 
 export type Job = {
@@ -416,6 +492,17 @@ export const api = {
   graphicsReview: (slug: string) =>
     request<GraphicsReview>(`/api/projects/${slug}/graphics-review`),
   preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
+  edit: (slug: string) => request<EditSummary>(`/api/projects/${slug}/edit`),
+  seedEdit: (slug: string) =>
+    request<EditSummary>(`/api/projects/${slug}/edit/seed`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  saveEdit: (slug: string, edit: unknown) =>
+    request<EditSummary>(`/api/projects/${slug}/edit`, {
+      method: "PUT",
+      body: JSON.stringify({ edit }),
+    }),
   exports: (slug: string) =>
     request<{ exports: string[]; previews: string[] }>(
       `/api/projects/${slug}/exports`,

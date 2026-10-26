@@ -2,8 +2,9 @@
 //
 // The renderer reaches this through src/index.jsx with local static-file names;
 // the Player passes the same shot objects plus an `src` URL for each still. Both
-// use src/timing.mjs, so spans, dissolves, camera moves, grades and transitions
-// are the same pure functions of the frame in the browser and in the MP4.
+// use src/timing.mjs, so spans, dissolves, camera moves, grades, edit
+// transitions, accents, split layouts and text animation are the same pure
+// functions of the frame in the browser and in the MP4.
 import React from "react";
 import {
   AbsoluteFill,
@@ -18,16 +19,199 @@ import * as timing from "./timing.mjs";
 
 export const DEFAULT_FONT_STACK = '"Avenir Next", "Helvetica Neue", Arial, sans-serif';
 
-export function ShotLayer({span, localFrame, reveal, width, height}) {
-  const grade = timing.postEffectsStyle(span.post_effects);
+function paneSource(pane) {
+  return pane.src ?? (pane.image ? staticFile(pane.image) : null);
+}
+
+function SplitPanes({panes, layout, width, height}) {
+  const rects = timing.splitLayout(panes.length, layout);
+  return (
+    <AbsoluteFill style={{backgroundColor: "#000"}}>
+      {panes.map((pane, index) => {
+        const rect = rects[index];
+        const source = paneSource(pane);
+        const crop = pane.crop ?? {};
+        const zoom = Number(crop.zoom ?? 1);
+        return (
+          <div
+            key={pane.shot_id ?? index}
+            style={{
+              position: "absolute",
+              left: rect.left * width,
+              top: rect.top * height,
+              width: rect.width * width,
+              height: rect.height * height,
+              overflow: "hidden",
+              background: "#101014",
+            }}
+          >
+            {source ? (
+              <Img
+                src={source}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: `${Number(crop.x ?? 0.5) * 100}% ${Number(crop.y ?? 0.5) * 100}%`,
+                  transform: zoom === 1 ? undefined : `scale(${zoom})`,
+                  display: "block",
+                }}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </AbsoluteFill>
+  );
+}
+
+function textBox(style, width, height) {
+  const base = {
+    position: "absolute",
+    fontFamily: DEFAULT_FONT_STACK,
+    color: "#FFFFFF",
+    textShadow: "0 2px 18px rgba(0,0,0,0.55)",
+  };
+  if (style === "title") {
+    return {
+      ...base,
+      left: width * 0.1,
+      right: width * 0.1,
+      top: height * 0.38,
+      textAlign: "center",
+      fontSize: height * 0.082,
+      fontWeight: 900,
+      letterSpacing: "0.02em",
+      lineHeight: 1.02,
+      textTransform: "uppercase",
+    };
+  }
+  if (style === "card") {
+    return {
+      ...base,
+      left: width * 0.12,
+      right: width * 0.12,
+      top: height * 0.32,
+      textAlign: "center",
+      fontSize: height * 0.062,
+      fontWeight: 800,
+      lineHeight: 1.12,
+    };
+  }
+  if (style === "lyric") {
+    return {
+      ...base,
+      left: width * 0.1,
+      right: width * 0.1,
+      bottom: height * 0.14,
+      textAlign: "center",
+      fontSize: height * 0.048,
+      fontWeight: 700,
+      fontStyle: "italic",
+      lineHeight: 1.15,
+    };
+  }
+  if (style === "lower_third") {
+    return {
+      ...base,
+      left: width * 0.08,
+      bottom: height * 0.18,
+      maxWidth: width * 0.7,
+      padding: `${height * 0.016}px ${width * 0.024}px`,
+      background: "rgba(8,8,10,0.68)",
+      borderLeft: `${Math.max(3, width * 0.006)}px solid #D8FF3E`,
+      fontSize: height * 0.036,
+      fontWeight: 700,
+      letterSpacing: "0.04em",
+      lineHeight: 1.14,
+    };
+  }
+  return {
+    ...base,
+    left: width * 0.08,
+    bottom: height * 0.1,
+    maxWidth: width * 0.84,
+    padding: `${height * 0.014}px ${width * 0.02}px`,
+    background: "rgba(8,8,10,0.55)",
+    fontSize: height * 0.042,
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    lineHeight: 1.08,
+    textTransform: "uppercase",
+  };
+}
+
+function TextLayer({item, absoluteFrame, width, height}) {
+  if (absoluteFrame < item.in_frame || absoluteFrame >= item.out_frame) return null;
+  const duration = Math.max(item.out_frame - item.in_frame, 1);
+  const progress = (absoluteFrame - item.in_frame) / duration;
+  const box = textBox(item.style, width, height);
+  const words = item.text.split(/\s+/).filter(Boolean);
+  if (item.animation === "kinetic_words") {
+    return (
+      <div style={box}>
+        {words.map((word, index) => {
+          const state = timing.textAnimationStyle(
+            "kinetic_words",
+            progress,
+            index,
+            words.length,
+          );
+          return (
+            <span
+              key={`${item.id}-${index}`}
+              style={{
+                display: "inline-block",
+                opacity: state.opacity,
+                transform: state.transform ?? undefined,
+                marginRight: "0.28em",
+              }}
+            >
+              {word}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+  const state = timing.textAnimationStyle(item.animation, progress);
+  const visible =
+    item.animation === "type_on"
+      ? item.text.slice(0, Math.max(0, Math.ceil(item.text.length * state.reveal)))
+      : item.text;
+  return (
+    <div
+      style={{
+        ...box,
+        opacity: state.opacity,
+        transform: state.transform ?? undefined,
+      }}
+    >
+      {visible}
+    </div>
+  );
+}
+
+export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height}) {
+  const grade = timing.gradeStyle(span.grade, span.post_effects);
+  const accent = timing.accentState(span.edit?.accents, absoluteFrame);
   const camera = timing.cameraAtFrame(span, localFrame);
-  const rect = timing.layerRect({width, height, ...camera});
+  const rect = timing.layerRect({
+    width,
+    height,
+    ...camera,
+    zoom: camera.zoom * accent.punch,
+  });
+  const panes = Array.isArray(span.split_panes) ? span.split_panes : [];
+  const splitLayout = span.edit?.split_layout ?? "row";
   return (
     <AbsoluteFill
       style={{
         opacity: reveal.opacity,
         overflow: "hidden",
         clipPath: reveal.clipPath ?? undefined,
+        transform: reveal.transform ?? undefined,
+        filter: reveal.filter ?? undefined,
       }}
     >
       <div
@@ -46,7 +230,9 @@ export function ShotLayer({span, localFrame, reveal, width, height}) {
             filter: grade.filter === "none" ? undefined : grade.filter,
           }}
         >
-          {span.src === null ? (
+          {panes.length >= 2 ? (
+            <SplitPanes panes={panes} layout={splitLayout} width={rect.width} height={rect.height} />
+          ) : span.src === null ? (
             // A missing selected still keeps its allocation and shows the same
             // placeholder marking as a preview render, without loading a file.
             <AbsoluteFill style={{backgroundColor: "#101014"}} />
@@ -57,13 +243,44 @@ export function ShotLayer({span, localFrame, reveal, width, height}) {
             />
           )}
         </div>
+        {grade.tint ? (
+          <AbsoluteFill
+            style={{
+              background: grade.tint,
+              mixBlendMode: "soft-light",
+              pointerEvents: "none",
+            }}
+          />
+        ) : null}
+        {grade.vignette > 0 ? (
+          <AbsoluteFill
+            style={{
+              background:
+                "radial-gradient(ellipse at center," +
+                ` rgba(0,0,0,0) 42%, rgba(0,0,0,${grade.vignette}) 100%)`,
+            }}
+          />
+        ) : null}
       </div>
-      {grade.vignette > 0 ? (
+      {(span.edit?.text ?? []).map((item) => (
+        <TextLayer
+          key={item.id}
+          item={item}
+          absoluteFrame={absoluteFrame}
+          width={width}
+          height={height}
+        />
+      ))}
+      {accent.flash > 0 ? (
+        <AbsoluteFill style={{backgroundColor: "#FFFFFF", opacity: accent.flash * 0.9}} />
+      ) : null}
+      {accent.leak > 0 ? (
         <AbsoluteFill
           style={{
             background:
-              "radial-gradient(ellipse at center," +
-              ` rgba(0,0,0,0) 42%, rgba(0,0,0,${grade.vignette}) 100%)`,
+              "linear-gradient(105deg, rgba(255,214,150,0) 30%, " +
+              `rgba(255,177,92,${0.7 * accent.leak}) 58%, rgba(255,236,207,0) 82%)`,
+            mixBlendMode: "screen",
           }}
         />
       ) : null}
@@ -97,15 +314,39 @@ export function BaseFilm({input}) {
       (1 - timing.rampAt(frame, brandFrames - fadeFrames, brandFrames));
   }
 
+  let incoming = {kind: "cut", opacity: 1, clipPath: null, transform: null, filter: null, black: 0, white: 0};
+  if (topLayer && topLayer.index > 0) {
+    const span = spans[topLayer.index];
+    if (span.edit?.transition_in) {
+      incoming = timing.editTransitionStyle(span.edit.transition_in, topLayer.progress);
+    } else {
+      const previous = spans[topLayer.index - 1];
+      incoming = {
+        ...timing.transitionStyle(previous.transition ?? "fade", topLayer.progress),
+        transform: null,
+        filter: null,
+        black: 0,
+        white: 0,
+      };
+    }
+  }
+
   return (
     <AbsoluteFill style={{backgroundColor: "#000"}}>
       {layers.map((layer, position) => {
         const span = spans[layer.index];
         const isTop = position === layers.length - 1;
-        // The incoming plate reveals itself over the still-opaque outgoing plate.
         const reveal = isTop
-          ? timing.transitionStyle(spans[layer.index - 1]?.transition ?? "fade", layer.progress)
-          : {kind: "fade", clipPath: null, opacity: 1};
+          ? incoming
+          : {
+              kind: "fade",
+              clipPath: null,
+              opacity: 1,
+              transform: null,
+              filter: null,
+              black: 0,
+              white: 0,
+            };
         return (
           <Sequence
             key={span.id}
@@ -115,6 +356,7 @@ export function BaseFilm({input}) {
             <ShotLayer
               span={span}
               localFrame={layer.localFrame}
+              absoluteFrame={frame}
               reveal={reveal}
               width={width}
               height={height}
@@ -122,6 +364,12 @@ export function BaseFilm({input}) {
           </Sequence>
         );
       })}
+      {incoming.black > 0 ? (
+        <AbsoluteFill style={{backgroundColor: "#000", opacity: incoming.black}} />
+      ) : null}
+      {incoming.white > 0 ? (
+        <AbsoluteFill style={{backgroundColor: "#FFF", opacity: incoming.white}} />
+      ) : null}
       {brandAlpha > 0 ? (
         <AbsoluteFill style={{opacity: brandAlpha}}>
           <Img src={brandPlate} style={{width: "100%", height: "100%", objectFit: "cover"}} />

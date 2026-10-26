@@ -1,42 +1,88 @@
 ---
-version: 1
+version: 2
 task: edit
 role: editor
 ---
 # E3 — Cut plan
 
-Plan the cut on the measured music. The storyboard owns content and frame spans;
-this pass owns what each section feels like, where cuts land, how the image
-moves, and which transitions and accents are worth spending.
+Plan the cut on the measured music and write `work/edit.json` through
+`update_edit`. The storyboard owns content and the source image of every shot;
+this pass owns order, frame spans, motion, transitions, accents, text timing and
+grade. The edit must cover the storyboard's whole timeline exactly.
 
 ## Procedure
 
-1. **Section plan.** For each music section: one line on the feeling, a cut
-   density target in cuts per 10 s, the dominant technique, and what is held
-   back for later.
-2. **Timing.** Cut on section boundaries, phrase ends and high-confidence
+1. **Section plan.** For each music section write `feel`, a cut-density target in
+   cuts per 10 s, the dominant techniques, and what is held back for later. If a
+   section deliberately holds, name a breathing-hold technique there.
+2. **Timing.** Place cuts on section boundaries, phrase ends and high-confidence
    accents. Snap to a beat estimate only when it helps and stays within two
-   frames. Respect reading time: insert 1 s or more, action or relationship 2 s
-   or more, text 0.3 s per word plus 1 s.
-3. **Motion.** Choose per shot: hold, push-in, pull-back, pan, punch-in. Give a
-   direction and an amount; alternate with purpose and keep screen direction.
-4. **Transitions and accents.** Hard cut by default. Every non-cut transition
-   names its reason: time, place, emotion or graphic rhythm. Spend about one to
-   three accents per section on the strongest hits.
-5. **Text and graphics.** Time supers, lyric hits, the end card and credits.
-   Respect safe areas; never cover a face or the product.
-6. **Self-review.** Check density against the energy curve, repeated moves,
-   reading time and missing transition handles. Fix what you flagged.
+   frames. Every storyboard shot appears exactly once and the spans are
+   contiguous from frame 0 to the film's last frame. Keep reading time: insert
+   1 s or more, action or relationship 2 s or more, card text 0.3 s per word plus
+   1 s.
+3. **Motion.** Choose one motion per shot: `hold`, `push_in`, `pull_back`,
+   `pan_left` or `pan_right`, with `from`, `to` (1.00–1.30), `easing`
+   (`linear` or `smoothstep`) and an anchor. Default travel is 1.00→1.05–1.10.
+   Avoid the same move three times in a row; keep screen direction consistent.
+4. **Transitions.** Hard cut is the default. `fade`, `wipe_left`, `wipe_right`,
+   `dip_to_black`, `dip_to_white`, `whip_pan`, `push` and `slide` need handle
+   frames and a stated reason. Use `direction` where the transition has one.
+   A non-cut transition without frames or a reason is a hard report finding.
+5. **Accents.** `punch_in`, `flash` and `light_leak` sit on absolute film
+   frames. Spend about one to three per section on the strongest hits. Never
+   place more than three `flash` accents inside any one second.
+6. **Text.** Time text layers inside their shot: `super`, `title`,
+   `lower_third`, `lyric` or `card`, with `fade`, `type_on`, `slide_up`, `pop` or
+   `kinetic_words`. Respect safe areas; never cover a face or the product.
+7. **Grade.** Choose one preset for the film: `neutral`, `warm-night`,
+   `clean-day`, `monochrome`, `vivid` or `film-fade`, with strength 0–1. Use the
+   four slider overrides only when a preset is close but not enough.
+8. **Self-review.** Call `get_edit` if an edit exists, or read the report returned
+   by `update_edit`. Fix every hard finding and the warnings that matter, then
+   save again.
 
-## Output
+## Edit decision list
 
-Until the structured edit-list tool is enabled in this phase, return the section
-plan and the per-shot plan as a compact table in your reply. Do not change
-storyboard timing. When the tool exists, write `work/edit.json` through it and
-report the section plan in two sentences.
+```json
+{
+  "sections": [{"id": "chorus-1", "start_frame": 1440, "end_frame": 2160,
+    "feel": "release, wide and bright", "density_per_10s": 3,
+    "techniques": ["cut on accent", "pull-back"]}],
+  "shots": [{
+    "shot_id": "s014", "start_frame": 1440, "duration_frames": 60,
+    "motion": {"type": "push_in", "from": 1.0, "to": 1.08,
+      "easing": "smoothstep", "anchor": [0.55, 0.4], "reason": "approach the reveal"},
+    "transition_in": {"type": "whip_pan", "frames": 8, "direction": "left",
+      "reason": "chorus entry"},
+    "split_layout": null,
+    "accents": [{"frame": 1440, "type": "punch_in", "amount": 1.04,
+      "duration_frames": 6, "reason": "first chorus hit"}],
+    "text": [{"id": "t3", "style": "super", "text": "OUT 14 NOV",
+      "in_frame": 1452, "out_frame": 1500, "animation": "type_on",
+      "reason": "date lands with the line"}]
+  }],
+  "grade": {"preset": "warm-night", "strength": 0.6},
+  "notes": "Why this cut, in one line."
+}
+```
+
+All shot and text frames are absolute film frames. `transition_in` belongs to the
+incoming shot and its handle is the overlap with the previous plate. `reason` is
+required on every non-cut transition and recommended on every accent and text
+layer.
+
+## Report
+
+The app computes cut density, repetition, reading time, hold ratio, accent and
+flash rate, transition handles and reasons, ad checks and technique usage. Hard
+findings make the cut invalid: coverage, a non-cut transition without handle
+frames or a reason, and more than three flashes in a second. Warnings are
+judgement calls to read, not commands to flatten the edit.
 
 ## Boundaries
 
-- Use the approved contiguous timeline; cover every source frame exactly.
 - Never retime, crop or replace an accepted still silently.
-- Do not add a silent tail or a second audio source.
+- Never change source audio, add a silent tail or add a second audio source.
+- Do not retime through `update_shots`; the storyboard is read-only for timing
+  once an edit exists.

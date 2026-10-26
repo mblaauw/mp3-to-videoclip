@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Film primitives — 2 second samples</title>
+    <style>
+      :root { color-scheme: dark; --ink: #f4f1e8; --muted: #9aa7ad; --line: #27333a; --accent: #d8ff3e; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 40px; background: #0b1015; color: var(--ink); font: 16px/1.5 "Avenir Next", "Helvetica Neue", Arial, sans-serif; }
+      h1 { font-size: clamp(32px, 5vw, 64px); letter-spacing: -0.03em; margin: 0 0 8px; }
+      h2 { font-size: 20px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); margin: 40px 0 16px; }
+      p { color: var(--muted); max-width: 70ch; }
+      section + section { border-top: 1px solid var(--line); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+      figure { margin: 0; border: 1px solid var(--line); background: #101820; }
+      video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+      figcaption { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; }
+      strong { font-size: 14px; text-transform: capitalize; }
+      code { color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Film primitives</h1>
+    <p>Two-second samples rendered through the production <code>BaseFilm</code> and <code>timing.mjs</code>, so the MP4 and Studio Player share these exact primitives. 21 clips at 24 fps. <a href="contact-sheet.png">Contact sheet</a>.</p>
+      <section>
+        <h2>Transitions</h2>
+        <div class="grid">
+        <figure>
+          <video src="transition-dip-to-black.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>dip to black</strong><code>transition-dip-to-black</code></figcaption>
+        </figure>
+        <figure>
+          <video src="transition-dip-to-white.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>dip to white</strong><code>transition-dip-to-white</code></figcaption>
+        </figure>
+        <figure>
+          <video src="transition-whip-pan.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>whip pan</strong><code>transition-whip-pan</code></figcaption>
+        </figure>
+        <figure>
+          <video src="transition-push.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>push</strong><code>transition-push</code></figcaption>
+        </figure>
+        <figure>
+          <video src="transition-slide.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>slide</strong><code>transition-slide</code></figcaption>
+        </figure>
+        </div>
+      </section>
+      <section>
+        <h2>Accents</h2>
+        <div class="grid">
+        <figure>
+          <video src="accent-punch-in.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>punch in</strong><code>accent-punch-in</code></figcaption>
+        </figure>
+        <figure>
+          <video src="accent-flash.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>flash frame</strong><code>accent-flash</code></figcaption>
+        </figure>
+        <figure>
+          <video src="accent-light-leak.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>light leak</strong><code>accent-light-leak</code></figcaption>
+        </figure>
+        </div>
+      </section>
+      <section>
+        <h2>Split layouts</h2>
+        <div class="grid">
+        <figure>
+          <video src="split-row.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>two panes, row</strong><code>split-row</code></figcaption>
+        </figure>
+        <figure>
+          <video src="split-grid.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>three panes, grid</strong><code>split-grid</code></figcaption>
+        </figure>
+        </div>
+      </section>
+      <section>
+        <h2>Text</h2>
+        <div class="grid">
+        <figure>
+          <video src="text-fade.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>fade</strong><code>text-fade</code></figcaption>
+        </figure>
+        <figure>
+          <video src="text-type-on.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>type_on</strong><code>text-type-on</code></figcaption>
+        </figure>
+        <figure>
+          <video src="text-slide-up.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>slide_up</strong><code>text-slide-up</code></figcaption>
+        </figure>
+        <figure>
+          <video src="text-pop.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>pop</strong><code>text-pop</code></figcaption>
+        </figure>
+        <figure>
+          <video src="text-kinetic-words.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>kinetic_words</strong><code>text-kinetic-words</code></figcaption>
+        </figure>
+        </div>
+      </section>
+      <section>
+        <h2>Grade presets</h2>
+        <div class="grid">
+        <figure>
+          <video src="grade-neutral.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>neutral</strong><code>grade-neutral</code></figcaption>
+        </figure>
+        <figure>
+          <video src="grade-warm-night.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>warm-night</strong><code>grade-warm-night</code></figcaption>
+        </figure>
+        <figure>
+          <video src="grade-clean-day.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>clean-day</strong><code>grade-clean-day</code></figcaption>
+        </figure>
+        <figure>
+          <video src="grade-monochrome.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>monochrome</strong><code>grade-monochrome</code></figcaption>
+        </figure>
+        <figure>
+          <video src="grade-vivid.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>vivid</strong><code>grade-vivid</code></figcaption>
+        </figure>
+        <figure>
+          <video src="grade-film-fade.mp4" controls loop muted playsinline preload="metadata"></video>
+          <figcaption><strong>film-fade</strong><code>grade-film-fade</code></figcaption>
+        </figure>
+        </div>
+      </section>
+  </body>
+</html>

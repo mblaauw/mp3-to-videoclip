@@ -1,0 +1,157 @@
+{
+  "width": 480,
+  "height": 270,
+  "fps": 24,
+  "frames": 48,
+  "seconds": 2,
+  "source": "renderers/remotion/src/BaseFilm.jsx + timing.mjs",
+  "samples": [
+    {
+      "file": "transition-dip-to-black.mp4",
+      "group": "Transitions",
+      "label": "dip to black",
+      "sha256": "061af83b82adf8b395fef751b866f9715114542c1f34e4d3c3d79ca3c12c0baa",
+      "bytes": 42215
+    },
+    {
+      "file": "transition-dip-to-white.mp4",
+      "group": "Transitions",
+      "label": "dip to white",
+      "sha256": "c7e1dd73defa170626a5394e3960f17b36aed8985561f906874cf795f69a63cf",
+      "bytes": 44771
+    },
+    {
+      "file": "transition-whip-pan.mp4",
+      "group": "Transitions",
+      "label": "whip pan",
+      "sha256": "e73e64485ac577481a1e34cb0f80bb63fb9dcc8768e39a51652ac741848a8576",
+      "bytes": 46417
+    },
+    {
+      "file": "transition-push.mp4",
+      "group": "Transitions",
+      "label": "push",
+      "sha256": "d0a6b49bd0300bf9d29717dcb6100ce9e05981aea078c2495c674f3cb8cb70ad",
+      "bytes": 76025
+    },
+    {
+      "file": "transition-slide.mp4",
+      "group": "Transitions",
+      "label": "slide",
+      "sha256": "a82b57669afda13ad4bfed54572922eacf4de3067fa6e7cdea27dbb4eb7c9a4d",
+      "bytes": 52645
+    },
+    {
+      "file": "accent-punch-in.mp4",
+      "group": "Accents",
+      "label": "punch in",
+      "sha256": "fe059e06c777ea1ec3b0487a90ea5648454cd8efa4676dd5231e0f81451cb09d",
+      "bytes": 42000
+    },
+    {
+      "file": "accent-flash.mp4",
+      "group": "Accents",
+      "label": "flash frame",
+      "sha256": "70c071eb53a02b74220bb8180fc1278e69aa83dfed683eaf1489e0379b68bb42",
+      "bytes": 40054
+    },
+    {
+      "file": "accent-light-leak.mp4",
+      "group": "Accents",
+      "label": "light leak",
+      "sha256": "7f9c1213785094fcbd2bdf427f9ea2a7a78da6a0600129a4290cef3d2d518927",
+      "bytes": 39525
+    },
+    {
+      "file": "split-row.mp4",
+      "group": "Split layouts",
+      "label": "two panes, row",
+      "sha256": "a090344af5f375d61e74a09da2030cc1fa4ee6511147535cfffbe816570d9fce",
+      "bytes": 18712
+    },
+    {
+      "file": "split-grid.mp4",
+      "group": "Split layouts",
+      "label": "three panes, grid",
+      "sha256": "c9eb8ba527145a41edb7fdfeaac33cc831a5b7f7e6b1143004a785b2c96fd6bc",
+      "bytes": 20990
+    },
+    {
+      "file": "text-fade.mp4",
+      "group": "Text",
+      "label": "fade",
+      "sha256": "60972ec894486bc6aed38293912adc9a49efed39565e7f0d4d7ef24a7e1ad8aa",
+      "bytes": 24554
+    },
+    {
+      "file": "text-type-on.mp4",
+      "group": "Text",
+      "label": "type_on",
+      "sha256": "02678d7dbe549cb8ab021bd9140f770c932c9796141e3cc26d95c63db80226b2",
+      "bytes": 23048
+    },
+    {
+      "file": "text-slide-up.mp4",
+      "group": "Text",
+      "label": "slide_up",
+      "sha256": "c672bd1ca0ba26b59a9737d883e1bb771fbb144fe5b0cc9be0ec34d5f1093b75",
+      "bytes": 24872
+    },
+    {
+      "file": "text-pop.mp4",
+      "group": "Text",
+      "label": "pop",
+      "sha256": "a839b689b86e49f3e94ab522a6e60bfe31509eb4dbc6439d09cbd48573144e90",
+      "bytes": 24274
+    },
+    {
+      "file": "text-kinetic-words.mp4",
+      "group": "Text",
+      "label": "kinetic_words",
+      "sha256": "2cdc6ca40cec0d31d7dd186654f9a2ebabb53ff39abc575994804e1d1381977c",
+      "bytes": 26045
+    },
+    {
+      "file": "grade-neutral.mp4",
+      "group": "Grade presets",
+      "label": "neutral",
+      "sha256": "b9bfe577c345b4b4d386ec0d386bebb350b4efb3af719b09d015cac548f05d22",
+      "bytes": 17791
+    },
+    {
+      "file": "grade-warm-night.mp4",
+      "group": "Grade presets",
+      "label": "warm-night",
+      "sha256": "0ca86a0496467e7add88130d70397f27fb4ca200e25825bded9647dab489d6d0",
+      "bytes": 20647
+    },
+    {
+      "file": "grade-clean-day.mp4",
+      "group": "Grade presets",
+      "label": "clean-day",
+      "sha256": "6c384b52c3695ce29abaabc64bcb1bc32e9c86f356b7fc2bb62610ebcbc972bf",
+      "bytes": 19066
+    },
+    {
+      "file": "grade-monochrome.mp4",
+      "group": "Grade presets",
+      "label": "monochrome",
+      "sha256": "cfe2fbe2783f6396b7836922836791410f1a757a024920b34d87f7fd455b4053",
+      "bytes": 15340
+    },
+    {
+      "file": "grade-vivid.mp4",
+      "group": "Grade presets",
+      "label": "vivid",
+      "sha256": "e8af7470772c0b008d1471d45adbd3c8f60934d81a09ae818478fc06077b5d46",
+      "bytes": 20718
+    },
+    {
+      "file": "grade-film-fade.mp4",
+      "group": "Grade presets",
+      "label": "film-fade",
+      "sha256": "f4baeedfab51d3ad51288d932f7aadc03f0638201339678c52e734a9d1ee238f",
+      "bytes": 20091
+    }
+  ]
+}
