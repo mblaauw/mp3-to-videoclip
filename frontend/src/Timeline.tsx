@@ -32,12 +32,14 @@ export function Timeline({
   slug,
   board,
   music,
+  readOnly = false,
   onChange,
   onError,
 }: {
   slug: string;
   board: Storyboard;
   music: Music | null;
+  readOnly?: boolean;
   onChange: (board: Storyboard) => void;
   onError: (message: string) => void;
 }) {
@@ -69,6 +71,7 @@ export function Timeline({
   };
 
   const commit = async (index: number, frame: number) => {
+    if (readOnly) return;
     const left = board.shots[index];
     const right = board.shots[index + 1];
     const boundary = left.start_frame + left.duration_frames;
@@ -159,9 +162,9 @@ export function Timeline({
               aria-valuemax={high}
               aria-valuenow={position}
               aria-valuetext={`frame ${position} of ${total}`}
-              disabled={saving}
+              disabled={saving || readOnly}
               onPointerDown={(event) => {
-                if (busy.current) return;
+                if (busy.current || readOnly) return;
                 event.currentTarget.setPointerCapture(event.pointerId);
                 setDrag({ index, frame: position });
               }}
@@ -178,7 +181,7 @@ export function Timeline({
               onPointerCancel={() => setDrag(null)}
               onLostPointerCapture={() => setDrag(null)}
               onKeyDown={(event) => {
-                if (busy.current) return;
+                if (busy.current || readOnly) return;
                 if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
                 event.preventDefault();
                 const step = event.shiftKey ? 10 : 1;
@@ -198,6 +201,7 @@ export function Timeline({
         <span>{clock(0)}</span>
         <span>
           {board.shots.length} shots · {total} frames · {clock(seconds)}
+          {readOnly ? " · edit-owned timing" : ""}
         </span>
         <span>{clock(seconds)}</span>
       </div>

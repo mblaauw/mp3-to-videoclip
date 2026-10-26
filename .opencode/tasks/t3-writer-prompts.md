@@ -161,3 +161,9 @@ file as its `SKILL.md`; no skill reference file remains a runtime prompt source.
 PR #21 squash-merged as `253da6b`; the branch commit `a4d141f` and the merge
 tree are identical (`b3bc0e0`). CI check passed in 4m31s. No paid provider call
 was made. The branch was deleted after merge.
+
+## T4 follow-up
+
+The structured edit list, computed report, editor prompt rewrite and renderer
+primitives that this record deferred shipped as T4; see
+`.opencode/tasks/t4-editor-edit.md` and `docs/EDITING.md`.

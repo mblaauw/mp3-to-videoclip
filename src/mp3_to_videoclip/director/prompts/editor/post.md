@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: post
 role: editor
 ---
@@ -12,18 +12,27 @@ and free; image and transcription commitments still count against the cap.
 
 - Composite every word locally: intro, supers, lyric hits, sound-effect cards,
   the end card and credits. Generated panels carry no text.
-- Bind captions to shots, not brittle absolute seconds. Check that long words
-  fit their box before export.
+- Bind text to its shot in `edit.json` with absolute in/out frames. Long words
+  must fit their box; the report flags text shorter than 0.3 s per word plus 1 s.
 - Use the kind's opening and closing package. A music video may carry the 25/40
   signature; a promo or advert closes on the logo and CTA, with no credits roll.
 - Keep the legal line verbatim if the user supplied one.
+
+## Picture polish
+
+- Choose one grade preset for the whole film (`neutral`, `warm-night`,
+  `clean-day`, `monochrome`, `vivid`, `film-fade`) and a strength from 0 to 1.
+  The four sliders are advanced per-key overrides, not the first choice.
+- Read the edit report again after the post pass. A grade or text change that
+  makes a shot unreadable is still an edit problem.
+- Never use a grade, flash or effect to hide a weak cut.
 
 ## Render
 
 1. Check that the timeline, stills and graphics spec are current and approved.
 2. Queue a preview with `render`; report the job, not a film.
 3. Ask the user to watch it with the music. Their notes go back to the stage that
-   owns the problem: story, board, images or graphics.
+   owns the problem: story, board, images, edit or graphics.
 4. Queue the final only after the preview is accepted.
 5. Read the export list and probe the file before claiming it exists.
 

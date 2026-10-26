@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { api, type Budget, type GraphicsReview } from "../api";
+import { api, type Budget, type EditSummary, type GraphicsReview } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
@@ -30,6 +30,19 @@ export function FilmStage({ slug }: { slug: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cut, setCut] = useState<EditSummary | null>(null);
+  const [cutText, setCutText] = useState("");
+  const [cutBusy, setCutBusy] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+
+  const applyCut = (value: EditSummary) => {
+    setCut(value);
+    if (value.present && value.edit) {
+      setCutText(JSON.stringify(value.edit, null, 2));
+    } else {
+      setCutText("");
+    }
+  };
 
   const load = () => {
     api
@@ -67,6 +80,13 @@ export function FilmStage({ slug }: { slug: string }) {
     // A render is a background job; keep watching until its file appears.
     const id = setInterval(load, 5000);
     return () => clearInterval(id);
+  }, [slug]);
+
+  useEffect(() => {
+    api
+      .edit(slug)
+      .then(applyCut)
+      .catch(() => setCut(null));
   }, [slug]);
 
   useEffect(() => {
@@ -108,7 +128,51 @@ export function FilmStage({ slug }: { slug: string }) {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, revision]);
+
+  const seedCut = async () => {
+    setCutBusy("seed");
+    setError(null);
+    try {
+      const value = await api.seedEdit(slug);
+      applyCut(value);
+      setRevision((current) => current + 1);
+      setMessage("Timing now lives in the edit list; the storyboard keeps content.");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setCutBusy(null);
+    }
+  };
+
+  const saveCut = async () => {
+    setCutBusy("save");
+    setError(null);
+    try {
+      const parsed = JSON.parse(cutText) as unknown;
+      const value = await api.saveEdit(slug, parsed);
+      applyCut(value);
+      setRevision((current) => current + 1);
+      setMessage(value.report.ok ? "Cut saved; the report has no hard findings." : "Cut saved; fix the hard findings.");
+    } catch (e) {
+      setError(`Cut not saved: ${String(e)}`);
+    } finally {
+      setCutBusy(null);
+    }
+  };
+
+  const refreshCut = async () => {
+    setCutBusy("report");
+    setError(null);
+    try {
+      applyCut(await api.edit(slug));
+      setRevision((current) => current + 1);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setCutBusy(null);
+    }
+  };
 
   const render = async (kind: "preview" | "base" | "final") => {
     setBusy(kind);
@@ -141,6 +205,111 @@ export function FilmStage({ slug }: { slug: string }) {
       <p className="sub">Watch the render, check the budget and download the export.</p>
       {error && <p className="error">{error}</p>}
       {message && <p className="message">{message}</p>}
+
+      <div className="card">
+        <h3>Cut report</h3>
+        {cut?.present ? (
+          <>
+            <p className="meta">
+              {cut.report.counts.shots ?? 0} shots · {cut.report.counts.cuts ?? 0} cuts ·{" "}
+              {cut.report.counts.holds ?? 0} holds (
+              {Math.round((cut.report.counts.hold_ratio ?? 0) * 100)}%) ·{" "}
+              {cut.report.counts.accents ?? 0} accents ·{" "}
+              {cut.report.counts.flashes ?? 0} flashes ·{" "}
+              {cut.report.hard.length === 0
+                ? "no hard findings"
+                : `${cut.report.hard.length} hard finding${cut.report.hard.length === 1 ? "" : "s"}`}
+            </p>
+            {(cut.report.hard.length > 0 || cut.report.warnings.length > 0) && (
+              <div className="pre">
+                {cut.report.hard.map((finding) => (
+                  <div key={`hard-${finding.code}-${finding.shot_id ?? ""}-${finding.message}`}>
+                    HARD {finding.code}: {finding.message}
+                  </div>
+                ))}
+                {cut.report.warnings.map((finding) => (
+                  <div key={`warn-${finding.code}-${finding.shot_id ?? ""}-${finding.message}`}>
+                    warning {finding.code}: {finding.message}
+                  </div>
+                ))}
+              </div>
+            )}
+            {cut.report.sections.length > 0 && (
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Section</th>
+                      <th>Frames</th>
+                      <th>Energy</th>
+                      <th>Cuts / 10s</th>
+                      <th>Holds</th>
+                      <th>Flashes</th>
+                      <th>Plan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cut.report.sections.map((section) => (
+                      <tr key={section.id}>
+                        <td>{section.id}</td>
+                        <td>
+                          {section.start_frame}–{section.end_frame}
+                        </td>
+                        <td>{section.energy ?? "—"}</td>
+                        <td>
+                          {section.density_per_10s} / {section.target_density_per_10s}
+                        </td>
+                        <td>
+                          {section.holds}/{section.shots}
+                        </td>
+                        <td>{section.flashes}</td>
+                        <td>{section.techniques.join(", ") || section.feel}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {cut.report.techniques.length > 0 && (
+              <p className="meta">
+                Techniques:{" "}
+                {cut.report.techniques
+                  .map(
+                    (item) =>
+                      `${item.name} ×${item.count}${item.reasoned ? "" : " (no stated reason)"}`,
+                  )
+                  .join(" · ")}
+              </p>
+            )}
+            <button onClick={refreshCut} disabled={cutBusy !== null}>
+              {cutBusy === "report" ? "Reading…" : "Re-run report"}
+            </button>{" "}
+            <details>
+              <summary>Edit JSON</summary>
+              <textarea
+                value={cutText}
+                onChange={(event) => setCutText(event.target.value)}
+                rows={16}
+                spellCheck={false}
+                style={{ width: "100%", fontFamily: "monospace" }}
+              />
+              <button onClick={saveCut} disabled={cutBusy !== null}>
+                {cutBusy === "save" ? "Saving…" : "Save cut"}
+              </button>
+            </details>
+          </>
+        ) : (
+          <>
+            <p className="meta">
+              Timing is still the storyboard's. Seed an edit to move order, spans, motion,
+              transitions, accents, text timing and grade into <code>work/edit.json</code>.
+            </p>
+            <button onClick={seedCut} disabled={cutBusy !== null}>
+              {cutBusy === "seed" ? "Seeding…" : "Move timing into an edit"}
+            </button>
+          </>
+        )}
+      </div>
 
       <div className="card live-preview">
         <h3>Live preview</h3>

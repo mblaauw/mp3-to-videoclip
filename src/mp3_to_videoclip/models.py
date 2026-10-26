@@ -698,11 +698,284 @@ class EventMap(Model):
             raise ValueError("event map source/format does not match project")
 
 
+EditTransitionType = Literal[
+    "cut",
+    "fade",
+    "wipe_left",
+    "wipe_right",
+    "dip_to_black",
+    "dip_to_white",
+    "whip_pan",
+    "push",
+    "slide",
+]
+EditMotionType = Literal["hold", "push_in", "pull_back", "pan_left", "pan_right"]
+EditAccentType = Literal["punch_in", "flash", "light_leak"]
+EditTextAnimation = Literal["fade", "type_on", "slide_up", "pop", "kinetic_words"]
+EditTextStyle = Literal["super", "title", "lower_third", "lyric", "card"]
+GradePreset = Literal["neutral", "warm-night", "clean-day", "monochrome", "vivid", "film-fade"]
+
+
+class EditTransition(Model):
+    """How one edit shot arrives; timing is owned here, not by the storyboard."""
+
+    type: EditTransitionType = "cut"
+    frames: int = Field(default=0, ge=0, le=48)
+    direction: Literal["left", "right", "up", "down"] | None = None
+    reason: str = Field(default="", max_length=240)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("direction") is None:
+            value.pop("direction", None)
+        if value.get("reason") == "":
+            value.pop("reason", None)
+        return value
+
+
+class EditMotion(Model):
+    """A bounded camera move for one shot, in normalized crop coordinates."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, populate_by_name=True)
+
+    type: EditMotionType = "hold"
+    from_scale: float = Field(
+        default=1.0,
+        ge=1.0,
+        le=1.3,
+        validation_alias="from",
+        serialization_alias="from",
+    )
+    to_scale: float = Field(
+        default=1.0,
+        ge=1.0,
+        le=1.3,
+        validation_alias="to",
+        serialization_alias="to",
+    )
+    easing: Literal["linear", "smoothstep"] = "smoothstep"
+    anchor: list[float] = Field(default_factory=lambda: [0.5, 0.5], min_length=2, max_length=2)
+    reason: str = Field(default="", max_length=240)
+
+    @model_validator(mode="after")
+    def check_motion(self):
+        if any(value < 0 or value > 1 for value in self.anchor):
+            raise ValueError("motion anchor is normalized 0..1")
+        if self.type == "hold" and (self.from_scale != 1.0 or self.to_scale != 1.0):
+            raise ValueError("a hold keeps the image at scale 1.00")
+        if self.type in ("push_in", "pull_back") and self.from_scale == self.to_scale:
+            raise ValueError("push and pull need a scale change")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("reason") == "":
+            value.pop("reason", None)
+        return value
+
+
+class EditAccent(Model):
+    """A short emphasis hit placed on an absolute film frame."""
+
+    frame: int = Field(ge=0)
+    type: EditAccentType
+    amount: float = Field(default=1.04, ge=1.0, le=1.2)
+    duration_frames: int = Field(default=6, ge=1, le=24)
+    reason: str = Field(default="", max_length=240)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("reason") == "":
+            value.pop("reason", None)
+        return value
+
+
+class EditText(Model):
+    """One timed text layer. Frames are absolute film frames."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    style: EditTextStyle = "super"
+    text: str = Field(min_length=1, max_length=160)
+    in_frame: int = Field(ge=0)
+    out_frame: int = Field(gt=0)
+    animation: EditTextAnimation = "fade"
+    reason: str = Field(default="", max_length=240)
+
+    @model_validator(mode="after")
+    def check_window(self):
+        if self.out_frame <= self.in_frame:
+            raise ValueError("text out_frame must follow in_frame")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("reason") == "":
+            value.pop("reason", None)
+        return value
+
+
+class EditShot(Model):
+    """One edit decision: order, span, motion, transition, accents and text."""
+
+    shot_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    start_frame: int = Field(ge=0)
+    duration_frames: int = Field(gt=0)
+    motion: EditMotion = Field(default_factory=EditMotion)
+    transition_in: EditTransition = Field(default_factory=EditTransition)
+    split_layout: Literal["row", "column", "grid"] | None = None
+    accents: list[EditAccent] = Field(default_factory=list, max_length=8)
+    text: list[EditText] = Field(default_factory=list, max_length=8)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("split_layout") is None:
+            value.pop("split_layout", None)
+        return value
+
+    @model_validator(mode="after")
+    def check_children(self):
+        end = self.start_frame + self.duration_frames
+        for accent in self.accents:
+            if not self.start_frame <= accent.frame < end:
+                raise ValueError(f"accent frame {accent.frame} is outside shot {self.shot_id}")
+        ids = {item.id for item in self.text}
+        if len(ids) != len(self.text):
+            raise ValueError(f"text ids in shot {self.shot_id} must be unique")
+        for item in self.text:
+            if not self.start_frame <= item.in_frame < item.out_frame <= end:
+                raise ValueError(f"text {item.id} is outside shot {self.shot_id}")
+        return self
+
+
+class EditSection(Model):
+    """A section intent used by the report and by the Editor's own review."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    start_frame: int = Field(ge=0)
+    end_frame: int | None = Field(default=None, gt=0)
+    feel: str = Field(min_length=1, max_length=240)
+    density_per_10s: float = Field(default=0, ge=0, le=60)
+    techniques: list[str] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def check_window(self):
+        if self.end_frame is not None and self.end_frame <= self.start_frame:
+            raise ValueError("section end_frame must follow start_frame")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("end_frame") is None:
+            value.pop("end_frame", None)
+        return value
+
+
+class Grade(Model):
+    """A named look, with the legacy four sliders available as overrides."""
+
+    preset: GradePreset = "neutral"
+    strength: float = Field(default=1.0, ge=0, le=1)
+    overrides: PostEffects | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("overrides") is None:
+            value.pop("overrides", None)
+        return value
+
+
+class EditDecisionList(Model):
+    """The edit-owned timeline for a storyboard; content stays in Storyboard."""
+
+    schema_version: Literal[1] = 1
+    sections: list[EditSection] = Field(default_factory=list)
+    shots: list[EditShot] = Field(min_length=1)
+    grade: Grade = Field(default_factory=Grade)
+    notes: str = Field(default="", max_length=2000)
+
+    @model_validator(mode="after")
+    def check_order(self):
+        shot_ids = [shot.shot_id for shot in self.shots]
+        if len(set(shot_ids)) != len(shot_ids):
+            raise ValueError("edit shot IDs must be unique")
+        starts = [shot.start_frame for shot in self.shots]
+        if starts != sorted(starts):
+            raise ValueError("edit shots must be ordered by start_frame")
+        section_ids = [section.id for section in self.sections]
+        if len(set(section_ids)) != len(section_ids):
+            raise ValueError("edit section IDs must be unique")
+        section_starts = [section.start_frame for section in self.sections]
+        if section_starts != sorted(section_starts):
+            raise ValueError("edit sections must be ordered by start_frame")
+        return self
+
+    def check_board(self, board: Storyboard):
+        """Require the edit to cover exactly the storyboard's frame range."""
+        known = {shot.id for shot in board.shots}
+        edit_ids = {shot.shot_id for shot in self.shots}
+        if edit_ids != known:
+            missing = sorted(known - edit_ids)
+            extra = sorted(edit_ids - known)
+            raise ValueError(
+                f"edit must name every storyboard shot (missing {missing}, extra {extra})"
+            )
+        cursor = 0
+        for index, shot in enumerate(self.shots):
+            if shot.start_frame != cursor:
+                raise ValueError(
+                    f"edit shot {shot.shot_id} starts at {shot.start_frame}; expected {cursor}"
+                )
+            if shot.transition_in.frames > 0:
+                if shot.transition_in.frames >= shot.duration_frames:
+                    raise ValueError(f"edit shot {shot.shot_id} transition is longer than the shot")
+                if index > 0 and shot.transition_in.frames >= self.shots[index - 1].duration_frames:
+                    raise ValueError(
+                        f"edit shot {shot.shot_id} transition is longer than the previous shot"
+                    )
+            cursor += shot.duration_frames
+        if cursor != board.total_frames:
+            raise ValueError(
+                f"edit covers {cursor} frames but the storyboard has {board.total_frames}"
+            )
+        for section in self.sections:
+            end = section.end_frame if section.end_frame is not None else board.total_frames
+            if end > board.total_frames:
+                raise ValueError(f"edit section {section.id} extends past the film")
+        return self
+
+    def effective_board(self, board: Storyboard) -> Storyboard:
+        """Apply edit order and spans to the content board, without mutating it."""
+        self.check_board(board)
+        content = {shot.id: shot for shot in board.shots}
+        shots = []
+        for decision in self.shots:
+            shot = content[decision.shot_id].model_copy(
+                update={
+                    "start_frame": decision.start_frame,
+                    "duration_frames": decision.duration_frames,
+                    # Edit timing and motion replace the legacy storyboard controls.
+                    "dissolve_frames": 0,
+                    "transition": None,
+                }
+            )
+            shots.append(shot)
+        return board.model_copy(update={"shots": shots})
+
+
 class RenderShot(Model):
     """Input to renderer, already resolved and checked against current approvals."""
 
     shot: Shot
     image: str
+    edit: EditShot | None = None
+    grade: Grade | None = None
 
 
 class BrandPackage(Model):

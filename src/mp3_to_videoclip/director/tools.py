@@ -50,6 +50,19 @@ TOOLS: list[dict] = [
     _tool("get_brief", "Read the brief.", {"slug": {"type": "string"}}, ["slug"]),
     _tool("get_storyboard", "Read the storyboard.", {"slug": {"type": "string"}}, ["slug"]),
     _tool(
+        "get_edit",
+        "Read the edit decision list and its computed report, if an edit exists.",
+        {"slug": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
+        "update_edit",
+        "Write the edit decision list (timing, motion, transitions, accents, text, grade). "
+        "Returns the saved edit and its report; fix every hard finding.",
+        {"slug": {"type": "string"}, "edit": {"type": "object"}},
+        ["slug", "edit"],
+    ),
+    _tool(
         "get_music_summary",
         "Read the measured music summary.",
         {"slug": {"type": "string"}},
@@ -123,7 +136,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "update_shots",
-        "Edit fields of named shots. Returns the changed IDs and the new storyboard.",
+        "Edit content fields of named shots. Timing and motion are refused once an edit exists. "
+        "Returns the changed IDs and the new storyboard.",
         {"slug": {"type": "string"}, "changes": {"type": "array", "items": {"type": "object"}}},
         ["slug", "changes"],
     ),
@@ -216,6 +230,17 @@ def _dispatch(
 
     if name == "get_storyboard":
         return P.load_board(root).model_dump()
+
+    if name == "get_edit":
+        from mp3_to_videoclip import edits
+
+        return edits.summary(root)
+
+    if name == "update_edit":
+        from mp3_to_videoclip import edits
+
+        edit = edits.save_edit(root, arguments.get("edit") or {})
+        return edits.summary(root, edit)
 
     if name == "get_music_summary":
         path = root / "work" / "music.json"

@@ -31,17 +31,32 @@ for a different organisation. No licence key or font file belongs in git.
 
 ## Contracts
 
-- `project.json` supplies fps/canvas/total duration; `work/storyboard.json` supplies
-  contiguous integer shot allocations. Derived props are render receipts, not a
-  competing editable timeline. Existing approved source selection is resolved first.
+- `project.json` supplies fps/canvas/total duration. `work/storyboard.json`
+  supplies content and, when no edit exists, the legacy contiguous integer shot
+  allocations. `work/edit.json` supplies the authoritative order, spans, motion,
+  transitions, accents, text timing and grade once it exists; the effective
+  board is derived, never written back over the storyboard. Existing approved
+  source selection is resolved first.
 - An outgoing shot's `dissolve_frames` are extra handles. The next shot starts at
   its declared frame; no transition subtracts frames from the allocated film.
 - `camera_path` preserves normalized available-crop x/y. `camera_keyframes` are
   explicit local integer frames, ordered from zero, within shot+handles. A hold
   can be followed by movement without inventing subject motion.
 - `post_effects`: contrast1–1.2, saturation0.7–1.3, brightness0.9–1.1, vignette0–0.3.
-  Optional `transition`: fade/wipe_left/wipe_right on the outgoing handle. Unknown
-  or unsupported settings fail; FFmpeg legacy rejects Remotion-only controls.
+  Legacy optional `transition`: fade/wipe_left/wipe_right on the outgoing handle.
+  Edit transitions are a separate contract (`cut`, `fade`, wipes, dip to black or
+  white, whip pan, push, slide) owned by the incoming shot; their handle is the
+  overlap with the previous plate. Unknown or unsupported settings fail; FFmpeg
+  legacy rejects Remotion-only controls.
+- Edit motion is `hold`, `push_in`, `pull_back`, `pan_left` or `pan_right` with
+  scale 1.00–1.30 and normalized anchors. Accents are `punch_in`, `flash` and
+  `light_leak`; text animates with `fade`, `type_on`, `slide_up`, `pop` or
+  `kinetic_words`; split panes use `row`, `column` or `grid`; grade presets are
+  `neutral`, `warm-night`, `clean-day`, `monochrome`, `vivid` and `film-fade`,
+  with the old sliders as advanced overrides.
+- `request.mjs` validates the edit payload and refuses a base render with more
+  than three flash accents in any one-second window. This is the photosensitivity
+  limit, not merely a report warning.
 - Graphics spec sets `renderer: "remotion"`, `design: "joint-v1"`; brand is the
   selected `filmstrip`, `plate: false`, so opening/credits render one identity.
   Legacy Pillow specs and earlier logo releases remain available, not rewritten.
@@ -64,11 +79,14 @@ for a different organisation. No licence key or font file belongs in git.
 `renderers/remotion/src/BaseFilm.jsx` is the one still-film composition. The
 renderer imports it from `index.jsx`; the Studio imports the same file through
 `frontend/src/baseFilm.ts` and Vite dedupes React and Remotion to one copy. The
-Player gets `GET /api/projects/<slug>/preview`: the renderer's shot fields,
-selected-still URLs and the source audio. A missing still keeps its span and is
-marked as a placeholder, never dropped. `tests/test_timing_parity.py` loads
-`timing.mjs` with Node and compares its constants, enums, bounds, allocation
-acceptance and legacy camera endpoints with the Python models and renderer.
+Player gets `GET /api/projects/<slug>/preview`: the effective renderer shot
+fields, the matching edit decision and grade, selected-still URLs, native split
+pane sources and the source audio. A missing still keeps its span and is marked
+as a placeholder, never dropped. `tests/test_timing_parity.py` loads `timing.mjs`
+with Node and compares its constants, enums, bounds, allocation acceptance and
+legacy camera endpoints with the Python models and renderer;
+`renderers/remotion/tests/edit-primitives.test.mjs` pins every edit primitive and
+the flash refusal.
 
 A Studio preview job writes `work/preview-review.json` itself, binding the movie
 bytes to the current storyboard, proof set, brand and renderer revision, so the
@@ -79,6 +97,16 @@ a **final** render composites the reviewed graphics onto that exact base. The
 final therefore needs the `stills` and `graphics` approvals. Schema 3 selects
 Remotion even when a migrated document no longer carries the legacy
 `renderer_backend` field; an explicit backend wins for older schema-1 projects.
+
+## Primitive samples
+
+`docs/primitives/` contains two-second visual samples for every edit transition,
+accent, split layout, text animation and grade preset. They are rendered through
+the production `BaseFilm` and `timing.mjs` at 480×270, 24 fps and 48 frames; the
+manifest records their hashes. `node docs/primitives/render_samples.mjs`
+regenerates missing clips (it refuses to overwrite an existing sample). The
+gallery is `docs/primitives/index.html`; the contact sheet is
+`docs/primitives/contact-sheet.png`.
 
 ## Acceptance is more than tests
 

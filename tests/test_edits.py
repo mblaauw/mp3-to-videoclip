@@ -1,0 +1,371 @@
+"""Edit-owned timing, coverage, the computed report and the draft API."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from api_support import add_assets, api_client, make_api_project
+
+from mp3_to_videoclip import edits, remotion
+from mp3_to_videoclip import production as P
+from mp3_to_videoclip.models import (
+    EditAccent,
+    EditDecisionList,
+    EditMotion,
+    EditSection,
+    EditShot,
+    EditText,
+    EditTransition,
+    Grade,
+    Shot,
+    Storyboard,
+)
+from mp3_to_videoclip.services import preview
+from mp3_to_videoclip.storage import read_json, write_json
+
+
+def _energetic_root(tmp_path: Path) -> Path:
+    root = make_api_project(tmp_path)
+    project = read_json(root / "project.json")
+    project["duration"] = 10.0
+    write_json(root / "project.json", project)
+    framings = ["wide", "close_up", "detail", "medium"]
+    board = Storyboard(
+        aspect="16:9",
+        fps=24,
+        total_frames=240,
+        shots=[
+            Shot(
+                id=f"s{index + 1:03d}",
+                start_frame=index * 24,
+                duration_frames=24,
+                purpose=f"Beat {index}",
+                image_prompt=f"SHOT-s{index + 1:03d} prompt",
+                framing=framings[index % len(framings)],
+                camera="hold",
+            )
+            for index in range(10)
+        ],
+    )
+    write_json(root / P.STAGE_FILES["storyboard"], board.model_dump())
+    add_assets(root)
+    return root
+
+
+def _energetic_edit() -> EditDecisionList:
+    decisions = []
+    for index in range(10):
+        shot_id = f"s{index + 1:03d}"
+        start = index * 24
+        motion = EditMotion(type="hold")
+        transition = EditTransition(type="cut")
+        accents = []
+        text = []
+        if index == 0:
+            motion = EditMotion(type="hold", reason="open on the first accent")
+        elif index == 1:
+            motion = EditMotion(
+                type="push_in",
+                **{"from": 1.0, "to": 1.08},
+                reason="approach the reveal",
+            )
+            transition = EditTransition(
+                type="whip_pan",
+                frames=4,
+                direction="left",
+                reason="chorus entry",
+            )
+        elif index == 2:
+            motion = EditMotion(
+                type="pull_back",
+                **{"from": 1.1, "to": 1.0},
+                reason="release the section",
+            )
+            transition = EditTransition(
+                type="dip_to_black",
+                frames=4,
+                reason="chapter break",
+            )
+            accents = [
+                EditAccent(
+                    frame=start + 4,
+                    type="punch_in",
+                    amount=1.05,
+                    reason="first hard hit",
+                )
+            ]
+            text = [
+                EditText(
+                    id="t1",
+                    style="super",
+                    text="OUT NOW",
+                    in_frame=start,
+                    out_frame=start + 24,
+                    animation="type_on",
+                    reason="date lands with the line",
+                )
+            ]
+        elif index == 3:
+            motion = EditMotion(type="hold", reason="let the image land")
+        elif index == 4:
+            motion = EditMotion(
+                type="pan_right",
+                **{"from": 1.08, "to": 1.08},
+                reason="discover the second subject",
+            )
+            transition = EditTransition(
+                type="slide",
+                frames=4,
+                direction="left",
+                reason="list structure",
+            )
+            accents = [
+                EditAccent(
+                    frame=start + 6,
+                    type="flash",
+                    duration_frames=2,
+                    reason="accent flash",
+                )
+            ]
+        elif index == 5:
+            motion = EditMotion(
+                type="push_in",
+                **{"from": 1.0, "to": 1.06},
+                reason="intimacy",
+            )
+            text = [
+                EditText(
+                    id="t2",
+                    style="lower_third",
+                    text="ONE TAKE",
+                    in_frame=start,
+                    out_frame=start + 24,
+                    animation="kinetic_words",
+                    reason="words hit the rhythm",
+                )
+            ]
+        elif index == 6:
+            motion = EditMotion(
+                type="pull_back",
+                **{"from": 1.07, "to": 1.0},
+                reason="reveal the room",
+            )
+            transition = EditTransition(
+                type="push",
+                frames=4,
+                reason="graphic transition",
+            )
+        elif index == 7:
+            motion = EditMotion(type="hold", reason="breath after the montage")
+            accents = [
+                EditAccent(
+                    frame=start + 2,
+                    type="light_leak",
+                    duration_frames=8,
+                    reason="memory warmth",
+                )
+            ]
+        elif index == 8:
+            motion = EditMotion(
+                type="pan_left",
+                **{"from": 1.08, "to": 1.08},
+                reason="return to the room",
+            )
+            transition = EditTransition(
+                type="fade",
+                frames=4,
+                reason="time passing",
+            )
+        else:
+            motion = EditMotion(
+                type="push_in",
+                **{"from": 1.0, "to": 1.05},
+                reason="land the last line",
+            )
+            transition = EditTransition(
+                type="dip_to_white",
+                frames=4,
+                reason="end card arrival",
+            )
+            text = [
+                EditText(
+                    id="t3",
+                    style="card",
+                    text="14 NOV",
+                    in_frame=start,
+                    out_frame=start + 24,
+                    animation="pop",
+                    reason="closing date",
+                )
+            ]
+        decisions.append(
+            EditShot(
+                shot_id=shot_id,
+                start_frame=start,
+                duration_frames=24,
+                motion=motion,
+                transition_in=transition,
+                accents=accents,
+                text=text,
+            )
+        )
+    return EditDecisionList(
+        sections=[
+            EditSection(
+                id="build",
+                start_frame=0,
+                end_frame=120,
+                feel="build, close and restless",
+                density_per_10s=8,
+                techniques=["cut on accent", "push-in"],
+            ),
+            EditSection(
+                id="release",
+                start_frame=120,
+                end_frame=240,
+                feel="release, wide and bright chorus",
+                density_per_10s=8,
+                techniques=["pull-back", "flash frame"],
+            ),
+        ],
+        shots=decisions,
+        grade=Grade(preset="warm-night", strength=0.6),
+    )
+
+
+def test_seed_moves_timing_into_the_edit_and_guards_the_storyboard(tmp_path):
+    root = make_api_project(tmp_path)
+    edit = edits.seed_edit(root)
+    assert (root / edits.EDIT).is_file()
+    assert [(s.shot_id, s.start_frame) for s in edit.shots] == [
+        (s.id, s.start_frame) for s in P.load_board(root).shots
+    ]
+
+    with pytest.raises(ValueError, match="edit.json owns timing"):
+        P.update_shots(root, [{"id": "s001", "duration_frames": 10}])
+    board, changed = P.update_shots(root, [{"id": "s001", "purpose": "New content"}])
+    assert changed == ["s001"]
+    assert board.shots[0].purpose == "New content"
+
+
+def test_edit_reorders_and_retimes_the_effective_preview(tmp_path):
+    root = _energetic_root(tmp_path)
+    edit = _energetic_edit()
+    # Put s002 first and s001 second; content is unchanged, order is edit-owned.
+    first, second = edit.shots[0], edit.shots[1]
+    edit.shots[0] = second.model_copy(update={"start_frame": 0, "transition_in": EditTransition()})
+    edit.shots[1] = first.model_copy(update={"start_frame": 24})
+    edits.save_edit(root, edit)
+    payload = preview.player_input(root, "production")
+    assert payload["durationInFrames"] == 240
+    assert [shot["id"] for shot in payload["shots"][:2]] == ["s002", "s001"]
+    assert payload["shots"][0]["start_frame"] == 0
+    assert payload["shots"][1]["start_frame"] == 24
+    assert payload["shots"][0]["edit"]["shot_id"] == "s002"
+    assert payload["grade"]["preset"] == "warm-night"
+
+
+def test_edit_report_flags_flashes_and_broken_transitions(tmp_path):
+    root = _energetic_root(tmp_path)
+    edit = _energetic_edit()
+    first = edit.shots[0]
+    edit.shots[0] = first.model_copy(
+        update={
+            "accents": [EditAccent(frame=frame, type="flash") for frame in (0, 6, 12, 18)],
+            "transition_in": EditTransition(type="whip_pan", frames=0),
+        }
+    )
+    edits.save_edit(root, edit)
+    value = edits.report(root)
+    codes = {finding["code"] for finding in value["hard"]}
+    assert "flash_rate" in codes
+    assert "transition_handle" in codes
+    assert "transition_reason" in codes
+
+
+def test_energetic_fixture_has_five_reasoned_techniques_and_no_hard_findings(tmp_path):
+    root = _energetic_root(tmp_path)
+    edits.save_edit(root, _energetic_edit())
+    value = edits.report(root)
+    assert value["ok"] is True, value["hard"]
+    assert value["counts"]["hold_ratio"] < 0.5
+    reasoned = [row["name"] for row in value["techniques"] if row["reasoned"]]
+    assert len(reasoned) >= 5, reasoned
+    assert {"push-in", "whip pan", "dip to black", "punch-in", "type-on"} <= set(reasoned)
+    assert all(row["count"] > 0 for row in value["techniques"])
+    # Hard cuts are the default; only named transitions can become repetitive.
+    assert not any(warning["code"] == "transition_repetition" for warning in value["warnings"])
+
+
+def test_mp4_compiled_input_carries_the_same_edit_and_grade_as_the_player(tmp_path):
+    root = _energetic_root(tmp_path)
+    edits.save_edit(root, _energetic_edit())
+    assets = root / "work" / "remotion-assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    compiled = remotion.compile_shots(P.resolved_assets(root), root / "work", assets)
+    assert compiled[0]["grade"]["preset"] == "warm-night"
+    assert compiled[0]["edit"]["shot_id"] == "s001"
+    assert compiled[1]["edit"]["motion"]["type"] == "push_in"
+    assert compiled[1]["edit"]["transition_in"]["type"] == "whip_pan"
+    assert compiled[0]["image"].endswith(".jpg")
+
+
+def test_coverage_gap_is_refused_before_it_can_reach_the_renderer(tmp_path):
+    root = make_api_project(tmp_path)
+    edit = edits.seed_edit(root)
+    raw = edit.model_dump(by_alias=True)
+    raw["shots"][0]["duration_frames"] -= 1
+    with pytest.raises(ValueError, match="starts at|edit covers"):
+        edits.save_edit(root, raw)
+
+
+def test_edit_api_seeds_reports_and_saves(tmp_path):
+    root = _energetic_root(tmp_path)
+    client = api_client(tmp_path)
+    before = client.get("/api/projects/production/edit").json()
+    assert before["present"] is False
+    assert before["report"]["hard"] == []
+
+    seeded = client.post("/api/projects/production/edit/seed", json={})
+    assert seeded.status_code == 200
+    assert seeded.json()["present"] is True
+
+    payload = _energetic_edit().model_dump(by_alias=True)
+    saved = client.put("/api/projects/production/edit", json={"edit": payload})
+    assert saved.status_code == 200
+    assert saved.json()["report"]["ok"] is True
+    assert read_json(root / edits.EDIT)["shots"][1]["motion"]["type"] == "push_in"
+
+
+def test_split_preview_carries_native_pane_sources(tmp_path):
+    root = make_api_project(tmp_path)
+    add_assets(root)
+    board = P.load_board(root)
+    raw = board.model_dump()
+    raw["shots"][2] = {
+        "id": "s003",
+        "start_frame": 24,
+        "duration_frames": 12,
+        "kind": "split",
+        "purpose": "two reactions at once",
+        "panes": [
+            {"shot_id": "s001", "crop": {"zoom": 1.1, "x": 0.4, "y": 0.5}},
+            {"shot_id": "s002", "crop": {"zoom": 1, "x": 0.5, "y": 0.5}},
+        ],
+        "camera": "hold",
+    }
+    write_json(root / P.STAGE_FILES["storyboard"], raw)
+    edit = edits.seed_edit(root)
+    payload = preview.player_input(root, "production")
+    split = next(shot for shot in payload["shots"] if shot["id"] == "s003")
+    assert split["edit"]["shot_id"] == edit.shots[2].shot_id
+    assert len(split["split_panes"]) == 2
+    assert all(pane["src"] for pane in split["split_panes"])
+
+    assets = root / "work" / "remotion-assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    compiled = remotion.compile_shots(P.resolved_assets(root), root / "work", assets)
+    compiled_split = next(shot for shot in compiled if shot["id"] == "s003")
+    assert len(compiled_split["split_panes"]) == 2
+    assert all(pane["image"] for pane in compiled_split["split_panes"])

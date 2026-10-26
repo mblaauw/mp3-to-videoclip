@@ -89,6 +89,45 @@ async def get_graphics_sample(slug: str, name: str, request: Request):
     return FileResponse(target, media_type="image/png")
 
 
+@router.get("/edit")
+async def get_edit(slug: str, request: Request):
+    """The edit list plus the report computed from the current board."""
+    from mp3_to_videoclip import edits
+
+    root = project_root(request, slug)
+    try:
+        return edits.summary(root)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/edit/seed")
+async def seed_edit(slug: str, request: Request):
+    """Move timing ownership from the storyboard to a first edit list."""
+    from mp3_to_videoclip import edits
+
+    root = project_root(request, slug)
+    try:
+        edit = edits.seed_edit(root)
+        return edits.summary(root, edit)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/edit")
+async def put_edit(slug: str, request: Request, payload: dict):
+    """Save the whole edit and return the report the Editor must read."""
+    from mp3_to_videoclip import edits
+
+    root = project_root(request, slug)
+    value = payload.get("edit", payload)
+    try:
+        edit = edits.save_edit(root, value)
+        return edits.summary(root, edit)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/preview")
 async def preview_input(slug: str, request: Request):
     """The live Player payload: the renderer's shot fields plus local URLs."""

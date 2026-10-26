@@ -19,20 +19,57 @@ from mp3_to_videoclip.storage import digest, inside, read_json
 MISSING_IMAGE = "missing-still.jpg"
 
 
+def _selected(root: Path, assets: dict, shot) -> dict | None:
+    owner = shot.asset_shot_id or shot.id
+    entry = assets.get(owner, {})
+    return next(
+        (v for v in entry.get("versions", []) if v["version"] == entry.get("selected")),
+        None,
+    )
+
+
+def _pane_payload(root: Path, slug: str, assets: dict, pane, source) -> dict:
+    owner = source.asset_shot_id or source.id
+    if source.asset_shot_id is None and shotkinds.is_local(source):
+        try:
+            path = Path(P.resolved_assets(root, [source.id])[0].image)
+        except (OSError, ValueError):
+            return {"shot_id": pane.shot_id, "crop": pane.crop.model_dump(), "src": None}
+        return {
+            "shot_id": pane.shot_id,
+            "crop": pane.crop.model_dump(),
+            "src": f"/api/projects/{slug}/plates/{source.id}",
+            "image": path.name,
+        }
+    chosen = _selected(root, assets, source)
+    if chosen is None:
+        return {"shot_id": pane.shot_id, "crop": pane.crop.model_dump(), "src": None}
+    path = inside(root, chosen["path"])
+    return {
+        "shot_id": pane.shot_id,
+        "crop": pane.crop.model_dump(),
+        "src": f"/api/projects/{slug}/images/{owner}/{chosen['version']}",
+        "image": path.name,
+    }
+
+
 def player_input(root: Path, slug: str) -> dict:
+    from mp3_to_videoclip import edits
+
     project = P.load_project(root)
     board = P.load_board(root)
+    edit = edits.load_edit(root, board=board)
+    effective = edit.effective_board(board) if edit is not None else board
+    decisions = {shot.shot_id: shot for shot in edit.shots} if edit is not None else {}
+    grade = edit.grade.model_dump(by_alias=True) if edit is not None else None
     assets = read_json(root / "work/assets.json")
+    content = {shot.id: shot for shot in board.shots}
     shots: list[dict] = []
     placeholders: list[str] = []
     stale: list[str] = []
-    for shot in board.shots:
+    for shot in effective.shots:
         owner = shot.asset_shot_id or shot.id
-        entry = assets.get(owner, {})
-        chosen = next(
-            (v for v in entry.get("versions", []) if v["version"] == entry.get("selected")),
-            None,
-        )
+        chosen = _selected(root, assets, shot)
         dumped = shot.model_dump()
         value = {
             # Only the renderer's own fields: prompt text stays out of the Player.
@@ -56,6 +93,19 @@ def player_input(root: Path, slug: str) -> dict:
             "src": None,
             "still_current": False,
         }
+        if shot.id in decisions:
+            value["edit"] = decisions[shot.id].model_dump(by_alias=True)
+            value["grade"] = grade
+        if shot.kind == "split":
+            panes = [
+                _pane_payload(root, slug, assets, pane, content[pane.shot_id])
+                for pane in shot.panes
+                if pane.shot_id in content
+            ]
+            if panes and all(pane.get("src") for pane in panes):
+                value["split_panes"] = panes
+            if any(not pane.get("src") for pane in panes):
+                stale.append(shot.id)
         if shot.asset_shot_id is None and shotkinds.is_local(shot):
             try:
                 resolved = P.resolved_assets(root, [shot.id])[0]
@@ -84,6 +134,7 @@ def player_input(root: Path, slug: str) -> dict:
         "height": project.height,
         "durationInFrames": board.total_frames,
         "shots": shots,
+        "grade": grade,
         "audio": (
             f"/api/projects/{slug}/audio-excerpt"
             if project.audio_window is not None

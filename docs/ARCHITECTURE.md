@@ -96,8 +96,10 @@ and `bridge.mode=generated` compile an image spec and may enter a quote. `card`,
 `upload`, `split`, `reprise`, `logo`, `end_card`, designed `bridge` and a
 `product` with an uploaded `asset` are local: Pillow renders a deterministic
 full-frame PNG under `work/local-plates/`, keyed by the shot definition, project
-size, source panes and `LOCAL_PLATE_VERSION`. The renderer and the Player receive
-ordinary image files, so no Remotion primitive is added.
+size, source panes and `LOCAL_PLATE_VERSION`. The split plate remains the
+fallback when a pane still is missing or stale; when every pane is current,
+`RenderShot` also carries native pane sources and `BaseFilm` draws the split
+primitive itself in both the MP4 and the Player.
 
 `Shot.kind`, `message`, `text`, `bridge`, `product_ref`, `panes` and `asset` are
 dropped from serialization while they hold defaults. Legacy shots, briefs and
@@ -108,6 +110,33 @@ definition for a split whose panes do not exist yet), and the stills stage binds
 every local plate. `GET /api/projects/<slug>/plates/<shot_id>` serves the local
 file; the Player points local shots at that URL and keeps paid shots on the
 existing image route.
+
+## Edit list, cut report and primitives
+
+T4 moved timing and motion out of the storyboard into `work/edit.json`. The
+storyboard remains the content source; the edit owns order, spans, transitions,
+camera motion, accents, text timing and grade. `EditDecisionList.check_board`
+requires every storyboard shot exactly once and contiguous coverage of the full
+duration. `production.resolved_assets` applies the edit to a derived effective
+board and attaches the matching `EditShot` and `Grade` to every `RenderShot`, so
+the MP4 and the Player consume one payload. A production without an edit keeps
+the old storyboard timing and approval hashes byte-for-byte.
+
+Once an edit exists, `update_shots` refuses timing and motion fields and the
+Storyboard timeline is read-only. `GET /api/projects/<slug>/edit` returns the cut
+and its computed report; `PUT /edit` saves a whole cut; `POST /edit/seed` moves
+the approved storyboard timing into the first edit without rewriting content.
+The Editor gets `get_edit`/`update_edit` tools and the report in its project
+snapshot.
+
+The shared `renderers/remotion/src/timing.mjs` and `BaseFilm.jsx` implement edit
+transitions (`dip_to_black`, `dip_to_white`, `whip_pan`, `push`, `slide`), accents
+(`punch_in`, `flash`, `light_leak`), split layouts, text animations (`fade`,
+`type_on`, `slide_up`, `pop`, `kinetic_words`) and grade presets with slider
+overrides. `request.mjs` refuses more than three flash accents in any one-second
+window, independently of the Python report. `docs/EDITING.md` owns the schema,
+report rules and sample gallery; `tests/test_edits.py` and
+`renderers/remotion/tests/edit-primitives.test.mjs` pin the contracts.
 
 ## Money and evidence
 
@@ -188,6 +217,7 @@ api/              projects, track, story, storyboard, images, film, director, jo
 domain/           intake, models, migration, approvals, archive, budget, lyrics
 services/         analysis, generation, graphics, transcription, render, preview input, runware
 director/         direct adapter, OpenCode gateway, MCP bridge, tools, context, prompts, conversation
+edits.py          edit decision list, effective board, report and flash rule
 jobs/             asyncio runner, per-project serialisation, SSE events
 frontend/         Vite + React + TypeScript, @remotion/player for the real composition
 renderers/remotion/src/BaseFilm.jsx + timing.mjs

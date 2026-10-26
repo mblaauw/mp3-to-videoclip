@@ -186,6 +186,12 @@ def build_context(slug: str, projects_dir: Path | None = None, stage: str | None
         if board is None:
             lines.append("## Shots\nNo storyboard yet.")
             return "\n".join(lines)
+        from mp3_to_videoclip import edits
+
+        source_board = board
+        edit = edits.load_edit(root, board=board)
+        if edit is not None:
+            board = edit.effective_board(board)
         statuses = []
         placeholders = 0
         shot_lines = []
@@ -210,6 +216,34 @@ def build_context(slug: str, projects_dir: Path | None = None, stage: str | None
             f"{stale} stale, {unreadable} unreadable; {placeholders} marked placeholders)"
         )
         lines.extend(shot_lines)
+        try:
+            cut_report = edits.report(root, edit=edit, board=source_board, project=project)
+        except (OSError, ValueError) as exc:  # noqa: BLE001
+            lines.append(f"## Cut\nReport unavailable: {_clip(exc, 180)}")
+            return "\n".join(lines)
+        if cut_report.get("present"):
+            lines.append("")
+            lines.append("## Cut (edit-owned timing and motion)")
+            counts = cut_report.get("counts", {})
+            lines.append(
+                f"- {counts.get('shots', 0)} shots, {counts.get('cuts', 0)} cuts, "
+                f"{counts.get('holds', 0)} holds "
+                f"({float(counts.get('hold_ratio', 0)) * 100:.0f}%); "
+                f"grade {edit.grade.preset if edit is not None else 'none'}; "
+                f"{len(cut_report.get('hard', []))} hard, "
+                f"{len(cut_report.get('warnings', []))} warnings."
+            )
+            for section in cut_report.get("sections", [])[:10]:
+                lines.append(
+                    f"- {section['id']} {section['start_frame']}-{section['end_frame']} "
+                    f"({section.get('energy') or 'energy unknown'}) "
+                    f"{section['density_per_10s']}/10s target "
+                    f"{section['target_density_per_10s']}/10s: {_clip(section['feel'], 90)}"
+                )
+            for finding in cut_report.get("hard", [])[:8]:
+                lines.append(f"- HARD {finding['code']}: {_clip(finding['message'], 180)}")
+            for finding in cut_report.get("warnings", [])[:8]:
+                lines.append(f"- warning {finding['code']}: {_clip(finding['message'], 180)}")
         return "\n".join(lines)
     except Exception as exc:  # noqa: BLE001
         return f"Project {slug}: {exc}"
