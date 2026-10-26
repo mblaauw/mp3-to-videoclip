@@ -276,6 +276,7 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
         {
             "id": "brand_or_product_first_5s",
             "ok": visible,
+            "automatic": True,
             "message": (
                 "brand, product or a text card is visible in the first five seconds"
                 if visible
@@ -285,6 +286,7 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
         {
             "id": "end_card_3s",
             "ok": end_ok,
+            "automatic": True,
             "message": (
                 "the end card holds for at least three seconds"
                 if end_ok
@@ -316,6 +318,7 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
             {
                 "id": "mandatories_present",
                 "ok": not missing,
+                "automatic": False,
                 "message": (
                     "every mandatory is present"
                     if not missing

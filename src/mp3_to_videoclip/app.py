@@ -25,6 +25,7 @@ from .api.film import router as film_router
 from .api.images import router as images_router
 from .api.jobs import router as jobs_router
 from .api.projects import router as projects_router
+from .api.ratings import router as ratings_router
 from .api.settings import router as settings_router
 from .api.setup import router as setup_router
 from .api.story import router as story_router
@@ -70,6 +71,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
     app.include_router(film_router)
     app.include_router(budget_router)
     app.include_router(approvals_router)
+    app.include_router(ratings_router)
     app.include_router(director_router)
     app.include_router(jobs_router)
 

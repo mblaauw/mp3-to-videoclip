@@ -246,6 +246,44 @@ export type GraphicsReview = {
   samples?: GraphicsSample[];
 };
 
+export type ArtifactName = "brief" | "treatments" | "storyboard" | "edit";
+
+export type RatingEntry = {
+  artifact: ArtifactName;
+  label: string;
+  rating: "up" | "down";
+  note: string;
+  artifact_hash: string;
+  prompt_hash: string | null;
+  prompt_files: { path: string; version: number }[];
+  prompt_role: string | null;
+  prompt_task: string | null;
+  prompt_words: number | null;
+  at: string;
+};
+
+export type RatingSummary = {
+  artifact: ArtifactName;
+  label: string;
+  available: boolean;
+  artifact_hash: string | null;
+  prompt: {
+    hash: string | null;
+    files: { path: string; version: number }[];
+    role: string | null;
+    task: string | null;
+    words: number | null;
+  };
+  latest: RatingEntry | null;
+  stale: boolean;
+  history: RatingEntry[];
+};
+
+export type RatingResponse = {
+  entry: RatingEntry;
+  summary: RatingSummary;
+};
+
 export type PreviewInput = {
   available: boolean;
   reason?: string;
@@ -493,6 +531,13 @@ export const api = {
     request<GraphicsReview>(`/api/projects/${slug}/graphics-review`),
   preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
   edit: (slug: string) => request<EditSummary>(`/api/projects/${slug}/edit`),
+  rating: (slug: string, artifact: ArtifactName) =>
+    request<RatingSummary>(`/api/projects/${slug}/ratings?artifact=${artifact}`),
+  rate: (slug: string, artifact: ArtifactName, rating: "up" | "down", note: string) =>
+    request<RatingResponse>(`/api/projects/${slug}/ratings`, {
+      method: "POST",
+      body: JSON.stringify({ artifact, rating, note }),
+    }),
   seedEdit: (slug: string) =>
     request<EditSummary>(`/api/projects/${slug}/edit/seed`, {
       method: "POST",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Brief, type Music, type Shot, type ShotKind, type Storyboard } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import { ArtifactRating } from "../ArtifactRating";
 import { SHOT_KINDS, isPaidShot, kindMeta, kindOf } from "../shotKinds";
 import { Timeline } from "../Timeline";
 
@@ -330,6 +331,10 @@ export function StoryboardStage({ slug }: { slug: string }) {
       <button onClick={save} disabled={saving || !Object.keys(draft).length}>
         {saving ? "Saving…" : `Save ${Object.keys(draft).length || ""} changes`}
       </button>
+      <div className="card">
+        <h3>Rate this storyboard</h3>
+        <ArtifactRating slug={slug} artifact="storyboard" />
+      </div>
     </>
   );
 }

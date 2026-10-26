@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { api, type Budget, type EditSummary, type GraphicsReview } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import { ArtifactRating } from "../ArtifactRating";
 import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
 
@@ -297,6 +298,7 @@ export function FilmStage({ slug }: { slug: string }) {
                 {cutBusy === "save" ? "Saving…" : "Save cut"}
               </button>
             </details>
+            <ArtifactRating slug={slug} artifact="edit" />
           </>
         ) : (
           <>

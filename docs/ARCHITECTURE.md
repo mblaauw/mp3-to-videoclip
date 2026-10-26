@@ -89,6 +89,26 @@ tool writes the brief, treatments, proof shots or storyboard. Chat history keeps
 the metadata on the user turn. A bad output can therefore be traced to the exact
 prompt revision without changing any artifact schema or approval hash.
 
+## Evaluation and ratings
+
+Three frozen fixtures and their automatic checks live in `tests/evals/`. The
+Writer checks cover three distinct concept structures, board coverage, local
+kinds for the advert and invented claims; the Editor checks cover edit-report
+hard findings and the advert's first-five-seconds/end-card rules. The command
+`uv run python -m tests.evals` writes one report page per current prompt hash,
+one per stored run hash and one for rating-only or unbound hashes, with no model
+or network call. A page with no run says so instead of inventing a result. `tests/evals/rubric.py` defines the other-role
+cross-review rubric; the harness validates a supplied review but never sends it.
+`tests/evals/README.md` owns the run-bundle contract and `docs/EVALUATION.md`
+records the evaluation policy.
+
+Artifact thumbs are append-only rows in `work/ratings.jsonl`. `ratings.py` binds
+each row to the artifact hash and to the last prompt write for that artifact from
+`work/prompt-artifacts.jsonl`; ratings made without prompt history are unbound.
+The Studio shows the control on Story (brief/concepts), Storyboard and Film
+(edit), and the API is `GET/POST /api/projects/<slug>/ratings`. Ratings are
+signals, never approvals, and a later artifact write marks the old row stale.
+
 ## Shot kinds and local plates
 
 `shotkinds.py` owns the only paid/local decision. `scene`, generated `product`

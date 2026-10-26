@@ -142,3 +142,32 @@ def report(fixture_value: dict, treatments: dict, board: dict) -> dict:
         "claims": claims,
         "ok": concepts["ok"] and storyboard["ok"] and claims["ok"],
     }
+
+
+def edit_report(fixture_value: dict, board: dict, report_value: dict) -> dict:
+    """Automatic Editor checks: schema/board coverage, hard report, claims, ad."""
+    storyboard = storyboard_report(board, kind=fixture_value["kind"])
+    issues = [f"board: {issue}" for issue in storyboard["issues"]]
+    for finding in report_value.get("hard", []):
+        issues.append(f"hard {finding.get('code')}: {finding.get('message')}")
+    values = [shot.get("message", "") for shot in board.get("shots", [])]
+    values += [line for shot in board.get("shots", []) for line in shot.get("text", [])]
+    values += [line for shot in report_value.get("shots", []) for line in shot.get("text", [])]
+    claims = claim_report(values, fixture_value.get("allowed_facts", []))
+    if not claims["ok"]:
+        issues.append("claims: " + ", ".join(claims["invented"]))
+    ad = report_value.get("ad") or {"applicable": False, "checks": []}
+    for check in ad.get("checks", []):
+        if check.get("automatic", True) and not check.get("ok"):
+            issues.append(f"ad {check.get('id')}: {check.get('message')}")
+    return {
+        "ok": not issues,
+        "issues": issues,
+        "storyboard": storyboard,
+        "claims": claims,
+        "hard": report_value.get("hard", []),
+        "warnings": report_value.get("warnings", []),
+        "counts": report_value.get("counts", {}),
+        "techniques": report_value.get("techniques", []),
+        "ad": ad,
+    }

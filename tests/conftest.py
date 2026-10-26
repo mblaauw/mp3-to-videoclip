@@ -17,7 +17,12 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
+
+# Tests are also a package so ``python -m tests.evals`` works; keep the
+# historical top-level imports used by the test modules working.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
 import pytest

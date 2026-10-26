@@ -47,6 +47,10 @@ references.
 - Shared Remotion primitives for dips, whip pans, pushes, slides, punch-ins,
   flashes, light leaks, split layouts, five text animations and six grade
   presets; two-second visual samples are in `docs/primitives/`.
+- A local evaluation harness (`uv run python -m tests.evals`) over three frozen
+  fixtures, with one prompt-version page per report hash, automatic Writer/Editor
+  checks, a cross-review rubric and Studio thumbs stored against the prompt
+  revision. See `docs/EVALUATION.md`.
 - Read-only archive view of frozen productions (`domain/archive.py`).
 - Image reviews bound to exact versions and bytes, plus content-bound brief,
   storyboard, proof, preview, stills and graphics approvals in the Studio.

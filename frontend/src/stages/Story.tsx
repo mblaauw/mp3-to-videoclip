@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Brief } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
+import { ArtifactRating } from "../ArtifactRating";
 import { IntakeCard } from "../IntakeCard";
 
 export function StoryStage({ slug }: { slug: string }) {
@@ -113,6 +114,14 @@ export function StoryStage({ slug }: { slug: string }) {
       <div className="card">
         <h3>Treatment</h3>
         <textarea value={treatment} onChange={(e) => setTreatment(e.target.value)} rows={10} />
+      </div>
+      <div className="card">
+        <h3>Artifact ratings</h3>
+        <p className="meta">
+          Thumbs are evaluation signals, stored with the prompt revision that wrote the artifact.
+        </p>
+        <ArtifactRating slug={slug} artifact="brief" />
+        <ArtifactRating slug={slug} artifact="treatments" />
       </div>
       <div className="card">
         <h3>Look</h3>
