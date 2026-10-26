@@ -7,7 +7,7 @@ Base: `main` at `42a33cf` (T0–T5 merged).
 P0 branch: `studio-redesign/p0-correctness`, merged as PR #24 (`1a3800e`).
 P1 branch: `studio-redesign/p1-foundations`, merged as PR #25 (`71406aa`).
 P2 branch: `studio-redesign/p2-shell`, merged as PR #26 (`d437b37`).
-P3 branch: `studio-redesign/p3-track-story`.
+P3 branch: `studio-redesign/p3-track-story` (merged as PR #27, `4fe6a6b`).
 
 ## Objective
 
@@ -55,7 +55,7 @@ logic stay authoritative in the existing engine modules.
 | P0 | K13 vocal promo/advert brief approval; K2 real blocking stage | Complete (PR #24, `1a3800e`) |
 | P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Complete (PR #25, `71406aa`) |
 | P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Complete (PR #26, `d437b37`) |
-| P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | In review (`studio-redesign/p3-track-story`) |
+| P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Complete (PR #27, `4fe6a6b`) |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Not started |
 | P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | Not started |
 | P6 | Empty/loading/error states, responsive and accessibility pass | Not started |
@@ -452,6 +452,9 @@ Limitations:
 - All mutations happened in `/tmp/opencode/p3-projects`; no production under
   `projects/` was modified. No paid provider call was made and no Playwright
   dependency was added.
+
+P3 shipped in PR #27, squash-merged as `4fe6a6b` on 26 Oct 2026. CI (`check`)
+passed in 3m17s before the merge.
 
 ## Next
 
