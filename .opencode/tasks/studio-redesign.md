@@ -5,6 +5,7 @@ Source: `studio-redesign-handover.zip` (README, 01–05, tokens, prototype,
 screenshots), with `05-update-42a33cf.md` overriding 01–04 where they differ.
 Base: `main` at `42a33cf` (T0–T5 merged).
 P0 branch: `studio-redesign/p0-correctness`, merged as PR #24 (`1a3800e`).
+P1 branch: `studio-redesign/p1-foundations`, merged as PR #25 (`71406aa`).
 
 ## Objective
 
@@ -50,7 +51,7 @@ logic stay authoritative in the existing engine modules.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | P0 | K13 vocal promo/advert brief approval; K2 real blocking stage | Complete (PR #24, `1a3800e`) |
-| P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Complete; PR pending |
+| P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Complete (PR #25, `71406aa`) |
 | P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Not started |
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Not started |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Not started |
@@ -164,6 +165,9 @@ P1 verified on `studio-redesign/p1-foundations` at the final working tree:
 - Browser evidence was collected before the browser tool was temporarily removed
   from the session catalog and again after it returned. No Playwright dependency
   was added.
+
+P1 shipped in PR #25, squash-merged as `71406aa` on 26 Oct 2026. CI (`check`)
+passed in 4m15s before the merge.
 
 ## Next
 
