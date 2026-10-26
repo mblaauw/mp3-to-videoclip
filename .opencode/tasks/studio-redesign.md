@@ -4,6 +4,7 @@ Authorized: 2026-10-26, owner asked to implement the complete Studio redesign.
 Source: `studio-redesign-handover.zip` (README, 01–05, tokens, prototype,
 screenshots), with `05-update-42a33cf.md` overriding 01–04 where they differ.
 Base: `main` at `42a33cf` (T0–T5 merged).
+P0 branch: `studio-redesign/p0-correctness`, merged as PR #24 (`1a3800e`).
 
 ## Objective
 
@@ -48,7 +49,7 @@ logic stay authoritative in the existing engine modules.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| P0 | K13 vocal promo/advert brief approval; K2 real blocking stage | Complete; PR pending |
+| P0 | K13 vocal promo/advert brief approval; K2 real blocking stage | Complete (PR #24, `1a3800e`) |
 | P1 | Tokens/font, UI primitives, SSE jobs, API types, error codes | Not started |
 | P2 | Shell, routes, library, top bar, next step, budget/jobs, spine, director drawer | Not started |
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Not started |
@@ -100,7 +101,8 @@ P0 verified on `studio-redesign/p0-correctness` at the final working tree:
   state, so the app still starts and serves approvals.
 - No paid provider call was made; no production under `projects/` was modified.
 
-P0 PR and merge evidence will be added on `main` after this branch is merged.
+P0 shipped in PR #24, squash-merged as `1a3800e` on 26 Oct 2026. CI (`check`)
+passed in 4m46s before the merge.
 
 ## Next
 
