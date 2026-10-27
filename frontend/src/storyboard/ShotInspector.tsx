@@ -10,6 +10,7 @@ import {
 import { usePaidImages } from "../images/paid";
 import { PaidCard } from "../images/PaidCard";
 import { notifyProjectChanged } from "../shell/projectEvents";
+import { AutoTextarea } from "../ui/AutoTextarea";
 import { SHOT_KINDS, isPaidShot, kindMeta, kindOf } from "../shotKinds";
 import { Button } from "../ui";
 import { ShotThumb } from "./ShotThumb";
@@ -70,6 +71,9 @@ export function ShotInspector({
   const shot = board?.shots.find((item) => item.id === shotId) || null;
   const image = images.find((item) => item.id === shotId);
   const [draft, setDraft] = useState<Partial<Shot>>({});
+  // One-per-line fields keep the raw text while typing: parsing on every key
+  // stroke ate the Enter key and the space at the end of a word.
+  const [lines, setLines] = useState<{ text?: string; must_show?: string }>({});
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +89,7 @@ export function ShotInspector({
 
   useEffect(() => {
     setDraft({});
+    setLines({});
     setError(null);
     paid.clear();
     // The paid flow belongs to one shot; never carry a quote to the next.
@@ -302,8 +307,9 @@ export function ShotInspector({
 
         <label className="ui-field">
           <span>Job of this shot</span>
-          <textarea
-            rows={2}
+          <AutoTextarea
+            minRows={2}
+            maxRows={8}
             value={current.purpose}
             maxLength={400}
             onChange={(event) => change("purpose", event.target.value)}
@@ -313,8 +319,9 @@ export function ShotInspector({
 
         <label className="ui-field">
           <span>What this shot says</span>
-          <textarea
-            rows={2}
+          <AutoTextarea
+            minRows={2}
+            maxRows={8}
             value={current.message || ""}
             maxLength={400}
             onChange={(event) => change("message", event.target.value)}
@@ -324,11 +331,19 @@ export function ShotInspector({
 
         <label className="ui-field">
           <span>On-screen text (one line per row)</span>
-          <textarea
-            rows={3}
-            value={(current.text || []).join("\n")}
-            onChange={(event) => change("text", splitLines(event.target.value))}
-            onBlur={() => void save()}
+          <AutoTextarea
+            minRows={2}
+            maxRows={8}
+            value={lines.text ?? (current.text || []).join("\n")}
+            onChange={(event) => {
+              const raw = event.target.value;
+              setLines((value) => ({ ...value, text: raw }));
+              change("text", splitLines(raw));
+            }}
+            onBlur={() => {
+              setLines((value) => ({ ...value, text: undefined }));
+              void save();
+            }}
           />
         </label>
 
@@ -336,8 +351,10 @@ export function ShotInspector({
           <>
             <label className="ui-field">
               <span>Picture prompt</span>
-              <textarea
-                rows={5}
+              <AutoTextarea
+                className="prompt-text"
+                minRows={4}
+                maxRows={16}
                 value={current.image_prompt || ""}
                 onChange={(event) => change("image_prompt", event.target.value)}
                 onBlur={() => void save()}
@@ -350,19 +367,25 @@ export function ShotInspector({
             </label>
             <label className="ui-field">
               <span>Must show (one per row)</span>
-              <textarea
-                rows={2}
-                value={(current.must_show || []).join("\n")}
-                onChange={(event) =>
+              <AutoTextarea
+                minRows={2}
+                maxRows={8}
+                value={lines.must_show ?? (current.must_show || []).join("\n")}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setLines((value) => ({ ...value, must_show: raw }));
                   change(
                     "must_show",
-                    event.target.value
+                    raw
                       .split("\n")
                       .map((line) => line.trim())
                       .filter(Boolean),
-                  )
-                }
-                onBlur={() => void save()}
+                  );
+                }}
+                onBlur={() => {
+                  setLines((value) => ({ ...value, must_show: undefined }));
+                  void save();
+                }}
               />
             </label>
           </>

@@ -12,6 +12,7 @@ export default function LivePlayer({
   width,
   height,
   time,
+  clock,
   playing,
 }: PreviewProps & {
   durationInFrames: number;
@@ -19,17 +20,30 @@ export default function LivePlayer({
   width: number;
   height: number;
   time?: number;
+  /** The Studio audio clock; followed without re-rendering this component. */
+  clock?: { get: () => number; subscribe: (listener: () => void) => () => void };
   playing?: boolean;
 }) {
   const playerRef = useRef<PlayerRef>(null);
-  const synced = time !== undefined;
+  const synced = time !== undefined || clock !== undefined;
 
   useEffect(() => {
-    if (!synced) return;
+    if (time === undefined) return;
     const frame = Math.round((time || 0) * fps);
     const current = playerRef.current?.getCurrentFrame() ?? 0;
     if (Math.abs(current - frame) > 2) playerRef.current?.seekTo(frame);
-  }, [fps, synced, time]);
+  }, [fps, time]);
+
+  useEffect(() => {
+    if (!clock) return;
+    const follow = () => {
+      const frame = Math.round(clock.get() * fps);
+      const current = playerRef.current?.getCurrentFrame() ?? 0;
+      if (Math.abs(current - frame) > 2) playerRef.current?.seekTo(frame);
+    };
+    follow();
+    return clock.subscribe(follow);
+  }, [clock, fps]);
 
   useEffect(() => {
     if (!synced || playing === undefined) return;

@@ -84,6 +84,23 @@ def _role(payload: dict, stage: str | None) -> str:
     return role
 
 
+def _announce_tool(request: Request, slug: str, event) -> None:
+    """A finished tool that may have written the production: tell every open view.
+
+    The director's tools can run in the OpenCode MCP process, outside any Studio
+    request, so the turn itself announces each finished write while it streams.
+    """
+    if getattr(event, "kind", None) != "tool" or not getattr(event, "result", None):
+        return
+    tool = getattr(event, "tool", None) or ""
+    if tool.startswith("get_") or tool == "ask_user":
+        return
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        return
+    runner.bus.publish("project.changed", {"project": slug, "source": "director", "tool": tool})
+
+
 def _line(event) -> str:
     return (
         json.dumps(
@@ -228,6 +245,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
                         model=model,
                         prompt_meta=bundle.meta,
                     ):
+                        _announce_tool(request, slug, event)
                         yield _line(event)
                 finally:
                     await client.aclose()
@@ -255,6 +273,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
             projects_dir=root.parent,
             prompt_meta=bundle.meta,
         ):
+            _announce_tool(request, slug, event)
             yield _line(event)
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")

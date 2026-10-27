@@ -78,6 +78,21 @@ max_corrections`.
   for $0.0347625, no resubmission. The remaining proof batch is s006/s038 at
   $0.10.
 
+## Follow-up: relative API roots broke asset recording
+
+The Studio was launched with the relative default `projects`. The API handed
+that relative root to `record_asset`, while `inside()` returned an absolute
+image path, so `path.relative_to(root)` failed *after* Runware had returned and
+billed s006. The job aborted with "is not in the subpath of", left s006 at
+`result`, and never submitted s038.
+
+- `create_app` now stores an absolute `projects_dir`; every API root inherits it.
+- `record_asset` normalises both root and image path before storing the relative
+  path.
+- Recovered s006's paid result ($0.0347205) from the journal, no resubmission.
+  s003 is kept, s006 is waiting for review, s038 is the last $0.05 proof still.
+- Regression test: `record_asset` accepts a relative project root.
+
 ## Status
 
 Complete. Live smoke check on a temporary copy of `tree-of-love`: imported a

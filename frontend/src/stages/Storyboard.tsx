@@ -8,7 +8,7 @@ import {
 } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
-import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
+import { concerns, notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
 import { isPaidShot, kindMeta, kindOf } from "../shotKinds";
 import { ShotThumb } from "../storyboard/ShotThumb";
 import { Button, ErrorState, LoadingState } from "../ui";
@@ -109,10 +109,13 @@ export function StoryboardStage({
     };
     setError(null);
     load();
-    window.addEventListener(PROJECT_CHANGED, load);
+    const changed = (event: Event) => {
+      if (concerns(event, slug)) load();
+    };
+    window.addEventListener(PROJECT_CHANGED, changed);
     return () => {
       live = false;
-      window.removeEventListener(PROJECT_CHANGED, load);
+      window.removeEventListener(PROJECT_CHANGED, changed);
     };
   }, [slug, revision]);
 
@@ -190,6 +193,7 @@ export function StoryboardStage({
             Integer-frame timeline, stable shot IDs. Choose each shot's kind, job, message
             and on-screen text; only scene and generated product or bridge shots cost money.
           </p>
+          <ApprovalBar stages={["storyboard"]} />
         </div>
         <div className="stage-tools">
           <ArtifactRating slug={slug} artifact="storyboard" />
@@ -230,7 +234,6 @@ export function StoryboardStage({
           }
         />
       )}
-      <ApprovalBar slug={slug} stages={["brief", "storyboard"]} refresh={revision} />
 
       {!loaded && !error && <LoadingState>Reading the storyboard…</LoadingState>}
 

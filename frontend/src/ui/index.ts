@@ -13,3 +13,8 @@ export { StatusDot } from "./StatusDot";
 export type { StatusTone } from "./StatusDot";
 export { EmptyState, ErrorState, LoadingState } from "./State";
 export { scrollBehavior, useFocusTrap } from "./focus";
+export { AutoTextarea } from "./AutoTextarea";
+export { Markdown } from "./Markdown";
+export { ProseField } from "./ProseField";
+export { SaveState } from "./SaveState";
+export type { SaveStatus } from "./SaveState";

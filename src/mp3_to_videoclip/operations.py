@@ -17,6 +17,7 @@ never from a guessed percentage or an invented ETA.
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import os
 import socket
 from datetime import UTC, datetime
@@ -197,18 +198,69 @@ def active() -> Operation | None:
     return _ACTIVE
 
 
+# A live listener for the same phase/progress calls. The Studio's job runner sets
+# it (through a context variable, so ``asyncio.to_thread`` carries it into the
+# worker thread) to stream progress to the browser. Like the receipt, it is
+# observation only: an observer error is swallowed and never reaches the work.
+_OBSERVER: contextvars.ContextVar = contextvars.ContextVar("operation_observer", default=None)
+
+
+# A cooperative stop request for the same context (the Studio's Cancel button).
+# Work that can stop safely between steps checks it; nothing is interrupted
+# mid-step, so a paid task that was already sent still finishes and is recorded.
+_STOP: contextvars.ContextVar = contextvars.ContextVar("operation_stop", default=None)
+
+
+def watch_stop(event):
+    """Install a ``threading.Event`` that asks this context's work to stop."""
+    return _STOP.set(event)
+
+
+def unwatch_stop(token) -> None:
+    _STOP.reset(token)
+
+
+def stop_requested() -> bool:
+    event = _STOP.get()
+    try:
+        return bool(event is not None and event.is_set())
+    except Exception:  # noqa: BLE001 - a broken flag never stops real work
+        return False
+
+
+def observe(callback):
+    """Install ``callback(event, data)`` for this context; returns a reset token."""
+    return _OBSERVER.set(callback)
+
+
+def unobserve(token) -> None:
+    _OBSERVER.reset(token)
+
+
+def _notify(event: str, data: dict) -> None:
+    callback = _OBSERVER.get()
+    if callback is None:
+        return
+    try:
+        callback(event, {key: value for key, value in data.items() if value is not None})
+    except Exception:  # noqa: BLE001 - monitoring never breaks the observed work
+        pass
+
+
 def tick(**kwargs) -> None:
     """Advance the active operation; a no-op when nothing is being observed.
 
     Persistence is already best-effort inside :meth:`Operation._save`, so a
     monitoring failure can never break the work it observes.
     """
+    _notify("tick", kwargs)
     if _ACTIVE is None:
         return
     _ACTIVE.tick(**kwargs)
 
 
 def phase(name, **kwargs) -> None:
+    _notify("phase", {"phase": name, **kwargs})
     if _ACTIVE is None:
         return
     _ACTIVE.phase(name, **kwargs)

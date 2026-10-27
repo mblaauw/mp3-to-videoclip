@@ -8,7 +8,7 @@ import {
   type Storyboard,
 } from "../api";
 import { editBoundaryLimits, moveEditBoundary } from "../film/editTimeline";
-import { PauseIcon, PlayIcon } from "../ui/icons";
+import { LoopIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, VolumeIcon } from "../ui/icons";
 import { toast } from "../toast";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { usePlayer } from "./player";
@@ -144,6 +144,8 @@ export function Spine({
   const windowOrigin = useRef<AudioWindow | null>(null);
   const commitTimer = useRef<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [hover, setHover] = useState<{ x: number; time: number } | null>(null);
+  const scrubbing = useRef(false);
   const excerptMode =
     stage === "story" &&
     !!audioWindow &&
@@ -201,7 +203,10 @@ export function Spine({
   const frameAt = (clientX: number, index: number) => {
     const box = canvasRef.current?.getBoundingClientRect();
     if (!box || !box.width || !board) return 0;
-    const raw = Math.round(((clientX - box.left) / box.width) * total);
+    // Same basis as the drawing: lane width is the timeline in seconds.
+    const seconds = ((clientX - box.left) / box.width) * timelineDuration -
+      (excerptMode && audioWindow ? audioWindow.start : 0);
+    const raw = Math.round(seconds * (board.fps || 24));
     const { low, high } = limits(index);
     return Math.max(low, Math.min(high, raw));
   };
@@ -314,62 +319,273 @@ export function Spine({
     setWindowDrag(null);
   };
 
-  const seekFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const timeAtPointer = (clientX: number): number => {
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (!box || !box.width) return 0;
+    const ratio = Math.max(0, Math.min(1, (clientX - box.left) / box.width));
+    if (excerptMode && audioWindow) {
+      const source = ratio * sourceDuration;
+      return Math.max(0, Math.min(windowLength, source - audioWindow.start));
+    }
+    return ratio * timelineDuration;
+  };
+
+  const startScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
     if (
       event.target instanceof Element &&
       event.target.closest(".spine-cut, .spine-window-handle, .spine-window")
     ) {
       return;
     }
-    const box = canvasRef.current?.getBoundingClientRect();
-    if (!box || !box.width) return;
-    if (excerptMode && audioWindow) {
-      const source = (event.clientX - box.left) / box.width * sourceDuration;
-      const clamped = Math.max(audioWindow.start, Math.min(audioWindow.end, source));
-      player.seek(clamped - audioWindow.start);
-      return;
+    scrubbing.current = true;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Older browsers: scrubbing still works while the pointer stays inside.
     }
-    player.seek(((event.clientX - box.left) / box.width) * timelineDuration);
+    player.seek(timeAtPointer(event.clientX));
   };
 
-  const playheadPosition = excerptMode && audioWindow
-    ? ((audioWindow.start + player.time) / timelineDuration) * 100
-    : (player.time / timelineDuration) * 100;
-  const displayTime = excerptMode && audioWindow ? audioWindow.start + player.time : player.time;
+  const moveScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (box && box.width) {
+      const x = Math.max(0, Math.min(box.width, event.clientX - box.left));
+      setHover({ x: (x / box.width) * 100, time: timeAtPointer(event.clientX) });
+    }
+    if (scrubbing.current) player.seek(timeAtPointer(event.clientX));
+  };
+
+  const endScrub = () => {
+    scrubbing.current = false;
+  };
+
+  const shift = excerptMode && audioWindow ? audioWindow.start : 0;
+  const toPercent = (seconds: number) => ((shift + seconds) / timelineDuration) * 100;
+  const playheadPosition = toPercent(player.time);
+  const displayTime = player.time;
+  const shownDuration = excerptMode && audioWindow ? windowLength : timelineDuration;
+
+  // What is under the playhead, in the player's own time.
+  const fps = board?.fps || 24;
+  const shotAt = (seconds: number) =>
+    board?.shots.find(
+      (shot) =>
+        seconds >= shot.start_frame / fps &&
+        seconds < (shot.start_frame + shot.duration_frames) / fps,
+    ) || null;
+  const sectionIndexAt = (seconds: number) =>
+    sections.findIndex(
+      (section) => seconds >= Number(section.start) && seconds < Number(section.end),
+    );
+  const nowShot = shotAt(player.time);
+  const nowSectionIndex = sectionIndexAt(player.time);
+  const nowSection = nowSectionIndex >= 0 ? sections[nowSectionIndex] : null;
+
+  const stops = useMemo(() => {
+    if (board?.shots.length) return board.shots.map((shot) => shot.start_frame / (board.fps || 24));
+    return (music?.sections ?? []).map((section) => Number(section.start));
+  }, [board, music]);
+
+  const jump = (direction: -1 | 1) => {
+    const now = player.current();
+    if (!stops.length) {
+      player.seekBy(direction * 5);
+      return;
+    }
+    if (direction > 0) {
+      const next = stops.find((value) => value > now + 0.05);
+      if (next !== undefined) player.seek(next);
+      return;
+    }
+    // Back: to the start of this shot, or the previous one when already there.
+    const earlier = stops.filter((value) => value < now - 0.75);
+    player.seek(earlier.length ? earlier[earlier.length - 1] : 0);
+  };
+
+  const cycleLoop = () => {
+    const now = player.current();
+    const mode = player.loop?.label.startsWith("Shot")
+      ? "shot"
+      : player.loop?.label.startsWith("Section")
+        ? "section"
+        : player.loop
+          ? "other"
+          : "off";
+    const shot = shotAt(now);
+    const sectionIndex = sectionIndexAt(now);
+    if (mode === "off" && shot) {
+      player.setLoop({
+        start: shot.start_frame / fps,
+        end: (shot.start_frame + shot.duration_frames) / fps,
+        label: `Shot ${shot.id}`,
+      });
+      return;
+    }
+    if ((mode === "off" || mode === "shot") && sectionIndex >= 0) {
+      const section = sections[sectionIndex];
+      player.setLoop({
+        start: Number(section.start),
+        end: Number(section.end),
+        label: `Section ${sectionName(section, sectionIndex)}`,
+      });
+      return;
+    }
+    player.setLoop(null);
+  };
+
+  const cycleRate = () => {
+    const rates = [1, 0.75, 0.5];
+    const index = rates.indexOf(player.rate);
+    player.setRate(rates[(index + 1) % rates.length]);
+  };
+
+  const keys = useRef({ jump, cycleLoop });
+  keys.current = { jump, cycleLoop };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) {
+        return;
+      }
+      if (event.key === "," || event.key === ".") {
+        event.preventDefault();
+        keys.current.jump(event.key === "," ? -1 : 1);
+      } else if (event.key === "l" || event.key === "L") {
+        event.preventDefault();
+        keys.current.cycleLoop();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // A loop that no longer matches the board (a moved cut) is dropped.
+  const { loop, setLoop } = player;
+  useEffect(() => {
+    if (loop && loop.end > shownDuration + 0.5) setLoop(null);
+  }, [loop, setLoop, shownDuration]);
 
   return (
     <footer className="spine" aria-label="Song timeline">
       <div className="spine-transport">
-        <button
-          type="button"
-          className="spine-play"
-          onClick={player.toggle}
-          aria-label={player.playing ? "Pause" : "Play"}
-        >
-          {player.playing ? <PauseIcon /> : <PlayIcon />}
-        </button>
+        <div className="spine-buttons">
+          <button
+            type="button"
+            className="spine-btn"
+            onClick={() => jump(-1)}
+            aria-label={board ? "Previous shot" : "Previous section"}
+            title={`${board ? "Previous shot" : "Previous section"} ( , )`}
+          >
+            <PrevIcon size={16} />
+          </button>
+          <button
+            type="button"
+            className="spine-play"
+            onClick={player.toggle}
+            aria-label={player.playing ? "Pause" : "Play"}
+            title={`${player.playing ? "Pause" : "Play"} (Space)`}
+          >
+            {player.playing ? <PauseIcon /> : <PlayIcon />}
+          </button>
+          <button
+            type="button"
+            className="spine-btn"
+            onClick={() => jump(1)}
+            aria-label={board ? "Next shot" : "Next section"}
+            title={`${board ? "Next shot" : "Next section"} ( . )`}
+          >
+            <NextIcon size={16} />
+          </button>
+        </div>
         <div className="spine-time">
-          <b>{clock(displayTime)}</b> / {clock(timelineDuration)}
+          <b>{clock(displayTime)}</b> / {clock(shownDuration)}
           {excerptMode && <span className="spine-time-label"> excerpt</span>}
+        </div>
+        <div className="spine-now" aria-live="off">
+          {nowShot ? <b>{nowShot.id}</b> : null}
+          {nowSection ? (
+            <span>{sectionName(nowSection, nowSectionIndex)}</span>
+          ) : !nowShot ? (
+            <span>{music ? "—" : "Not measured yet"}</span>
+          ) : null}
+        </div>
+        <div className="spine-tools">
+          <button
+            type="button"
+            className={`spine-chip ${player.loop ? "on" : ""}`}
+            onClick={cycleLoop}
+            aria-pressed={!!player.loop}
+            title="Loop the shot, then the section, then off (L)"
+          >
+            <LoopIcon size={14} />
+            <span>{player.loop ? player.loop.label.split(" ")[0] : "Loop"}</span>
+          </button>
+          <button
+            type="button"
+            className="spine-chip"
+            onClick={cycleRate}
+            title="Playback speed"
+            aria-label={`Playback speed ${player.rate}×`}
+          >
+            {player.rate}×
+          </button>
+          <button
+            type="button"
+            className={`spine-chip icon ${player.muted ? "on" : ""}`}
+            onClick={player.toggleMute}
+            aria-pressed={player.muted}
+            aria-label={player.muted ? "Unmute" : "Mute"}
+            title={`${player.muted ? "Unmute" : "Mute"} (M)`}
+          >
+            <VolumeIcon size={14} muted={player.muted || player.volume === 0} />
+          </button>
+          <input
+            className="spine-volume"
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={player.muted ? 0 : player.volume}
+            onChange={(event) => player.setVolume(Number(event.target.value))}
+            aria-label="Volume"
+          />
         </div>
       </div>
       <div
         className="spine-track"
-        ref={canvasRef}
         role="slider"
         tabIndex={0}
         aria-label={excerptMode ? "Seek in the song excerpt" : "Seek in the song"}
         aria-valuemin={0}
-        aria-valuemax={Math.round(timelineDuration)}
+        aria-valuemax={Math.round(shownDuration)}
         aria-valuenow={Math.round(displayTime)}
-        onPointerDown={seekFromPointer}
+        aria-valuetext={`${clock(displayTime)} of ${clock(shownDuration)}${
+          nowShot ? `, shot ${nowShot.id}` : ""
+        }`}
         onKeyDown={(event) => {
           if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
             event.preventDefault();
-            player.seekBy(event.key === "ArrowLeft" ? -5 : 5);
+            player.seekBy((event.key === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 1 : 5));
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            player.seek(0);
+          } else if (event.key === "End") {
+            event.preventDefault();
+            player.seek(shownDuration);
           }
         }}
       >
+        <div
+          className={`spine-lane ${scrubbing.current ? "scrubbing" : ""}`}
+          ref={canvasRef}
+          onPointerDown={startScrub}
+          onPointerMove={moveScrub}
+          onPointerUp={endScrub}
+          onPointerCancel={endScrub}
+          onPointerLeave={() => setHover(null)}
+        >
         <div className="spine-sections">
           {sections.map((section, index) => {
             if (excerptMode && audioWindow) {
@@ -617,7 +833,7 @@ export function Spine({
               type="button"
               key={`cut-${board.shots[index].id}`}
               className="spine-cut"
-              style={{ left: `${(position / total) * 100}%` }}
+              style={{ left: `${toPercent(position / fps)}%` }}
               role="slider"
               aria-label={`Boundary before ${board.shots[index + 1].id}`}
               aria-orientation="horizontal"
@@ -663,10 +879,29 @@ export function Spine({
             />
           );
         })}
+        {player.loop && (
+          <div
+            className="spine-loop"
+            style={{
+              left: `${Math.max(0, toPercent(player.loop.start))}%`,
+              width: `${Math.max(0, toPercent(player.loop.end) - toPercent(player.loop.start))}%`,
+            }}
+            aria-hidden="true"
+          />
+        )}
+        {hover && (
+          <div className="spine-ghost" style={{ left: `${hover.x}%` }} aria-hidden="true">
+            <span>
+              {clock(hover.time)}
+              {shotAt(hover.time) ? ` · ${shotAt(hover.time)?.id}` : ""}
+            </span>
+          </div>
+        )}
         <div
           className="spine-playhead"
           style={{ left: `${Math.min(100, Math.max(0, playheadPosition))}%` }}
         />
+        </div>
       </div>
     </footer>
   );

@@ -8,9 +8,12 @@ import {
   type IntakePayload,
   type TreatmentsPayload,
 } from "../api";
-import { ApprovalBar } from "../ApprovalBar";
+import { ApprovalBar, useApprovals } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
-import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
+import { notifyProjectChanged, useProjectChanged } from "../shell/projectEvents";
+import { SaveState, type SaveStatus } from "../ui/SaveState";
+import { ProseField } from "../ui/ProseField";
+import { AutoTextarea } from "../ui/AutoTextarea";
 import { Button, EmptyState, ErrorState, LoadingState } from "../ui";
 import { BriefCard } from "../story/BriefCard";
 import { CharactersCard } from "../story/CharactersCard";
@@ -52,12 +55,10 @@ export function StoryStage({
 }) {
   const [brief, setBrief] = useState<Brief | null>(null);
   const [treatments, setTreatments] = useState<TreatmentsPayload | null>(null);
-  const [approval, setApproval] = useState<ApprovalState | null>(null);
   const [changes, setChanges] = useState<ApprovalChanges | null>(null);
   const [treatment, setTreatment] = useState("");
   const [direction, setDirection] = useState("");
   const [style, setStyle] = useState("");
-  const [treatmentSaved, setTreatmentSaved] = useState(false);
   const [savingTreatment, setSavingTreatment] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
   const [fieldsDirty, setFieldsDirty] = useState(false);
@@ -69,12 +70,12 @@ export function StoryStage({
   const treatmentLast = useRef("");
   const treatmentRef = useRef("");
   const savingRef = useRef(false);
-  const savedTimer = useRef<number | null>(null);
 
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
   const flashSaved = () => {
-    setTreatmentSaved(true);
-    if (savedTimer.current) window.clearTimeout(savedTimer.current);
-    savedTimer.current = window.setTimeout(() => setTreatmentSaved(false), 2000);
+    setSavedAt(Date.now());
+    setSaveFailed(false);
   };
 
   const load = useCallback(async () => {
@@ -101,7 +102,6 @@ export function StoryStage({
   useEffect(() => {
     setBrief(null);
     setTreatments(null);
-    setApproval(null);
     setChanges(null);
     setTreatment("");
     setDirection("");
@@ -111,24 +111,20 @@ export function StoryStage({
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const changed = () => {
-      setRevision((value) => value + 1);
-      // The Writer can rewrite the brief while this stage stays mounted. Reload
-      // it unless a reload would overwrite input the user has not saved yet.
-      if (
-        savingRef.current ||
-        savingFields ||
-        fieldsDirty ||
-        treatmentRef.current !== treatmentLast.current
-      ) {
-        return;
-      }
-      void load();
-    };
-    window.addEventListener(PROJECT_CHANGED, changed);
-    return () => window.removeEventListener(PROJECT_CHANGED, changed);
-  }, [fieldsDirty, load, savingFields]);
+  useProjectChanged(slug, () => {
+    setRevision((value) => value + 1);
+    // The Writer can rewrite the brief while this stage stays mounted. Reload
+    // it unless a reload would overwrite input the user has not saved yet.
+    if (
+      savingRef.current ||
+      savingFields ||
+      fieldsDirty ||
+      treatmentRef.current !== treatmentLast.current
+    ) {
+      return;
+    }
+    void load();
+  });
 
   useEffect(() => {
     if (!intake) {
@@ -139,12 +135,7 @@ export function StoryStage({
     }
   }, [intake, onIntakeChange, slug]);
 
-  useEffect(() => {
-    api
-      .approvals(slug, ["brief"])
-      .then((data) => setApproval(data.stages[0] || null))
-      .catch(() => setApproval(null));
-  }, [slug, revision]);
+  const approval: ApprovalState | null = useApprovals().states.brief || null;
 
   useEffect(() => {
     if (approval?.state !== "stale") {
@@ -156,13 +147,6 @@ export function StoryStage({
       .then(setChanges)
       .catch(() => setChanges(null));
   }, [slug, approval?.state, approval?.expected_hash, revision]);
-
-  useEffect(
-    () => () => {
-      if (savedTimer.current) window.clearTimeout(savedTimer.current);
-    },
-    [],
-  );
 
   const saveTreatment = useCallback(
     async (value: string) => {
@@ -180,9 +164,10 @@ export function StoryStage({
         }
         flashSaved();
         setRevision((current) => current + 1);
-        notifyProjectChanged();
+        notifyProjectChanged({ slug });
       } catch (caught) {
         setError(String(caught));
+        setSaveFailed(true);
       } finally {
         savingRef.current = false;
         setSavingTreatment(false);
@@ -222,9 +207,10 @@ export function StoryStage({
       setStyle(updated.style || "");
       flashSaved();
       setRevision((current) => current + 1);
-      notifyProjectChanged();
+      notifyProjectChanged({ slug });
     } catch (caught) {
       setError(String(caught));
+      setSaveFailed(true);
     } finally {
       setSavingFields(false);
     }
@@ -294,6 +280,17 @@ export function StoryStage({
     }
   };
 
+  const saveStatus: SaveStatus =
+    savingTreatment || savingFields
+      ? "saving"
+      : saveFailed
+        ? "error"
+        : fieldsDirty || treatment !== treatmentLast.current
+          ? "dirty"
+          : savedAt
+            ? "saved"
+            : "idle";
+
   const concepts = treatments?.concepts || treatments?.treatments || [];
   const chosen = treatments?.chosen_id || null;
   const length = sectionLength(audioWindow);
@@ -314,10 +311,11 @@ export function StoryStage({
         Paste a concept, outline or full treatment. It is saved as the Treatment first, so the
         Writer reads it as your story and improves it instead of replacing it.
       </p>
-      <textarea
+      <AutoTextarea
         value={importText}
         onChange={(event) => setImportText(event.target.value)}
-        rows={8}
+        minRows={6}
+        maxRows={24}
         placeholder="Paste your concept or treatment…"
         aria-label="Concept you already have"
       />
@@ -345,6 +343,7 @@ export function StoryStage({
         <div>
           <h1>Story</h1>
           <p>Pick a direction, shape the story and set the look every picture will share.</p>
+          <ApprovalBar stages={["brief"]} />
         </div>
         <div className="stage-ratings" aria-label="Rate the story artifacts">
           <ArtifactRating slug={slug} artifact="brief" />
@@ -479,17 +478,32 @@ export function StoryStage({
         <section className="stage-block treatment-block">
           <h2>
             Treatment
-            {treatmentSaved && <span className="saved-note">Saved</span>}
-            {(savingTreatment || savingFields) && <span className="saved-note">Saving…</span>}
+            <SaveState
+              status={saveStatus}
+              savedAt={savedAt}
+              onRetry={() => {
+                void saveTreatment(treatmentRef.current);
+                void saveFields();
+              }}
+            />
           </h2>
           <div className="direction-style">
             <label>
               Direction
-              <input
+              <AutoTextarea
+                minRows={1}
+                maxRows={5}
                 value={direction}
                 onChange={(event) => {
-                  setDirection(event.target.value);
+                  setDirection(event.target.value.replace(/\n/g, " "));
                   setFieldsDirty(true);
+                }}
+                onKeyDown={(event) => {
+                  // One sentence: Enter finishes the field instead of breaking the line.
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    (event.target as HTMLTextAreaElement).blur();
+                  }
                 }}
                 onBlur={() => window.setTimeout(() => void saveFields(), 0)}
                 placeholder="What kind of film is this?"
@@ -498,11 +512,20 @@ export function StoryStage({
             </label>
             <label>
               Style
-              <input
+              <AutoTextarea
+                minRows={1}
+                maxRows={5}
                 value={style}
                 onChange={(event) => {
-                  setStyle(event.target.value);
+                  setStyle(event.target.value.replace(/\n/g, " "));
                   setFieldsDirty(true);
+                }}
+                onKeyDown={(event) => {
+                  // One sentence: Enter finishes the field instead of breaking the line.
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    (event.target as HTMLTextAreaElement).blur();
+                  }
                 }}
                 onBlur={() => window.setTimeout(() => void saveFields(), 0)}
                 placeholder="One honest sentence about the medium"
@@ -510,19 +533,21 @@ export function StoryStage({
               />
             </label>
           </div>
-          <textarea
-            className="treatment-doc"
+          <ProseField
+            label="Treatment"
             value={treatment}
-            rows={14}
-            onChange={(event) => {
-              setTreatment(event.target.value);
-              treatmentRef.current = event.target.value;
+            minRows={12}
+            onChange={(value) => {
+              setTreatment(value);
+              treatmentRef.current = value;
             }}
-            onBlur={() => void saveTreatment(treatment)}
-            placeholder="The story from the first frame to the last. Saves as you type."
-            aria-label="Treatment"
+            onCommit={() => void saveTreatment(treatmentRef.current)}
+            placeholder="The story from the first frame to the last. It saves as you type."
           />
-          <p className="hint">Saves 800 ms after you stop typing. There is no Save button.</p>
+          <p className="hint">
+            Click the text to edit. It saves a moment after you stop typing; there is no Save
+            button.
+          </p>
         </section>
         <div className="story-side">
           {intake && brief ? (
@@ -544,13 +569,6 @@ export function StoryStage({
       </div>
 
       <CreditsCard slug={slug} />
-
-      <ApprovalBar
-        slug={slug}
-        stages={["brief"]}
-        refresh={revision}
-        onApproved={() => setRevision((value) => value + 1)}
-      />
     </>
   );
 }

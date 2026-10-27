@@ -16,9 +16,11 @@ import type { BaseFilmInput } from "../baseFilm";
 import type { EditTransition } from "../baseFilm";
 import { setEditTransition, TRANSITION_TYPES } from "../film/editTimeline";
 import type { Stage } from "../shell/nextStep";
-import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
+import { JobBanner } from "../jobs/JobBanner";
+import { useProjectJobs } from "../jobs/store";
+import { notifyProjectChanged, useProjectChanged } from "../shell/projectEvents";
 import { SHOW_EDIT_FILE } from "../shell/SettingsDialog";
-import { usePlayer } from "../spine/player";
+import { usePlayerControls, usePlayerTime } from "../spine/player";
 import { CreditsCard } from "../story/CreditsCard";
 import { ShotThumb } from "../storyboard/ShotThumb";
 import { Button, ErrorState, LoadingState, useFocusTrap } from "../ui";
@@ -143,7 +145,10 @@ export function FilmStage({
   slug: string;
   onNavigate: (stage: Stage) => void;
 }) {
-  const player = usePlayer();
+  const player = usePlayerControls();
+  // A tenth of a second is enough for the "now playing" label; the synced
+  // preview reads the exact clock itself.
+  const playerTime = usePlayerTime(0.1);
   const [tab, setTab] = useState<"cut" | "files">("cut");
   const [previews, setPreviews] = useState<string[]>([]);
   const [exports, setExports] = useState<string[]>([]);
@@ -232,44 +237,15 @@ export function FilmStage({
     void load();
   }, [load]);
 
-  useEffect(() => {
-    // Renders are background jobs. Poll only the cheap file and sample lists;
-    // the full checklist re-hashes every accepted still and must not run on a timer.
-    const id = window.setInterval(() => {
-      void Promise.allSettled([api.exports(slug), api.graphicsReview(slug)]).then(
-        ([filesResult, reviewResult]) => {
-          if (filesResult.status === "fulfilled") {
-            const changed =
-              filesResult.value.previews.join("|") !== previewsKey.current;
-            applyFiles(filesResult.value);
-            if (changed) {
-              void load();
-              return;
-            }
-          }
-          if (reviewResult.status === "fulfilled") {
-            const next = reviewKey(reviewResult.value);
-            if (next !== graphicsKey.current) {
-              graphicsKey.current = next;
-              setGraphics(reviewResult.value);
-              void load();
-            }
-          }
-        },
-      );
-    }, 5000);
-    return () => window.clearInterval(id);
-  }, [applyFiles, load, slug]);
-
-  useEffect(() => {
-    const refresh = () => {
-      setShowEditFile(window.localStorage.getItem(SHOW_EDIT_FILE) === "1");
-      setRevision((value) => value + 1);
-      void load();
-    };
-    window.addEventListener(PROJECT_CHANGED, refresh);
-    return () => window.removeEventListener(PROJECT_CHANGED, refresh);
-  }, [load]);
+  // Renders are background jobs; the server announces when one finishes (and
+  // when any file behind this view changes), so nothing here polls.
+  useProjectChanged(slug, () => {
+    setShowEditFile(window.localStorage.getItem(SHOW_EDIT_FILE) === "1");
+    setRevision((value) => value + 1);
+    void load();
+  });
+  const renderJobs = useProjectJobs(slug, "render");
+  const rendering = renderJobs.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -370,7 +346,7 @@ export function FilmStage({
     setNotice(
       `${
         kind === "final" ? "Final render" : kind === "base" ? "Titles check" : "Preview"
-      } queued. It appears in Rendered files when the job finishes.`,
+      } queued. Progress shows below; the file appears in Rendered files when it is done.`,
     );
     try {
       await api.render(slug, kind);
@@ -475,15 +451,15 @@ export function FilmStage({
   const fps = board?.fps || 24;
   const currentCutShot = cut?.shots.find(
     (shot) =>
-      player.time >= shot.start_frame / fps &&
-      player.time < (shot.start_frame + shot.duration_frames) / fps,
+      playerTime >= shot.start_frame / fps &&
+      playerTime < (shot.start_frame + shot.duration_frames) / fps,
   );
   const currentBoardShot = currentCutShot
     ? boardById.get(currentCutShot.shot_id)
     : board?.shots.find(
         (shot) =>
-          player.time >= shot.start_frame / fps &&
-          player.time < (shot.start_frame + shot.duration_frames) / fps,
+          playerTime >= shot.start_frame / fps &&
+          playerTime < (shot.start_frame + shot.duration_frames) / fps,
       );
   const currentPicture = currentBoardShot ? imageById.get(currentBoardShot.id) : undefined;
   const line = (id: string) => checklist?.lines.find((item) => item.id === id) || null;
@@ -548,6 +524,52 @@ export function FilmStage({
         <LoadingState>Reading the film, its gates and the cut…</LoadingState>
       ) : tab === "cut" ? (
         <div className="film-cut">
+          <div className={`film-top ${rendererReady === false ? "single" : ""}`}>
+            <section className="card live-preview">
+              <header className="live-head">
+                <div>
+                  <h3>Live preview</h3>
+                  <p className="hint">
+                    Free, marked and local. Same timing, camera and transitions as the render.
+                  </p>
+                </div>
+                {currentBoardShot && (
+                  <div className="live-now">
+                    <b>{currentBoardShot.id}</b>
+                    <span>{currentBoardShot.message || currentBoardShot.purpose}</span>
+                    {currentPicture?.stale && <em>Older prompt</em>}
+                  </div>
+                )}
+              </header>
+              {live ? (
+                <>
+                  <Suspense fallback={<p className="empty">Loading the player…</p>}>
+                    <LivePlayer
+                      input={live.input}
+                      audio={null}
+                      durationInFrames={live.durationInFrames}
+                      fps={live.fps}
+                      width={live.width}
+                      height={live.height}
+                      clock={player.clock}
+                      playing={player.playing}
+                    />
+                  </Suspense>
+                  <p className="hint">
+                    {live.input.shots.filter((shot) => shot.src).length} of{" "}
+                    {live.input.shots.length} stills loaded
+                    {live.stale > 0
+                      ? ` · ${live.stale} selected still${
+                          live.stale === 1 ? " is" : "s are"
+                        } older than the storyboard`
+                      : ""}
+                  </p>
+                </>
+              ) : (
+                <p className="empty">{liveError ?? "No storyboard yet."}</p>
+              )}
+            </section>
+
           {rendererReady !== false && (
             <section className="delivery-card">
               <header>
@@ -603,10 +625,10 @@ export function FilmStage({
                           <Button
                             size="small"
                             variant="primary"
-                            disabled={busy !== null}
+                            disabled={busy !== null || rendering}
                             onClick={() => void render("preview")}
                           >
-                            {busy === "preview" ? "Queueing…" : "Watch preview"}
+                            {busy === "preview" ? "Queueing…" : rendering ? "Rendering…" : "Render the preview"}
                           </Button>
                         </span>
                       )}
@@ -647,7 +669,7 @@ export function FilmStage({
                           <Button
                             size="small"
                             variant={samples.length ? "quiet" : "primary"}
-                            disabled={!stillsDone || busy !== null}
+                            disabled={!stillsDone || busy !== null || rendering}
                             title={
                               stillsDone
                                 ? "Render a base and read the real title frames"
@@ -689,10 +711,11 @@ export function FilmStage({
                   </li>
                 )}
               </ul>
+              <JobBanner slug={slug} kinds={["render"]} className="in-card" />
               <footer>
                 <Button
                   variant="primary"
-                  disabled={!checklist?.can_final || busy !== null}
+                  disabled={!checklist?.can_final || busy !== null || rendering}
                   onClick={() => void render("final")}
                 >
                   {busy === "final" ? "Queueing…" : "Render final"}
@@ -701,6 +724,7 @@ export function FilmStage({
               </footer>
             </section>
           )}
+          </div>
 
           <section className="cut-section">
             <header className="cut-head">
@@ -890,51 +914,6 @@ export function FilmStage({
             )}
           </section>
 
-          <section className="card live-preview">
-            <header className="live-head">
-              <div>
-                <h3>Live preview</h3>
-                <p className="hint">
-                  Free, marked and local. Same timing, camera and transitions as the render.
-                </p>
-              </div>
-              {currentBoardShot && (
-                <div className="live-now">
-                  <b>{currentBoardShot.id}</b>
-                  <span>{currentBoardShot.message || currentBoardShot.purpose}</span>
-                  {currentPicture?.stale && <em>Older prompt</em>}
-                </div>
-              )}
-            </header>
-            {live ? (
-              <>
-                <Suspense fallback={<p className="empty">Loading the player…</p>}>
-                  <LivePlayer
-                    input={live.input}
-                    audio={null}
-                    durationInFrames={live.durationInFrames}
-                    fps={live.fps}
-                    width={live.width}
-                    height={live.height}
-                    time={player.time}
-                    playing={player.playing}
-                  />
-                </Suspense>
-                <p className="hint">
-                  {live.input.shots.filter((shot) => shot.src).length} of{" "}
-                  {live.input.shots.length} stills loaded
-                  {live.stale > 0
-                    ? ` · ${live.stale} selected still${
-                        live.stale === 1 ? " is" : "s are"
-                      } older than the storyboard`
-                    : ""}
-                </p>
-              </>
-            ) : (
-              <p className="empty">{liveError ?? "No storyboard yet."}</p>
-            )}
-          </section>
-
           <CreditsCard slug={slug} />
         </div>
       ) : (
@@ -969,18 +948,19 @@ export function FilmStage({
                 No renders yet. A preview is local and free; the checklist queues one.
               </p>
             )}
+            <JobBanner slug={slug} kinds={["render"]} className="in-card" />
             <div className="row-actions">
               <Button
                 size="small"
-                disabled={busy !== null}
+                disabled={busy !== null || rendering}
                 onClick={() => void render("preview")}
               >
-                {busy === "preview" ? "Queueing…" : "Watch a new preview"}
+                {busy === "preview" ? "Queueing…" : "Render a new preview"}
               </Button>
               <Button
                 size="small"
                 variant="quiet"
-                disabled={!checklist?.can_final || busy !== null}
+                disabled={!checklist?.can_final || busy !== null || rendering}
                 onClick={() => void render("final")}
               >
                 {busy === "final" ? "Queueing…" : "Render final"}

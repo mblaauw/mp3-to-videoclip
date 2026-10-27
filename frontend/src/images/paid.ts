@@ -33,6 +33,8 @@ export function usePaidImages(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  /** Shot ids of the batch this screen last queued (cleared by the caller). */
+  const [queued, setQueued] = useState<string[]>([]);
   const done = useRef(onDone);
   done.current = onDone;
 
@@ -60,10 +62,11 @@ export function usePaidImages(
           return;
         }
         setQuote(null);
+        setQueued(current.estimate.shot_ids?.length ? current.estimate.shot_ids : current.ids);
         setMessage(
           `Queued ${result.tasks || current.estimate.tasks} still${
             (result.tasks || current.estimate.tasks) === 1 ? "" : "s"
-          } · $${result.reserve_usd || current.estimate.reserve_usd} reserved.`,
+          } · $${result.reserve_usd || current.estimate.reserve_usd} reserved. They appear here as they arrive.`,
         );
         done.current();
       } catch (caught) {
@@ -150,5 +153,7 @@ export function usePaidImages(
     setMessage(null);
   }, []);
 
-  return { quote, busy, error, message, request, topUp, confirm, clear };
+  const clearQueued = useCallback(() => setQueued([]), []);
+
+  return { quote, busy, error, message, queued, request, topUp, confirm, clear, clearQueued };
 }

@@ -1052,6 +1052,8 @@ export interface components {
             progress: components["schemas"]["JobProgress"];
             /** Project */
             project: string;
+            /** Queued At */
+            queued_at?: number | null;
             /** Started At */
             started_at?: number | null;
             /** Status */
@@ -1072,6 +1074,8 @@ export interface components {
             progress: components["schemas"]["JobProgress"];
             /** Project */
             project: string;
+            /** Queued At */
+            queued_at?: number | null;
             /** Started At */
             started_at?: number | null;
             /** Status */
@@ -1084,6 +1088,13 @@ export interface components {
              * @default 0
              */
             done: number;
+            /** Message */
+            message?: string | null;
+            /**
+             * Phase
+             * @default
+             */
+            phase: string;
             /**
              * Total
              * @default 0

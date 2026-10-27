@@ -1,158 +1,98 @@
-import { useEffect, useState } from "react";
-import { api, type ApprovalState } from "./api";
-import { notifyProjectChanged } from "./shell/projectEvents";
+import { createContext, useContext, type ReactNode } from "react";
+import type { ApprovalState } from "./api";
+import { Pill, type PillTone } from "./ui";
 
-const LABEL: Record<string, string> = {
-  approved: "approved",
-  stale: "changed since approval",
-  missing: "not approved",
-  unavailable: "not ready",
+/**
+ * Approval *status* for a stage, read from the shell's one approvals snapshot.
+ *
+ * Approving happens in exactly one place — the sticky next-step bar (or, for the
+ * preview and titles, the attested checklist on Film). This strip only says
+ * where each gate stands, when it was signed and with which note, so a page no
+ * longer shows a second, competing Approve button.
+ */
+
+export type ApprovalsSnapshot = {
+  states: Record<string, ApprovalState>;
+  loaded: boolean;
 };
 
-const BUTTON: Record<string, string> = {
-  analysis: "Approve analysis",
-  lyrics: "Approve lyrics",
-  brief: "Approve story",
-  storyboard: "Approve storyboard",
-  proof: "Approve style check",
-  preview: "Approve preview",
-  stills: "Approve all stills",
-  graphics: "Approve graphics",
-};
+const ApprovalsContext = createContext<ApprovalsSnapshot>({ states: {}, loaded: false });
 
-export function ApprovalBar({
-  slug,
-  stages,
-  refresh = 0,
-  onApproved,
+export function ApprovalsProvider({
+  value,
+  children,
 }: {
-  slug: string;
-  stages: string[];
-  refresh?: number;
-  onApproved?: () => void;
+  value: ApprovalsSnapshot;
+  children: ReactNode;
 }) {
-  const [items, setItems] = useState<ApprovalState[]>([]);
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
-  const [attested, setAttested] = useState<Record<string, boolean>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const keys = stages.join(",");
+  return <ApprovalsContext.Provider value={value}>{children}</ApprovalsContext.Provider>;
+}
 
-  const load = () => {
-    api
-      .approvals(slug, stages)
-      .then((d) => setItems(d.stages))
-      .catch((e) => setError(String(e)));
-  };
+export function useApprovals(): ApprovalsSnapshot {
+  return useContext(ApprovalsContext);
+}
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, keys, refresh]);
+const NAME: Record<string, string> = {
+  analysis: "Analysis",
+  lyrics: "Lyrics",
+  brief: "Story",
+  storyboard: "Storyboard",
+  proof: "Style check",
+  preview: "Preview",
+  stills: "All stills",
+  graphics: "Titles",
+};
 
-  const approve = async (item: ApprovalState) => {
-    if (!item.expected_hash) return;
-    setBusy(item.stage);
-    setError(null);
-    try {
-      await api.approve(slug, item.stage, {
-        expected_hash: item.expected_hash,
-        note: (notes[item.stage] || "").trim(),
-        confirmed: true,
-        ...(item.stage === "preview" ? { preview_watched: !!attested[item.stage] } : {}),
-        ...(item.stage === "graphics" ? { inspected: !!attested[item.stage] } : {}),
-        ...(item.stage === "lyrics" ? { acknowledge_uncertain: !!attested[item.stage] } : {}),
-      });
-      setNotes((n) => ({ ...n, [item.stage]: "" }));
-      setNotesOpen((n) => ({ ...n, [item.stage]: false }));
-      setAttested((current) => ({ ...current, [item.stage]: false }));
-      load();
-      notifyProjectChanged();
-      onApproved?.();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(null);
-    }
-  };
+const STATE: Record<ApprovalState["state"], { tone: PillTone; word: string }> = {
+  approved: { tone: "keep", word: "Approved" },
+  stale: { tone: "old", word: "Changed since approval" },
+  missing: { tone: "you", word: "Not approved yet" },
+  unavailable: { tone: "neutral", word: "Not ready" },
+};
 
-  if (!items.length) return null;
+function when(at: string | null | undefined): string | null {
+  if (!at) return null;
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** A compact, read-only sign-off line for the given gates. */
+export function ApprovalBar({ stages }: { slug?: string; stages: string[] }) {
+  const { states, loaded } = useApprovals();
+  const items = stages.map((stage) => states[stage]).filter(Boolean) as ApprovalState[];
+  if (!loaded || !items.length) return null;
   return (
-    <section className="card approvals">
-      <h3>Approval</h3>
+    <div className="signoff" aria-label="Approval status">
       {items.map((item) => {
-        const attestation = ["preview", "graphics", "lyrics"].includes(item.stage);
-        const attestedOk = !attestation || !!attested[item.stage];
+        const look = STATE[item.state] || STATE.missing;
+        const stamp = item.state === "approved" ? when(item.at) : null;
+        const note = item.state === "approved" ? item.note : null;
+        // "Not ready" needs no engine wording here: the bar says what to do next.
+        const why = item.state === "stale" ? item.reason : null;
         return (
-          <div className="row" key={item.stage}>
-            <div className="who">
-              <strong>{item.stage}</strong>{" "}
-              <span className={`chip ${item.state}`}>{LABEL[item.state]}</span>
-              {item.at && (
-                <span className="meta"> {new Date(item.at).toLocaleString()}</span>
-              )}
-              {item.reason && <div className="meta">{item.reason}</div>}
-              {!item.reason && item.note && <div className="meta">{item.note}</div>}
-              {item.state === "unavailable" && item.error && (
-                <div className="meta">{item.error}</div>
-              )}
-            </div>
-            {item.state !== "approved" && item.expected_hash && (
-              <div className="approve">
-                {attestation && (
-                  <label className="attest">
-                    <input
-                      type="checkbox"
-                      checked={!!attested[item.stage]}
-                      onChange={(e) =>
-                        setAttested((current) => ({
-                          ...current,
-                          [item.stage]: e.target.checked,
-                        }))
-                      }
-                    />
-                    {item.stage === "preview"
-                      ? "I watched the preview continuously with the actual music"
-                      : item.stage === "graphics"
-                        ? "I inspected the composited graphics samples"
-                        : "I reviewed the lyric lines"}
-                  </label>
-                )}
-                {notesOpen[item.stage] ? (
-                  <input
-                    value={notes[item.stage] || ""}
-                    onChange={(e) =>
-                      setNotes((n) => ({ ...n, [item.stage]: e.target.value }))
-                    }
-                    placeholder="What did you check? (optional)"
-                    maxLength={2000}
-                    aria-label={`Approval note for ${item.stage}`}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() =>
-                      setNotesOpen((current) => ({ ...current, [item.stage]: true }))
-                    }
-                  >
-                    Add a note
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => approve(item)}
-                  disabled={busy === item.stage || !attestedOk}
-                >
-                  {busy === item.stage ? "…" : BUTTON[item.stage] || "Approve"}
-                </button>
-              </div>
+          <div className={`signoff-item ${item.state}`} key={item.stage}>
+            <span className="signoff-name">{NAME[item.stage] || item.stage}</span>
+            <Pill tone={look.tone}>{look.word}</Pill>
+            {stamp && <span className="signoff-meta">{stamp}</span>}
+            {note && (
+              <span className="signoff-note" title={note}>
+                “{note}”
+              </span>
+            )}
+            {why && (
+              <span className="signoff-meta" title={why}>
+                {why}
+              </span>
             )}
           </div>
         );
       })}
-      {error && <p className="error">{error}</p>}
-    </section>
+    </div>
   );
 }

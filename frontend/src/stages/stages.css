@@ -323,24 +323,11 @@
   border-radius: var(--r-control);
   background: var(--raised);
   color: var(--ink);
-  font: var(--t-13) / var(--lh-read) var(--font);
+  font: var(--t-15) / var(--lh-read) var(--font);
 }
 .concept-import textarea:focus {
   outline: 2px solid var(--gold);
   outline-offset: -1px;
-}
-.treatment-doc {
-  width: 100%;
-  min-height: 300px;
-  max-width: 68ch;
-  resize: vertical;
-  border: 0;
-  border-left: 1px solid var(--line);
-  border-radius: 0;
-  padding: 0 0 0 var(--s-4);
-  background: transparent;
-  color: var(--ink);
-  font: var(--t-15) / 1.65 var(--font);
 }
 .direction-style {
   display: grid;
@@ -354,18 +341,16 @@
   color: var(--muted);
   font-size: var(--t-12);
 }
-.direction-style input {
+.direction-style input,
+.direction-style textarea {
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: var(--r-control);
-  padding: 7px 9px;
+  padding: 7px 10px;
   color: var(--ink);
   font: inherit;
-  font-size: var(--t-13);
-}
-.treatment-doc:focus {
-  outline: none;
-  border-left-color: var(--gold);
+  font-size: var(--t-15);
+  line-height: 1.5;
 }
 .story-side {
   display: grid;

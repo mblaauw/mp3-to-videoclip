@@ -94,3 +94,58 @@ export function RightIcon(props: IconProps) {
 export function PlusIcon(props: IconProps) {
   return svg({ ...props, children: <path d="M10 4v12M4 10h12" /> });
 }
+
+export function PrevIcon(props: IconProps) {
+  return svg({
+    ...props,
+    children: (
+      <>
+        <path d="M6 5v10" strokeLinecap="round" />
+        <path d="M15 5.5 8.5 10 15 14.5Z" fill="currentColor" stroke="none" />
+      </>
+    ),
+  });
+}
+
+export function NextIcon(props: IconProps) {
+  return svg({
+    ...props,
+    children: (
+      <>
+        <path d="M14 5v10" strokeLinecap="round" />
+        <path d="M5 5.5 11.5 10 5 14.5Z" fill="currentColor" stroke="none" />
+      </>
+    ),
+  });
+}
+
+export function LoopIcon(props: IconProps) {
+  return svg({
+    ...props,
+    children: (
+      <>
+        <path d="M4 9V8a3 3 0 0 1 3-3h8l-2-2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M16 11v1a3 3 0 0 1-3 3H5l2 2" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+  });
+}
+
+export function VolumeIcon({ muted = false, ...props }: IconProps & { muted?: boolean }) {
+  return svg({
+    ...props,
+    children: (
+      <>
+        <path d="M3.5 8h2.5L10 4.5v11L6 12H3.5Z" fill="currentColor" stroke="none" />
+        {muted ? (
+          <path d="m13 7.5 5 5m0-5-5 5" strokeLinecap="round" />
+        ) : (
+          <>
+            <path d="M13 7.5a3.5 3.5 0 0 1 0 5" strokeLinecap="round" />
+            <path d="M15.2 5.3a6.6 6.6 0 0 1 0 9.4" strokeLinecap="round" />
+          </>
+        )}
+      </>
+    ),
+  });
+}

@@ -9,10 +9,12 @@ import {
   type Music,
   type Storyboard,
 } from "../api";
-import { ApprovalBar } from "../ApprovalBar";
+import { ApprovalBar, useApprovals } from "../ApprovalBar";
 import { PaidCard } from "../images/PaidCard";
 import { usePaidImages } from "../images/paid";
-import { notifyProjectChanged } from "../shell/projectEvents";
+import { JobBanner } from "../jobs/JobBanner";
+import { useProjectJobs } from "../jobs/store";
+import { notifyProjectChanged, useProjectChanged } from "../shell/projectEvents";
 import type { NextAction } from "../shell/nextStep";
 import { kindMeta } from "../shotKinds";
 import { Button, EmptyState, ErrorState, LoadingState, useFocusTrap } from "../ui";
@@ -88,7 +90,6 @@ export function ImagesStage({
 }) {
   const [shots, setShots] = useState<ImageShot[]>([]);
   const [budget, setBudget] = useState<Card | null>(null);
-  const [approvals, setApprovals] = useState<Record<string, ApprovalState>>({});
   const [proofIds, setProofIds] = useState<string[]>([]);
   const [board, setBoard] = useState<Storyboard | null>(null);
   const [music, setMusic] = useState<Music | null>(null);
@@ -98,31 +99,28 @@ export function ImagesStage({
   const [redoNote, setRedoNote] = useState("");
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [revision, setRevision] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const approvals: Record<string, ApprovalState> = useApprovals().states;
+  const imageJobs = useProjectJobs(slug, "images");
   const consumed = useRef<string | null>(null);
   const refreshTimer = useRef<number | null>(null);
   const refreshPending = useRef(false);
   const lightboxRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    const [imagesResult, budgetResult, approvalResult, briefResult, boardResult, trackResult] =
+    const [imagesResult, budgetResult, briefResult, boardResult, trackResult] =
       await Promise.allSettled([
         api.images(slug),
         api.budget(slug),
-        api.approvals(slug, ["proof", "stills"]),
         api.brief(slug),
         api.storyboard(slug),
         api.track(slug),
       ]);
-    if (imagesResult.status === "fulfilled") setShots(imagesResult.value.shots);
-    else setError(String(imagesResult.reason));
+    if (imagesResult.status === "fulfilled") {
+      setShots(imagesResult.value.shots);
+      setError(null);
+    } else setError(String(imagesResult.reason));
     if (budgetResult.status === "fulfilled") setBudget(budgetResult.value);
-    if (approvalResult.status === "fulfilled") {
-      const map: Record<string, ApprovalState> = {};
-      for (const state of approvalResult.value.stages) map[state.stage] = state;
-      setApprovals(map);
-    }
     if (briefResult.status === "fulfilled") {
       const brief = briefResult.value as Brief;
       setProofIds(brief.creative?.proof_shot_ids || []);
@@ -131,9 +129,11 @@ export function ImagesStage({
       setBoard("available" in boardResult.value ? null : boardResult.value);
     }
     if (trackResult.status === "fulfilled") setMusic(trackResult.value.music);
-    setRevision((value) => value + 1);
     setLoaded(true);
   }, [slug]);
+
+  // Stills land one by one while a batch runs; every notice reloads the sheet.
+  useProjectChanged(slug, () => void load());
 
   useEffect(() => {
     setFilter("all");
@@ -155,14 +155,14 @@ export function ImagesStage({
       refreshTimer.current = null;
       refreshPending.current = false;
       void load();
-      notifyProjectChanged();
+      notifyProjectChanged({ slug });
     }, 800);
   };
 
   useEffect(
     () => () => {
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
-      if (refreshPending.current) notifyProjectChanged();
+      if (refreshPending.current) notifyProjectChanged({ slug });
     },
     [],
   );
@@ -179,6 +179,33 @@ export function ImagesStage({
     onPendingConsumed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPaid]);
+
+  // Which queued stills have not arrived yet: a shot is done once it has more
+  // versions than it had when the batch was queued.
+  const baseline = useRef<{ key: string; counts: Map<string, number> }>({
+    key: "",
+    counts: new Map(),
+  });
+  const queuedKey = paid.queued.join(",");
+  if (baseline.current.key !== queuedKey) {
+    baseline.current = {
+      key: queuedKey,
+      counts: new Map(shots.map((shot) => [shot.owner, shot.versions.length])),
+    };
+  }
+  const making = new Set(
+    imageJobs.length
+      ? paid.queued.filter((id) => {
+          const shot = shots.find((item) => item.owner === id || item.id === id);
+          const before = baseline.current.counts.get(shot?.owner || id) ?? 0;
+          return !shot || shot.versions.length <= before;
+        })
+      : [],
+  );
+  const { clearQueued } = paid;
+  useEffect(() => {
+    if (!imageJobs.length && paid.queued.length) clearQueued();
+  }, [imageJobs.length, paid.queued.length, clearQueued]);
 
   const visible = shots.filter((shot) => matches(shot, filter));
   const counts: Record<Filter, number> = {
@@ -197,7 +224,7 @@ export function ImagesStage({
   const proofApproved = proof?.state === "approved";
   const proofShots = shots.filter((shot) => proofIds.includes(shot.id));
   const proofMissing = proofShots.filter((shot) => shot.selected === null);
-  const missing = paidShots.filter((shot) => shot.selected === null);
+  const proofStale = proofShots.filter((shot) => shot.selected !== null && shot.stale);
   const older = paidShots.filter((shot) => shot.stale);
   const visibleMissing = visible.filter((shot) => !shot.local && shot.selected === null);
   const visibleOlder = visible.filter((shot) => shot.stale);
@@ -319,7 +346,7 @@ export function ImagesStage({
         note: redoNote.trim(),
         inspected: true,
       });
-      notifyProjectChanged();
+      notifyProjectChanged({ slug });
       await load();
       setRedoOpen(null);
       setActiveId(null);
@@ -351,7 +378,7 @@ export function ImagesStage({
     setError(null);
     try {
       await api.selectImage(slug, shot.id, version);
-      notifyProjectChanged();
+      notifyProjectChanged({ slug });
       await load();
     } catch (caught) {
       setError(String(caught));
@@ -415,6 +442,7 @@ export function ImagesStage({
             The style check first, then the full set. Local cards, splits, bridges, logos
             and end cards are made on this computer and cost nothing.
           </p>
+          <ApprovalBar stages={["proof", "stills"]} />
         </div>
         <div className="images-budget">
           <b>${money(budget?.remaining_usd ?? null)} left</b>
@@ -433,18 +461,17 @@ export function ImagesStage({
         />
       )}
       {!loaded && <LoadingState>Reading the stills and the style check…</LoadingState>}
-      <ApprovalBar
-        slug={slug}
-        stages={["proof", "stills"]}
-        refresh={revision}
-        onApproved={() => void load()}
-      />
+      <JobBanner slug={slug} kinds={["images"]} />
 
       {proofIds.length > 0 && !proofApproved && (
         <section className="style-check images-style-check">
           <div className="style-check-say">
             <b>Style check · {proofIds.length} hard shots first</b>
-            <span>When they look right, make the rest. Only these three are paid now.</span>
+            <span>
+              When they look right, make the rest. Only these three are paid now.
+              {proofStale.length > 0 &&
+                " Older-prompt shots are from the previous look; remake them, then keep the new version."}
+            </span>
           </div>
           <div className="style-shots">
             {proofShots.map((shot) => {
@@ -469,24 +496,26 @@ export function ImagesStage({
             })}
           </div>
           <div className="style-check-actions">
-            {proofMissing.length > 0 ? (
-              <Button
-                variant="primary"
-                size="small"
-                disabled={paid.busy}
-                onClick={() =>
-                  make(
-                    proofMissing.map((shot) => shot.id),
-                    "proof",
-                  )
-                }
-              >
-                Make {proofMissing.length} style still{proofMissing.length === 1 ? "" : "s"} · $
-                {price(proofMissing.length)}
-              </Button>
+            {proofMissing.length > 0 || proofStale.length > 0 ? (
+              <span className="hint">
+                {proofMissing.length > 0 && `${proofMissing.length} not made yet`}
+                {proofMissing.length > 0 && proofStale.length > 0 && " and "}
+                {proofStale.length > 0 &&
+                  `${proofStale.length} older-prompt style still${
+                    proofStale.length === 1 ? "" : "s"
+                  }`}
+                {` · make or remake them with the button in the bar at the top (${price(
+                  proofMissing.length + proofStale.length,
+                )}).`}
+              </span>
             ) : (
               <span className="hint">
-                Keep all three, then approve the style check above.
+                {proofShots.every((shot) => shot.review?.verdict === "accept" && !shot.stale)
+                  ? "All kept. Approve the style check in the bar at the top."
+                  : `Open each one and keep or redo it (${
+                      proofShots.filter((shot) => shot.review?.verdict === "accept" && !shot.stale)
+                        .length
+                    } of ${proofShots.length} kept).`}
               </span>
             )}
           </div>
@@ -509,25 +538,10 @@ export function ImagesStage({
           ))}
         </div>
         <div className="images-actions">
-          {proofApproved && missing.length > 0 && (
-            <Button
-              variant="primary"
-              size="small"
-              disabled={paid.busy}
-              onClick={() =>
-                make(
-                  missing.map((shot) => shot.id),
-                  "stills",
-                )
-              }
-            >
-              Make all {missing.length} missing · ${price(missing.length)}
-            </Button>
-          )}
           {proofApproved && older.length > 0 && (
             <Button
               size="small"
-              disabled={paid.busy}
+              disabled={paid.busy || imageJobs.length > 0}
               onClick={() =>
                 make(
                   older.map((shot) => shot.id),
@@ -541,7 +555,7 @@ export function ImagesStage({
           {visibleMissing.length === 1 && (
             <Button
               size="small"
-              disabled={paid.busy}
+              disabled={paid.busy || imageJobs.length > 0}
               onClick={() => make([visibleMissing[0].id], proofApproved ? "stills" : "proof")}
             >
               Make {visibleMissing[0].id} · ${price(1)}
@@ -550,7 +564,7 @@ export function ImagesStage({
           {visibleOlder.length === 1 && proofApproved && (
             <Button
               size="small"
-              disabled={paid.busy}
+              disabled={paid.busy || imageJobs.length > 0}
               onClick={() => make([visibleOlder[0].id], "stills")}
             >
               Remake {visibleOlder[0].id} · ${price(1)}
@@ -584,10 +598,17 @@ export function ImagesStage({
                 type="button"
                 key={shot.id}
                 data-still={shot.id}
-                className={`still-tile ${status.tone}`}
+                className={`still-tile ${status.tone} ${making.has(shot.owner) || making.has(shot.id) ? "making" : ""}`}
                 onClick={() => open(shot.id)}
                 aria-label={`Open ${shot.id}, ${status.label}`}
+                aria-busy={making.has(shot.owner) || making.has(shot.id)}
               >
+                {(making.has(shot.owner) || making.has(shot.id)) && (
+                  <span className="still-making">
+                    <i aria-hidden="true" />
+                    Making…
+                  </span>
+                )}
                 {src ? (
                   <img src={src} alt="" loading="lazy" />
                 ) : (
@@ -680,7 +701,7 @@ export function ImagesStage({
                 {!current.local && (
                   <Button
                     variant="primary"
-                    disabled={paid.busy}
+                    disabled={paid.busy || imageJobs.length > 0}
                     onClick={() => {
                       makeFromLightbox(
                         [current.id],
@@ -714,7 +735,13 @@ export function ImagesStage({
                   : current.stale
                     ? "Made from an older prompt. Remake it, or review the new prompt first."
                     : current.review
-                      ? `Last review: ${current.review.verdict} v${current.review.version}`
+                      ? `Last review: ${
+                          { accept: "kept", reject: "redo", uncertain: "check again" }[
+                            current.review.verdict as "accept" | "reject" | "uncertain"
+                          ] || current.review.verdict
+                        } · v${current.review.version}${
+                          current.review.note ? ` · “${current.review.note}”` : ""
+                        }`
                       : "Not reviewed yet."}
               </span>
             </div>
@@ -770,7 +797,7 @@ export function ImagesStage({
                       <Button
                         size="small"
                         variant="primary"
-                        disabled={working === current.id || paid.busy}
+                        disabled={working === current.id || paid.busy || imageJobs.length > 0}
                         onClick={() => void submitRedo(current, true)}
                       >
                         Remake · ${reserve}
@@ -812,7 +839,7 @@ export function ImagesStage({
                     <Button
                       size="small"
                       variant="quiet"
-                      disabled={paid.busy}
+                      disabled={paid.busy || imageJobs.length > 0}
                       onClick={() => {
                         makeFromLightbox(
                           [current.id],

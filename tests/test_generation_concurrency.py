@@ -471,3 +471,50 @@ def test_budgeted_concurrency_allows_only_its_own_active_workers(production):
     runner = ScriptedStub(production, outcome_map(quote, cost=0.001))
     G.generate(production, quote["id"], runner, concurrency=3)
     assert len(runner.submissions) == 3
+
+
+# --------------------------------------------------------------------------- #
+# a user stop admits nothing new and keeps every sent task recorded
+# --------------------------------------------------------------------------- #
+def test_a_stop_before_admission_sends_nothing(production):
+    from mp3_to_videoclip import operations
+
+    planner = ScriptedStub(production, {})
+    quote = quote_and_authorize(production, planner)
+    client = ScriptedStub(production, outcome_map(quote, cost=0.001))
+    stop = threading.Event()
+    stop.set()
+    token = operations.watch_stop(stop)
+    try:
+        with pytest.raises(ValueError, match="stopped by the user"):
+            G.generate(production, quote["id"], client, concurrency=2)
+    finally:
+        operations.unwatch_stop(token)
+    assert client.submissions == []
+    assert read_json(production / "work/tasks.json") == {}
+
+
+def test_a_stop_mid_batch_drains_the_sent_task_and_admits_no_more(production):
+    from mp3_to_videoclip import operations
+
+    planner = ScriptedStub(production, {})
+    quote = quote_and_authorize(production, planner)
+    stop = threading.Event()
+
+    class StopAfterFirst(ScriptedStub):
+        def submit(self, request):
+            result = super().submit(request)
+            stop.set()  # the user presses Cancel while the first still is out
+            return result
+
+    client = StopAfterFirst(production, outcome_map(quote, cost=0.001))
+    token = operations.watch_stop(stop)
+    try:
+        with pytest.raises(ValueError, match="stopped by the user; 2 still"):
+            G.generate(production, quote["id"], client, concurrency=1)
+    finally:
+        operations.unwatch_stop(token)
+    assert len(client.submissions) == 1
+    journal = read_json(production / "work/tasks.json")
+    assert [t["status"] for t in journal.values()] == ["ready"]
+    assert G.costs(production)["reported_or_calculated_usd"] == "0.001"
