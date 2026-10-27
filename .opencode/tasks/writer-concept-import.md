@@ -40,12 +40,31 @@ the 8,000-character chat cap and concept field limits the Writer could not see.
 - `pytest`, `ruff` and the frontend build/tests are green; Studio starts and
   serves the new bundle.
 
+## Follow-up: the protected style core
+
+The Writer followed the owner's master-style request by replacing the whole
+`creative.look`, which is correct for a custom look but invalid while
+`photographic-painted-v2` stayed selected. Approval then failed the protected
+core check, and the Look card had no way to detach from the preset.
+
+- `apply_intake(style_preset="")` now clears the preset and keeps the current
+  look; selecting a named preset still replaces the look with that preset.
+- Story → Look lists **Custom**; choosing it detaches without rewriting the look.
+- The Writer prompt now states the protected-core rule and points at Custom. The
+  `update_brief` tool refuses to blank `direction`, `style` or `treatment`, so a
+  full-object patch cannot quietly make the brief unapprovable.
+- Repaired `tree-of-love` through the API: preset cleared to custom, its 2,049
+  character master look unchanged, and the missing one-line `style` restored
+  from the owner's own sentence. A dry-run approval on a copy validates; the
+  owner still makes the real approval decision.
+
 ## Status
 
 Complete. Live smoke check on a temporary copy of `tree-of-love`: imported a
 short concept, confirmed `brief.json`, the Treatment textarea and the Director
 composer prefill; no model call. Temporary project and server removed. The
-owner's `projects/tree-of-love` data was not modified.
+owner's `projects/tree-of-love` data was not modified by that smoke check; the
+later style repair was deliberate and recorded above.
 
 ## Evidence
 

@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: revise
 role: writer
 ---
@@ -13,7 +13,9 @@ stale for no reason.
 
 1. Name the affected artifact and the exact shots or fields.
 2. Read the current artifact with the matching `get_` tool.
-3. Apply the smallest patch that satisfies the request.
+3. Apply the smallest patch that satisfies the request. Patch only the named
+   fields; never send an empty `style`, `direction` or `treatment`, because the
+   write is refused and the brief needs all three to be approved.
 4. Validate the whole artifact through the existing write tool.
 5. Report in one line what changed and what stayed.
 

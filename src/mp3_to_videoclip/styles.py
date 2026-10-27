@@ -140,6 +140,6 @@ def core_problem(preset_id: str | None, look: str) -> str | None:
         return (
             "preserve the approved DEFAULT_STYLE core verbatim at the start of "
             "creative.look; append film-specific look after a blank line, or "
-            "choose a custom/other preset"
+            "choose Custom in Story \u2192 Look"
         )
     return None

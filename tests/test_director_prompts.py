@@ -44,6 +44,30 @@ def test_assembly_order_versions_and_hash(tmp_path):
     assert positions == sorted(positions)
 
 
+def test_a_protected_style_preset_states_the_core_rule(tmp_path):
+    root = make_api_project(tmp_path)
+    protected = prompts.assemble(
+        root,
+        "story",
+        role="writer",
+        kind="music_video",
+        style_preset="photographic-painted-v2",
+        task="brief",
+    ).text
+    assert "This preset core is protected" in protected
+    assert "switch Story \u2192 Look to Custom" in protected
+
+    ordinary = prompts.assemble(
+        root,
+        "story",
+        role="writer",
+        kind="music_video",
+        style_preset="clean-photographic-v1",
+        task="brief",
+    ).text
+    assert "This preset core is protected" not in ordinary
+
+
 def test_every_writer_task_is_under_the_word_budget(tmp_path):
     root = make_api_project(tmp_path)
     for task in prompts.TASKS["writer"]:

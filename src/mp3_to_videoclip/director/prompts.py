@@ -94,11 +94,6 @@ def _split(text: str, path: Path) -> tuple[dict, str]:
     return meta, body.strip()
 
 
-def _body(path: Path) -> str:
-    meta, body = _split(path.read_text(), path)
-    return body
-
-
 def _version(path: Path) -> int:
     meta, _ = _split(path.read_text(), path)
     return int(meta["version"])
@@ -201,9 +196,17 @@ def assemble(
         path = PROMPTS / relative
         if not path.is_file():
             raise FileNotFoundError(f"prompt file missing: {relative}")
-        body = _body(path)
+        meta, body = _split(path.read_text(), path)
         if relative.startswith("styles/"):
             body = f"## Style preset\n\n{body}"
+            if meta.get("protected") is True:
+                body += (
+                    "\n\nThis preset core is protected: keep it verbatim at the start "
+                    "of creative.look and append film-specific additions after a blank "
+                    "line. If the owner brings a different master style, ask them to "
+                    "switch Story \u2192 Look to Custom before you save it; never rewrite "
+                    "this core."
+                )
         elif relative.startswith("examples/"):
             body = f"## Example\n\n{body}"
         blocks.append(body)

@@ -463,17 +463,23 @@ def apply_intake(
     analysis_needed = False
     if audio_window is not None:
         project, analysis_needed = _apply_window(root, project, audio_window)
-    if style_preset:
-        chosen = styles.preset(style_preset)
-        project = project.model_copy(update={"style_preset": chosen.id})
-        creative = brief.creative or CreativeProfile()
-        brief = brief.model_copy(
-            update={
-                "creative": creative.model_copy(
-                    update={"look": chosen.look, "image_rules": list(chosen.image_rules)}
-                )
-            }
-        )
+    if style_preset is not None:
+        if style_preset == "":
+            # An explicit empty value detaches the film from a preset and keeps
+            # the look the owner already has. The protected-core rule only
+            # applies while a protected preset stays selected.
+            project = project.model_copy(update={"style_preset": None})
+        else:
+            chosen = styles.preset(style_preset)
+            project = project.model_copy(update={"style_preset": chosen.id})
+            creative = brief.creative or CreativeProfile()
+            brief = brief.model_copy(
+                update={
+                    "creative": creative.model_copy(
+                        update={"look": chosen.look, "image_rules": list(chosen.image_rules)}
+                    )
+                }
+            )
     if intent is not None:
         if not isinstance(intent, dict):
             raise ValueError("intent must be a JSON object")

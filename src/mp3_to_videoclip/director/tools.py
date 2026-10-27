@@ -130,7 +130,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "update_brief",
-        "Patch the brief with an RFC 7396 JSON merge. Returns the new brief.",
+        "Patch the brief with an RFC 7396 JSON merge. Omit fields you do not change; "
+        "direction, style and treatment cannot be blanked. Returns the new brief.",
         {"slug": {"type": "string"}, "patch": {"type": "object"}},
         ["slug", "patch"],
     ),
@@ -274,7 +275,13 @@ def _dispatch(
         return _get_images(root, arguments.get("shot_ids") or [])
 
     if name == "update_brief":
-        return P.update_brief(root, arguments.get("patch") or {}).model_dump()
+        patch = arguments.get("patch") or {}
+        if not isinstance(patch, dict):
+            raise ValueError("brief patch must be a JSON object")
+        for field in ("direction", "style", "treatment"):
+            if field in patch and (not isinstance(patch[field], str) or not patch[field].strip()):
+                raise ValueError(f"brief {field} cannot be blank; omit it to keep the current text")
+        return P.update_brief(root, patch).model_dump()
 
     if name == "update_shots":
         board, changed = P.update_shots(root, arguments.get("changes") or [])
