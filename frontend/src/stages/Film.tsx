@@ -13,14 +13,15 @@ import {
 import { ArtifactRating } from "../ArtifactRating";
 import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
+import type { EditTransition } from "../baseFilm";
+import { setEditTransition, TRANSITION_TYPES } from "../film/editTimeline";
 import type { Stage } from "../shell/nextStep";
 import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
 import { SHOW_EDIT_FILE } from "../shell/SettingsDialog";
 import { usePlayer } from "../spine/player";
 import { CreditsCard } from "../story/CreditsCard";
 import { ShotThumb } from "../storyboard/ShotThumb";
-import { Button } from "../ui";
-
+import { Button, ErrorState, LoadingState, useFocusTrap } from "../ui";
 const LivePlayer = lazy(() => import("../LivePlayer"));
 
 type FilmFile = { kind: "previews" | "renders"; name: string };
@@ -53,6 +54,88 @@ function reviewKey(value: GraphicsReview | null): string {
   return `${value.available}:${value.current}:${value.samples?.length ?? 0}`;
 }
 
+function TransitionEditor({
+  shot,
+  busy,
+  onSave,
+}: {
+  shot: CutShot;
+  busy: boolean;
+  onSave: (change: Partial<EditTransition>) => Promise<void>;
+}) {
+  const [type, setType] = useState<EditTransition["type"]>(
+    (shot.transition.type as EditTransition["type"]) || "cut",
+  );
+  const [frames, setFrames] = useState(shot.transition.frames);
+  const [reason, setReason] = useState(shot.transition.reason || "");
+  const [saving, setSaving] = useState(false);
+  const named = type !== "cut";
+  const canSave =
+    named && reason.trim().length > 0 && !saving && !busy && frames >= 0 && frames <= 48;
+
+  const save = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      await onSave({ type, frames, reason: reason.trim() });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="cut-transition-edit">
+      <label>
+        <span>Into {shot.shot_id}</span>
+        <select
+          aria-label={`Transition into ${shot.shot_id}`}
+          value={type}
+          disabled={saving}
+          onChange={(event) => {
+            const next = event.target.value as EditTransition["type"];
+            setType(next);
+            if (next !== "cut" && frames === 0) setFrames(6);
+          }}
+        >
+          {TRANSITION_TYPES.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Frames</span>
+        <input
+          aria-label={`Transition frames into ${shot.shot_id}`}
+          type="number"
+          min={0}
+          max={48}
+          value={frames}
+          disabled={!named || saving}
+          onChange={(event) => setFrames(Number(event.target.value))}
+        />
+      </label>
+      {named && (
+        <label className="reason">
+          <span>Why this join</span>
+          <input
+            aria-label={`Reason for the join into ${shot.shot_id}`}
+            value={reason}
+            maxLength={240}
+            disabled={saving}
+            placeholder="Lift the chorus…"
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </label>
+      )}
+      <Button size="small" disabled={!canSave} onClick={() => void save()}>
+        {saving ? "Saving…" : "Save join"}
+      </Button>
+    </div>
+  );
+}
+
 export function FilmStage({
   slug,
   onNavigate,
@@ -75,6 +158,7 @@ export function FilmStage({
   const [cut, setCut] = useState<CutSummary | null>(null);
   const [checklist, setChecklist] = useState<DeliveryChecklist | null>(null);
   const [checklistError, setChecklistError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [board, setBoard] = useState<Storyboard | null>(null);
   const [images, setImages] = useState<ImageShot[]>([]);
   const [revision, setRevision] = useState(0);
@@ -87,6 +171,7 @@ export function FilmStage({
   );
   const graphicsKey = useRef("");
   const previewsKey = useRef("");
+  const samplesRef = useRef<HTMLDivElement>(null);
 
   const applyFiles = useCallback((value: { exports: string[]; previews: string[] }) => {
     previewsKey.current = value.previews.join("|");
@@ -140,6 +225,7 @@ export function FilmStage({
     } else {
       setGraphics(null);
     }
+    setLoaded(true);
   }, [applyFiles, slug]);
 
   useEffect(() => {
@@ -216,15 +302,17 @@ export function FilmStage({
         });
         setLiveError(null);
       })
-      .catch((caught) => {
+      .catch(() => {
         if (cancelled) return;
         setLive(null);
-        setLiveError(`Live preview unavailable: ${String(caught)}`);
+        setLiveError("The live preview could not be read. Check the storyboard and stills.");
       });
     return () => {
       cancelled = true;
     };
   }, [slug, revision]);
+
+  useFocusTrap(samplesOpen && (graphics?.samples?.length || 0) > 0, samplesRef);
 
   useEffect(() => {
     if (!samplesOpen) return;
@@ -250,6 +338,23 @@ export function FilmStage({
       setCut(await api.editSummary(slug));
       setNotice("The Editor cut the film. Timing now comes from the cut.");
       setRevision((value) => value + 1);
+      notifyProjectChanged();
+      await load();
+    } catch (caught) {
+      setError(String(caught));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveTransition = async (shotId: string, change: Partial<EditTransition>) => {
+    if (!cut?.edit) return;
+    setBusy(`join:${shotId}`);
+    setError(null);
+    try {
+      await api.saveEdit(slug, setEditTransition(cut.edit, shotId, change));
+      setCut(await api.editSummary(slug));
+      setNotice(`Saved the join into ${shotId}.`);
       notifyProjectChanged();
       await load();
     } catch (caught) {
@@ -427,12 +532,21 @@ export function FilmStage({
           </Button>
         </div>
       </div>
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <ErrorState
+          what="working on the film"
+          error={error}
+          compact
+          onRetry={() => void load()}
+        />
+      )}
       {notice && <p className="message">{notice}</p>}
 
       <RendererSetup onReady={setRendererReady} />
 
-      {tab === "cut" ? (
+      {!loaded ? (
+        <LoadingState>Reading the film, its gates and the cut…</LoadingState>
+      ) : tab === "cut" ? (
         <div className="film-cut">
           {rendererReady !== false && (
             <section className="delivery-card">
@@ -653,17 +767,17 @@ export function FilmStage({
                   </div>
                 )}
                 {cut.warnings.length > 0 && (
-                  <div className="cut-findings">
-                    <b>
+                  <details className="cut-findings warning-details">
+                    <summary>
                       {cut.warnings.length} warning{cut.warnings.length === 1 ? "" : "s"}
-                    </b>
+                    </summary>
                     {cut.warnings.map((finding) => (
                       <span key={`${finding.code}-${finding.shot_id || ""}-${finding.message}`}>
                         {finding.shot_id ? `${finding.shot_id}: ` : ""}
                         {finding.message}
                       </span>
                     ))}
-                  </div>
+                  </details>
                 )}
                 <div className="cut-facts">
                   <span>{cut.counts.shots ?? 0} shots</span>
@@ -748,6 +862,14 @@ export function FilmStage({
                                       </span>
                                     ))}
                                   </div>
+                                )}
+                                {cut.edit && (
+                                  <TransitionEditor
+                                    key={`${shot.shot_id}-${shot.transition.type}-${shot.transition.frames}-${shot.transition.reason}`}
+                                    shot={shot}
+                                    busy={busy === `join:${shot.shot_id}`}
+                                    onSave={(change) => saveTransition(shot.shot_id, change)}
+                                  />
                                 )}
                               </div>
                             </article>
@@ -919,6 +1041,7 @@ export function FilmStage({
           role="dialog"
           aria-modal="true"
           aria-label="Graphics samples"
+          ref={samplesRef}
         >
           <header>
             <b>{samples[sampleIndex]?.name || "Sample"}</b>

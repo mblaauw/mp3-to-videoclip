@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type Settings, type SettingsTest, type SetupStatus } from "../api";
-import { Button } from "../ui";
+import { Button, ErrorState, useFocusTrap } from "../ui";
 import { CloseIcon } from "../ui/icons";
 
 export const SHOW_EDIT_FILE = "studio.showEditFile";
@@ -77,6 +77,7 @@ export function SettingsDialog({
   const [runware, setRunware] = useState<SettingsTest | null>(null);
   const [opencode, setOpencode] = useState<SettingsTest | null>(null);
   const dialog = useRef<HTMLDivElement>(null);
+  useFocusTrap(true, dialog);
 
   const load = () => {
     api
@@ -212,9 +213,16 @@ export function SettingsDialog({
         </header>
 
         {!draft ? (
-          <div className="settings-loading">{error || "Reading settings…"}</div>
+          error ? (
+            <div className="settings-body">
+              <ErrorState what="reading settings" error={error} onRetry={load} />
+            </div>
+          ) : (
+            <div className="settings-loading">Reading settings…</div>
+          )
         ) : (
           <div className="settings-body">
+            {error && <ErrorState what="saving settings" error={error} compact />}
             <section className="settings-section">
               <h3>Director</h3>
               <div className="settings-grid">
@@ -413,7 +421,13 @@ export function SettingsDialog({
 
         <footer>
           <span className="settings-state">
-            {error ? <span className="settings-bad">{error}</span> : saved ? "Saved" : ""}
+            {error ? (
+              <span className="settings-bad">Something went wrong. Details are in the log.</span>
+            ) : saved ? (
+              "Saved"
+            ) : (
+              ""
+            )}
           </span>
           <Button variant="quiet" onClick={onClose}>
             Close

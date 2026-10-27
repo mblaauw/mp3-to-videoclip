@@ -140,7 +140,8 @@
   font-size: var(--t-12);
 }
 .shot-card-id {
-  padding: 0;
+  min-height: 24px;
+  padding: 2px 0;
   border: 0;
   background: transparent;
   color: var(--gold);
@@ -164,8 +165,8 @@
   color: var(--muted);
 }
 .star-toggle {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 999px;

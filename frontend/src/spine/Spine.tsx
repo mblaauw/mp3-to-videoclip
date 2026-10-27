@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { api, type AudioWindow, type ImageShot, type Music, type Storyboard } from "../api";
+import {
+  api,
+  type AudioWindow,
+  type EditPayload,
+  type ImageShot,
+  type Music,
+  type Storyboard,
+} from "../api";
+import { editBoundaryLimits, moveEditBoundary } from "../film/editTimeline";
 import { PauseIcon, PlayIcon } from "../ui/icons";
 import { toast } from "../toast";
 import { notifyProjectChanged } from "../shell/projectEvents";
@@ -105,6 +113,8 @@ export function Spine({
   onAudioWindow,
   onAudioWindowCommit,
   onBoardChange,
+  edit = null,
+  onEditChange,
   readOnly = false,
 }: {
   slug: string;
@@ -120,6 +130,9 @@ export function Spine({
   onAudioWindow?: (window: AudioWindow) => void;
   onAudioWindowCommit?: (window: AudioWindow) => Promise<boolean>;
   onBoardChange?: (board: Storyboard) => void;
+  /** The edit owns timing on Film; joins write the whole cut back. */
+  edit?: EditPayload | null;
+  onEditChange?: (edit: EditPayload) => Promise<boolean>;
   readOnly?: boolean;
 }) {
   const player = usePlayer();
@@ -151,7 +164,9 @@ export function Spine({
   );
   const sections = music?.sections ?? [];
   const total = board?.total_frames ?? 0;
-  const cutStage = stage === "storyboard" && !!board && !readOnly;
+  const storyboardCut = stage === "storyboard" && !!board && !readOnly;
+  const editCut = stage === "film" && !!board && !!edit && !!onEditChange && !readOnly;
+  const cutStage = storyboardCut || editCut;
   const windowLength = audioWindow ? Math.max(0, audioWindow.end - audioWindow.start) : 0;
 
   useEffect(
@@ -172,6 +187,7 @@ export function Spine({
   };
 
   const limits = (index: number) => {
+    if (editCut && edit) return editBoundaryLimits(edit, index);
     if (!board) return { low: 0, high: total };
     const left = board.shots[index];
     const right = board.shots[index + 1];
@@ -192,6 +208,20 @@ export function Spine({
 
   const commit = async (index: number, frame: number) => {
     if (!board || readOnly || busy.current) return;
+    if (editCut && edit && onEditChange) {
+      const next = moveEditBoundary(edit, index, frame);
+      if (next === edit) return;
+      busy.current = true;
+      setSaving(true);
+      try {
+        const saved = await onEditChange(next);
+        if (!saved) toast("Could not move the cut.");
+      } finally {
+        busy.current = false;
+        setSaving(false);
+      }
+      return;
+    }
     const left = board.shots[index];
     const right = board.shots[index + 1];
     const boundary = left.start_frame + left.duration_frames;

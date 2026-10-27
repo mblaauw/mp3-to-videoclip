@@ -229,8 +229,67 @@
   font-size: var(--t-12);
 }
 
+/* Empty, loading and failure surfaces. The raw detail stays folded away. */
+.ui-state {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  background: var(--panel);
+  color: var(--ink-2);
+  font-size: var(--t-13);
+}
+.ui-state p {
+  margin: 0;
+  line-height: var(--lh-ui);
+}
+.ui-state b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+.ui-state.error {
+  border-color: color-mix(in srgb, var(--red) 45%, var(--line));
+  background: var(--red-wash);
+}
+.ui-state.error b {
+  color: var(--ink);
+}
+.ui-state.empty {
+  border-style: dashed;
+  background: transparent;
+}
+.ui-state.compact {
+  padding: var(--s-3);
+}
+.ui-state-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.ui-state-detail {
+  max-height: 160px;
+  margin: var(--s-1) 0 0;
+  padding: var(--s-2);
+  overflow: auto;
+  border-radius: var(--r-control);
+  background: var(--well);
+  color: var(--muted);
+  font-size: var(--t-12);
+  white-space: pre-wrap;
+}
+.ui-state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: ui-pulse 1.4s var(--ease) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ui-dot--run {
+  .ui-dot--run,
+  .ui-state-dot {
     animation: none;
   }
 }

@@ -15,7 +15,7 @@ import { usePaidImages } from "../images/paid";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import type { NextAction } from "../shell/nextStep";
 import { kindMeta } from "../shotKinds";
-import { Button } from "../ui";
+import { Button, EmptyState, ErrorState, LoadingState, useFocusTrap } from "../ui";
 
 type Card = Omit<Budget, "history">;
 type Filter = "all" | "review" | "redo" | "stale" | "missing" | "kept" | "made";
@@ -78,11 +78,13 @@ export function ImagesStage({
   reserve,
   pendingPaid,
   onPendingConsumed,
+  onNavigate,
 }: {
   slug: string;
   reserve: string;
   pendingPaid: PaidRequest | null;
   onPendingConsumed: () => void;
+  onNavigate: (stage: "storyboard" | "film") => void;
 }) {
   const [shots, setShots] = useState<ImageShot[]>([]);
   const [budget, setBudget] = useState<Card | null>(null);
@@ -97,9 +99,11 @@ export function ImagesStage({
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   const consumed = useRef<string | null>(null);
   const refreshTimer = useRef<number | null>(null);
   const refreshPending = useRef(false);
+  const lightboxRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     const [imagesResult, budgetResult, approvalResult, briefResult, boardResult, trackResult] =
@@ -128,6 +132,7 @@ export function ImagesStage({
     }
     if (trackResult.status === "fulfilled") setMusic(trackResult.value.music);
     setRevision((value) => value + 1);
+    setLoaded(true);
   }, [slug]);
 
   useEffect(() => {
@@ -201,6 +206,7 @@ export function ImagesStage({
   const current = activeIndex >= 0 ? visible[activeIndex] : null;
   const shotById = new Map((board?.shots || []).map((shot) => [shot.id, shot]));
   const currentShot = current ? shotById.get(current.id) : undefined;
+  useFocusTrap(!!current, lightboxRef);
   const fps = board?.fps || 24;
   const sectionAt = (seconds: number) => {
     const section = (music?.sections || []).find(
@@ -373,12 +379,14 @@ export function ImagesStage({
   useEffect(() => {
     if (!activeId) return;
     const onKey = (event: KeyboardEvent) => {
-      const tag = (event.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (event.key === "Escape") {
         event.preventDefault();
         keyboard.current.close();
-      } else if (event.key === "ArrowRight") {
+        return;
+      }
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (event.key === "ArrowRight") {
         event.preventDefault();
         keyboard.current.move(1);
       } else if (event.key === "ArrowLeft") {
@@ -416,7 +424,15 @@ export function ImagesStage({
           </span>
         </div>
       </div>
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <ErrorState
+          what="reviewing the stills"
+          error={error}
+          compact
+          onRetry={() => void load()}
+        />
+      )}
+      {!loaded && <LoadingState>Reading the stills and the style check…</LoadingState>}
       <ApprovalBar
         slug={slug}
         stages={["proof", "stills"]}
@@ -598,14 +614,29 @@ export function ImagesStage({
             );
           })}
         </div>
-      ) : (
-        <p className="empty">
-          {shots.length ? "Nothing in this filter." : "No storyboard or assets yet."}
-        </p>
-      )}
+      ) : loaded ? (
+        <EmptyState
+          title={shots.length ? "Nothing in this filter." : "No storyboard or assets yet."}
+          action={
+            shots.length ? undefined : (
+              <Button onClick={() => onNavigate("storyboard")}>Go to Storyboard</Button>
+            )
+          }
+        >
+          {shots.length
+            ? "Clear the filter to see every still."
+            : "Make the storyboard first; the stills follow its shots."}
+        </EmptyState>
+      ) : null}
 
       {current && (
-        <div className="lightbox" role="dialog" aria-modal="true" aria-label={`Still ${current.id}`}>
+        <div
+          className="lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Still ${current.id}`}
+          ref={lightboxRef}
+        >
           <header className="lightbox-head">
             <div>
               <b>{current.id}</b>

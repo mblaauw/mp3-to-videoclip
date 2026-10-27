@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type KindProfile } from "./api";
+import { ErrorState } from "./ui";
 
 const MAX_BYTES = 25_000_000;
 
@@ -167,7 +168,7 @@ export function NewProduction({
       <p className="sub">
         Start from a song. It stays on this computer; nothing is spent until you make pictures.
       </p>
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorState what="creating the film" error={error} compact />}
 
       <div className="kind-picker" role="group" aria-label="Kind of film">
         {options.map((item) => (

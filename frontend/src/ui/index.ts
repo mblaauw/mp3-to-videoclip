@@ -11,3 +11,5 @@ export { Seg } from "./Seg";
 export type { SegOption } from "./Seg";
 export { StatusDot } from "./StatusDot";
 export type { StatusTone } from "./StatusDot";
+export { EmptyState, ErrorState, LoadingState, State } from "./State";
+export { scrollBehavior, useFocusTrap } from "./focus";
