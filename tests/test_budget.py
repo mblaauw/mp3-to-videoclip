@@ -115,6 +115,34 @@ def test_corrupt_budget_artifact_is_rejected(tmp_path):
         B.read_budget(root)
 
 
+def test_schema_three_budget_with_a_null_correction_limit_uses_the_default(tmp_path):
+    root = make_root(tmp_path)
+    write_json(
+        root / "project.json",
+        {
+            "schema_version": 3,
+            "slug": "test",
+            "title": "Test",
+            "source_sha256": "0" * 64,
+            "duration": 1,
+            "width": 192,
+            "height": 108,
+            "budget": [
+                {
+                    "at": "2026-10-27T10:31:25+00:00",
+                    "cap_usd": "5",
+                    "reason": "initial production budget",
+                    "max_corrections": None,
+                }
+            ],
+        },
+    )
+    record = B.read_budget(root)
+    assert record is not None
+    assert record["cap_usd"] == "5"
+    assert record["max_corrections"] == B.DEFAULT_MAX_CORRECTIONS
+
+
 def test_restaging_keeps_unrelated_cycles(tmp_path):
     root = make_root(tmp_path)
     B.set_budget(root, "1", "test authority")

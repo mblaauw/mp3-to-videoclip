@@ -58,13 +58,28 @@ core check, and the Look card had no way to detach from the preset.
   from the owner's own sentence. A dry-run approval on a copy validates; the
   owner still makes the real approval decision.
 
+## Follow-up: a null correction limit in a schema-3 budget
+
+`schema_version: 3` keeps the cap history in `project.json`. A null
+`max_corrections` there means "no explicit limit was recorded", but the budget
+validator only defaulted a *missing* key and rejected null, so the first paid
+style-check quote failed with `production budget artifact has invalid
+max_corrections`.
+
+- `_schema_budget` now maps a null correction limit to
+  `DEFAULT_MAX_CORRECTIONS`; explicit integers, including 0, stay untouched.
+- `tree-of-love` now reads `cap $5.00`, `max_corrections 1`.
+- The proof estimate for s003/s006/s038 returns 3 stills at $0.15 with
+  `needs_budget: false`. No provider call was made; the owner confirms the paid
+  batch.
+
 ## Status
 
 Complete. Live smoke check on a temporary copy of `tree-of-love`: imported a
 short concept, confirmed `brief.json`, the Treatment textarea and the Director
 composer prefill; no model call. Temporary project and server removed. The
 owner's `projects/tree-of-love` data was not modified by that smoke check; the
-later style repair was deliberate and recorded above.
+later style and budget repairs were deliberate and recorded above.
 
 ## Evidence
 
