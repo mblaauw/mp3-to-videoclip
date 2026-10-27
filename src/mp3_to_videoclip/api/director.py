@@ -28,6 +28,10 @@ from mp3_to_videoclip.director.opencode import (
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["director"])
 
+# A pasted treatment is legitimate context, not a chat message we should reject
+# at the old 8k convenience cap. Keep a bound so one turn cannot become a dump.
+MAX_CHAT_MESSAGE = 24_000
+
 GATEWAYS: dict[tuple[str, str, str, str, str], OpenCodeGateway] = {}
 
 
@@ -151,8 +155,13 @@ async def post_chat(slug: str, request: Request, payload: dict):
     message = payload.get("message", "")
     if not isinstance(message, str) or not message.strip():
         raise HTTPException(status_code=400, detail="message required")
-    if len(message) > 8000:
-        raise HTTPException(status_code=400, detail="message is too long")
+    if len(message) > MAX_CHAT_MESSAGE:
+        raise ApiError(
+            400,
+            "That message is too long. Paste the treatment into Story under "
+            "\u201cI already have a concept\u201d, then ask the Writer to improve it.",
+            "message_too_long",
+        )
     settings = effective_settings()
     stage = payload.get("stage")
     role = _role(payload, stage)

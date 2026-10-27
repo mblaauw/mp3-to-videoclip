@@ -9,6 +9,7 @@ import pytest
 from api_support import add_assets, api_client, make_api_project
 
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip.api.director import MAX_CHAT_MESSAGE
 from mp3_to_videoclip.config import Settings, load_settings
 from mp3_to_videoclip.director.loop import TurnEvent
 from mp3_to_videoclip.models import Lyrics, Segment
@@ -612,6 +613,32 @@ def test_director_chat_reads_and_streams(client, monkeypatch):
     assert streamed.status_code == 200
     events = [json.loads(line) for line in streamed.text.splitlines() if line]
     assert [event["kind"] for event in events] == ["text", "done"]
+
+
+def test_director_chat_accepts_a_long_paste_up_to_the_bound(client, monkeypatch):
+    monkeypatch.setattr(
+        "mp3_to_videoclip.api.director.effective_settings",
+        lambda: Settings(llm_api_key="test-key"),
+    )
+
+    async def fake_turn(*args, **kwargs):
+        yield TurnEvent(kind="text", text="ok")
+        yield TurnEvent(kind="done", text="ok")
+
+    monkeypatch.setattr("mp3_to_videoclip.api.director.run_turn", fake_turn)
+    at_limit = client.post(
+        "/api/projects/production/chat",
+        json={"message": "x" * MAX_CHAT_MESSAGE, "stage": "story"},
+    )
+    assert at_limit.status_code == 200
+
+    over = client.post(
+        "/api/projects/production/chat",
+        json={"message": "x" * (MAX_CHAT_MESSAGE + 1), "stage": "story"},
+    )
+    assert over.status_code == 400
+    assert over.json()["code"] == "message_too_long"
+    assert "Story" in over.json()["detail"]
 
 
 def test_director_context_is_bounded_and_typed(client):

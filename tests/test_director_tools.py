@@ -350,3 +350,60 @@ def test_update_treatments_validates_and_writes_three_distinct_routes(tmp_path):
         )
     )
     assert "different structures" in failed["error"]
+
+
+def test_concept_limits_accept_long_fields_and_advertise_the_same_bound(tmp_path):
+    payload = {
+        "concepts": [
+            {
+                "id": f"c{index}",
+                "title": f"Route {index}",
+                "structure": structure,
+                "logline": "A courier crosses the city with a record.",
+                "why": "w" * 1200,
+                "world": "d" * 1200,
+                "shape": ["open", "lose", "search", "arrive"],
+                "signature_moment": "The label becomes a street lamp.",
+                "risk": "r" * 800,
+            }
+            for index, structure in enumerate(("narrative", "demonstration", "three reasons"))
+        ]
+    }
+    saved = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_treatments",
+                {"slug": "production", **payload},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert saved["concepts"][0]["why"] == "w" * 1200
+    assert saved["concepts"][1]["risk"] == "r" * 800
+
+    too_long = json.loads(json.dumps(payload))
+    too_long["concepts"][0]["why"] = "w" * 1201
+    failed = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_treatments",
+                {"slug": "production", **too_long},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "concepts.0.why" in failed["error"]
+    assert "at most 1200 characters" in failed["error"]
+
+    schema = next(tool for tool in tools.TOOLS if tool["function"]["name"] == "update_treatments")
+    properties = schema["function"]["parameters"]["properties"]["concepts"]["items"]["properties"]
+    limits = {
+        "title": 120,
+        "structure": 80,
+        "logline": 300,
+        "why": 1200,
+        "world": 1200,
+        "signature_moment": 300,
+        "risk": 800,
+    }
+    assert {name: properties[name]["maxLength"] for name in limits} == limits
