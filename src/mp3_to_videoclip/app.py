@@ -206,7 +206,10 @@ class StudioGuard:
 def create_app(projects_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="mp3-to-videoclip Studio", lifespan=lifespan)
     if projects_dir is not None:
-        app.state.projects_dir = str(projects_dir)
+        # Keep every API project root absolute. Asset paths are resolved before
+        # indexing; a relative root makes path.relative_to(root) fail after a
+        # paid result has already been fetched.
+        app.state.projects_dir = str(Path(projects_dir).resolve())
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(_request: Request, exc: StarletteHTTPException):
