@@ -230,7 +230,7 @@ export function StoryboardStage({
           }
         />
       )}
-      <ApprovalBar slug={slug} stages={["storyboard"]} refresh={revision} />
+      <ApprovalBar slug={slug} stages={["brief", "storyboard"]} refresh={revision} />
 
       {!loaded && !error && <LoadingState>Reading the storyboard…</LoadingState>}
 
@@ -256,7 +256,7 @@ export function StoryboardStage({
                 </b>
                 <span>
                   Star the hardest identity or interaction first. Changing the stars asks for
-                  the story to be approved again.
+                  the story to be approved again in the bar above, then approve the board.
                 </span>
               </div>
               <div className="style-check-picks">
