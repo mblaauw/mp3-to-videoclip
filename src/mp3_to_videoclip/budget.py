@@ -131,11 +131,16 @@ def _schema_budget(root: Path) -> dict | None:
     latest = entries[-1]
     if not isinstance(latest, dict):
         raise ValueError("project budget history is invalid; inspect it locally")
+    corrections = latest.get("max_corrections")
+    if corrections is None:
+        # Schema 3 stores None when no explicit correction limit was recorded.
+        # The engine's documented default is the policy in that case.
+        corrections = DEFAULT_MAX_CORRECTIONS
     return _validate_budget_record(
         {
             "version": BUDGET_VERSION,
             "cap_usd": latest.get("cap_usd"),
-            "max_corrections": latest.get("max_corrections", DEFAULT_MAX_CORRECTIONS),
+            "max_corrections": corrections,
             "note": str(latest.get("reason") or "schema 3 production budget"),
             "at": latest.get("at") or _now(),
         }
