@@ -60,7 +60,7 @@ logic stay authoritative in the existing engine modules.
 | P3 | Track and Story, Brief card, excerpt band, lyrics, credits card, one-click approval | Complete (PR #27, `4fe6a6b`) |
 | P4 | Storyboard cards/table/inspector, Images contact sheet/lightbox, priced actions | Complete (PR #28, `575ad17`) |
 | P5 | Film Cut tab, checklist, credits editor, settings, director tool cards, history | Complete (PR #29, `6bb03c9`) |
-| P6 | Empty/loading/error states, responsive and accessibility pass | Not started |
+| P6 | Empty/loading/error states, responsive and accessibility pass | Complete (PR #30, `034e785`) |
 
 ## P0 — correctness
 
@@ -846,8 +846,101 @@ Limitations:
 P5 shipped in PR #29, squash-merged as `6bb03c9` on 26 Oct 2026. CI
 (`check`) passed before the merge.
 
+## P6 — polish and checks
+
+### Scope
+
+- Empty, loading and error states for the library and all five stages. The
+  shared `ErrorState` keeps raw exceptions and paths behind *Copy details* and
+  offers a retry where one is meaningful.
+- Responsive pass at 390 / 900 / 1280 / 1440 against the app's own composition.
+- Accessibility: keyboard-only path through all five stages, focus traps for the
+  review and graphics lightboxes and both modals, focus restoration, `aria-live`
+  next-step and job status, larger rating and star targets, reduced motion.
+- README screenshots at 1440 and 390 px, committed as webp.
+- Carry the two P5 items: spine boundary drags that write `PUT /edit` when the
+  cut owns timing, and per-shot inline transition type/handle/reason controls.
+
+### What changed
+
+- `ui/State.tsx` adds `LoadingState`, `ErrorState` and `EmptyState`; `ui/focus.ts`
+  adds the shared focus trap and reduced-motion-aware scroll behaviour.
+- Library and stages now distinguish first load from empty and from failure.
+  Images without a board offers *Go to Storyboard*.
+- The review lightbox traps Tab, restores the triggering tile on close and now
+  handles Escape even from the redo textarea. Settings and New film trap Tab and
+  restore focus; the graphics sample lightbox uses the same trap.
+- `TopBar` announces the tray state through a polite live region and its job
+  bars are real progress bars. `NextStepBar` already used a polite live region.
+- `Spine` accepts the edit payload and writes a whole `PUT /edit` after a
+  boundary drag on Film. `film/editTimeline.ts` owns the boundary limits, the
+  move and the join edit; Node tests cover coverage, transitions, timed children
+  and the impossible-boundary case.
+- Film cut rows expose a per-shot join editor (type, frames, reason). A named
+  join cannot be saved without a reason; a cut clears its handle.
+- The Film warnings panel is collapsed by default; hard findings stay open.
+- README has a Screens section with the five committed captures and no paid call
+  behind them.
+
+### Evidence
+
+- `uv run pytest -q` — 941 passed, 1 skipped.
+- `uv run ruff check .` — clean; `uv run ruff format --check .` — 226 files
+  already formatted.
+- `npm test --prefix frontend` — 39 passed, including five edit-timeline tests.
+- `npm run build --prefix frontend` — clean; the committed dist was rebuilt.
+- Keyboard-only CDP flow at 1440 and 390: library card opened with Enter, each
+  stepper button activated with Enter (track → story → storyboard → images →
+  film), review lightbox opened from a tile, Tab stayed inside for 12 presses,
+  Escape closed it and focus returned to `a001-blue-face`; Settings trapped Tab
+  and Escape closed it. Zero console errors at both widths.
+- Story approval through the UI at 1440 and 390: *Approve story* moved the bar to
+  *Story approved.* and the toast said the same.
+- Lightbox Keep at 1440 and 390: `k011-phone-letter-last` moved to verdict
+  `accept`, `inspected: true`, and the lightbox closed. Zero console errors.
+- A real local preview (239.8 s, 62.6 MB) was rendered from a fixture copy and
+  selected with *Play* at 1440 (958 px element) and 390 (332 px). No provider
+  call.
+- Film spine drag: a mouse drag on a cut boundary changed `g003-carry-candles`
+  from 275 to 322 frames at 1440 and `g006-choir` from 1 to 147 at 390; both
+  writes came back from `PUT /edit`. The inline editor rendered 79 rows; saving
+  a fade returned *Saved the join into a001-blue-face.*
+- Route sweep at 390 / 900 / 1280 / 1440 over the library and all five p5-final
+  stages: `scrollWidth == clientWidth` in every document, zero console errors.
+  The only boxes past the 390 px viewport are the stage buttons inside the
+  intentionally horizontal stepper.
+- Empty fixtures: fresh-advert Images showed *No storyboard or assets yet.* with
+  *Go to Storyboard*; its Film showed the storyboard-first card. No console
+  errors.
+- Reduced motion: Chrome emulation reported `prefers-reduced-motion: reduce`,
+  `.ui-dot--run` computed `animation-duration: 1e-05s`, and scroll behaviour
+  falls back to `auto`.
+- Graphics sample lightbox: a local fixture review with two PNG samples opened
+  from the titles strip and focused its close button; the real preflight path
+  remains backend-covered.
+- README captures were reviewed for blank/loading frames, clipping and overflow;
+  the library phone capture shows the wordmark and no page overflow.
+
+Limitations:
+
+- No fixture has a current real graphics preflight/base, so the sample lightbox
+  was exercised with a fixture review rather than a real composited render.
+- Moving an edit boundary changes the stills stage hash, so a fixture that had
+  approved stills returned to *Needs you* after a drag. This is existing
+  content-binding behaviour, not changed in P6; re-approving stills after a cut
+  change is still required.
+- The OpenCode browser screenshot tool needs a visible desktop window. The README
+  captures therefore used headless Chrome over CDP; no Playwright dependency was
+  added and no paid call was made.
+- Fixtures live under `/tmp/opencode/`; no production under `projects/` was
+  touched.
+
+P6 shipped in PR #30, squash-merged as `034e785` on 27 Oct 2026. CI (`check`)
+passed in 4m35s before the merge.
+
 ## Next
 
-P6 — empty, loading and error states, the 390/900/1280/1440 responsive pass,
-keyboard-only paths and focus traps, reduced motion, README screenshots, and the
-spine boundary controls that write the edit list.
+No redesign phases remain. P6's limitations above are the open follow-ups: a real
+graphics preflight fixture and a review of whether edit changes should invalidate
+the stills approval.
+
