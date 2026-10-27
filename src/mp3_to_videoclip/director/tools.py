@@ -131,9 +131,94 @@ TOOLS: list[dict] = [
     _tool(
         "update_brief",
         "Patch the brief with an RFC 7396 JSON merge. Omit fields you do not change; "
-        "direction, style and treatment cannot be blanked. Returns the new brief.",
+        "direction, style and treatment cannot be blanked. Returns the new brief. "
+        "Use set_creative_profile for characters, scenes, image rules, avoid and look.",
         {"slug": {"type": "string"}, "patch": {"type": "object"}},
         ["slug", "patch"],
+    ),
+    _tool(
+        "set_creative_profile",
+        "Create or replace the film's cast, places, arc, global image rules, avoid list "
+        "and compact rendering look. Call once after the treatment, before the storyboard. "
+        "Characters carry identity and changeable states; never repeat identity or wardrobe "
+        "in shot prompts.",
+        {
+            "slug": {"type": "string"},
+            "characters": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "identity": {
+                            "type": "string",
+                            "description": "One line: age, build, skin, hair, eyes. No wardrobe.",
+                        },
+                        "description": {"type": "string"},
+                        "states": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                    "description": {"type": "string"},
+                                    "attributes": {
+                                        "type": "object",
+                                        "additionalProperties": {"type": "string"},
+                                    },
+                                    "references": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
+                                },
+                                "required": ["description"],
+                            },
+                        },
+                        "default_state": {"type": "string"},
+                        "references": {"type": "array", "items": {"type": "string"}},
+                        "permission_confirmed": {"type": "boolean"},
+                    },
+                    "required": ["id", "identity"],
+                },
+            },
+            "scenes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "description": {
+                            "type": "string",
+                            "description": "Place, time and light; no plot or cast.",
+                        },
+                        "reference_ids": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["id", "description"],
+                },
+            },
+            "arc": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "phase": {"type": "string"},
+                        "intention": {"type": "string"},
+                    },
+                    "required": ["phase", "intention"],
+                },
+            },
+            "image_rules": {
+                "type": "array",
+                "items": {"type": "string"},
+                "maxItems": 6,
+            },
+            "avoid": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
+            "look": {
+                "type": "string",
+                "description": "Rendering only, 90-150 words. Protected preset: core verbatim "
+                "plus at most 60 words.",
+            },
+        },
+        ["slug", "characters", "scenes", "arc", "image_rules", "avoid", "look"],
     ),
     _tool(
         "update_shots",
@@ -282,6 +367,17 @@ def _dispatch(
             if field in patch and (not isinstance(patch[field], str) or not patch[field].strip()):
                 raise ValueError(f"brief {field} cannot be blank; omit it to keep the current text")
         return P.update_brief(root, patch).model_dump()
+
+    if name == "set_creative_profile":
+        return P.set_creative_profile(
+            root,
+            characters=arguments.get("characters") or [],
+            scenes=arguments.get("scenes") or [],
+            arc=arguments.get("arc") or [],
+            image_rules=arguments.get("image_rules") or [],
+            avoid=arguments.get("avoid") or [],
+            look=arguments.get("look") or "",
+        ).model_dump()
 
     if name == "update_shots":
         board, changed = P.update_shots(root, arguments.get("changes") or [])

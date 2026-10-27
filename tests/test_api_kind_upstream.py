@@ -60,6 +60,7 @@ def test_vocal_advert_can_approve_its_brief(tmp_path, monkeypatch):
                 "direction": "Late-night city, one signal",
                 "style": "Clean photographic, sodium light",
                 "treatment": "A courier carries the last tape across a dark city.",
+                "creative": {"profile_version": 1},
             },
         )
         assert patched.status_code == 200, patched.text

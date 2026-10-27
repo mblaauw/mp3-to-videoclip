@@ -99,13 +99,36 @@ export function CharactersCard({
         {saving && <span className="saved-note">Saving…</span>}
       </h2>
       {!characters.length && (
-        <p className="hint">No characters yet. A film can work with places and objects alone.</p>
+        <p className="hint">
+          No characters yet. The Writer adds recurring people with the creative profile; a film
+          can also work with places and objects alone.
+        </p>
       )}
-      {characters.map((character, index) => (
+      {characters.map((character, index) => {
+        const states = Object.entries(character.states || {});
+        return (
         <div className="character-row" key={character.id}>
           <div className="character-avatar">No photo</div>
           <div className="character-fields">
             <b>{displayName(character.id)}</b>
+            {states.length > 0 && (
+              <div className="chips">
+                {states.map(([state, value]) => (
+                  <span
+                    className="ui-chip"
+                    key={state}
+                    title={value?.description || undefined}
+                  >
+                    {state}
+                  </span>
+                ))}
+                {character.default_state && (
+                  <span className="hint">
+                    default {character.default_state}
+                  </span>
+                )}
+              </div>
+            )}
             <input
               value={character.identity || ""}
               aria-label={`Identity for ${displayName(character.id)}`}
@@ -140,7 +163,8 @@ export function CharactersCard({
             </label>
           </div>
         </div>
-      ))}
+        );
+      })}
       <div className="add-character">
         <Field label="Add a character">
           <div className="inline-fields">

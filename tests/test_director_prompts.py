@@ -133,6 +133,10 @@ def test_story_task_routing_follows_the_artifacts(tmp_path):
         {"time_range": "0–3 s", "picture": "the hook", "text": "", "music": "first accent"}
     ]
     write_json(root / "brief.json", brief)
+    assert prompts.select_task(root, "story", "writer") == "profile"
+
+    brief["creative"]["profile_version"] = 1
+    write_json(root / "brief.json", brief)
     assert prompts.select_task(root, "story", "writer") == "revise"
 
 

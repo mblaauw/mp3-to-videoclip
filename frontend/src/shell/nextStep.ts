@@ -34,6 +34,8 @@ export type NextStep = {
 export type ProjectFacts = {
   kind?: string | null;
   music_mode?: string | null;
+  prompt_version?: number | null;
+  profile_version?: number;
   has_analysis?: boolean;
   has_lyrics?: boolean;
   has_message?: boolean;
@@ -238,6 +240,16 @@ function storyStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
           : "Say what the promo is about.",
       detail: "The Brief card on Story holds the facts the film must not invent.",
       actions: [{ label: "Edit brief", target: "brief", kind: "primary" }],
+    };
+  }
+  if (project.prompt_version === 2 && (project.profile_version ?? 0) < 1) {
+    return {
+      tone: "you",
+      title: "Build the cast, places and rules.",
+      detail:
+        "The Writer turns the treatment into the structured profile the stills use. " +
+        "The story cannot be approved before it exists.",
+      actions: [{ label: "Open Story", to: "story", kind: "primary" }],
     };
   }
   if (brief?.state === "stale" || stateOf(project, "story") === "changed") {

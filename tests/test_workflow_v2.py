@@ -320,6 +320,43 @@ def test_reject_revokes_prior_approval_even_with_unchanged_bytes(tmp_path):
         P.require_approval(root, "proof")
 
 
+def test_a_v2_story_needs_the_structured_profile_before_approval(tmp_path):
+    root = strict_root(tmp_path)
+    project = read_json(root / "project.json")
+    project["prompt_version"] = 2
+    write_json(root / "project.json", project)
+
+    P.approve(root, "analysis", "test user approved")
+    P.approve(root, "lyrics", "test user approved", True)
+    P.approve(root, "events", "test user approved")
+    with pytest.raises(ValueError, match="create the creative profile"):
+        P.approve(root, "brief", "test user approved")
+
+    brief = read_json(root / "brief.json")
+    assert "profile_version" not in brief["creative"]
+    brief["creative"]["profile_version"] = 1
+    write_json(root / "brief.json", brief)
+    P.approve(root, "brief", "test user approved")
+    P.require_approval(root, "brief")
+
+
+def test_a_legacy_story_still_approves_without_a_profile(tmp_path):
+    root = make_root(tmp_path)
+    assert read_json(root / "brief.json")["creative"].get("profile_version") is None
+    approve_prerequisites(root)
+    P.require_approval(root, "brief")
+
+
+def test_an_unbound_shot_gets_no_cast_in_its_prompt(tmp_path):
+    root = strict_root(tmp_path)
+    board = read_json(root / "work/storyboard.json")
+    board["shots"][0].update(character_ids=[], character_states={}, state_requirements={})
+    write_json(root / "work/storyboard.json", board)
+    prompt = preflight.manifest(root, ["s001"])["shots"][0]["spec"]["positivePrompt"]
+    assert "juno identity" not in prompt
+    assert "olive parka" not in prompt
+
+
 def test_strict_quote_and_generate_uses_preflight_budget_and_no_implicit_acceptance(tmp_path):
     root = strict_root(tmp_path)
     approve_prerequisites(root)

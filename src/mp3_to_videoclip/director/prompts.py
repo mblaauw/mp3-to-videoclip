@@ -33,6 +33,7 @@ TASKS: dict[Role, dict[str, str]] = {
         "concepts": "writer/concepts.md",
         "script_mv": "writer/script_mv.md",
         "script_ad": "writer/script_ad.md",
+        "profile": "writer/profile.md",
         "storyboard": "writer/storyboard.md",
         "prompts": "writer/prompts.md",
         "review": "writer/review.md",
@@ -51,6 +52,7 @@ EXAMPLES = {
     "concepts": "examples/concepts.md",
     "script_mv": "examples/script_mv.md",
     "script_ad": "examples/script_ad.md",
+    "profile": "examples/profile.md",
     "storyboard": "examples/storyboard.md",
     "prompts": "examples/prompts.md",
     "review": "examples/review.md",
@@ -147,6 +149,9 @@ def select_task(root: Path, stage: str | None, role: Role) -> str:
             return "concepts"
         if not brief.get("script"):
             return "script_ad" if kind in ("promo", "advert") else "script_mv"
+        creative = brief.get("creative") if isinstance(brief.get("creative"), dict) else {}
+        if int(creative.get("profile_version") or 0) < 1:
+            return "profile"
         return "revise"
     return "revise"
 

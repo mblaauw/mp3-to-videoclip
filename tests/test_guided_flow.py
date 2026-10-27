@@ -141,6 +141,7 @@ def test_new_production_prefills_style_and_credits_from_siblings(tmp_path):
             "direction": "Test direction",
             "style": "Test style",
             "treatment": "Test treatment",
+            "creative": P.load_brief(new).creative.model_copy(update={"profile_version": 1}),
         }
     )
     write_json(new / "brief.json", brief.model_dump())

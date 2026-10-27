@@ -226,6 +226,38 @@ test("story continues to storyboard when approved", () => {
   assert.equal(step.actions[0].to, "storyboard");
 });
 
+test("a v2 story asks for the creative profile before approval", () => {
+  const step = nextStep(
+    "story",
+    project({
+      prompt_version: 2,
+      profile_version: 0,
+      stage_states: states({ story: "you" }),
+    }),
+    approvals({ brief: { state: "missing" } }),
+    images(),
+    budget,
+  );
+  assert.match(step.title, /cast, places and rules/);
+  assert.equal(step.actions[0].to, "story");
+});
+
+test("a v2 story with a profile offers the approval", () => {
+  const step = nextStep(
+    "story",
+    project({
+      prompt_version: 2,
+      profile_version: 1,
+      stage_states: states({ story: "you" }),
+    }),
+    approvals({ brief: { state: "missing", expected_hash: "abc" } }),
+    images(),
+    budget,
+  );
+  assert.equal(step.actions[0].approve, "brief");
+  assert.match(step.title, /approve/);
+});
+
 test("storyboard is blocked by the story", () => {
   const step = nextStep(
     "storyboard",

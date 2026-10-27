@@ -81,6 +81,7 @@ def probe_project(tmp_path, monkeypatch):
     brief.direction = "A scripted probe"
     brief.style = "A local probe"
     brief.treatment = "Import, board, one mocked batch, one regeneration."
+    brief.creative.profile_version = 1
     write_json(root / "brief.json", brief.model_dump())
     P.approve(root, "brief", "probe setup", via="studio", review_confirmed=True)
     return root
