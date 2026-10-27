@@ -4,12 +4,15 @@ import {
   type ApprovalState,
   type AudioWindow,
   type Budget,
+  type EditPayload,
+  type EditSummary,
   type ImageShot,
   type IntakePayload,
   type Music,
   type ProjectSummary,
   type Storyboard,
 } from "../api";
+import { applyEditBoard } from "../film/editTimeline";
 import { useJobs } from "../jobs/store";
 import { PlayerProvider } from "../spine/player";
 import { Spine } from "../spine/Spine";
@@ -37,6 +40,7 @@ import {
 import { notifyProjectChanged, PROJECT_CHANGED } from "./projectEvents";
 import { goLibrary } from "./route";
 import { TopBar } from "./TopBar";
+import { scrollBehavior } from "../ui";
 import { SHOT_KINDS } from "../shotKinds";
 
 const APPROVAL_STAGES = [
@@ -113,7 +117,9 @@ function derivedStates(
 
 function scrollTo(selector: string, delay = 60) {
   window.setTimeout(() => {
-    document.querySelector(selector)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document
+      .querySelector(selector)
+      ?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
   }, delay);
 }
 
@@ -163,6 +169,7 @@ function StageView({
         reserve={reserve}
         pendingPaid={pendingPaid}
         onPendingConsumed={onPendingConsumed}
+        onNavigate={onNavigate}
       />
     );
   return <FilmStage slug={slug} onNavigate={onNavigate} />;
@@ -217,6 +224,7 @@ function FilmShellContent({
   const [audioWindow, setAudioWindow] = useState<AudioWindow | null>(null);
   const [windowBusy, setWindowBusy] = useState(false);
   const [editOwnsTiming, setEditOwnsTiming] = useState(false);
+  const [editPayload, setEditPayload] = useState<EditPayload | null>(null);
   const [reserve, setReserve] = useState("0.05");
   const [shotKinds, setShotKinds] = useState<typeof SHOT_KINDS>(SHOT_KINDS);
   const [revision, setRevision] = useState(0);
@@ -242,7 +250,7 @@ function FilmShellContent({
       api.budget(slug),
       api.storyboard(slug),
       api.track(slug),
-      project.shots > 0 ? api.edit(slug) : Promise.resolve({ present: false }),
+      project.shots > 0 ? api.edit(slug) : Promise.resolve({ present: false } as EditSummary),
       api.intake(slug),
       api.settings(),
     ]);
@@ -256,7 +264,10 @@ function FilmShellContent({
       setBoard("shots" in boardResult.value ? boardResult.value : null);
     }
     if (trackResult.status === "fulfilled") setMusic(trackResult.value.music);
-    if (editResult.status === "fulfilled") setEditOwnsTiming(editResult.value.present);
+    if (editResult.status === "fulfilled") {
+      setEditOwnsTiming(editResult.value.present);
+      setEditPayload(editResult.value.present ? editResult.value.edit ?? null : null);
+    }
     if (intakeResult.status === "fulfilled") {
       setIntake(intakeResult.value);
       setAudioWindow((current) => current ?? intakeResult.value.audio_window);
@@ -341,6 +352,21 @@ function FilmShellContent({
     committedWindow && project.kind !== "music_video"
       ? `${baseAudio}?v=${committedWindow.start}-${committedWindow.end}-${committedWindow.fade_in}-${committedWindow.fade_out}`
       : baseAudio;
+  const spineBoard = board && editPayload ? applyEditBoard(board, editPayload) : board;
+
+  const saveCutBoundary = async (next: EditPayload): Promise<boolean> => {
+    try {
+      const saved = await api.saveEdit(slug, next);
+      setEditPayload(saved.present ? saved.edit ?? next : null);
+      setEditOwnsTiming(saved.present);
+      notifyProjectChanged();
+      onProjectsChanged();
+      return true;
+    } catch (error) {
+      toast(`Could not save the cut: ${String(error)}`);
+      return false;
+    }
+  };
 
   const commitAudioWindow = async (window: AudioWindow): Promise<boolean> => {
     const previous = intake?.audio_window || null;
@@ -508,7 +534,7 @@ function FilmShellContent({
         <Spine
           slug={slug}
           stage={stage}
-          board={board}
+          board={spineBoard}
           music={music}
           images={images}
           audioWindow={audioWindow}
@@ -518,8 +544,10 @@ function FilmShellContent({
           windowLocked={project.shots > 0}
           onAudioWindow={setAudioWindow}
           onAudioWindowCommit={commitAudioWindow}
-          readOnly={editOwnsTiming}
           onBoardChange={setBoard}
+          edit={stage === "film" ? editPayload : null}
+          onEditChange={stage === "film" ? saveCutBoundary : undefined}
+          readOnly={stage === "storyboard" && editOwnsTiming}
         />
       </div>
     </PlayerProvider>
@@ -534,6 +562,7 @@ export function LibraryShell({
   onArchive,
   onCreated,
   onSettings,
+  onRetry,
 }: {
   projects: ProjectSummary[];
   loading: boolean;
@@ -542,6 +571,7 @@ export function LibraryShell({
   onArchive: (slug: string) => void;
   onCreated: (slug: string) => void;
   onSettings: () => void;
+  onRetry: () => void;
 }) {
   return (
     <div className="shell library-shell">
@@ -562,6 +592,7 @@ export function LibraryShell({
         onOpen={onOpen}
         onArchive={onArchive}
         onCreated={onCreated}
+        onRetry={onRetry}
       />
     </div>
   );

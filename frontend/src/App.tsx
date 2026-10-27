@@ -58,6 +58,7 @@ export function App() {
           onArchive={goArchive}
           onCreated={(slug) => void created(slug)}
           onSettings={openSettings}
+          onRetry={() => void refresh()}
         />
         {dialog}
         <ToastTray />

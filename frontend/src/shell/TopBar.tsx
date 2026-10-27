@@ -191,12 +191,23 @@ function JobsPopover({
               {job.cost_usd > 0 ? ` · $${job.cost_usd.toFixed(2)} so far` : ""}
             </span>
             {job.status === "running" && job.progress.total === 0 && (
-              <div className="job-bar indeterminate" aria-hidden="true">
+              <div
+                className="job-bar indeterminate"
+                role="progressbar"
+                aria-label={`${label} progress`}
+              >
                 <i />
               </div>
             )}
             {job.status === "running" && job.progress.total > 0 && (
-              <div className="job-bar" aria-hidden="true">
+              <div
+                className="job-bar"
+                role="progressbar"
+                aria-label={`${label} progress`}
+                aria-valuemin={0}
+                aria-valuemax={job.progress.total}
+                aria-valuenow={job.progress.done}
+              >
                 <i
                   style={{
                     width: `${Math.min(
@@ -239,6 +250,17 @@ export function TopBar({
   const [pop, setPop] = useState<"budget" | "jobs" | null>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const running = jobs.filter((job) => job.status === "running").length;
+  const activeJobs = jobs.filter((job) =>
+    ["queued", "running", "needs_budget"].includes(job.status),
+  ).length;
+  const latest = jobs[0];
+  const finished = latest?.finished_at ? Number(latest.finished_at) : 0;
+  const recent = finished > 0 && Date.now() / 1000 - finished < 30;
+  const jobStatus = activeJobs
+    ? `${activeJobs} ${activeJobs === 1 ? "job" : "jobs"} in the tray.`
+    : latest && recent
+      ? `${JOB_PAST[latest.kind] || latest.kind.replaceAll("_", " ")}: ${latest.status}.`
+      : "No jobs running.";
   const remaining = budget?.remaining_usd ?? project?.remaining_usd;
   const cap = budget?.cap_usd ?? null;
   const analysisRunning = jobs.some(
@@ -263,6 +285,12 @@ export function TopBar({
       document.removeEventListener("keydown", escape);
     };
   }, [pop]);
+
+  useEffect(() => {
+    if (!stage) return;
+    const current = document.querySelector<HTMLElement>(`.step[aria-current="page"]`);
+    current?.scrollIntoView({ block: "nearest", inline: "center", behavior: "auto" });
+  }, [stage]);
 
   const states = stageStates || project?.stage_states || {};
   return (
@@ -357,6 +385,9 @@ export function TopBar({
         <button type="button" className="icon-btn" aria-label="Settings" onClick={onSettings}>
           <GearIcon />
         </button>
+        <span className="sr-only" role="status" aria-live="polite">
+          {jobStatus}
+        </span>
         {pop === "budget" && project && (
           <BudgetPopover
             slug={project.slug}

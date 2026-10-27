@@ -6,7 +6,7 @@ film. Money records, the library, source audio and generated stills are kept
 locally. Only an explicitly authorized paid transcription, listening pass or
 image batch sends the required bytes to the provider.
 
-**Current state (25 Oct 2026): the new Studio is live.** `uv run studio` opens the
+**Current state (27 Oct 2026): the new Studio is live.** `uv run studio` opens the
 library, creates a schema-3 production from an MP3, measures it locally, and takes
 it through Track, Story, Storyboard, Images and Film with content-bound approvals
 and a job tray. The waveform timeline, the Remotion Player preview, the error tray,
@@ -86,7 +86,7 @@ uv run studio                  # free loopback port, opens the browser
 uv run studio --port 8799
 ```
 
-**New production:** press *+ New production*, drop an MP3 (25 MB limit) and choose
+**New production:** press *New film*, drop an MP3 (25 MB limit) and choose
 a title, starting budget and 16:9 or 9:16. The app probes and copies the source,
 writes a schema-3 production, and queues the local analysis job. Paste LRC
 timestamps in Track when the track has vocals; no lyric position is invented.
@@ -94,6 +94,34 @@ In Storyboard, drag the gold boundaries over the waveform (or focus one and use
 the arrow keys) to retime the cut; later cuts stay put. Film shows a live Player
 preview from the selected stills and the source audio before you render. It runs
 the renderer's own composition and timing module, not a second approximation.
+Once Film seeds an edit, the same gold boundaries on that screen write the cut
+(`PUT /edit`), and every shot's incoming transition and handle are editable
+inline in the cut list.
+
+### Screens
+
+![The library at 1440 px](docs/screenshots/library-1440.webp)
+
+*Your films — posters, the five-stage progress line, the next thing to do and the money left.*
+
+![The Images stage at 1440 px](docs/screenshots/images-1440.webp)
+
+*Images — style check, filter counts and the contact sheet.*
+
+![A still in the review lightbox](docs/screenshots/images-lightbox-1440.webp)
+
+*The review lightbox — Keep, Redo or remake, with the exact version and prompt on screen.*
+
+![The Film stage at 1440 px](docs/screenshots/film-cut-1440.webp)
+
+*Film — the delivery gates, the readable cut and the inline joins above the live preview.*
+
+![The library at 390 px](docs/screenshots/library-390.webp)
+
+*The same library at 390 px; the stage stepper scrolls horizontally and keeps the current stage in view.*
+
+These screens come from local fixtures at 1440 and 390 px. No paid provider call
+was made to capture them.
 
 **Director:** add `llm_api_key` (and optionally `llm_base_url` / `llm_model`) under
 `[settings]` in `~/.config/mp3-to-videoclip/settings.toml`, or set

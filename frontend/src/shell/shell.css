@@ -1180,6 +1180,9 @@ body {
     padding: 6px var(--s-3) 0;
     row-gap: 0;
   }
+  .mark-word {
+    display: inline;
+  }
   .stepper {
     order: 3;
     width: 100%;

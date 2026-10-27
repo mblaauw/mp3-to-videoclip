@@ -11,7 +11,7 @@ import {
 import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
 import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
-import { Button } from "../ui";
+import { Button, EmptyState, ErrorState, LoadingState } from "../ui";
 import { BriefCard } from "../story/BriefCard";
 import { CharactersCard } from "../story/CharactersCard";
 import { CreditsCard } from "../story/CreditsCard";
@@ -269,10 +269,24 @@ export function StoryStage({
           <ArtifactRating slug={slug} artifact="treatments" />
         </div>
       </div>
-      {error && <p className="error">{error}</p>}
-      {loading && !brief && <p className="hint">Reading the current story…</p>}
-      {!loading && !brief && (
-        <Button onClick={() => void load()}>Retry loading the story</Button>
+      {error && (
+        <ErrorState
+          what={brief ? "saving the story" : "reading the story"}
+          error={error}
+          compact={!!brief}
+          onRetry={brief ? undefined : () => void load()}
+        />
+      )}
+      {loading && !brief && !error && <LoadingState>Reading the current story…</LoadingState>}
+      {!loading && !brief && !error && (
+        <EmptyState
+          title="The story could not be read."
+          action={
+            <Button onClick={() => void load()}>Retry loading the story</Button>
+          }
+        >
+          Nothing was changed. Try again, or check that the brief exists for this film.
+        </EmptyState>
       )}
 
       {approval?.state === "stale" && (

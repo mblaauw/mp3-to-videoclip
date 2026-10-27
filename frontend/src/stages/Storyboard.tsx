@@ -11,7 +11,7 @@ import { ArtifactRating } from "../ArtifactRating";
 import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
 import { isPaidShot, kindMeta, kindOf } from "../shotKinds";
 import { ShotThumb } from "../storyboard/ShotThumb";
-import { Button } from "../ui";
+import { Button, ErrorState, LoadingState } from "../ui";
 
 function clock(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
@@ -74,6 +74,7 @@ export function StoryboardStage({
   const [timingOwned, setTimingOwned] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"pictures" | "table">("pictures");
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -85,6 +86,9 @@ export function StoryboardStage({
         })
         .catch((caught) => {
           if (live) setError(String(caught));
+        })
+        .finally(() => {
+          if (live) setLoaded(true);
         });
       api
         .brief(slug)
@@ -110,7 +114,7 @@ export function StoryboardStage({
       live = false;
       window.removeEventListener(PROJECT_CHANGED, load);
     };
-  }, [slug]);
+  }, [slug, revision]);
 
   useEffect(() => {
     if (!board) {
@@ -211,10 +215,26 @@ export function StoryboardStage({
           )}
         </div>
       </div>
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <ErrorState
+          what={board ? "saving the storyboard" : "reading the storyboard"}
+          error={error}
+          compact={!!board}
+          onRetry={
+            board
+              ? undefined
+              : () => {
+                  setError(null);
+                  setRevision((value) => value + 1);
+                }
+          }
+        />
+      )}
       <ApprovalBar slug={slug} stages={["storyboard"]} refresh={revision} />
 
-      {!board ? (
+      {!loaded && !error && <LoadingState>Reading the storyboard…</LoadingState>}
+
+      {loaded && !board && !error && (
         <section className="card empty-card">
           <p className="empty">No storyboard yet. The brief must be approved first.</p>
           <Button variant="primary" onClick={() => void create()} disabled={creating}>
@@ -224,7 +244,9 @@ export function StoryboardStage({
             Timing only. Fill each shot's job and prompt before approving the board.
           </p>
         </section>
-      ) : (
+      )}
+
+      {board && (
         <>
           {expectedProof > 0 && (
             <section className={`style-check ${proofIds.length === expectedProof ? "set" : ""}`}>

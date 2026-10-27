@@ -1,7 +1,7 @@
-import { useState, type DragEvent as ReactDragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import type { ProjectSummary } from "../api";
 import { NewProduction } from "../NewProduction";
-import { Button, StatusDot, type StatusTone } from "../ui";
+import { Button, EmptyState, ErrorState, LoadingState, StatusDot, useFocusTrap, type StatusTone } from "../ui";
 import { PlusIcon } from "../ui/icons";
 import { stageLabel } from "./stages";
 import type { Stage } from "./nextStep";
@@ -92,6 +92,7 @@ function FilmCard({
     <button
       type="button"
       className="film-card"
+      data-slug={project.slug}
       onClick={() => onOpen(project.slug, project.next_step || "film")}
     >
       <Poster project={project} />
@@ -121,6 +122,7 @@ export function Library({
   onOpen,
   onArchive,
   onCreated,
+  onRetry,
 }: {
   projects: ProjectSummary[];
   loading: boolean;
@@ -128,10 +130,23 @@ export function Library({
   onOpen: (slug: string, stage: string) => void;
   onArchive: (slug: string) => void;
   onCreated: (slug: string) => void;
+  onRetry?: () => void;
 }) {
   const [newFile, setNewFile] = useState<File | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const newRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(newOpen, newRef);
+
+  useEffect(() => {
+    if (!newOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNewOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [newOpen]);
+
   const active = projects.filter((project) => !project.archived);
   const delivered = projects.filter((project) => project.archived);
   const summary = `${active.length} in progress${delivered.length ? `, ${delivered.length} delivered` : ""}.`;
@@ -160,9 +175,13 @@ export function Library({
             <PlusIcon /> New film
           </Button>
         </div>
-        {error && <p className="error">{error}</p>}
-        {!loading && !active.length && !delivered.length && (
-          <p className="empty">No films yet. Drop an MP3 below to start one.</p>
+        {error && <ErrorState what="reading your films" error={error} onRetry={onRetry} />}
+        {loading && !projects.length && <LoadingState>Reading the library…</LoadingState>}
+        {!loading && !error && !active.length && !delivered.length && (
+          <EmptyState title="No films yet.">
+            Drop an MP3 below to start one. It stays on this computer; nothing is spent
+            until you make pictures.
+          </EmptyState>
         )}
         <div className="film-grid">
           {active.map((project) => (
@@ -194,6 +213,7 @@ export function Library({
                 <button
                   type="button"
                   className="film-card"
+                  data-slug={project.slug}
                   key={project.slug}
                   onClick={() => onArchive(project.slug)}
                 >
@@ -219,6 +239,7 @@ export function Library({
             role="dialog"
             aria-modal="true"
             aria-label="New film"
+            ref={newRef}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <NewProduction

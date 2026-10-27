@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type TrackData } from "../api";
 import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
+import { ErrorState, LoadingState } from "../ui";
 
 function clock(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
@@ -216,7 +217,15 @@ export function TrackStage({ slug }: { slug: string }) {
         <h1>Track</h1>
         <p>Listen, name the parts of the song and add the lyrics. Everything here is measured on this computer.</p>
       </div>
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <ErrorState
+          what={data ? "saving the track" : "reading the track"}
+          error={error}
+          compact={!!data}
+          onRetry={data ? undefined : () => void load()}
+        />
+      )}
+      {!data && !error && <LoadingState>Reading the song and its sections…</LoadingState>}
 
       <div className="facts-row">
         <div className="fact">
