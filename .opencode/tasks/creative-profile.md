@@ -64,6 +64,9 @@ made and no still was touched.
 - The brief and storyboard are now `stale` and need the owner's re-approval. The
   three proof versions (`s003` v2, `s006` v1, `s038` v1) remain on disk and are
   stale against the new prompts.
+- Restaging cycles authorized for `s003` and `s006` (both had two rejected
+  generations; s006's second was an unselected v2 that still counted against the
+  correction cap). `s038` remains under the cap. No spend was made.
 
 ## Open questions
 
