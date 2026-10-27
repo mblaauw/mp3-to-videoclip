@@ -43,10 +43,31 @@ handover and the two preserved local fixes.
 - `projects/tree-of-love` (native v2, profile 0) and `projects/zero-bars`
   (legacy schema 3) still load unchanged.
 
+## tree-of-love acceptance (2026-10-27)
+
+The production was repaired through the new writers only; no provider call was
+made and no still was touched.
+
+- Snapshot first: `backups/tree-of-love-metadata-20261027T183829Z.zip`
+  (`project.json`, `brief.json`, `brand.json`, `work/`; media and assets left
+  out). Roll back by unpacking it over `projects/tree-of-love`.
+- Profile: `woman` (`dream`, `waking`, `waking-loose`) and `man` (`dream`,
+  `waking`); five scenes (`dream-garden`, `her-room`, `his-room`, `grounds`,
+  `courtyard`); eight arc beats; five global image rules; six `avoid` entries; a
+  174-word rendering look.
+- `direction` lost its 96-word character contract and now holds only the waking
+  world, the no-lip-sync/lens rule and the credits note (121 words).
+- 25 of 38 shots bind cast; 13 stay deliberately unbound (empty establishing
+  shots, hand, eye and root macros). Every shot binds a scene.
+- Compiled prompt text fell from 32,863 to 16,175 words across the board
+  (`s003` 879 → 462, `s001` 901 → 441, `s006` 865 → 386).
+- The brief and storyboard are now `stale` and need the owner's re-approval. The
+  three proof versions (`s003` v2, `s006` v1, `s038` v1) remain on disk and are
+  stale against the new prompts.
+
 ## Open questions
 
-- `tree-of-love` still repeats a 96-word contract in all 38 prompts and holds a
-  597-word look. Repairing it is the acceptance exercise for this phase and
-  would need three paid proof remakes (~$0.15) with the owner's authorization.
+- The three proof remakes (~$0.15) and the owner's re-approval are the only
+  remaining steps for `tree-of-love`; the spend needs explicit authorization.
 - The legacy FFmpeg/Pillow branches and the portable headless-shell decision
   remain from the rework.
