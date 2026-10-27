@@ -36,7 +36,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from .profiles import DEFAULT_MAX_CORRECTIONS
-from .storage import digest, read_json, write_json
+from .storage import digest, read_json, state_mutation, write_json
 
 _SHOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
@@ -150,6 +150,20 @@ def _schema_budget(root: Path) -> dict | None:
 def read_budget(root: Path) -> dict | None:
     """Validated production budget, or ``None`` for a legacy/unconfigured project."""
     path = root / BUDGET_PATH
+    if schema_version(root) == 3:
+        record = _schema_budget(root)
+        if path.exists():
+            legacy = _validate_budget_record(read_json(path))
+            if (
+                record is None
+                or money(legacy["cap_usd"]) != money(record["cap_usd"])
+                or legacy["max_corrections"] != record["max_corrections"]
+            ):
+                raise ValueError(
+                    "conflicting schema-3 budget files; inspect and explicitly reconcile "
+                    "work/production-budget.json with project.json before spending"
+                )
+        return record
     if path.exists():
         return _validate_budget_record(read_json(path))
     return _schema_budget(root)
@@ -184,6 +198,7 @@ def commitment(root: Path) -> Decimal:
     return spent + reserved
 
 
+@state_mutation
 def set_budget(root: Path, cap_usd, note: str, max_corrections: int | None = None) -> dict:
     """Write the explicit production cap. Never lowers it below committed spend."""
     cap = money(cap_usd)
@@ -215,7 +230,22 @@ def set_budget(root: Path, cap_usd, note: str, max_corrections: int | None = Non
         "note": note,
         "at": _now(),
     }
-    write_json(root / BUDGET_PATH, record)
+    if schema_version(root) == 3:
+        read_budget(root)
+        if (root / BUDGET_PATH).exists():
+            raise ValueError("reconcile the legacy budget file before changing a schema-3 cap")
+        project = read_json(root / PROJECT_PATH)
+        project.setdefault("budget", []).append(
+            {
+                "at": record["at"],
+                "cap_usd": str(cap),
+                "reason": note,
+                "max_corrections": max_corrections,
+            }
+        )
+        write_json(root / PROJECT_PATH, project)
+    else:
+        write_json(root / BUDGET_PATH, record)
     return record
 
 
@@ -353,6 +383,7 @@ def require_correction_cycles(root: Path, shot_ids):
         check_correction_cycle(root, shot_id)
 
 
+@state_mutation
 def authorize_restaging(root: Path, shot_ids, note: str) -> dict:
     """Explicit new correction cycle for named shots; grants no spending.
 

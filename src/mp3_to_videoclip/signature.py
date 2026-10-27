@@ -9,6 +9,7 @@ from .storage import (
     project_lock,
     read_json,
     read_optional,
+    state_lock,
     write_json,
 )
 
@@ -144,7 +145,7 @@ def save_credits(root: Path, cards, *, use_as_template: bool = False) -> list:
         if len(role) > 120 or len(name) > 120:
             raise ValueError("a credit role or name must be at most 120 characters")
         normalized.append([role, name])
-    with project_lock(root):
+    with project_lock(root), state_lock(root):
         spec = read_json(root / SPEC)
         spec.setdefault("credits", {})
         spec["credits"]["cards"] = normalized

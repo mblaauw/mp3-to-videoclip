@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mp3_to_videoclip.storage import read_json, read_optional, write_json
+from mp3_to_videoclip.storage import read_json, read_optional
 
 MAX_TOOL_IMAGES = 8
 THUMBNAIL_PIXELS = 512
@@ -389,7 +389,6 @@ def _dispatch(
             arguments.get("seconds"),
             arguments.get("timing"),
         )
-        write_json(root / "work" / "storyboard.json", board.model_dump())
         from mp3_to_videoclip import promptlog
 
         promptlog.record(root, "storyboard-skeleton")

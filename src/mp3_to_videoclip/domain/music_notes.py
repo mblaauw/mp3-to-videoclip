@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from mp3_to_videoclip.storage import project_lock, read_optional, write_json
+from mp3_to_videoclip.storage import project_lock, read_optional, state_lock, write_json
 
 FILE = "work/music-notes.json"
 MAX_SECTIONS = 64
@@ -103,6 +103,6 @@ def save(root: Path, payload: dict) -> dict:
         seen.add(key)
         result.append({"start": key, "name": name.strip()})
     result.sort(key=lambda item: item["start"])
-    with project_lock(Path(root)):
+    with project_lock(Path(root)), state_lock(Path(root)):
         write_json(Path(root) / FILE, {"sections": result})
     return {"sections": result}

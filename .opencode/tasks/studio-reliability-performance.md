@@ -43,7 +43,17 @@ local performance and quality evidence, not just encoder flags.
   detection, secret exclusions and exclusive publication. Fresh review found
   secret-root/output-symlink gaps; both were corrected and checks rerun. Capture
   is explicitly optimistic, not a filesystem transactional snapshot.
-- Current task: T2. Next: coordinated mutations and financial admission tests.
+- T2 implemented: reentrant cross-process state locks separate from operation
+  leases, atomic admission/reservation, coordinated manifest/review/document and
+  journal writes, canonical schema-3 budget, offline ready-task index recovery,
+  and optional HTTP ETag/If-Match conflicts for brief/board/edit. Frontend
+  conditional-write wiring belongs with shared request resources in T5.
+- Fresh T2 review found missing full-set gate revalidation, OpenAI publication
+  conflict and matching-dual-budget top-up hazards. All corrected; 23 targeted
+  coordination tests pass. Full suite: 1062 passed, 1 skipped (before final T3
+  cancellation-race correction). Golden contracts unchanged.
+- Current task: T3 integration/phase verification. Next: freeze revision, rerun
+  phase checks and publish the phase PR.
 - T1 files: script SHA256 `129c7c271e4b651589080ac00390aaa6d4e76dcbd9968d5b2d121ac1180171b8`,
   tests `037c93b60ab05d5f7510e32cee2f5ed5bb3e17b5e760dd2cf4014489ca734a52`.
   No new provider spend. Full phase checks pending.

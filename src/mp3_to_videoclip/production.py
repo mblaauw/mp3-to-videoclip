@@ -26,7 +26,16 @@ from .models import (
     VisualBeat,
 )
 from .render import audio_seconds, probe
-from .storage import digest, file_hash, inside, read_json, read_optional, write_json
+from .storage import (
+    digest,
+    file_hash,
+    inside,
+    read_json,
+    read_optional,
+    require_revision,
+    state_mutation,
+    write_json,
+)
 
 STAGE_FILES = {
     "analysis": "work/music.json",
@@ -393,12 +402,14 @@ def _merge_patch(target, patch):
     return result
 
 
-def update_brief(root: Path, patch: dict) -> Brief:
+@state_mutation
+def update_brief(root: Path, patch: dict, *, expected_hash: str | None = None) -> Brief:
     """Apply one validated merge patch and keep the previous brief in history."""
     if not isinstance(patch, dict):
         raise ValueError("brief patch must be a JSON object")
     previous = load_brief(root)
     previous_value = previous.model_dump()
+    require_revision(root / "brief.json", expected_hash, value=previous_value)
     merged = _merge_patch(previous_value, patch)
     try:
         brief = Brief.model_validate(merged)
@@ -421,6 +432,7 @@ PROFILE_MAX_AVOID = 8
 PROFILE_MAX_ARC = 12
 
 
+@state_mutation
 def set_creative_profile(
     root: Path,
     *,
@@ -525,6 +537,7 @@ def set_creative_profile(
     return updated
 
 
+@state_mutation
 def update_treatments(root: Path, payload: dict) -> Treatments:
     """Write exactly three structurally distinct concepts as one validated artifact."""
     if not isinstance(payload, dict):
@@ -560,6 +573,7 @@ def _record_prompt_write(root: Path, artifact: str) -> None:
     promptlog.record(root, artifact)
 
 
+@state_mutation
 def apply_intake(
     root: Path,
     *,
@@ -701,6 +715,7 @@ def load_events(root: Path) -> EventMap:
     return events
 
 
+@state_mutation
 def init_events(root: Path) -> EventMap:
     """Seed an empty, reviewed-by-human event map; never guess structure or meter."""
     path = root / STAGE_FILES["events"]
@@ -784,11 +799,15 @@ def validate_board(root: Path, board: Storyboard, *, verify_source: bool = True)
     return board
 
 
-def update_shots(root: Path, changes: list[dict]) -> tuple[Storyboard, list[str]]:
+@state_mutation
+def update_shots(
+    root: Path, changes: list[dict], *, expected_hash: str | None = None
+) -> tuple[Storyboard, list[str]]:
     """Apply named shot edits atomically after validating the whole board."""
     if not isinstance(changes, list):
         raise ValueError("shot changes must be a list")
     board = load_board(root)
+    require_revision(root / STAGE_FILES["storyboard"], expected_hash, value=board.model_dump())
     from . import edits
 
     existing_edit = edits.load_edit(root, board=board)
@@ -1163,6 +1182,7 @@ def _current_proof_ids(root: Path, board: Storyboard) -> list[str]:
     return proof_ids(board, load_brief(root))
 
 
+@state_mutation
 def set_proof_ids(root: Path, shot_ids: list[str]) -> list[str]:
     """Record the explicit proof shots; they are part of the brief's bytes."""
     if not (root / STAGE_FILES["storyboard"]).exists():
@@ -1491,6 +1511,7 @@ def _require_reference_permissions(brief: Brief):
             raise ValueError(f"permission to upload/depict {reference.id} is not confirmed")
 
 
+@state_mutation
 def approve(
     root: Path,
     stage: str,
@@ -1628,6 +1649,7 @@ def approve(
     write_json(root / "work/approvals.json", approvals)
 
 
+@state_mutation
 def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None, max_seconds=None):
     """Build a timing-only skeleton (TODO content, never creative approval).
 
@@ -1747,6 +1769,7 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
     return board
 
 
+@state_mutation
 def select_asset(root: Path, shot_id: str, version: int):
     board = load_board(root)
     shot = next((s for s in board.shots if s.id == shot_id), None)
@@ -1758,10 +1781,12 @@ def select_asset(root: Path, shot_id: str, version: int):
     write_json(root / "work/assets.json", assets)
 
 
+@state_mutation
 def record_asset(root: Path, shot_id: str, version: int, path: Path, input_hash: str, task_id: str):
     root = root.resolve()
     path = Path(path).resolve()
-    assets = read_json(root / "work/assets.json")
+    index = root / "work/assets.json"
+    assets = read_json(index) if index.exists() else {}
     entry = assets.setdefault(shot_id, {"versions": [], "selected": None})
     existing = next((v for v in entry["versions"] if v["version"] == version), None)
     value = {
