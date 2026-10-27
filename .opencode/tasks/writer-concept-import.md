@@ -72,6 +72,11 @@ max_corrections`.
 - The proof estimate for s003/s006/s038 returns 3 stills at $0.15 with
   `needs_budget: false`. No provider call was made; the owner confirms the paid
   batch.
+- The first paid click had already returned s003's image before the budget
+  failure interrupted recording. Recovered task `f14279a3-dddc-41ee-9042-
+  f99dd71cda0e` from its recorded provider result: v1 downloaded and selected
+  for $0.0347625, no resubmission. The remaining proof batch is s006/s038 at
+  $0.10.
 
 ## Status
 
