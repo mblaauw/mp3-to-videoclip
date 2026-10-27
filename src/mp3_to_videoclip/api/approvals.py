@@ -17,7 +17,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.api.errors import error_response
 from mp3_to_videoclip.domain import approval_changes, approvals
-from mp3_to_videoclip.storage import read_json
+from mp3_to_videoclip.storage import ProjectBusy, read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["approvals"])
 
@@ -152,5 +152,7 @@ async def approve_stage(slug: str, stage: str, request: Request, payload: dict):
             409: "approval_stale",
         }.get(exc.status, "approval_invalid")
         return error_response(str(exc), code, exc.status)
+    except ProjectBusy as exc:
+        return error_response(str(exc), "project_busy", 409)
     except ValueError as exc:
         return error_response(str(exc), "approval_invalid", 400)

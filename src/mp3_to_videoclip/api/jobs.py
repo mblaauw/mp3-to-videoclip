@@ -14,6 +14,8 @@ class JobProgress(BaseModel):
     done: int = 0
     total: int = 0
     unit: str = ""
+    phase: str = ""
+    message: str | None = None
 
 
 class JobOut(BaseModel):
@@ -24,6 +26,7 @@ class JobOut(BaseModel):
     progress: JobProgress
     cost_usd: float
     error: str | None = None
+    queued_at: float | None = None
     started_at: float | None = None
     finished_at: float | None = None
 

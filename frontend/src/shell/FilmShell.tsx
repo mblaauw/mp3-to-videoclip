@@ -12,7 +12,9 @@ import {
   type ProjectSummary,
   type Storyboard,
 } from "../api";
+import { ApprovalsProvider } from "../ApprovalBar";
 import { applyEditBoard } from "../film/editTimeline";
+import { jobLine } from "../jobs/JobBanner";
 import { useJobs } from "../jobs/store";
 import { PlayerProvider } from "../spine/player";
 import { Spine } from "../spine/Spine";
@@ -37,11 +39,21 @@ import {
   type Stage,
   type StageState,
 } from "./nextStep";
-import { notifyProjectChanged, PROJECT_CHANGED } from "./projectEvents";
+import { notifyProjectChanged, useProjectChanged } from "./projectEvents";
 import { goLibrary } from "./route";
+import { STAGES } from "./stages";
 import { TopBar } from "./TopBar";
 import { scrollBehavior } from "../ui";
 import { SHOT_KINDS } from "../shotKinds";
+
+const APPROVED: Record<string, string> = {
+  brief: "Story approved",
+  storyboard: "Storyboard approved",
+  proof: "Style check approved",
+  stills: "All stills approved",
+  preview: "Preview approved",
+  graphics: "Titles approved",
+};
 
 const APPROVAL_STAGES = [
   "analysis",
@@ -68,10 +80,16 @@ function approvalMap(states: ApprovalState[]): ApprovalMap {
   return result;
 }
 
-function imageFacts(shots: ImageShot[], reserve: string): ImageFacts {
+function imageFacts(shots: ImageShot[], reserve: string, proofIds: string[]): ImageFacts {
   const paid = shots.filter((shot) => shot.paid);
   const missing = paid.filter((shot) => shot.selected === null);
+  const proof = shots.filter((shot) => proofIds.includes(shot.id) && !shot.local);
   return {
+    proof_total: proof.length,
+    proof_kept: proof.filter(
+      (shot) => shot.selected !== null && !shot.stale && shot.review?.verdict === "accept",
+    ).length,
+    proof_missing_ids: proof.filter((shot) => shot.selected === null).map((shot) => shot.id),
     total: paid.length,
     selected: paid.filter((shot) => shot.selected !== null).length,
     kept: paid.filter((shot) => shot.review?.verdict === "accept").length,
@@ -215,6 +233,7 @@ function FilmShellContent({
   const slug = project.slug;
   const { jobs } = useJobs();
   const [approvals, setApprovals] = useState<ApprovalMap>({});
+  const [approvalStates, setApprovalStates] = useState<Record<string, ApprovalState>>({});
   const [approvalsLoaded, setApprovalsLoaded] = useState(false);
   const [images, setImages] = useState<ImageShot[]>([]);
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -256,6 +275,9 @@ function FilmShellContent({
     ]);
     if (approvalResult.status === "fulfilled") {
       setApprovals(approvalMap(approvalResult.value.stages));
+      setApprovalStates(
+        Object.fromEntries(approvalResult.value.stages.map((item) => [item.stage, item])),
+      );
     }
     setApprovalsLoaded(true);
     if (imageResult.status === "fulfilled") setImages(imageResult.value.shots);
@@ -278,17 +300,13 @@ function FilmShellContent({
       const kinds = settingsResult.value.shot_kinds;
       if (kinds && kinds.length) setShotKinds(kinds);
     }
-  }, [slug]);
+  }, [slug, project.shots]);
 
   useEffect(() => {
     void load();
   }, [load, revision]);
 
-  useEffect(() => {
-    const changed = () => setRevision((value) => value + 1);
-    window.addEventListener(PROJECT_CHANGED, changed);
-    return () => window.removeEventListener(PROJECT_CHANGED, changed);
-  }, []);
+  useProjectChanged(slug, () => setRevision((value) => value + 1));
 
   useEffect(() => {
     if (stage !== "storyboard") setInspectorShot(null);
@@ -321,7 +339,15 @@ function FilmShellContent({
     return () => window.removeEventListener("studio:ask-director", ask);
   }, []);
 
-  const facts = imageFacts(images, reserve);
+  const imageJob = jobs.find(
+    (job) =>
+      job.project === slug && job.kind === "images" && ["queued", "running"].includes(job.status),
+  );
+  const facts: ImageFacts = {
+    ...imageFacts(images, reserve, intake?.brief?.creative?.proof_shot_ids || []),
+    running: !!imageJob,
+    running_line: imageJob ? jobLine(imageJob) : undefined,
+  };
   const authoritative = approvalsLoaded && Object.keys(approvals).length > 0;
   const states = authoritative
     ? derivedStates(project, approvals)
@@ -386,20 +412,25 @@ function FilmShellContent({
     }
   };
 
-  const act = async (action: NextAction) => {
+  const act = async (action: NextAction, note?: string) => {
     if (action.approve) {
       const expected = approvals[action.approve]?.expected_hash;
       if (!expected) {
-        toast("The current version is not ready to approve yet.");
+        toast("The current version is not ready to approve yet.", "info");
         return;
       }
       try {
-        await api.approve(slug, action.approve, { expected_hash: expected, confirmed: true });
-        toast(action.approve === "brief" ? "Story approved." : "Approved.");
-        notifyProjectChanged();
+        await api.approve(slug, action.approve, {
+          expected_hash: expected,
+          confirmed: true,
+          ...(note ? { note } : {}),
+        });
+        toast(`${APPROVED[action.approve] || "Approved"}.`, "done");
+        notifyProjectChanged({ slug });
         onProjectsChanged();
       } catch {
-        // request() already surfaced the error.
+        // request() already surfaced the error; reload in case the stage moved on.
+        setRevision((value) => value + 1);
       }
       return;
     }
@@ -412,7 +443,7 @@ function FilmShellContent({
         await api.analyze(slug);
         notifyProjectChanged();
         onProjectsChanged();
-        toast("The song is measured.");
+        toast("The song is measured.", "done");
       } catch {
         // request() already surfaced the error.
       }
@@ -429,8 +460,8 @@ function FilmShellContent({
       return;
     }
     if (action.target === "approval") {
-      if (!document.querySelector(".approvals")) onNavigate(stage);
-      scrollTo(".approvals");
+      if (!document.querySelector(".signoff")) onNavigate(stage);
+      scrollTo(".signoff");
       return;
     }
     if (action.target === "preview") {
@@ -440,7 +471,7 @@ function FilmShellContent({
     }
     if (action.target === "render") {
       if (stage !== "film") onNavigate("film");
-      scrollTo(".render-card");
+      scrollTo(".delivery-card");
       return;
     }
     if (action.target === "make-missing") {
@@ -456,7 +487,11 @@ function FilmShellContent({
     }
   };
 
+  const stageIndex = STAGES.findIndex((item) => item.id === stage);
+  const previousStage = stageIndex > 0 ? STAGES[stageIndex - 1] : null;
+
   return (
+    <ApprovalsProvider value={{ states: approvalStates, loaded: approvalsLoaded }}>
     <PlayerProvider src={playerSrc} fallbackDuration={intake?.duration || project.duration || 0}>
       <div className="shell">
         <TopBar
@@ -482,7 +517,12 @@ function FilmShellContent({
           }}
         />
         <main className="shell-main">
-          <NextStepBar step={step} ready={approvalsLoaded} onAction={act} />
+          <NextStepBar
+            step={step}
+            ready={approvalsLoaded}
+            onAction={act}
+            back={previousStage ? { label: previousStage.label, onClick: () => onNavigate(previousStage.id) } : null}
+          />
           <div className="stage-pad">
             <div className={stage === "images" ? "images-body" : undefined}>
               <StageView
@@ -551,6 +591,7 @@ function FilmShellContent({
         />
       </div>
     </PlayerProvider>
+    </ApprovalsProvider>
   );
 }
 

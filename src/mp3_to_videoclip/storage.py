@@ -64,13 +64,22 @@ def inside(root: Path, relative: str) -> Path:
     return p
 
 
+class ProjectBusy(ValueError):
+    """Another writer (a paid batch, a render, the CLI) holds the project lock.
+
+    A ``ValueError`` so every existing caller keeps its behaviour; the Studio
+    maps it to a 409 ``project_busy`` so the browser can say "try again when the
+    job finishes" instead of reporting a broken request.
+    """
+
+
 @contextlib.contextmanager
 def project_lock(root: Path):
     with (root / ".lock").open("a") as f:
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as e:
-            raise ValueError("another command is writing this project") from e
+            raise ProjectBusy("another command is writing this project") from e
         try:
             yield
         finally:

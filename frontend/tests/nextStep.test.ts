@@ -538,3 +538,61 @@ test("film keeps the preview gate when the production records one", () => {
   );
   assert.match(step.title, /Watch the preview/);
 });
+
+test("images offer to make the missing style-check stills at their price", () => {
+  const step = nextStep(
+    "images",
+    project({ stage_states: states({ story: "done", storyboard: "done", images: "you" }) }),
+    approvals({ brief: { state: "approved" }, storyboard: { state: "approved" } }),
+    images({ proof_total: 3, proof_kept: 0, proof_missing_ids: ["s1", "s4"], reserve_usd: "0.05" }),
+    budget,
+  );
+  assert.equal(step.actions[0].target, "make-missing");
+  assert.deepEqual(step.actions[0].paid, { ids: ["s1", "s4"], scope: "proof" });
+  assert.match(step.actions[0].label, /\$0\.10/);
+});
+
+test("images approve the style check from the bar once every proof still is kept", () => {
+  const step = nextStep(
+    "images",
+    project({ stage_states: states({ story: "done", storyboard: "done", images: "you" }) }),
+    approvals({
+      brief: { state: "approved" },
+      storyboard: { state: "approved" },
+      proof: { state: "missing", expected_hash: "abc" },
+    }),
+    images({ proof_total: 3, proof_kept: 3, proof_missing_ids: [] }),
+    budget,
+  );
+  assert.equal(step.actions[0].approve, "proof");
+  assert.match(step.title, /style-check stills kept/);
+  assert.match(step.actions[0].label, /Approve style check/);
+});
+
+test("every approval in the bar names its stage, so it approves in place", () => {
+  const board = nextStep(
+    "storyboard",
+    project({ stage_states: states({ story: "done", storyboard: "you" }) }),
+    approvals({ brief: { state: "approved" } }),
+    images(),
+    budget,
+  );
+  assert.equal(board.actions[0].approve, "storyboard");
+});
+
+test("a running batch replaces the make button instead of offering a second batch", () => {
+  const step = nextStep(
+    "images",
+    project({ stage_states: states({ story: "done", storyboard: "done", images: "you" }) }),
+    approvals({
+      brief: { state: "approved" },
+      storyboard: { state: "approved" },
+      proof: { state: "approved" },
+    }),
+    images({ missing: 4, missing_ids: ["s2", "s3", "s4", "s5"], running: true, running_line: "2 of 4 images" }),
+    budget,
+  );
+  assert.equal(step.actions.length, 0);
+  assert.match(step.title, /Making stills/);
+  assert.match(step.detail || "", /2 of 4 images/);
+});

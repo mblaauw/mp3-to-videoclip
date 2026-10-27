@@ -175,8 +175,8 @@ The frontend starts from the neutral `styles/tokens.css` palette and a
 self-hosted Schibsted Grotesk variable font; `ui/` holds the token-only
 `Button`, `IconButton`, `StatusDot`, `Pill`, `Seg`, `Chip` and `Field`
 primitives. The shell keeps one `/api/events` EventSource open for jobs, with
-JSON payloads and reconnect/backoff; there is no polling. Job progress stays
-indeterminate until the runner reports real units. `src/api/schema.d.ts` is
+JSON payloads and reconnect/backoff; there is no polling. Job progress is
+reported in real units (images, frames) and stays indeterminate otherwise. `src/api/schema.d.ts` is
 generated with `npm run api:types` from the app's OpenAPI document and types the
 routes that declare response models; legacy untyped routes keep explicit
 hand-written types. Every API 4xx/5xx is `{detail, code}`; the frontend parses
@@ -198,6 +198,39 @@ Film's Remotion `LivePlayer` seeks from the same time, so switching stages keeps
 the playhead. The director is a drawer that is open by default above 1180 px and
 an overlay below it; approvals and library refreshes travel over a
 `studio:project-changed` event.
+
+### Live updates
+
+A view reloads itself whenever the data behind it changes; nothing needs a
+browser refresh. The server announces four kinds of change on the one
+`/api/events` stream, each naming its film:
+
+- every mutating request under `/api/projects/<slug>` that ends 2xx publishes
+  `project.changed` once its body is complete (`app.StudioGuard`, a pure ASGI
+  middleware so the SSE and NDJSON streams are never buffered);
+- every finished director tool that is not a read publishes `project.changed`
+  while the turn streams (its tools may run in the OpenCode MCP process);
+- jobs publish `job.queued/started/progress/succeeded/failed/cancelled` with
+  `project` and `kind`; engine `operations.phase/tick` calls reach the runner
+  through a context-variable observer, and an image batch also publishes
+  `project.changed` per finished still; every job ends with one;
+- `jobs/watch.py` fingerprints each production (top-level and `work/` JSON, film
+  names) once a second while a browser listens, so CLI writes show up too. A
+  request absorbs its own write so it is announced once.
+
+`jobs/store.ts` turns these into the coalesced `studio:project-changed` window
+event (`useProjectChanged(slug, reload)`), drops other films' notices while a
+film is open, and resyncs everything after a reconnect. GET handlers must never
+write what the watcher fingerprints (`tests/test_live_updates.py` pins this), or
+a read would reload every open view forever.
+
+Approvals are made in one place per screen: the sticky next-step bar (with an
+optional note), or the attested preview/titles lines on Film. Stage pages show a
+read-only sign-off strip (`ApprovalBar`) fed by the shell's single approvals
+snapshot. A busy production (another writer holds the project lock) answers
+409 `project_busy`. Cancelling an image batch stops admission through
+`operations.stop_requested()`; a still already sent still finishes and is
+journaled.
 
 Archived productions never pass through `project_root`; dedicated
 `/api/projects/<slug>/archive/render` and `/archive/stills/<index>` routes serve

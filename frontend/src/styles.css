@@ -116,24 +116,26 @@ th { color: var(--muted); font-weight: 600; }
 
 td input, td textarea, td select {
   width: 100%;
-  background: var(--panel);
+  background: var(--raised);
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 5px 7px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--t-13);
+  line-height: 1.5;
 }
 td textarea { min-height: 52px; resize: vertical; }
 .card textarea {
   width: 100%;
-  background: var(--panel);
+  background: var(--raised);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 9px 10px;
+  border-radius: var(--r-control);
+  padding: 9px 11px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--t-15);
+  line-height: 1.6;
   resize: vertical;
 }
 button.active { border-color: var(--gold); color: var(--gold); }
@@ -477,13 +479,14 @@ button.active { border-color: var(--gold); color: var(--gold); }
 .intake-card select,
 .intake-card textarea {
   width: 100%;
-  background: var(--panel);
+  background: var(--raised);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: var(--r-control);
+  padding: 8px 11px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--t-15);
+  line-height: 1.55;
 }
 .intake-card textarea { resize: vertical; }
 .intake-card .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }

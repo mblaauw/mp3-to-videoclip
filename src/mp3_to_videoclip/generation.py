@@ -529,6 +529,13 @@ def _execute_quote(root: Path, quote: dict, auth: dict, schema: dict, client, co
     def admit():
         nonlocal failure
         while queue and len(futures) < concurrency and failure is None:
+            if operations.stop_requested():
+                # The user cancelled: admit nothing new. Already-sent tasks drain
+                # and are journaled as usual; the rest stay unspent in the quote.
+                failure = ValueError(
+                    f"stopped by the user; {len(queue)} still(s) were not sent and cost nothing"
+                )
+                return
             task, request = queue[0]
             try:
                 _check_dispatch_room(root, quote, auth, task)

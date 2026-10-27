@@ -60,6 +60,13 @@ export type ImageFacts = {
   missing: number;
   missing_ids?: string[];
   reserve_usd?: string;
+  /** The style-check shots (present once the Studio knows them). */
+  proof_total?: number;
+  proof_kept?: number;
+  proof_missing_ids?: string[];
+  /** A paid batch for this film is queued or running. */
+  running?: boolean;
+  running_line?: string;
 };
 
 export type BudgetFacts = {
@@ -281,14 +288,14 @@ function storyboardStep(project: ProjectFacts, approvals: ApprovalMap): NextStep
       tone: "changed",
       title: "The storyboard changed since you approved it.",
       detail: "Review the current shots before approving again.",
-      actions: approvedAction("Approve storyboard"),
+      actions: approvedAction("Approve storyboard", "storyboard"),
     };
   }
   return {
     tone: "you",
     title: "Read the storyboard and approve it.",
     detail: "Shot timing and content unlock the style check.",
-    actions: approvedAction("Approve storyboard"),
+    actions: approvedAction("Approve storyboard", "storyboard"),
   };
 }
 
@@ -306,6 +313,16 @@ function imagesStep(
       actions: continueTo("storyboard", "Go to Storyboard"),
     };
   }
+  if (images.running) {
+    return {
+      tone: "you",
+      title: "Making stills…",
+      detail: images.running_line
+        ? `${images.running_line}. They appear below as they arrive; keep reviewing meanwhile.`
+        : "They appear below as they arrive; keep reviewing meanwhile.",
+      actions: [],
+    };
+  }
   if (stateOf(project, "images") === "done" || approved(approvals, "stills")) {
     return {
       tone: "done",
@@ -315,19 +332,47 @@ function imagesStep(
     };
   }
   const proof = approval(approvals, "proof");
-  if (proof?.state === "stale" || stateOf(project, "images") === "changed") {
-    return {
-      tone: "changed",
-      title: "The style check changed.",
-      detail: "Review the current style-check shots before making the rest.",
-      actions: [{ label: "Review style check", target: "pictures", kind: "primary" }],
-    };
-  }
+  const proofChanged = proof?.state === "stale" || stateOf(project, "images") === "changed";
   if (!proof || proof.state !== "approved") {
+    const total = images.proof_total ?? 0;
+    const missingIds = images.proof_missing_ids || [];
+    const kept = images.proof_kept ?? 0;
+    const title = proofChanged ? "The style check changed." : "Finish the style check.";
+    if (total > 0 && missingIds.length > 0) {
+      const reserve = Number(images.reserve_usd || "0.05");
+      return {
+        tone: proofChanged ? "changed" : "you",
+        title,
+        detail: `Make the ${total} hard shots first; the rest wait until they look right.`,
+        actions: [
+          {
+            label: `Make ${missingIds.length} style still${missingIds.length === 1 ? "" : "s"} · $${(
+              missingIds.length * reserve
+            ).toFixed(2)}`,
+            target: "make-missing",
+            kind: "primary",
+            paid: { ids: missingIds, scope: "proof" },
+          },
+        ],
+      };
+    }
+    if (total > 0 && kept >= total && proof?.expected_hash) {
+      return {
+        tone: proofChanged ? "changed" : "you",
+        title: proofChanged ? "The style check changed." : "All style-check stills kept.",
+        detail: "Approve the style check to unlock the rest. A note is optional.",
+        actions: approvedAction("Approve style check", "proof"),
+      };
+    }
     return {
-      tone: "you",
-      title: "Finish the style check.",
-      detail: "Keep or redo the style-check shots, then approve them.",
+      tone: proofChanged ? "changed" : "you",
+      title,
+      detail:
+        total > 0
+          ? `Keep or redo each style-check still (${kept} of ${total} kept), then approve them.`
+          : proofChanged
+            ? "Review the current style-check shots before making the rest."
+            : "Keep or redo the style-check shots, then approve them.",
       actions: [{ label: "Review style check", target: "pictures", kind: "primary" }],
     };
   }
@@ -373,7 +418,7 @@ function imagesStep(
     tone: "you",
     title: "Approve all stills.",
     detail: "Every picture is kept; sign the full set off.",
-    actions: approvedAction("Approve all stills"),
+    actions: approvedAction("Approve all stills", "stills"),
   };
 }
 
