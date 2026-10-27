@@ -64,6 +64,8 @@ export type ImageFacts = {
   proof_total?: number;
   proof_kept?: number;
   proof_missing_ids?: string[];
+  /** Selected style-check stills made from an older prompt. */
+  proof_stale_ids?: string[];
   /** A paid batch for this film is queued or running. */
   running?: boolean;
   running_line?: string;
@@ -336,22 +338,35 @@ function imagesStep(
   if (!proof || proof.state !== "approved") {
     const total = images.proof_total ?? 0;
     const missingIds = images.proof_missing_ids || [];
+    const staleIds = images.proof_stale_ids || [];
+    const needsWork = [...missingIds, ...staleIds];
     const kept = images.proof_kept ?? 0;
-    const title = proofChanged ? "The style check changed." : "Finish the style check.";
-    if (total > 0 && missingIds.length > 0) {
+    const stale = staleIds.length > 0;
+    const title = proofChanged
+      ? "The style check changed."
+      : stale
+        ? "Older style-check stills need a remake."
+        : "Finish the style check.";
+    if (total > 0 && needsWork.length > 0) {
       const reserve = Number(images.reserve_usd || "0.05");
       return {
         tone: proofChanged ? "changed" : "you",
         title,
-        detail: `Make the ${total} hard shots first; the rest wait until they look right.`,
+        detail: stale
+          ? `${staleIds.length} style-check still${
+              staleIds.length === 1 ? " is" : "s are"
+            } from a previous look; remake ${
+              staleIds.length === 1 ? "it" : "them"
+            } before approving. The rest wait until they look right.`
+          : `Make the ${total} hard shots first; the rest wait until they look right.`,
         actions: [
           {
-            label: `Make ${missingIds.length} style still${missingIds.length === 1 ? "" : "s"} · $${(
-              missingIds.length * reserve
-            ).toFixed(2)}`,
+            label: `${stale ? "Remake" : "Make"} ${needsWork.length} style still${
+              needsWork.length === 1 ? "" : "s"
+            } · $${(needsWork.length * reserve).toFixed(2)}`,
             target: "make-missing",
             kind: "primary",
-            paid: { ids: missingIds, scope: "proof" },
+            paid: { ids: needsWork, scope: "proof" },
           },
         ],
       };

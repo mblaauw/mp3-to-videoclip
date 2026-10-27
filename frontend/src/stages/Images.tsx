@@ -224,6 +224,7 @@ export function ImagesStage({
   const proofApproved = proof?.state === "approved";
   const proofShots = shots.filter((shot) => proofIds.includes(shot.id));
   const proofMissing = proofShots.filter((shot) => shot.selected === null);
+  const proofStale = proofShots.filter((shot) => shot.selected !== null && shot.stale);
   const older = paidShots.filter((shot) => shot.stale);
   const visibleMissing = visible.filter((shot) => !shot.local && shot.selected === null);
   const visibleOlder = visible.filter((shot) => shot.stale);
@@ -466,7 +467,11 @@ export function ImagesStage({
         <section className="style-check images-style-check">
           <div className="style-check-say">
             <b>Style check · {proofIds.length} hard shots first</b>
-            <span>When they look right, make the rest. Only these three are paid now.</span>
+            <span>
+              When they look right, make the rest. Only these three are paid now.
+              {proofStale.length > 0 &&
+                " Older-prompt shots are from the previous look; remake them, then keep the new version."}
+            </span>
           </div>
           <div className="style-shots">
             {proofShots.map((shot) => {
@@ -491,10 +496,17 @@ export function ImagesStage({
             })}
           </div>
           <div className="style-check-actions">
-            {proofMissing.length > 0 ? (
+            {proofMissing.length > 0 || proofStale.length > 0 ? (
               <span className="hint">
-                {proofMissing.length} not made yet · make them with the button in the bar at
-                the top (${price(proofMissing.length)}).
+                {proofMissing.length > 0 && `${proofMissing.length} not made yet`}
+                {proofMissing.length > 0 && proofStale.length > 0 && " and "}
+                {proofStale.length > 0 &&
+                  `${proofStale.length} older-prompt style still${
+                    proofStale.length === 1 ? "" : "s"
+                  }`}
+                {` · make or remake them with the button in the bar at the top (${price(
+                  proofMissing.length + proofStale.length,
+                )}).`}
               </span>
             ) : (
               <span className="hint">

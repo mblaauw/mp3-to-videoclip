@@ -90,6 +90,9 @@ function imageFacts(shots: ImageShot[], reserve: string, proofIds: string[]): Im
       (shot) => shot.selected !== null && !shot.stale && shot.review?.verdict === "accept",
     ).length,
     proof_missing_ids: proof.filter((shot) => shot.selected === null).map((shot) => shot.id),
+    proof_stale_ids: proof
+      .filter((shot) => shot.selected !== null && shot.stale)
+      .map((shot) => shot.id),
     total: paid.length,
     selected: paid.filter((shot) => shot.selected !== null).length,
     kept: paid.filter((shot) => shot.review?.verdict === "accept").length,
