@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .storage import digest, file_hash, inside, read_json, write_json
+from .storage import digest, file_hash, inside, read_json, state_mutation, write_json
 
 REVIEWS = "work/reviews.json"
 
@@ -29,6 +29,7 @@ def _version(root, shot_id, version):
     return shot, owner, chosen
 
 
+@state_mutation
 def record_review(
     root: Path,
     shot_id: str,

@@ -43,7 +43,7 @@ def test_vocal_advert_can_approve_its_brief(tmp_path, monkeypatch):
         monkeypatch.setattr(
             client.app.state.runner,
             "submit",
-            lambda kind, slug, factory: "job-1",
+            lambda kind, slug, factory, *, blocking=False: "job-1",
         )
         created = _advert_upload(client)
         assert created.status_code == 201, created.text

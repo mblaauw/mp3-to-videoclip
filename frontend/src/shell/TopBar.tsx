@@ -22,9 +22,11 @@ const JOB_PAST: Record<string, string> = {
 const JOB_TONE: Record<string, { dot: StatusTone; pill: PillTone; word: string }> = {
   queued: { dot: "you", pill: "neutral", word: "Queued" },
   running: { dot: "run", pill: "you", word: "Running" },
+  stopping: { dot: "run", pill: "you", word: "Stopping — finishing current work" },
   succeeded: { dot: "done", pill: "keep", word: "Done" },
   failed: { dot: "err", pill: "redo", word: "Failed" },
   cancelled: { dot: "idle", pill: "neutral", word: "Cancelled" },
+  interrupted: { dot: "err", pill: "redo", word: "Interrupted — check before retrying" },
   needs_budget: { dot: "you", pill: "you", word: "Needs budget" },
 };
 
@@ -139,7 +141,7 @@ function JobsPopover({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const active = jobs.filter((job) =>
-    ["queued", "running", "needs_budget"].includes(job.status),
+    ["queued", "running", "stopping", "needs_budget"].includes(job.status),
   );
   const shown = [...active, ...jobs.filter((job) => !active.includes(job))].slice(0, 8);
   const cancel = async (job: Job) => {
@@ -249,9 +251,9 @@ export function TopBar({
   const { jobs } = useJobs();
   const [pop, setPop] = useState<"budget" | "jobs" | null>(null);
   const rightRef = useRef<HTMLDivElement>(null);
-  const running = jobs.filter((job) => job.status === "running").length;
+  const running = jobs.filter((job) => ["running", "stopping"].includes(job.status)).length;
   const activeJobs = jobs.filter((job) =>
-    ["queued", "running", "needs_budget"].includes(job.status),
+    ["queued", "running", "stopping", "needs_budget"].includes(job.status),
   ).length;
   const latest = jobs[0];
   const finished = latest?.finished_at ? Number(latest.finished_at) : 0;
@@ -267,7 +269,7 @@ export function TopBar({
     (job) =>
       job.project === project?.slug &&
       job.kind === "analysis" &&
-      ["queued", "running"].includes(job.status),
+      ["queued", "running", "stopping"].includes(job.status),
   );
 
   useEffect(() => {

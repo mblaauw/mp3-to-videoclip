@@ -5,13 +5,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root, valid_slug
 from mp3_to_videoclip.domain import archive
-from mp3_to_videoclip.storage import inside, read_json
+from mp3_to_videoclip.storage import RevisionConflict, digest, inside, read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["film"])
 
@@ -114,13 +114,16 @@ async def get_graphics_sample(slug: str, name: str, request: Request):
 
 
 @router.get("/edit")
-async def get_edit(slug: str, request: Request):
+async def get_edit(slug: str, request: Request, response: Response):
     """The edit list plus the report computed from the current board."""
     from mp3_to_videoclip import edits
 
     root = project_root(request, slug)
     try:
-        return edits.summary(root)
+        result = edits.summary(root)
+        if result.get("present"):
+            response.headers["ETag"] = f'"{digest(result["edit"])}"'
+        return result
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -163,15 +166,19 @@ async def seed_edit(slug: str, request: Request):
 
 
 @router.put("/edit")
-async def put_edit(slug: str, request: Request, payload: dict):
+async def put_edit(slug: str, request: Request, payload: dict, response: Response):
     """Save the whole edit and return the report the Editor must read."""
     from mp3_to_videoclip import edits
 
     root = project_root(request, slug)
     value = payload.get("edit", payload)
     try:
-        edit = edits.save_edit(root, value)
-        return edits.summary(root, edit)
+        edit = edits.save_edit(root, value, expected_hash=request.headers.get("if-match"))
+        result = edits.summary(root, edit)
+        response.headers["ETag"] = f'"{digest(result["edit"])}"'
+        return result
+    except RevisionConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -216,7 +223,7 @@ async def render(slug: str, request: Request, payload: dict):
         }[kind]
         return await asyncio.to_thread(fn, root)
 
-    job_id = runner.submit("render", slug, work)
+    job_id = runner.submit("render", slug, work, blocking=True)
     return {"job_id": job_id, "kind": kind, "status": "queued"}
 
 

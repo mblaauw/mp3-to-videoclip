@@ -55,7 +55,7 @@ def _projects_dir(app: FastAPI) -> Path:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    runner = JobRunner()
+    runner = JobRunner(projects_dir=_projects_dir(app))
     await runner.start()
     app.state.runner = runner
     watcher = ProjectWatcher(_projects_dir(app), runner.bus)

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mp3_to_videoclip.storage import read_json, read_optional, write_json
+from mp3_to_videoclip.storage import read_json, read_optional
 
 MAX_TOOL_IMAGES = 8
 THUMBNAIL_PIXELS = 512
@@ -389,7 +389,6 @@ def _dispatch(
             arguments.get("seconds"),
             arguments.get("timing"),
         )
-        write_json(root / "work" / "storyboard.json", board.model_dump())
         from mp3_to_videoclip import promptlog
 
         promptlog.record(root, "storyboard-skeleton")
@@ -519,7 +518,7 @@ def _generate_images(root, arguments, runner):
     async def work():
         return await asyncio.to_thread(services.generation.run, root, estimate["quote_id"])
 
-    job_id = runner.submit("images", root.name, work)
+    job_id = runner.submit("images", root.name, work, blocking=True)
     return {"job_id": job_id, "estimate": estimate, "status": "queued"}
 
 
@@ -551,5 +550,5 @@ def _render(root, arguments, runner):
         fn = services.render.render_final if kind == "final" else services.render.render_preview
         return await asyncio.to_thread(fn, root)
 
-    job_id = runner.submit("render", root.name, work)
+    job_id = runner.submit("render", root.name, work, blocking=True)
     return {"job_id": job_id, "kind": kind, "status": "queued"}

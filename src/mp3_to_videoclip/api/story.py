@@ -4,29 +4,36 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.storage import RevisionConflict, digest
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["story"])
 
 
 @router.get("/brief")
-async def get_brief(slug: str, request: Request):
+async def get_brief(slug: str, request: Request, response: Response):
     root = project_root(request, slug)
     brief = P.load_brief(root)
-    return brief.model_dump()
+    value = brief.model_dump()
+    response.headers["ETag"] = f'"{digest(value)}"'
+    return value
 
 
 @router.patch("/brief")
-async def update_brief(slug: str, request: Request, payload: dict):
+async def update_brief(slug: str, request: Request, payload: dict, response: Response):
     root = project_root(request, slug)
     try:
-        brief = P.update_brief(root, payload)
+        brief = P.update_brief(root, payload, expected_hash=request.headers.get("if-match"))
+    except RevisionConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return brief.model_dump()
+    value = brief.model_dump()
+    response.headers["ETag"] = f'"{digest(value)}"'
+    return value
 
 
 @router.post("/proof-shots")

@@ -23,7 +23,7 @@ from .models import (
     RenderShot,
     Storyboard,
 )
-from .storage import digest, read_json, read_optional, write_json
+from .storage import digest, read_json, read_optional, require_revision, state_mutation, write_json
 
 EDIT = "work/edit.json"
 HARD = "hard"
@@ -138,12 +138,14 @@ def load_edit(root: Path, *, board: Storyboard | None = None) -> EditDecisionLis
     return edit
 
 
+@state_mutation
 def save_edit(
     root: Path,
     value: EditDecisionList | dict,
     *,
     board: Storyboard | None = None,
     record: bool = True,
+    expected_hash: str | None = None,
 ) -> EditDecisionList:
     """Validate the whole cut and write it atomically.
 
@@ -154,6 +156,7 @@ def save_edit(
     """
     from . import production as P
 
+    require_revision(edit_path(root), expected_hash)
     if not P.load_project(root, verify_source=False).uses_remotion:
         raise ValueError("edit lists require the Remotion renderer")
     board = board or P.load_board(root)
@@ -790,6 +793,7 @@ def _seed_motion(shot) -> EditMotion:
     return EditMotion(type="pan_right", **{"from": 1.08, "to": 1.08}, reason=reason)
 
 
+@state_mutation
 def seed_edit(root: Path) -> EditDecisionList:
     """Create the first edit without changing the approved cut.
 

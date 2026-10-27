@@ -344,7 +344,7 @@ function FilmShellContent({
 
   const imageJob = jobs.find(
     (job) =>
-      job.project === slug && job.kind === "images" && ["queued", "running"].includes(job.status),
+      job.project === slug && job.kind === "images" && ["queued", "running", "stopping"].includes(job.status),
   );
   const facts: ImageFacts = {
     ...imageFacts(images, reserve, intake?.brief?.creative?.proof_shot_ids || []),
@@ -359,7 +359,7 @@ function FilmShellContent({
     (job) =>
       job.project === slug &&
       job.kind === "analysis" &&
-      ["queued", "running"].includes(job.status),
+      ["queued", "running", "stopping"].includes(job.status),
   );
   const shellStates = analysisRunning ? { ...states, track: "running" as const } : states;
   const inspectShot = (id: string) => {

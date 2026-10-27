@@ -567,7 +567,7 @@ export type SettingsTest = {
 };
 
 /** Generated from the typed `/api/jobs` response models. */
-export type Job = Schemas["JobOut"];
+export type Job = Schemas["JobOut"] & { historical?: boolean; blocking?: boolean };
 export type JobDetail = Schemas["JobDetailOut"];
 
 export type ApprovalState = Schemas["ApprovalStateOut"];

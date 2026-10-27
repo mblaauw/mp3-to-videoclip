@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from mp3_to_videoclip.models import Lyrics, Segment
-from mp3_to_videoclip.storage import digest, read_json, write_json
+from mp3_to_videoclip.storage import digest, read_json, state_mutation, write_json
 
 _TAG = re.compile(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
 _METADATA = re.compile(r"^\[[a-zA-Z]+:.*\]$")
@@ -19,6 +19,7 @@ MAX_TEXT = 200_000
 MAX_LINES = 2_000
 
 
+@state_mutation
 def save_lyrics(root: Path, lyrics: Lyrics) -> None:
     """Replace the live lyrics while keeping the previous artifact in history."""
     previous = root / "work" / "lyrics.json"

@@ -113,7 +113,7 @@ def test_generate_authorizes_the_exact_quote_before_queueing(client, monkeypatch
     monkeypatch.setattr(
         client.app.state.runner,
         "submit",
-        lambda kind, slug, factory: submitted.append((kind, slug)) or "job-1",
+        lambda kind, slug, factory, *, blocking=False: submitted.append((kind, slug)) or "job-1",
     )
 
     response = client.post(

@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from mp3_to_videoclip import budget as engine_budget
-from mp3_to_videoclip.storage import read_json, write_json
+from mp3_to_videoclip.storage import read_json, state_mutation, write_json
 
 from .models import BudgetEntry, Project
 
@@ -36,6 +36,7 @@ def _project(root: Path) -> Project:
 
 
 def cap(root: Path) -> Decimal | None:
+    engine_budget.read_budget(root)  # Reject conflicting schema-3 authorities.
     project = _project(root)
     return money(project.cap_usd) if project.cap_usd else None
 
@@ -44,8 +45,12 @@ def history(root: Path) -> list[dict]:
     return [entry.model_dump() for entry in _project(root).budget]
 
 
+@state_mutation
 def add_budget(root: Path, amount, reason: str) -> dict:
     """Append a cap entry; the newest cap is the active one."""
+    engine_budget.read_budget(root)
+    if (root / engine_budget.BUDGET_PATH).exists():
+        raise ValueError("reconcile the legacy budget file before changing a schema-3 cap")
     value = money(amount)
     if value <= 0:
         raise ValueError("the production cap must be a positive USD amount")

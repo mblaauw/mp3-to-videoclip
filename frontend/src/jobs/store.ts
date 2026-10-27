@@ -29,6 +29,7 @@ const JOB_EVENTS = [
   "job.progress",
   "job.succeeded",
   "job.failed",
+  "job.stopping",
   "job.cancelled",
 ] as const;
 
@@ -45,7 +46,7 @@ type ServerEvent = {
   tool?: string;
 };
 
-const ACTIVE = ["queued", "running", "needs_budget"];
+const ACTIVE = ["queued", "running", "stopping", "needs_budget"];
 
 let snapshot: JobsSnapshot = { jobs: [], connection: "connecting" };
 let source: EventSource | null = null;
@@ -198,10 +199,14 @@ function handleJob(name: JobEventName, event: Event) {
     patch(jobId, { status: "running", started_at: now });
     return;
   }
+  if (name === "job.stopping") {
+    patch(jobId, { status: "stopping" });
+    return;
+  }
   if (name === "job.progress") {
     const current = snapshot.jobs.find((entry) => entry.id === jobId);
     patch(jobId, {
-      status: "running",
+      status: current?.status === "stopping" ? "stopping" : "running",
       progress: { ...(current?.progress || { done: 0, total: 0, unit: "" }), ...payload.progress } as Job["progress"],
     });
     return;

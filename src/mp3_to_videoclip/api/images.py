@@ -199,7 +199,7 @@ async def generate_images(slug: str, request: Request, payload: dict):
     async def work():
         return await asyncio.to_thread(services.generation.run, root, quote_id)
 
-    job_id = runner.submit("images", slug, work)
+    job_id = runner.submit("images", slug, work, blocking=True)
     return {
         "job_id": job_id,
         "quote_id": quote_id,

@@ -47,7 +47,9 @@ def test_upload_creates_the_project_and_queues_analysis(tmp_path, monkeypatch):
         monkeypatch.setattr(
             client.app.state.runner,
             "submit",
-            lambda kind, slug, factory: submitted.append((kind, slug)) or "job-1",
+            lambda kind, slug, factory, *, blocking=False: (
+                submitted.append((kind, slug)) or "job-1"
+            ),
         )
         response = _upload(client)
         assert response.status_code == 201, response.text
@@ -175,7 +177,9 @@ def test_upload_an_advert_keeps_intent_and_skips_signature(tmp_path, monkeypatch
         monkeypatch.setattr(
             client.app.state.runner,
             "submit",
-            lambda kind, slug, factory: submitted.append((kind, slug)) or "job-ad",
+            lambda kind, slug, factory, *, blocking=False: (
+                submitted.append((kind, slug)) or "job-ad"
+            ),
         )
         response = _upload(
             client,

@@ -39,12 +39,13 @@ from .generation import (
     money,
     read_quote,
     save_quote,
+    update_task,
     validate_request,
 )
 from .models import ListeningDraft, Model
 from .production import load_project, now
 from .providers import ProviderError, RunwareClient
-from .storage import digest, inside, read_json, write_json
+from .storage import digest, inside, read_json, state_mutation, write_json
 from .transcription import (
     _client,
     finish_upload,
@@ -370,6 +371,7 @@ def _validated_draft(draft: ListeningDraft, duration: float) -> ListeningDraft:
     )
 
 
+@state_mutation
 def finish_listening(root: Path, task_uuid: str, result: dict) -> bool:
     validate_uuid(task_uuid)
     if "text" not in result:
@@ -578,9 +580,7 @@ def run_music(root: Path, quote_id: str, client=None) -> dict:
             begin_task(root, quote, task, kind="audio-upload")
 
             def checkpoint_response(response):
-                values = read_json(root / "work/tasks.json")
-                values[task["uuid"]]["upload_response"] = response
-                write_json(root / "work/tasks.json", values)
+                update_task(root, task["uuid"], upload_response=response)
 
             try:
                 result = client.upload_audio(
@@ -596,14 +596,14 @@ def run_music(root: Path, quote_id: str, client=None) -> dict:
                     "source_unreadable",
                     "unsupported_audio",
                 }:
-                    journal = read_json(root / "work/tasks.json")
-                    journal[task["uuid"]].update(
+                    update_task(
+                        root,
+                        task["uuid"],
                         status="resolved",
                         cost_usd="0",
                         cost_basis="client preflight rejected before network",
                         validation_error=exc.code,
                     )
-                    write_json(root / "work/tasks.json", journal)
                 raise
             if not finish_upload(root, task["uuid"], result):
                 return {

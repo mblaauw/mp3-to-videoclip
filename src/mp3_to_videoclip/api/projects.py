@@ -404,7 +404,7 @@ async def create_project(
         async def work():
             return await asyncio.to_thread(services.analysis.analyze_project, root)
 
-        job_id = runner.submit("analysis", created["slug"], work)
+        job_id = runner.submit("analysis", created["slug"], work, blocking=True)
     return {
         "slug": created["slug"],
         "title": project.title,

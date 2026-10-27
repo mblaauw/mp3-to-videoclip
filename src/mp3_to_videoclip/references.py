@@ -8,11 +8,12 @@ from pathlib import Path
 
 from PIL import Image
 
-from .storage import digest, file_hash, inside, read_json, write_json
+from .storage import digest, file_hash, inside, read_json, state_mutation, write_json
 
 LIBRARY = "work/reference-library.json"
 
 
+@state_mutation
 def import_reference(root: Path, source: Path, *, note: str, permission_confirmed=False, box=None):
     if permission_confirmed is not True or not note.strip():
         raise ValueError("reference import needs explicit permission and a provenance note")

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mp3_to_videoclip.storage import digest, read_json, write_json
+from mp3_to_videoclip.storage import digest, read_json, state_mutation, write_json
 
 ARTIFACTS: dict[str, tuple[str, str]] = {
     "brief": ("brief.json", "work/brief-history"),
@@ -100,6 +100,7 @@ def _validate(root: Path, artifact: str, value) -> None:
     raise ValueError("unknown history artifact")
 
 
+@state_mutation
 def restore(root: Path, artifact: str) -> dict:
     """Restore the newest snapshot that differs from the live value."""
     live, _ = _paths(root, artifact)

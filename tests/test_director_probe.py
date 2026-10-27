@@ -47,7 +47,8 @@ class RecordingRunner:
     def __init__(self):
         self.submitted = []
 
-    def submit(self, kind, project, factory):
+    def submit(self, kind, project, factory, *, blocking=False):
+        assert blocking is True
         self.submitted.append((kind, project))
         return f"probe-job-{len(self.submitted)}"
 

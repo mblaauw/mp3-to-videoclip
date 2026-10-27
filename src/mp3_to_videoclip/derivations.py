@@ -16,11 +16,12 @@ from pathlib import Path
 from PIL import Image
 
 from . import production as P
-from .storage import digest, file_hash, inside, read_json, write_json
+from .storage import digest, file_hash, inside, read_json, state_mutation, write_json
 
 RECEIPTS = "work/derivations"
 
 
+@state_mutation
 def adopt_derivative(
     root: Path,
     shot_id: str,

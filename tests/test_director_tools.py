@@ -52,7 +52,8 @@ class FakeRunner:
     def __init__(self):
         self.submitted = []
 
-    def submit(self, kind, project, factory):
+    def submit(self, kind, project, factory, *, blocking=False):
+        assert blocking is True
         self.submitted.append((kind, project))
         return "job-1"
 
@@ -477,6 +478,7 @@ def test_update_treatments_validates_and_writes_three_distinct_routes(tmp_path):
 
 
 def test_concept_limits_accept_long_fields_and_advertise_the_same_bound(tmp_path):
+    make_api_project(tmp_path)
     payload = {
         "concepts": [
             {

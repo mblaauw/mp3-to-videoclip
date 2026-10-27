@@ -10,7 +10,14 @@ from fastapi.responses import FileResponse
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.domain import music_notes
-from mp3_to_videoclip.storage import inside, project_lock, read_json, read_optional, write_json
+from mp3_to_videoclip.storage import (
+    inside,
+    project_lock,
+    read_json,
+    read_optional,
+    state_lock,
+    write_json,
+)
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["track"])
 
@@ -91,7 +98,7 @@ async def set_music_mode(slug: str, request: Request, payload: dict):
     if mode not in ("vocal", "instrumental"):
         raise HTTPException(status_code=400, detail="music mode must be vocal or instrumental")
     root = project_root(request, slug)
-    with project_lock(root):
+    with project_lock(root), state_lock(root):
         project = P.load_project(root)
         records = read_json(root / "work" / "approvals.json")
         if isinstance(records, dict) and isinstance(records.get("brief"), dict):

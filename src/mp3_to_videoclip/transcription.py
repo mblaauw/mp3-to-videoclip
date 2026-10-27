@@ -16,12 +16,13 @@ from .generation import (
     money,
     read_quote,
     save_quote,
+    update_task,
     validate_request,
 )
 from .models import Lyrics, Model, Segment
 from .production import load_project, now, require_approval
 from .providers import MAX_TRANSCRIBE_BYTES, ProviderError, RunwareClient, runware_api_key
-from .storage import digest, inside, read_json, write_json
+from .storage import digest, inside, read_json, state_mutation, write_json
 
 DEFAULT_TRANSCRIPTION_MODEL = profiles.DEFAULT_TEXT_MODEL
 DEFAULT_RESERVATION = profiles.DEFAULT_RESERVATION
@@ -226,6 +227,7 @@ def _client(client):
     return RunwareClient(runware_api_key()), True
 
 
+@state_mutation
 def finish_upload(root: Path, task_uuid: str, result: dict) -> bool:
     if "mediaUUID" not in result:
         return False
@@ -245,6 +247,7 @@ def finish_upload(root: Path, task_uuid: str, result: dict) -> bool:
     return True
 
 
+@state_mutation
 def finish_transcript(root: Path, task_uuid: str, result: dict) -> bool:
     validate_uuid(task_uuid)
     if "text" not in result:
@@ -411,9 +414,7 @@ def transcribe_runware(root: Path, quote_id: str, client=None) -> dict:
             begin_task(root, quote, task, kind="audio-upload")
 
             def checkpoint_response(response):
-                values = read_json(root / "work/tasks.json")
-                values[task["uuid"]]["upload_response"] = response
-                write_json(root / "work/tasks.json", values)
+                update_task(root, task["uuid"], upload_response=response)
 
             try:
                 result = client.upload_audio(
@@ -429,14 +430,14 @@ def transcribe_runware(root: Path, quote_id: str, client=None) -> dict:
                     "source_unreadable",
                     "unsupported_audio",
                 }:
-                    journal = read_json(root / "work/tasks.json")
-                    journal[task["uuid"]].update(
+                    update_task(
+                        root,
+                        task["uuid"],
                         status="resolved",
                         cost_usd="0",
                         cost_basis="client preflight rejected before network",
                         validation_error=exc.code,
                     )
-                    write_json(root / "work/tasks.json", journal)
                 raise
             if not finish_upload(root, task["uuid"], result):
                 return {

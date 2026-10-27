@@ -34,6 +34,8 @@ function phaseWords(phase: string | undefined): string {
 export function jobLine(job: Job): string {
   const progress = job.progress;
   const parts: string[] = [];
+  if (job.status === "stopping") return "Stopping — waiting for work already started to finish";
+  if (job.status === "interrupted") return "Interrupted — check existing results before retrying";
   if (job.status === "queued") parts.push("Waiting for the film's previous job");
   else if (progress.phase) parts.push(phaseWords(progress.phase));
   if (progress.total > 0) {
@@ -73,11 +75,11 @@ export function JobBanner({
             <Button
               size="small"
               variant="quiet"
-              disabled={cancelling === job.id}
+              disabled={cancelling === job.id || job.status === "stopping"}
               title={
                 job.kind === "images"
                   ? "Sends no more stills. A still that is already out finishes and is recorded."
-                  : "Stops waiting for this job. Work already running on this computer ends by itself."
+                   : "Requests a stop. This film stays busy until work already running finishes."
               }
               onClick={async () => {
                 setCancelling(job.id);
@@ -88,7 +90,7 @@ export function JobBanner({
                 }
               }}
             >
-              {cancelling === job.id ? "Cancelling…" : "Cancel"}
+              {job.status === "stopping" || cancelling === job.id ? "Stopping…" : "Cancel"}
             </Button>
             <div
               className={`job-bar ${percent === null ? "indeterminate" : ""}`}

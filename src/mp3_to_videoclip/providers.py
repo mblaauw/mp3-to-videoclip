@@ -172,6 +172,9 @@ def _atomic_write(path: Path, data: bytes) -> None:
         except FileExistsError as exc:
             raise ProviderError("asset_exists") from exc
         tmp.unlink()
+        from .storage import sync_directory
+
+        sync_directory(path.parent)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise

@@ -29,7 +29,7 @@ from .production import (
 from .profiles import DEFAULT_MODEL as DEFAULT_MODEL
 from .profiles import LEGACY_MODEL
 from .providers import MAX_TRANSCRIBE_BYTES, RunwareClient, runware_api_key, transcribe
-from .storage import digest, file_hash, inside, read_json, write_json
+from .storage import digest, file_hash, inside, read_json, state_lock, state_mutation, write_json
 
 WHISPER_RATE = Decimal("0.006") / Decimal(60)
 
@@ -307,6 +307,7 @@ def quote_uploads_required(quote: dict) -> bool:
     )
 
 
+@state_mutation
 def authorize(
     root: Path,
     quote_id: str,
@@ -379,6 +380,7 @@ def accounted(tasks: dict, quote_id: str) -> Decimal:
     )
 
 
+@state_mutation
 def begin_task(root: Path, quote: dict, task: dict, *, kind=None, admitted=()):
     auth = authorization(root, quote)
     journal = read_json(root / "work/tasks.json")
@@ -388,6 +390,47 @@ def begin_task(root: Path, quote: dict, task: dict, *, kind=None, admitted=()):
         raise ValueError("spending allowance exhausted; no task submitted")
     budget.check_capacity(root, task["reserve_usd"], context="submission")
     budget.require_reconciled(root, admitted)
+    if (kind or quote["kind"]) == "images":
+        # Editors can change state between network calls. Revalidate the paid
+        # task while admission/reservation are serialized, not only at job start.
+        shot = next((s for s in load_board(root).shots if s.id == task["shot_id"]), None)
+        if (
+            shot is None
+            or digest(effective_image_spec(image_spec(root, shot), quote["model"]))
+            != task["input_hash"]
+        ):
+            raise ValueError(
+                "shot/reference/brief changed since quote; estimate and authorize again"
+            )
+        require_approval(root, "storyboard")
+        board = load_board(root)
+        brief = load_brief(root)
+        if quote["scope"] == "proof":
+            if task["shot_id"] not in proof_ids(board, brief):
+                raise ValueError("proof selection changed; requote before spending")
+        else:
+            from . import flow
+
+            require_approval(
+                root,
+                "preview"
+                if brief.creative is not None and flow.settings(root)["preview_gate"]
+                else "proof",
+            )
+        budget.check_correction_cycle(root, task["shot_id"], task.get("retry_cycle"))
+        if any(
+            entry.get("kind") == "images"
+            and entry.get("shot_id") == task["shot_id"]
+            and (
+                entry.get("version") == task["version"]
+                or entry.get("status") in ("submitted", "result")
+            )
+            for entry in journal.values()
+        ):
+            raise ValueError("a conflicting task/version was submitted; recover or requote")
+    if (kind or quote["kind"]) == "transcription" and quote.get("provider", "openai") == "openai":
+        if (root / "work/lyrics.json").exists():
+            raise ValueError("lyrics already exist; preserve them rather than overwrite/rebill")
     value = {
         **task,
         "kind": kind or quote["kind"],
@@ -408,8 +451,7 @@ def asset_intact(root: Path, task: dict) -> bool:
 
 
 def finish_image(root: Path, task_uuid: str, result: dict, client: RunwareClient):
-    journal = read_json(root / "work/tasks.json")
-    task = journal[task_uuid]
+    task = read_json(root / "work/tasks.json")[task_uuid]
     if "imageURL" not in result:
         return False
     if result.get("taskUUID") != task_uuid:
@@ -417,8 +459,16 @@ def finish_image(root: Path, task_uuid: str, result: dict, client: RunwareClient
     cost = str(money(result["cost"]))
     if task.get("cost_usd") is not None and money(task["cost_usd"]) != money(cost):
         raise ValueError("provider task cost changed; reconcile manually")
-    task.update(status="result", result=result, cost_usd=cost, cost_basis="provider reported")
-    write_json(root / "work/tasks.json", journal)  # Save billed cost BEFORE downloading.
+    with state_lock(root):
+        journal = read_json(root / "work/tasks.json")
+        task = dict(journal[task_uuid])
+        if task.get("cost_usd") is not None and money(task["cost_usd"]) != money(cost):
+            raise ValueError("provider task cost changed; reconcile manually")
+        if task.get("status") == "resolved":
+            raise ValueError("task was manually reconciled; inspect the result before recovery")
+        task.update(status="result", result=result, cost_usd=cost, cost_basis="provider reported")
+        journal[task_uuid] = task
+        write_json(root / "work/tasks.json", journal)  # Billed cost BEFORE download.
     relative = f"assets/{task['shot_id']}/v{task['version']:03d}-{task_uuid}.jpg"
     path = inside(root, relative)
     expected_hash = task.get("sha256")
@@ -440,9 +490,14 @@ def finish_image(root: Path, task_uuid: str, result: dict, client: RunwareClient
 
     with Image.open(path) as image:
         image.verify()
-    record_asset(root, task["shot_id"], task["version"], path, task["input_hash"], task_uuid)
-    task.update(status="ready", path=relative, sha256=file_hash(path), completed_at=now())
-    write_json(root / "work/tasks.json", journal)
+    with state_lock(root):
+        journal = read_json(root / "work/tasks.json")
+        current = journal[task_uuid]
+        if current.get("status") == "resolved":
+            raise ValueError("task was manually reconciled during download; inspect the result")
+        record_asset(root, task["shot_id"], task["version"], path, task["input_hash"], task_uuid)
+        current.update(status="ready", path=relative, sha256=file_hash(path), completed_at=now())
+        write_json(root / "work/tasks.json", journal)
     return True
 
 
@@ -708,6 +763,16 @@ def recover(root: Path, task_uuid: str, client=None):
     if not task or task["kind"] != "images":
         raise ValueError("unknown image task; transcription has no automatic recovery endpoint")
     if task["status"] == "ready" and asset_intact(root, task):
+        # Ready journal bytes can outlive an interrupted asset-index publication.
+        # This is idempotent and neither selects an alternative nor reviews it.
+        record_asset(
+            root,
+            task["shot_id"],
+            task["version"],
+            inside(root, task["path"]),
+            task["input_hash"],
+            task_uuid,
+        )
         return True
     if task["status"] == "resolved":
         raise ValueError("task was manually reconciled; use a newly authorized quote if needed")
@@ -719,6 +784,16 @@ def recover(root: Path, task_uuid: str, client=None):
     finally:
         if own:
             client.close()
+
+
+@state_mutation
+def update_task(root: Path, task_uuid: str, **patch) -> dict:
+    """Checkpoint fields into the latest journal without losing another result."""
+    path = root / "work/tasks.json"
+    journal = read_json(path)
+    journal[task_uuid].update(patch)
+    write_json(path, journal)
+    return journal[task_uuid]
 
 
 def transcribe_quote(root: Path, quote_id: str, transcriber=transcribe, *, client=None):
@@ -760,8 +835,41 @@ def transcribe_quote(root: Path, quote_id: str, transcriber=transcribe, *, clien
     task = {"uuid": quote["uuid"], "reserve_usd": quote["reserve_total_usd"]}
     begin_task(root, quote, task)
     raw = transcriber(os.environ["OPENAI_API_KEY"], inside(root, project.source), quote["language"])
-    # Preserve raw evidence first, so validation failures never cause silent rebilling.
+    finish_openai_transcript(root, quote, project, raw)
+    # The OpenAI path returns nothing; the CLI derives its payload from work/lyrics.json.
+    return None
+
+
+@state_mutation
+def finish_openai_transcript(root: Path, quote: dict, project, raw: dict):
+    """Keep billed evidence before validation; never overwrite a concurrent import."""
     write_json(root / "work/transcription-raw.json", raw)
+    update_task(
+        root,
+        quote["uuid"],
+        status="result",
+        cost_usd=str(money(raw.get("duration", project.duration)) * WHISPER_RATE),
+        cost_basis="duration-rate estimate, not provider invoice",
+    )
+    try:
+        lyrics = _openai_lyrics(raw)
+    except (ValueError, TypeError, KeyError) as exc:
+        update_task(root, quote["uuid"], status="invalid", validation_error="invalid_transcript")
+        raise ValueError("billed transcription is invalid; raw evidence and cost retained") from exc
+    current = load_project(root)
+    if (current.source_sha256, current.duration) != (project.source_sha256, project.duration):
+        update_task(root, quote["uuid"], status="stale", validation_error="different_source")
+        raise ValueError("source changed during transcription; raw billed evidence retained")
+    if (root / "work/lyrics.json").exists():
+        update_task(
+            root, quote["uuid"], status="conflict", validation_error="lyrics_conflict_preserved"
+        )
+        raise ValueError("lyrics were imported during transcription; existing lyrics preserved")
+    write_json(root / "work/lyrics.json", lyrics.model_dump())
+    update_task(root, quote["uuid"], status="ready", completed_at=now())
+
+
+def _openai_lyrics(raw: dict) -> Lyrics:
     segments = []
     for segment in raw.get("segments", []):
         flags = ["unreviewed sung text"]
@@ -774,26 +882,16 @@ def transcribe_quote(root: Path, quote_id: str, transcriber=transcribe, *, clien
         segments.append(
             Segment(start=segment["start"], end=segment["end"], text=segment["text"], flags=flags)
         )
-    lyrics = Lyrics(
+    return Lyrics(
         provider="OpenAI",
         model="whisper-1",
         language=raw.get("language"),
         segments=segments,
         words=raw.get("words", []),
     )
-    write_json(root / "work/lyrics.json", lyrics.model_dump())
-    journal = read_json(root / "work/tasks.json")
-    journal[quote["uuid"]].update(
-        status="ready",
-        completed_at=now(),
-        cost_usd=str(money(raw.get("duration", project.duration)) * WHISPER_RATE),
-        cost_basis="duration-rate estimate, not provider invoice",
-    )
-    write_json(root / "work/tasks.json", journal)
-    # The OpenAI path returns nothing; the CLI derives its payload from work/lyrics.json.
-    return None
 
 
+@state_mutation
 def resolve_task(root: Path, task_uuid: str, cost: str, note: str):
     """Explicit user reconciliation, not a provider retry or a presumed refund."""
     journal = read_json(root / "work/tasks.json")
