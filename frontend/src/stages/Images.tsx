@@ -196,7 +196,8 @@ export function ImagesStage({
   const proof = approvals.proof;
   const proofApproved = proof?.state === "approved";
   const proofShots = shots.filter((shot) => proofIds.includes(shot.id));
-  const proofMissing = proofShots.filter((shot) => shot.selected === null);
+  const proofStale = proofShots.filter((shot) => shot.selected !== null && shot.stale);
+  const proofNeedsWork = proofShots.filter((shot) => shot.selected === null || shot.stale);
   const missing = paidShots.filter((shot) => shot.selected === null);
   const older = paidShots.filter((shot) => shot.stale);
   const visibleMissing = visible.filter((shot) => !shot.local && shot.selected === null);
@@ -444,7 +445,11 @@ export function ImagesStage({
         <section className="style-check images-style-check">
           <div className="style-check-say">
             <b>Style check · {proofIds.length} hard shots first</b>
-            <span>When they look right, make the rest. Only these three are paid now.</span>
+            <span>
+              When they look right, make the rest. Only these three are paid now.
+              {proofStale.length > 0 &&
+                " Older-prompt shots are from the previous look; remake them, then select the new version."}
+            </span>
           </div>
           <div className="style-shots">
             {proofShots.map((shot) => {
@@ -469,20 +474,20 @@ export function ImagesStage({
             })}
           </div>
           <div className="style-check-actions">
-            {proofMissing.length > 0 ? (
+            {proofNeedsWork.length > 0 ? (
               <Button
                 variant="primary"
                 size="small"
                 disabled={paid.busy}
                 onClick={() =>
                   make(
-                    proofMissing.map((shot) => shot.id),
+                    proofNeedsWork.map((shot) => shot.id),
                     "proof",
                   )
                 }
               >
-                Make {proofMissing.length} style still{proofMissing.length === 1 ? "" : "s"} · $
-                {price(proofMissing.length)}
+                {proofStale.length > 0 ? "Remake" : "Make"} {proofNeedsWork.length} style still
+                {proofNeedsWork.length === 1 ? "" : "s"} · ${price(proofNeedsWork.length)}
               </Button>
             ) : (
               <span className="hint">
