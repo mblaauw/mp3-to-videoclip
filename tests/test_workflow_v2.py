@@ -1,6 +1,7 @@
 """Local workflow regression cases derived from the Cool Cat audit. No paid calls."""
 
 import copy
+from pathlib import Path
 
 import pytest
 from test_creative_production import approve_prerequisites, jpeg, make_root, record_stills
@@ -240,6 +241,19 @@ def test_selected_new_version_does_not_change_imported_identity(tmp_path):
     assert P.load_brief(root).characters[0].references == ref
     assert digest(P.image_spec(root, P.load_board(root).shots[0])) == spec_before
     assert verdict_for(root, "s001") is None
+
+
+def test_record_asset_accepts_a_relative_project_root(tmp_path, monkeypatch):
+    root = strict_root(tmp_path)
+    spec = digest(P.image_spec(root, P.load_board(root).shots[0]))
+    monkeypatch.chdir(tmp_path)
+    relative = Path("production")
+    path = jpeg(relative / "assets/s001/relative.jpg", (10, 20, 30))
+    P.record_asset(relative, "s001", 2, path, spec, "relative")
+
+    entry = read_json(relative / "work/assets.json")["s001"]
+    saved = next(v for v in entry["versions"] if v["version"] == 2)
+    assert saved["path"] == "assets/s001/relative.jpg"
 
 
 def test_cli_commands_and_new_default(tmp_path):

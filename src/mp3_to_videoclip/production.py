@@ -1634,6 +1634,8 @@ def select_asset(root: Path, shot_id: str, version: int):
 
 
 def record_asset(root: Path, shot_id: str, version: int, path: Path, input_hash: str, task_id: str):
+    root = root.resolve()
+    path = Path(path).resolve()
     assets = read_json(root / "work/assets.json")
     entry = assets.setdefault(shot_id, {"versions": [], "selected": None})
     existing = next((v for v in entry["versions"] if v["version"] == version), None)
