@@ -205,6 +205,22 @@ def test_update_brief_rejects_an_invalid_patch_without_writing(tmp_path):
     assert read_json(root / "brief.json") == before
 
 
+def test_update_brief_refuses_to_blank_a_required_text_field(tmp_path):
+    root = make_api_project(tmp_path)
+    before = read_json(root / "brief.json")
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_brief",
+                {"slug": "production", "patch": {"style": ""}},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "style cannot be blank" in result["error"]
+    assert read_json(root / "brief.json") == before
+
+
 def test_update_shots_validates_the_whole_board_before_writing(tmp_path):
     root = make_api_project(tmp_path)
     before = read_json(root / "work" / "storyboard.json")

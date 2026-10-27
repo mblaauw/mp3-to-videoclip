@@ -7,6 +7,7 @@ import json
 import pytest
 from api_support import api_client
 
+from mp3_to_videoclip import styles
 from mp3_to_videoclip.app import create_app
 from mp3_to_videoclip.domain.models import Project
 
@@ -228,6 +229,17 @@ def test_upload_an_advert_keeps_intent_and_skips_signature(tmp_path, monkeypatch
         assert intake["style_preset"] == "clean-photographic-v1"
         assert intake["intent"] == intent
         assert intake["peaks"] == []
+
+        custom = client.put(
+            "/api/projects/forward-ever/intake",
+            json={"style_preset": ""},
+        )
+        assert custom.status_code == 200, custom.text
+        assert custom.json()["style_preset"] is None
+        assert (
+            custom.json()["brief"]["creative"]["look"]
+            == styles.preset("clean-photographic-v1").look
+        )
 
 
 def test_advert_upload_refuses_missing_creative_intent(tmp_path):

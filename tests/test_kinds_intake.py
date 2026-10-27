@@ -159,6 +159,23 @@ def test_style_presets_are_selectable_and_only_the_protected_core_is_forced(tmp_
         P._require_default_style_core(video, guarded)
 
 
+def test_apply_intake_can_switch_to_custom_without_rewriting_the_look(tmp_path, fake_probe):
+    created = intake.create_from_upload(
+        tmp_path / "projects", _source(tmp_path), title="Custom Look"
+    )
+    root = created["root"]
+    assert P.load_project(root).style_preset == profiles.STYLE_PRESET_ID
+    supplied = "A supplied master style that replaces the protected core."
+    P.update_brief(root, {"creative": {"look": supplied}})
+
+    result = P.apply_intake(root, style_preset="")
+
+    assert result["project"].style_preset is None
+    assert result["brief"].creative.look == supplied
+    # The protected-core rule no longer applies once the preset is detached.
+    P._require_default_style_core(result["project"], result["brief"])
+
+
 def test_apply_intake_updates_window_and_invalidates_stale_measurement(tmp_path, fake_probe):
     created = intake.create_from_upload(
         tmp_path / "projects",

@@ -87,6 +87,13 @@ export function LookCard({
     try {
       const updatedIntake = await api.updateIntake(slug, { style_preset: id });
       onIntakeChange(updatedIntake);
+      if (!id) {
+        // Custom only detaches the preset. The saved look stays exactly as it is.
+        lastSaved.current = brief.creative?.look || "";
+        flash();
+        notifyProjectChanged();
+        return;
+      }
       const chosen = updatedIntake.style_presets.find((item) => item.id === id);
       const withAdditions = chosen?.look
         ? additions.trim()
@@ -122,6 +129,7 @@ export function LookCard({
           <label className="ui-field">
             <span>Style preset</span>
             <select value={intake.style_preset || ""} onChange={(event) => void changePreset(event.target.value)}>
+              <option value="">Custom</option>
               {presets.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
@@ -132,7 +140,7 @@ export function LookCard({
           <p className="hint">{preset?.description || "A custom appearance."}</p>
         </div>
       </div>
-      <Field label="Film-specific additions">
+      <Field label={preset ? "Film-specific additions" : "Look"}>
         <textarea
           rows={4}
           value={additions}
