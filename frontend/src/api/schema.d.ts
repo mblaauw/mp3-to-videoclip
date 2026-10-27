@@ -1029,6 +1029,8 @@ export interface components {
         CancelOut: {
             /** Cancelled */
             cancelled: boolean;
+            /** Status */
+            status: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1037,12 +1039,22 @@ export interface components {
         };
         /** JobDetailOut */
         JobDetailOut: {
+            /**
+             * Blocking
+             * @default false
+             */
+            blocking: boolean;
             /** Cost Usd */
             cost_usd: number;
             /** Error */
             error?: string | null;
             /** Finished At */
             finished_at?: number | null;
+            /**
+             * Historical
+             * @default false
+             */
+            historical: boolean;
             /** Id */
             id: string;
             /** Kind */
@@ -1061,12 +1073,22 @@ export interface components {
         };
         /** JobOut */
         JobOut: {
+            /**
+             * Blocking
+             * @default false
+             */
+            blocking: boolean;
             /** Cost Usd */
             cost_usd: number;
             /** Error */
             error?: string | null;
             /** Finished At */
             finished_at?: number | null;
+            /**
+             * Historical
+             * @default false
+             */
+            historical: boolean;
             /** Id */
             id: string;
             /** Kind */

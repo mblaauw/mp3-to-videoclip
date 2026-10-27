@@ -29,6 +29,8 @@ class JobOut(BaseModel):
     queued_at: float | None = None
     started_at: float | None = None
     finished_at: float | None = None
+    historical: bool = False
+    blocking: bool = False
 
 
 class JobDetailOut(JobOut):
@@ -37,6 +39,7 @@ class JobDetailOut(JobOut):
 
 class CancelOut(BaseModel):
     cancelled: bool
+    status: str
 
 
 @router.get("", response_model=list[JobOut])
@@ -59,4 +62,4 @@ async def cancel_job(job_id: str, request: Request):
     runner = request.app.state.runner
     if not runner.cancel(job_id):
         raise ApiError(404, "job not found or already finished", "job_not_found")
-    return {"cancelled": True}
+    return {"cancelled": True, "status": runner.get(job_id).status}

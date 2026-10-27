@@ -23,7 +23,7 @@ Publication authority follows the approved phase plan and repository policy.
 
 | Phase | Tasks | State |
 | --- | --- | --- |
-| 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | active |
+| 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | verified; publishing |
 | 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | pending phase 1 |
 | 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | pending phase 2 |
 | 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | pending phase 3 |
@@ -38,7 +38,7 @@ local performance and quality evidence, not just encoder flags.
 
 ## Checkpoint
 
-- Branch: `reliability/phase-1`; HEAD `b6c3e4f`.
+- Branch: `reliability/phase-1`; T1 `d8d5d89`, T2 `285e0cb`.
 - T1 accepted: 45 snapshot tests passed, including JSONL restore, mutation
   detection, secret exclusions and exclusive publication. Fresh review found
   secret-root/output-symlink gaps; both were corrected and checks rerun. Capture
@@ -52,8 +52,22 @@ local performance and quality evidence, not just encoder flags.
   conflict and matching-dual-budget top-up hazards. All corrected; 23 targeted
   coordination tests pass. Full suite: 1062 passed, 1 skipped (before final T3
   cancellation-race correction). Golden contracts unchanged.
-- Current task: T3 integration/phase verification. Next: freeze revision, rerun
-  phase checks and publish the phase PR.
+- T3 implemented: explicit blocking job mode wired at all five worker callers,
+  cooperative stopping/drain ownership, pure async cancellation compatibility,
+  per-project monitoring receipts and read-only interrupted restart history.
+  Frontend treats stopping as active, never as completed. Fresh review caught a
+  simultaneous cancellation/failure error-loss race; regression reproduced then
+  fixed. Focused runner/receipt/API/director integration: 37 passed.
+- Frontend tests: 47 passed; API types regenerated; TypeScript/build clean.
+  Ruff check and format clean. No production files or owner processes changed.
+- Current task: phase 1 frozen-revision verification and publication. Next:
+  fresh phase tests/startup, PR/checks; then T4 on the integrated phase baseline.
+- Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
+  check/format clean; frontend 47 passed, TypeScript/build/API types clean.
+  Isolated app startup root/projects/jobs all HTTP 200 using the required
+  localhost host (initial testserver-host probe was correctly rejected 403).
+  T3 fresh-review cancellation-race correction passed its deterministic test.
+  No golden regeneration, provider call, production rewrite or app restart.
 - T1 files: script SHA256 `129c7c271e4b651589080ac00390aaa6d4e76dcbd9968d5b2d121ac1180171b8`,
   tests `037c93b60ab05d5f7510e32cee2f5ed5bb3e17b5e760dd2cf4014489ca734a52`.
   No new provider spend. Full phase checks pending.

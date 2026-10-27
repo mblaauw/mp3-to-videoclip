@@ -223,7 +223,7 @@ async def render(slug: str, request: Request, payload: dict):
         }[kind]
         return await asyncio.to_thread(fn, root)
 
-    job_id = runner.submit("render", slug, work)
+    job_id = runner.submit("render", slug, work, blocking=True)
     return {"job_id": job_id, "kind": kind, "status": "queued"}
 
 
