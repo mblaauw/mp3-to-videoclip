@@ -185,8 +185,9 @@ def build_context(
         if creative is not None:
             lines.append(f"- Look: {_clip(creative.look, 360)}")
             lines.append(
-                f"- World: {len(creative.scenes)} scenes, {len(creative.references)} visual "
-                f"references, {len(creative.image_rules)} image rules; "
+                f"- World: {len(brief.characters)} characters, {len(creative.scenes)} scenes, "
+                f"{len(creative.references)} visual references, {len(creative.image_rules)} image "
+                f"rules; profile v{creative.profile_version or 0}; "
                 f"proof {', '.join(creative.proof_shot_ids) or 'unset'}."
             )
         else:

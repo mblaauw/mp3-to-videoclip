@@ -17,6 +17,12 @@ and the change from the previous shot. Add `character_ids`, `scene_id`,
 only for words that appear on screen. Give the editor an intended feel in
 `motion_prompt`.
 
+Every recurring person in the shot must already be in `brief.characters` and
+bound in `character_ids`; every recurring place must be a scene and bound in
+`scene_id`. Do not repeat identity, wardrobe or the scene description in
+`image_prompt`: the compiler adds them. If a person or place is missing from
+the profile, create it with `set_creative_profile` before writing the board.
+
 Choose the kind from the table. Only `scene` and generated `product`/`bridge`
 shots cost money; the rest are designed or reused locally:
 

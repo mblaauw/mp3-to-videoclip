@@ -12,15 +12,18 @@ from .branding import brand_hash, load_brand
 from .models import (
     AudioWindow,
     Brief,
+    Character,
     CreativeProfile,
     EventMap,
     Intent,
     Lyrics,
     Project,
     RenderShot,
+    Scene,
     Shot,
     Storyboard,
     Treatments,
+    VisualBeat,
 )
 from .render import audio_seconds, probe
 from .storage import digest, file_hash, inside, read_json, read_optional, write_json
@@ -409,6 +412,117 @@ def update_brief(root: Path, patch: dict) -> Brief:
     write_json(root / "brief.json", brief.model_dump())
     _record_prompt_write(root, "brief")
     return brief
+
+
+PROFILE_MAX_LOOK_WORDS = 180
+PROFILE_MAX_LOOK_ADDITIONS = 60
+PROFILE_MAX_IMAGE_RULES = 6
+PROFILE_MAX_AVOID = 8
+PROFILE_MAX_ARC = 12
+
+
+def set_creative_profile(
+    root: Path,
+    *,
+    characters: list,
+    scenes: list,
+    arc: list,
+    image_rules: list,
+    avoid: list,
+    look: str,
+) -> Brief:
+    """Create or replace the film's structured cast, places, rules and look.
+
+    The Writer calls this once after the treatment. It is deliberately separate
+    from the generic brief patch: the cast, places and rendering rules have one
+    validated home, so they cannot drift back into ``direction`` or every shot.
+    """
+    if not all(isinstance(value, list) for value in (characters, scenes, arc)):
+        raise ValueError("characters, scenes and arc must be lists")
+    if not isinstance(image_rules, list) or not isinstance(avoid, list):
+        raise ValueError("image_rules and avoid must be lists")
+    if not isinstance(look, str):
+        raise ValueError("look must be text")
+
+    try:
+        character_values = [Character.model_validate(value) for value in characters]
+        scene_values = [Scene.model_validate(value) for value in scenes]
+        arc_values = [VisualBeat.model_validate(value) for value in arc]
+    except ValueError as exc:
+        raise ValueError(f"creative profile is invalid: {exc}") from exc
+
+    character_ids = [value.id for value in character_values]
+    if len(set(character_ids)) != len(character_ids):
+        raise ValueError("character IDs must be unique")
+    scene_ids = [value.id for value in scene_values]
+    if len(set(scene_ids)) != len(scene_ids):
+        raise ValueError("scene IDs must be unique")
+
+    rules = [value.strip() for value in image_rules if isinstance(value, str) and value.strip()]
+    if len(rules) != len(image_rules):
+        raise ValueError("image rules must be non-empty text")
+    if len(rules) > PROFILE_MAX_IMAGE_RULES:
+        raise ValueError(f"keep at most {PROFILE_MAX_IMAGE_RULES} global image rules")
+    avoid_values = [value.strip() for value in avoid if isinstance(value, str) and value.strip()]
+    if len(avoid_values) != len(avoid):
+        raise ValueError("avoid entries must be non-empty text")
+    if len(avoid_values) > PROFILE_MAX_AVOID:
+        raise ValueError(f"keep at most {PROFILE_MAX_AVOID} avoid entries")
+    if len(arc_values) > PROFILE_MAX_ARC:
+        raise ValueError(f"keep at most {PROFILE_MAX_ARC} arc beats")
+
+    look_text = look.strip()
+    if not look_text:
+        raise ValueError("define creative.look before creating the profile")
+    project = load_project(root)
+    guarded = styles.protected_preset(project.style_preset)
+    if guarded is not None:
+        problem = styles.core_problem(project.style_preset, look_text)
+        if problem:
+            raise ValueError(problem)
+        additions = look_text[len(guarded.look) :].strip()
+        if len(additions.split()) > PROFILE_MAX_LOOK_ADDITIONS:
+            raise ValueError(
+                f"keep film-specific look additions to {PROFILE_MAX_LOOK_ADDITIONS} words"
+            )
+    elif len(look_text.split()) > PROFILE_MAX_LOOK_WORDS:
+        raise ValueError(
+            f"keep the custom look to {PROFILE_MAX_LOOK_WORDS} words; "
+            "move cast, places and per-scene light into the profile"
+        )
+
+    brief = load_brief(root)
+    creative = brief.creative or CreativeProfile()
+    updated = brief.model_copy(
+        update={
+            "characters": character_values,
+            "avoid": avoid_values,
+            "creative": creative.model_copy(
+                update={
+                    "look": look_text,
+                    "image_rules": rules,
+                    "arc": arc_values,
+                    "scenes": scene_values,
+                    "profile_version": 1,
+                }
+            ),
+        }
+    )
+    try:
+        updated = Brief.model_validate(updated.model_dump())
+    except ValueError as exc:
+        raise ValueError(f"creative profile is invalid: {exc}") from exc
+
+    previous_value = brief.model_dump()
+    value = updated.model_dump()
+    if value == previous_value:
+        return brief
+    history = root / f"work/brief-history/{digest(previous_value)}.json"
+    if not history.exists():
+        write_json(history, previous_value)
+    write_json(root / "brief.json", value)
+    _record_prompt_write(root, "brief")
+    return updated
 
 
 def update_treatments(root: Path, payload: dict) -> Treatments:
@@ -1414,19 +1528,30 @@ def approve(
             raise ValueError("review/correct flagged lyrics, then explicitly --ack-uncertain")
     elif stage == "brief":
         brief = load_brief(root)
-        _require_default_style_core(load_project(root), brief)
+        project = load_project(root)
+        _require_default_style_core(project, brief)
         if requires_signature(root) and not flow.settings(root)["late_credits"]:
             from .signature import validate_spec
 
             validate_spec(root, load_project(root))
         _require_reference_permissions(brief)
-        if creative_workflow(load_project(root)) and brief.creative is None:
+        if creative_workflow(project) and brief.creative is None:
             raise ValueError("the creative workflow requires a creative profile")
-        if not all(x.strip() for x in [brief.direction, brief.style, brief.treatment]):
+        if project.prompt_version == 2:
+            if not brief.treatment.strip():
+                raise ValueError("write the treatment before approving the story")
+            if not brief.creative.look.strip():
+                raise ValueError("define creative.look (global appearance only) before approval")
+            if brief.creative.profile_version < 1:
+                raise ValueError(
+                    "create the creative profile (cast, places, rules and a compact look) "
+                    "before approving the story"
+                )
+        elif not all(x.strip() for x in [brief.direction, brief.style, brief.treatment]):
             raise ValueError("choose a treatment, direction and style before approval")
         if brief.creative is not None and not brief.creative.look.strip():
             raise ValueError("define creative.look (global appearance only) before approval")
-        if creative_workflow(load_project(root)):
+        if creative_workflow(project):
             from .references import validate_import
 
             for character in brief.characters:

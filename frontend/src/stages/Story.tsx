@@ -19,6 +19,7 @@ import { BriefCard } from "../story/BriefCard";
 import { CharactersCard } from "../story/CharactersCard";
 import { CreditsCard } from "../story/CreditsCard";
 import { LookCard } from "../story/LookCard";
+import { ProfileCard } from "../story/ProfileCard";
 
 function conceptPrompt(hasTreatment = false): string {
   if (hasTreatment) {
@@ -563,6 +564,9 @@ export function StoryStage({
               <h2>Look</h2>
               <p className="hint">Loading the appearance…</p>
             </section>
+          )}
+          {brief && intake?.prompt_version === 2 && (
+            <ProfileCard brief={brief} onAsk={askWriter} />
           )}
           {brief && <CharactersCard slug={slug} brief={brief} onBriefChange={briefChanged} />}
         </div>

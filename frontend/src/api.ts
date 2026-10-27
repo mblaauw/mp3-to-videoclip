@@ -218,7 +218,15 @@ export type Brief = {
     description?: string;
     permission_confirmed?: boolean;
     references?: string[];
-    states?: Record<string, unknown>;
+    default_state?: string;
+    states?: Record<
+      string,
+      {
+        description?: string;
+        attributes?: Record<string, string>;
+        references?: string[];
+      }
+    >;
   }[];
   creative?: {
     mode?: string;
@@ -227,7 +235,9 @@ export type Brief = {
     proof_shot_ids?: string[];
     world?: string;
     references?: unknown[];
-    scenes?: unknown[];
+    scenes?: { id: string; description?: string; reference_ids?: string[] }[];
+    arc?: { phase?: string; intention?: string }[];
+    profile_version?: number;
   } | null;
 };
 
@@ -270,6 +280,7 @@ export type IntakePayload = {
   kind: string;
   intent: Intent | null;
   brief: Brief;
+  prompt_version?: number | null;
   style_preset: string | null;
   style_presets: StylePreset[];
   kinds: KindProfile[];

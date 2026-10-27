@@ -32,11 +32,15 @@ the match: name the shape, colour or position, and put it at the agreed anchor s
 the editor can cut on it. A designed bridge needs no image prompt.
 
 Do not repeat the global look, the style preset or the scene description inside
-the shot text: the compiler inserts them. Keep the prompt about this frame.
+the shot text: the compiler inserts them. Do not repeat a character's identity or
+wardrobe either; bind the character in the storyboard and let the compiler add
+the identity and the resolved state. Keep the prompt about this frame.
 
 ## Self-check before saving
 
 - Read the compiled prompt: does any scene text contradict the shot?
+- Is every recurring person bound in `character_ids` and every place in `scene_id`?
+- Does the shot text avoid repeating identity, wardrobe or the scene description?
 - Is occupancy stated in the shot itself?
 - Is there a no-text clause, and does the prompt describe no lettering?
 - Does the product keep its supplied geometry and label?

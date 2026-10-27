@@ -283,6 +283,7 @@ class CreativeProfile(Model):
     references: list[VisualReference] = Field(default_factory=list)
     global_reference_ids: list[str] = Field(default_factory=list)
     proof_shot_ids: list[str] = Field(default_factory=list, max_length=3)
+    profile_version: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def unique_ids(self):
@@ -296,6 +297,13 @@ class CreativeProfile(Model):
         if len(set(self.proof_shot_ids)) != len(self.proof_shot_ids):
             raise ValueError("proof shot IDs must be unique")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if not value.get("profile_version"):
+            value.pop("profile_version", None)
+        return value
 
 
 class CallToAction(Model):

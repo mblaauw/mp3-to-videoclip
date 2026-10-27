@@ -221,6 +221,114 @@ def test_update_brief_refuses_to_blank_a_required_text_field(tmp_path):
     assert read_json(root / "brief.json") == before
 
 
+def _profile_payload(**overrides):
+    payload = {
+        "slug": "production",
+        "characters": [
+            {
+                "id": "woman",
+                "identity": "woman, early 30s, pale skin, green eyes, long blonde hair",
+                "states": {
+                    "dream": {"description": "hair loose, ivory linen, barefoot"},
+                    "waking": {"description": "hair tied back, buttoned ivory linen"},
+                },
+                "default_state": "waking",
+                "permission_confirmed": True,
+            }
+        ],
+        "scenes": [{"id": "garden", "description": "A walled garden at first light, damp stone."}],
+        "arc": [{"phase": "open", "intention": "distance"}],
+        "image_rules": ["Single coherent frame."],
+        "avoid": ["posed smiles"],
+        "look": "A photorealistic 35mm still with visible skin texture, soft dawn light, "
+        "a restrained palette and fine grain. Not CGI, not a glossy advert.",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_set_creative_profile_writes_the_structured_profile(tmp_path):
+    root = make_api_project(tmp_path)
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "set_creative_profile",
+                _profile_payload(),
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    after = P.load_brief(root)
+    assert result["creative"]["profile_version"] == 1
+    assert after.creative.profile_version == 1
+    assert [character.id for character in after.characters] == ["woman"]
+    assert after.characters[0].states["dream"].description.startswith("hair loose")
+    assert after.creative.scenes[0].id == "garden"
+    assert after.creative.arc[0].phase == "open"
+    assert after.creative.look.startswith("A photorealistic 35mm still")
+    assert after.avoid == ["posed smiles"]
+
+
+def test_set_creative_profile_enforces_the_writing_budget(tmp_path):
+    root = make_api_project(tmp_path)
+    before = read_json(root / "brief.json")
+
+    too_many_rules = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "set_creative_profile",
+                _profile_payload(image_rules=[f"Rule {index}" for index in range(7)]),
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "at most 6" in too_many_rules["error"]
+
+    long_look = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "set_creative_profile",
+                _profile_payload(look="word " * 181),
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "180 words" in long_look["error"]
+    assert read_json(root / "brief.json") == before
+
+
+def test_set_creative_profile_keeps_the_protected_core_verbatim(tmp_path):
+    from mp3_to_videoclip import profiles
+
+    root = make_api_project(tmp_path)
+    P.apply_intake(root, style_preset=profiles.STYLE_PRESET_ID)
+    core = profiles.DEFAULT_STYLE
+    accepted = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "set_creative_profile",
+                _profile_payload(look=core + "\n\nHard amber key light."),
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "error" not in accepted
+    assert P.load_brief(root).creative.look.startswith(core)
+
+    before = read_json(root / "brief.json")
+    rejected = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "set_creative_profile",
+                _profile_payload(look="A completely different look."),
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "approved DEFAULT_STYLE core" in rejected["error"]
+    assert read_json(root / "brief.json") == before
+
+
 def test_update_shots_validates_the_whole_board_before_writing(tmp_path):
     root = make_api_project(tmp_path)
     before = read_json(root / "work" / "storyboard.json")

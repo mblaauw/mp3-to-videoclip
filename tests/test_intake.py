@@ -163,6 +163,7 @@ def test_a_new_project_keeps_the_default_style_core(tmp_path, fake_probe):
     brief.direction = "Test direction"
     brief.style = "Test style"
     brief.treatment = "Test treatment"
+    brief.creative.profile_version = 1
     write_json(root / "brief.json", brief.model_dump())
     P.approve(root, "brief", "test default look", via="studio", review_confirmed=True)
 

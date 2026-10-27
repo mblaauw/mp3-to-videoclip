@@ -369,6 +369,8 @@ function FilmShellContent({
   const projectFacts: ProjectFacts = {
     ...project,
     stage_states: shellStates,
+    prompt_version: intake?.prompt_version ?? null,
+    profile_version: intake?.brief?.creative?.profile_version ?? 0,
     has_message: intake ? Boolean(intake.intent?.message?.trim()) : undefined,
     has_cta: intake
       ? Boolean(intake.intent?.cta?.text?.trim() || intake.intent?.cta?.url?.trim())

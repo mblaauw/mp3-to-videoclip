@@ -91,6 +91,7 @@ def test_story_task_routing_follows_the_artifacts(tmp_path):
     root = make_api_project(tmp_path)
     project = read_json(root / "project.json")
     project["kind"] = "advert"
+    project["prompt_version"] = 2
     write_json(root / "project.json", project)
     assert prompts.select_task(root, "story", "writer") == "brief"
 
@@ -133,6 +134,32 @@ def test_story_task_routing_follows_the_artifacts(tmp_path):
         {"time_range": "0–3 s", "picture": "the hook", "text": "", "music": "first accent"}
     ]
     write_json(root / "brief.json", brief)
+    assert prompts.select_task(root, "story", "writer") == "profile"
+
+    brief["creative"]["profile_version"] = 1
+    write_json(root / "brief.json", brief)
+    assert prompts.select_task(root, "story", "writer") == "revise"
+
+
+def test_a_legacy_story_is_never_sent_to_the_profile_task(tmp_path):
+    root = make_api_project(tmp_path)
+    project = read_json(root / "project.json")
+    project.pop("prompt_version", None)
+    write_json(root / "project.json", project)
+    brief = read_json(root / "brief.json")
+    brief["intent"] = {"kind": "music_video", "message": "the point of the film"}
+    brief["treatment"] = "the chosen route"
+    brief["script"] = [
+        {"time_range": "0–3 s", "picture": "the hook", "text": "", "music": "first accent"}
+    ]
+    write_json(root / "brief.json", brief)
+    write_json(
+        root / "work/treatments.json",
+        {
+            "concepts": [{"id": f"c{index}"} for index in range(3)],
+            "chosen_id": "c0",
+        },
+    )
     assert prompts.select_task(root, "story", "writer") == "revise"
 
 

@@ -781,7 +781,10 @@ def test_instrumental_init_and_stage_gates(tmp_path, monkeypatch):
                 "style": "Ambient",
                 "treatment": "Abstract",
                 "creative": brief.creative.model_copy(
-                    update={"look": profiles.DEFAULT_STYLE + "\n\nSoft monochrome"}
+                    update={
+                        "look": profiles.DEFAULT_STYLE + "\n\nSoft monochrome",
+                        "profile_version": 1,
+                    }
                 ),
             }
         ).model_dump(),
