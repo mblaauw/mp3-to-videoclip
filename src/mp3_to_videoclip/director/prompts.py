@@ -150,7 +150,8 @@ def select_task(root: Path, stage: str | None, role: Role) -> str:
         if not brief.get("script"):
             return "script_ad" if kind in ("promo", "advert") else "script_mv"
         creative = brief.get("creative") if isinstance(brief.get("creative"), dict) else {}
-        if int(creative.get("profile_version") or 0) < 1:
+        structured = project.get("prompt_version") == 2
+        if structured and int(creative.get("profile_version") or 0) < 1:
             return "profile"
         return "revise"
     return "revise"

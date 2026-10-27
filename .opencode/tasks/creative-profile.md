@@ -34,8 +34,8 @@ handover and the two preserved local fixes.
 
 ## Acceptance
 
-- `uv run pytest -q` — 983 passed, 1 skipped (after adding the v2 profile gate,
-  legacy-brief and unbound-cast tests).
+- `uv run pytest -q` — 984 passed, 1 skipped (after adding the v2 profile gate,
+  legacy-brief, unbound-cast and legacy-routing tests).
 - `uv run ruff check .` and `uv run ruff format --check .` — clean.
 - `cd frontend && npm test` — 47 passed.
 - `cd frontend && npx tsc -b` — clean.
