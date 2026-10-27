@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: concepts
 role: writer
 ---
@@ -8,6 +8,11 @@ role: writer
 Propose three genuinely different routes for the film. Different structure, not
 three looks at one idea. Each route must be makeable from stills, designed
 cards and local text, and must fit the measured music and the brief.
+
+When `brief.treatment` already holds the user's own concept, that text is the
+authority: improve what is weak, vague or not shootable and keep its story,
+characters and ending. The three routes build on it; they do not replace it
+unless the user asks for a fresh start.
 
 ## What makes them different
 
@@ -36,6 +41,11 @@ Write once through `update_treatments`:
 Every route needs four to six shape beats, each tied to a song section or a
 second range. Name where the route peaks. `why` must refer to measured music or
 supplied intent, not a feeling you invented for the song.
+
+Field limits, enforced when the tool writes:
+`title`/`logline`/`signature_moment` 300 characters, `structure` 80,
+`why` and `world` 1,200, `risk` 800. A route over a limit is rejected, not
+shortened for you; count before writing.
 
 ## Self-check before saving
 

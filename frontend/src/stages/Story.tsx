@@ -17,9 +17,21 @@ import { CharactersCard } from "../story/CharactersCard";
 import { CreditsCard } from "../story/CreditsCard";
 import { LookCard } from "../story/LookCard";
 
-function conceptPrompt(): string {
+function conceptPrompt(hasTreatment = false): string {
+  if (hasTreatment) {
+    return (
+      "Give me three new directions that build on the treatment in brief.treatment. " +
+      "Keep its story, characters and ending and stay structurally different from each other."
+    );
+  }
   return "Give me three new directions for this film. Keep them structurally different and concrete.";
 }
+
+const IMPORT_PROMPT =
+  "The concept I already had is saved as brief.treatment. Read it with get_brief first. " +
+  "Keep its story, characters and ending, improve only what is weak, vague or not shootable, " +
+  "and save the improved treatment with update_brief. Then propose three structurally different " +
+  "concepts that build on it instead of replacing it.";
 
 function sectionLength(window: AudioWindow | null): number {
   return window ? Math.max(0, window.end - window.start) : 0;
@@ -49,6 +61,8 @@ export function StoryStage({
   const [savingTreatment, setSavingTreatment] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
   const [fieldsDirty, setFieldsDirty] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
@@ -98,10 +112,23 @@ export function StoryStage({
   }, [load]);
 
   useEffect(() => {
-    const changed = () => setRevision((value) => value + 1);
+    const changed = () => {
+      setRevision((value) => value + 1);
+      // The Writer can rewrite the brief while this stage stays mounted. Reload
+      // it unless a reload would overwrite input the user has not saved yet.
+      if (
+        savingRef.current ||
+        savingFields ||
+        fieldsDirty ||
+        treatmentRef.current !== treatmentLast.current
+      ) {
+        return;
+      }
+      void load();
+    };
     window.addEventListener(PROJECT_CHANGED, changed);
     return () => window.removeEventListener(PROJECT_CHANGED, changed);
-  }, []);
+  }, [fieldsDirty, load, savingFields]);
 
   useEffect(() => {
     if (!intake) {
@@ -239,8 +266,32 @@ export function StoryStage({
     }
   };
 
-  const askWriter = (text = conceptPrompt()) => {
+  const askWriter = (text = conceptPrompt(!!brief?.treatment?.trim())) => {
     window.dispatchEvent(new CustomEvent("studio:ask-director", { detail: { text } }));
+  };
+
+  const importConcept = async () => {
+    const value = importText.trim();
+    if (!value || !brief || importing || savingTreatment || savingFields) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const updated = await api.patchBrief(slug, { treatment: value });
+      const saved = updated.treatment || "";
+      treatmentLast.current = saved;
+      treatmentRef.current = saved;
+      setTreatment(saved);
+      setBrief(updated);
+      setImportText("");
+      flashSaved();
+      setRevision((current) => current + 1);
+      notifyProjectChanged();
+      askWriter(IMPORT_PROMPT);
+    } catch (caught) {
+      setError(String(caught));
+    } finally {
+      setImporting(false);
+    }
   };
 
   const concepts = treatments?.concepts || treatments?.treatments || [];
@@ -256,6 +307,37 @@ export function StoryStage({
       : null;
   const difference = nearest !== null ? length - nearest : 0;
   const advert = intake?.kind === "advert";
+
+  const conceptImport = (
+    <>
+      <p className="hint">
+        Paste a concept, outline or full treatment. It is saved as the Treatment first, so the
+        Writer reads it as your story and improves it instead of replacing it.
+      </p>
+      <textarea
+        value={importText}
+        onChange={(event) => setImportText(event.target.value)}
+        rows={8}
+        placeholder="Paste your concept or treatment…"
+        aria-label="Concept you already have"
+      />
+      <div className="row-actions">
+        <Button
+          variant="primary"
+          size="small"
+          disabled={!importText.trim() || importing || savingTreatment || savingFields}
+          onClick={() => void importConcept()}
+        >
+          {importing ? "Saving…" : "Save and open the Writer"}
+        </Button>
+        {brief?.treatment?.trim() && (
+          <span className="hint">
+            Replaces the current treatment. The previous version stays in the brief history.
+          </span>
+        )}
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -350,34 +432,47 @@ export function StoryStage({
           Concepts <small>From the Writer · pick one to build on</small>
         </h2>
         {concepts.length ? (
-          <div className="concepts">
-            {concepts.map((concept) => (
-              <button
-                type="button"
-                className="concept"
-                key={concept.id}
-                aria-pressed={chosen === concept.id}
-                onClick={() => void chooseConcept(concept.id)}
-              >
-                {chosen === concept.id && <span className="chosen">Chosen</span>}
-                <h3>{concept.title}</h3>
-                <p>{concept.logline}</p>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="concepts">
+              {concepts.map((concept) => (
+                <button
+                  type="button"
+                  className="concept"
+                  key={concept.id}
+                  aria-pressed={chosen === concept.id}
+                  onClick={() => void chooseConcept(concept.id)}
+                >
+                  {chosen === concept.id && <span className="chosen">Chosen</span>}
+                  <h3>{concept.title}</h3>
+                  <p>{concept.logline}</p>
+                </button>
+              ))}
+            </div>
+            <div className="row-actions">
+              <Button size="small" variant="quiet" onClick={() => askWriter()}>
+                Ask for three more
+              </Button>
+            </div>
+            <details className="concept-import">
+              <summary>I already have a concept</summary>
+              <div className="concept-import-body">{conceptImport}</div>
+            </details>
+          </>
         ) : (
           <div className="empty-block">
-            <p>No concepts yet. Ask the Writer for three directions.</p>
+            <p>
+              No concepts yet. Ask the Writer for three directions, or start from one you already
+              have.
+            </p>
             <Button variant="primary" onClick={() => askWriter()}>
               Ask the Writer for three directions
             </Button>
+            <div className="concept-import concept-import-open">
+              <h3>I already have a concept</h3>
+              <div className="concept-import-body">{conceptImport}</div>
+            </div>
           </div>
         )}
-        <div className="row-actions">
-          <Button size="small" variant="quiet" onClick={() => askWriter()}>
-            Ask for three more
-          </Button>
-        </div>
       </section>
 
       <div className="stage-columns story-columns">

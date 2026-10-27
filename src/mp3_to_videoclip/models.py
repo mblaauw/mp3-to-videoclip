@@ -364,11 +364,11 @@ class Concept(Model):
     title: str = Field(min_length=1, max_length=120)
     structure: str = Field(min_length=1, max_length=80)
     logline: str = Field(min_length=1, max_length=300)
-    why: str = Field(min_length=1, max_length=500)
-    world: str = Field(min_length=1, max_length=700)
+    why: str = Field(min_length=1, max_length=1200)
+    world: str = Field(min_length=1, max_length=1200)
     shape: list[str] = Field(min_length=4, max_length=6)
     signature_moment: str = Field(min_length=1, max_length=300)
-    risk: str = Field(min_length=1, max_length=300)
+    risk: str = Field(min_length=1, max_length=800)
 
     @model_validator(mode="after")
     def useful(self):

@@ -281,6 +281,54 @@
   font-size: var(--t-12);
   font-weight: var(--w-medium);
 }
+.concept-import {
+  margin-top: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  background: var(--panel);
+}
+.concept-import-open,
+.empty-block .concept-import {
+  width: 100%;
+}
+.concept-import > summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: var(--t-13);
+  font-weight: var(--w-medium);
+}
+.concept-import > summary:hover {
+  color: var(--ink);
+}
+.concept-import h3 {
+  margin: 0;
+  font-size: var(--t-15);
+  font-weight: var(--w-bold);
+}
+.concept-import-body {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+.concept-import-body .hint {
+  margin: 0;
+}
+.concept-import textarea {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--ink);
+  font: var(--t-13) / var(--lh-read) var(--font);
+}
+.concept-import textarea:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: -1px;
+}
 .treatment-doc {
   width: 100%;
   min-height: 300px;
