@@ -11,6 +11,19 @@ renderer replacement. Preserve unrelated work and all existing productions.
 One commit per numbered task; one PR per phase, with same-revision verification.
 Publication authority follows the approved phase plan and repository policy.
 
+## Accepted outcome
+
+All numbered tasks T1–T10 have engineering acceptance. T9 delivers measured
+diagnostics and the plan's explicit safe deferral, **not** an encoder/concurrency
+default change or generalized render speedup. Portable folders and existing
+productions remain authoritative and unchanged by this engineering work.
+
+Frozen final code: `ef59b76308cccc3a418860a12681ec2ffb7700bf`.
+Publication: PRs #38, #39, #40 and #41; GitHub owns their current CI/merge state.
+No further ready engineering task remains in the approved milestone. Hardware,
+raw capture, rerender pixel variation and exit-tail investigation are disclosed
+limitations, not silently expanded follow-up scope.
+
 ## Session budget
 
 - Started: 2026-10-27T19:38:25Z; deadline: 2026-10-27T21:08:25Z (up to 90 min).
@@ -41,7 +54,7 @@ Publication authority follows the approved phase plan and repository policy.
 | 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | merged PR #38 at `2afc1cc` |
 | 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | merged PR #39 at `3375eb1` |
 | 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | merged PR #40 at `7fe6f96` |
-| 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | accepted locally with T9 adoption deferred; freezing/checking publication |
+| 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | accepted, T9 default adoption deferred; publication PR #41 |
 
 ## Acceptance
 
@@ -264,6 +277,15 @@ local performance and quality evidence, not just encoder flags.
 - Next: commit T9 experiment/deferral, final frozen checks/types/build/smoke,
   current-head revision review, push/Phase4 PR/CI/merge. Zero provider spend;
   no production writes, user approvals, cleanup or owner-app restart.
+- T9 frozen `ef59b76`; final independent revision-bound Phase4 review accepted
+  that exact snapshot with no remaining critical cross-boundary finding. Full
+  same-HEAD rerun1139 passed/1 skipped in125.38s
+  (`.opencode/scratch/phase4-frozen-pytest.log`). Renderer28/frontend74 passed;
+  API regeneration, TypeScript/shipped build, Ruff lint/format and real renderer
+  smoke passed. Shipped frontend rebuilt identically; golden files unchanged.
+  Worktree clean at freeze. PR #41 published from that code; final integration
+  requires current-head CI, never stale/empty checks. All engineering acceptance
+  is complete; CI/publication state is tracked by PR #41 rather than duplicated.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required
