@@ -18,7 +18,7 @@ diagnostics and the plan's explicit safe deferral, **not** an encoder/concurrenc
 default change or generalized render speedup. Portable folders and existing
 productions remain authoritative and unchanged by this engineering work.
 
-Frozen final code: `ef59b76308cccc3a418860a12681ec2ffb7700bf`.
+Frozen final code: `4f5853b` (bundle-v2 correction atop reviewed `ef59b76`).
 Publication: PRs #38, #39, #40 and #41; GitHub owns their current CI/merge state.
 No further ready engineering task remains in the approved milestone. Hardware,
 raw capture, rerender pixel variation and exit-tail investigation are disclosed
@@ -286,6 +286,22 @@ local performance and quality evidence, not just encoder flags.
   Worktree clean at freeze. PR #41 published from that code; final integration
   requires current-head CI, never stale/empty checks. All engineering acceptance
   is complete; CI/publication state is tracked by PR #41 rather than duplicated.
+- Final parent boundary audit found the pre-existing Node bundle cache still
+  trusted index.html and could delete/repair a partial entry. Corrected before
+  merge at `4f5853b`: v2 full-SHA keys, exact membership/content manifest checks,
+  symlink/nonregular rejection, unique staging and serialized atomic publication.
+  Missing/corrupt/partial entries, old v1 caches and stale locks are preserved,
+  not repaired. Crash-left locks fail visibly. Independent correction review
+  accepted; a direct stale-lock preservation regression also passed.
+- Final `4f5853b` execution: full pytest1139 passed/1 skipped in123.65s
+  (`.opencode/scratch/phase4-final-v2-pytest.log`), Node47 passed, Ruff lint/format
+  clean. Real cache/audio and alpha acceptance reran on v2 and passed with the
+  same alpha RGBA hash; startup routes all200 and frontend rebuilt identically.
+  Runtime evidence `t10-v2-runtime-acceptance/` and `phase4-v2-alpha-acceptance/`.
+  Prior measured comparison reports retain their original source hashes and are
+  not represented as post-v2 throughput measurements. Rendering defaults remain
+  unchanged; no speedup claim or forced process-exit workaround.
+  PR #41 must pass the new final evidence head, not the earlier green head.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required

@@ -103,6 +103,13 @@ retained for investigation. Node receives only this selected directory, so old
 image versions cannot force rebundling. Node's bundle identity still combines
 renderer code and selected asset bytes: code-only bundle reuse is deliberately
 not introduced because it is unsafe without changing the bundle serving model.
+Bundle cache v2 verifies a full-SHA key, exact file/directory membership and every
+file's SHA-256 before reuse. Missing, malformed, partial, symlinked or corrupt
+entries fail closed without rebuilding, overwriting or deleting the evidence.
+New bundles use unique private staging and validated, serialized atomic
+publication. Existing v1 caches stay untouched. A crash-left publication lock
+fails visibly; recovery is not automatic. The lock coordinates cooperating
+publishers, not hostile external filesystem writers.
 Silent-movie creation has its own per-key cross-process lock through validation
 and receipt publication. Concurrent consumers wait for a complete receipt rather
 than racing the same request/movie paths. Final audio muxes occur after release;
