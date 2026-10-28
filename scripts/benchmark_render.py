@@ -5,7 +5,9 @@ import hashlib
 import json
 import os
 import platform
+import secrets
 import shutil
+import signal
 import statistics
 import subprocess
 import time
@@ -15,6 +17,139 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE = ROOT / "renderers/remotion"
+
+
+OWNER_ENV = "MP3_VIDEO_BENCHMARK_OWNER"
+
+
+def _processes(nonce, *, timeout=1):
+    """Return marked live PIDs on our UID; never expose raw ps environments.
+
+    BSD/macOS and Linux ps support eww (untruncated environment). Capture only
+    internally, discard stderr, and replace all inspection errors with a fixed
+    message, outside the exception handler so no secret-bearing context escapes.
+    """
+    result = None
+    try:
+        result = subprocess.run(
+            ["ps", "eww", "-U", str(os.getuid()), "-o", "pid=,stat=,command="],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            errors="replace",
+            check=False,
+            timeout=timeout,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+    if result is None or result.returncode:
+        raise RuntimeError("benchmark process inspection failed")
+    marker = f"{OWNER_ENV}={nonce}"
+    rows = set()
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and fields[0].isdigit():
+            if marker in fields[2:] and not fields[1].startswith("Z"):
+                rows.add(int(fields[0]))
+    return rows
+
+
+def _signal_owned(nonce, pids, sig, *, deadline):
+    for pid in pids:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        # Start times have only second precision on macOS. Recheck the nonce,
+        # not ancestry/start time, immediately before each individual signal.
+        if pid in _processes(nonce, timeout=min(1, remaining)):
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                pass
+
+
+def _cleanup_owned(process, nonce):
+    # Popen protects the unreaped direct child's identity independently of ps.
+    process.terminate()
+    cleanup_deadline = time.monotonic() + 6.0
+    kill_at = time.monotonic() + 2.0
+    inspection_failed = False
+    while time.monotonic() < cleanup_deadline:
+        sig = signal.SIGKILL if time.monotonic() >= kill_at else signal.SIGTERM
+        if sig == signal.SIGKILL:
+            process.kill()
+        process.poll()
+        try:
+            alive = _processes(
+                nonce, timeout=max(0.001, min(1, cleanup_deadline - time.monotonic()))
+            )
+            if not alive and process.returncode is not None:
+                if inspection_failed:
+                    break
+                return
+            _signal_owned(nonce, alive - {process.pid}, sig, deadline=cleanup_deadline)
+        except RuntimeError:
+            inspection_failed = True
+        time.sleep(0.02)
+    # Never let failed snapshots bypass direct-child kill/reap.
+    process.kill()
+    try:
+        process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("benchmark direct child could not be reaped") from None
+    if inspection_failed:
+        raise RuntimeError("benchmark cleanup process inspection failed")
+    raise RuntimeError("benchmark cleanup could not confirm all marked processes stopped")
+
+
+def run_owned(command, *, stdout, stderr, timeout):
+    """Run and clean environment-inheriting children, including detached orphans.
+
+    Supported on macOS/Linux where ps exposes our UID's inherited environments.
+    Remotion BrowserRunner passes process.env to Chrome. This is not a sandbox:
+    arbitrary programs that scrub/change the marker are outside this contract.
+    No process groups, names, ancestry or second-resolution times confer ownership.
+    """
+    nonce = secrets.token_hex(32)
+    process = None
+    signals = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+    handlers = {sig: signal.getsignal(sig) for sig in signals}
+
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt(f"benchmark interrupted by signal {signum}")
+
+    try:
+        for sig in signals:
+            signal.signal(sig, interrupted)
+        process = subprocess.Popen(
+            command,
+            stdout=stdout,
+            stderr=stderr,
+            start_new_session=True,
+            env={**os.environ, OWNER_ENV: nonce},
+        )
+        deadline = time.monotonic() + timeout
+        while True:
+            _processes(nonce)
+            code = process.poll()
+            if code is not None:
+                if code:
+                    raise subprocess.CalledProcessError(code, command)
+                return
+            if time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired(command, timeout)
+            time.sleep(0.02)
+    finally:
+        try:
+            # Repeated interrupts must not interrupt the bounded cleanup itself.
+            for sig in signals:
+                signal.signal(sig, signal.SIG_IGN)
+            if process is not None:
+                _cleanup_owned(process, nonce)
+        finally:
+            for sig, handler in handlers.items():
+                signal.signal(sig, handler)
 
 
 def save(path, value):
@@ -170,7 +305,7 @@ def main():
                     save(request_path, request)
                     before = time.perf_counter()
                     with (output / f"{stem}.log").open("w") as log:
-                        subprocess.run(
+                        run_owned(
                             [
                                 "node",
                                 str(ENGINE / "render.mjs"),
@@ -180,7 +315,6 @@ def main():
                             ],
                             stdout=log,
                             stderr=log,
-                            check=True,
                             timeout=remaining,
                         )
                     wall = time.perf_counter() - before
@@ -203,7 +337,7 @@ def main():
                         {**summary, "aggregate": aggregate(summary["runs"])},
                     )
         summary["status"] = "complete"
-    except (subprocess.SubprocessError, TimeoutError) as error:
+    except (subprocess.SubprocessError, TimeoutError, RuntimeError) as error:
         summary["error"] = str(error)
     finally:
         summary["aggregate"] = aggregate(summary["runs"])
