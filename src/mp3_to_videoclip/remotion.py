@@ -1,9 +1,11 @@
 """Project-local Remotion adapter; derived inputs, never a second edit timeline."""
 
 import base64
+import fcntl
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from threading import Thread
@@ -15,6 +17,86 @@ from .models import Project, RenderShot
 from .storage import digest, file_hash, read_json, write_json
 
 ENGINE = Path(__file__).resolve().parents[2] / "renderers/remotion"
+
+
+class AssetCacheCorruption(ValueError):
+    """An immutable cached asset differs from its content-addressed name."""
+
+
+def _stage_asset(source: Path, assets: Path) -> tuple[str, str]:
+    sha = file_hash(source)
+    with Image.open(source) as image:
+        image.verify()
+    name = sha + source.suffix.lower()
+    target = assets / name
+    if not target.exists():
+        # Publish only complete bytes, without replacing another process's file.
+        with tempfile.NamedTemporaryFile(dir=assets, prefix=".asset-") as handle:
+            shutil.copyfile(source, handle.name)
+            if file_hash(Path(handle.name)) != sha:
+                raise AssetCacheCorruption("Remotion source changed during asset staging")
+            try:
+                os.link(handle.name, target)
+            except FileExistsError:
+                pass
+    if target.is_symlink() or not target.is_file() or file_hash(target) != sha:
+        raise AssetCacheCorruption("Remotion asset cache corruption")
+    return name, sha
+
+
+def selected_asset_root(compiled: list[dict], assets: Path) -> Path:
+    """Publish exactly the selected manifest, never the accumulating staging cache.
+
+    The lock serializes validation/publication across processes. A complete sibling
+    directory is renamed into place; existing publications are verified, not repaired.
+    """
+    manifest = {}
+    for shot in compiled:
+        entries = [shot, *shot.get("split_panes", [])]
+        for entry in entries:
+            name = entry["image"]
+            sha = entry.get("image_sha256", name.split(".", 1)[0])
+            if Path(name).name != name or len(sha) != 64 or not name.startswith(sha + "."):
+                raise AssetCacheCorruption("Invalid Remotion selected asset identity")
+            source = assets / name
+            if source.is_symlink() or file_hash(source) != sha:
+                raise AssetCacheCorruption("Remotion asset cache corruption")
+            manifest[name] = sha
+    identity = digest({"version": 1, "files": manifest})
+    publications = assets.parent / "remotion-asset-selections"
+    publications.mkdir(parents=True, exist_ok=True)
+    selected = publications / identity
+    with (publications / ".publish.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not selected.exists():
+            staging = Path(tempfile.mkdtemp(prefix=".selection-", dir=publications))
+            for name, sha in manifest.items():
+                shutil.copyfile(assets / name, staging / name)
+                if file_hash(staging / name) != sha:
+                    raise AssetCacheCorruption("Remotion asset changed during publication")
+            os.rename(staging, selected)
+        if selected.is_symlink() or {p.name for p in selected.iterdir()} != set(manifest):
+            raise AssetCacheCorruption("Remotion selected asset publication corruption")
+        for name, sha in manifest.items():
+            target = selected / name
+            if target.is_symlink() or not target.is_file() or file_hash(target) != sha:
+                raise AssetCacheCorruption("Remotion selected asset publication corruption")
+    return selected
+
+
+def visual_identity(project: Project, inputs: dict, revision: str) -> str:
+    """Versioned visual dependencies only; money and source-audio metadata do not render."""
+    return digest(
+        {
+            "version": 1,
+            "width": project.width,
+            "height": project.height,
+            "fps": project.fps,
+            "total_frames": project.total_frames,
+            "inputs": inputs,
+            "implementation_revision": revision,
+        }
+    )
 
 
 def implementation_hash() -> str:
@@ -212,17 +294,7 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
     compiled = []
     root = Path(workdir).resolve().parent
     for rs in shots:
-        source = Path(rs.image)
-        sha = file_hash(source)
-        # Copy only the selected bytes; never expose the production directory.
-        with Image.open(source) as image:
-            image.verify()
-        name = sha + source.suffix.lower()
-        target = assets / name
-        if not target.exists():
-            shutil.copyfile(source, target)
-        if file_hash(target) != sha:
-            raise ValueError("Remotion asset cache corruption")
+        name, sha = _stage_asset(Path(rs.image), assets)
         entry = {**rs.shot.model_dump(), "image": name, "image_sha256": sha}
         if rs.edit is not None:
             entry["edit"] = rs.edit.model_dump(by_alias=True)
@@ -237,16 +309,7 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
                 panes = []
                 for pane in rs.shot.panes:
                     resolved = P.resolved_assets(root, [pane.shot_id])[0]
-                    pane_path = Path(resolved.image)
-                    pane_sha = file_hash(pane_path)
-                    with Image.open(pane_path) as image:
-                        image.verify()
-                    pane_name = pane_sha + pane_path.suffix.lower()
-                    pane_target = assets / pane_name
-                    if not pane_target.exists():
-                        shutil.copyfile(pane_path, pane_target)
-                    if file_hash(pane_target) != pane_sha:
-                        raise ValueError("Remotion asset cache corruption")
+                    pane_name, _ = _stage_asset(Path(resolved.image), assets)
                     panes.append(
                         {
                             "shot_id": pane.shot_id,
@@ -254,6 +317,8 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
                             "crop": pane.crop.model_dump(),
                         }
                     )
+            except AssetCacheCorruption:
+                raise
             except (OSError, ValueError):
                 panes = []
             if panes:
@@ -301,25 +366,37 @@ def render_base(
         inputs["brand_plate"] = data_url(plate, "image/png")
         inputs["brand_duration_frames"] = round(brand.duration_seconds * project.fps)
     revision = implementation_hash()
-    key = digest({"inputs": inputs, "project": project.model_dump(), "revision": revision})
+    selected = selected_asset_root(compiled, assets)
+    key = visual_identity(project, inputs, revision)
     silent = Path(workdir).resolve() / f"remotion-base-{key[:20]}.mp4"
     cached = silent.with_suffix(".cache.json")
-    if silent.exists():
-        if not cached.is_file() or read_json(cached).get("sha256") != file_hash(silent):
-            raise ValueError("Remotion base cache corruption; preserve and investigate")
-    else:
-        invoke(
-            "base",
-            silent,
-            assets,
-            (project.width, project.height),
-            project.fps,
-            project.total_frames,
-            inputs,
-        )
-        if R._count_frames(silent) != project.total_frames:
-            raise ValueError("Remotion silent base has incorrect frame count")
-        write_json(cached, {"sha256": file_hash(silent), "key": key})
+    # Only this visual cache is locked during rendering, never project state or
+    # the selected-asset publication. Waiters must inspect the completed receipt.
+    with silent.with_suffix(".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        cache_hit = silent.exists()
+        if cache_hit:
+            try:
+                record = read_json(cached)
+            except (OSError, ValueError):
+                record = None
+            if not isinstance(record, dict) or record != {"sha256": file_hash(silent), "key": key}:
+                raise ValueError("Remotion base cache corruption; preserve and investigate")
+        else:
+            if cached.exists():
+                raise ValueError("Remotion base cache corruption; orphan sidecar preserved")
+            invoke(
+                "base",
+                silent,
+                selected,
+                (project.width, project.height),
+                project.fps,
+                project.total_frames,
+                inputs,
+            )
+            if R._count_frames(silent) != project.total_frames:
+                raise ValueError("Remotion silent base has incorrect frame count")
+            write_json(cached, {"sha256": file_hash(silent), "key": key})
     partial = output.with_name(f".{output.stem}.partial.mp4")
     if partial.exists():
         raise ValueError(f"Unresolved partial render: {partial}")
@@ -367,9 +444,15 @@ def render_base(
     report = {
         "output": str(output),
         "timings_seconds": {"mux": mux_seconds, "output_verification": verification_seconds},
+        "visual_cache_hit": cache_hit,
         "renderer_report": (
             read_json(Path(f"{silent}.render.json"))
-            if Path(f"{silent}.render.json").is_file()
+            if not cache_hit and Path(f"{silent}.render.json").is_file()
+            else None
+        ),
+        "historical_renderer_report": (
+            read_json(Path(f"{silent}.render.json"))
+            if cache_hit and Path(f"{silent}.render.json").is_file()
             else None
         ),
         **facts,
