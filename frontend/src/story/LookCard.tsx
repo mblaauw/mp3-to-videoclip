@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type Brief, type IntakePayload } from "../api";
+import { draftError } from "../api/resources";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { Button, Field } from "../ui";
 
@@ -39,8 +40,10 @@ export function LookCard({
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
   const lastSaved = useRef(brief.creative?.look || "");
+  const draftBase = useRef<Brief | null>(null);
 
   useEffect(() => {
+    if (draftBase.current) return;
     setAdditions(additionsFor(brief.creative?.look || "", preset?.look));
     lastSaved.current = brief.creative?.look || "";
   }, [brief.creative?.look, preset?.look]);
@@ -69,19 +72,24 @@ export function LookCard({
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.patchBrief(slug, { creative: { look: value } });
+      const updated = await api.patchBrief(slug, { creative: { look: value } }, draftBase.current ?? brief);
+      draftBase.current = null;
       lastSaved.current = updated.creative?.look || "";
       onBriefChange(updated);
       flash();
       notifyProjectChanged();
     } catch (caught) {
-      setError(String(caught));
+      setError(draftError(caught));
     } finally {
       setSaving(false);
     }
   };
 
   const changePreset = async (id: string) => {
+    if (draftBase.current) {
+      setError("Save or reload and review your look draft before changing its preset.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -102,13 +110,14 @@ export function LookCard({
         : additions.trim();
       const updatedBrief = await api.patchBrief(slug, {
         creative: { look: withAdditions },
-      });
+      }, updatedIntake.brief);
+      draftBase.current = null;
       lastSaved.current = updatedBrief.creative?.look || "";
       onBriefChange(updatedBrief);
       flash();
       notifyProjectChanged();
     } catch (caught) {
-      setError(String(caught));
+      setError(draftError(caught));
     } finally {
       setSaving(false);
     }
@@ -144,7 +153,8 @@ export function LookCard({
         <textarea
           rows={4}
           value={additions}
-          onChange={(event) => setAdditions(event.target.value)}
+          disabled={saving}
+          onChange={(event) => { draftBase.current ??= brief; setAdditions(event.target.value); }}
           onBlur={() => void save()}
           placeholder="Wet sodium streets, one cold light source per frame…"
         />

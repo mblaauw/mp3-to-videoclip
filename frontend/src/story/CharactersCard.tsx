@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { draftError } from "../api/resources";
 import { api, type Brief } from "../api";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { Button, Field } from "../ui";
@@ -39,28 +40,36 @@ export function CharactersCard({
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const draftBase = useRef<Brief | null>(null);
 
   useEffect(() => {
+    if (draftBase.current) return;
     setCharacters(brief.characters || []);
   }, [brief.characters]);
 
   const save = async (next: Character[]) => {
     if (saving) return;
+    draftBase.current ??= brief;
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.patchBrief(slug, { characters: next });
+      const updated = await api.patchBrief(slug, { characters: next }, draftBase.current ?? brief);
+      draftBase.current = null;
       setCharacters(updated.characters || []);
       onBriefChange(updated);
       notifyProjectChanged();
+      return true;
     } catch (caught) {
-      setError(String(caught));
+      setError(draftError(caught));
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const update = (index: number, patch: Partial<Character>) => {
+    if (saving) return;
+    draftBase.current ??= brief;
     setCharacters((current) =>
       current.map((item, position) =>
         position === index ? { ...item, ...patch } : item,
@@ -85,8 +94,9 @@ export function CharactersCard({
       permission_confirmed: permission,
     };
     setAdding(true);
-    await save([...characters, created]);
+    const saved = await save([...characters, created]);
     setAdding(false);
+    if (!saved) return;
     setName("");
     setIdentity("");
     setPermission(false);
@@ -130,6 +140,7 @@ export function CharactersCard({
               </div>
             )}
             <input
+              disabled={saving}
               value={character.identity || ""}
               aria-label={`Identity for ${displayName(character.id)}`}
               placeholder="One-line identity"
@@ -148,8 +159,10 @@ export function CharactersCard({
             <label className="check-line">
               <input
                 type="checkbox"
+                disabled={saving}
                 checked={!!character.permission_confirmed}
                 onChange={(event) => {
+                  draftBase.current ??= brief;
                   const next = characters.map((item, position) =>
                     position === index
                       ? { ...item, permission_confirmed: event.target.checked }

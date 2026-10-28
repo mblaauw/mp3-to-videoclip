@@ -225,10 +225,7 @@ function handleJob(name: JobEventName, event: Event) {
 function handleChange(event: Event) {
   const payload = parseEvent(event);
   const slug = payload.project;
-  const open = openSlug();
-  // Another film changing does not concern this tab's film view; the library
-  // (no film open) shows every film, so it hears every change.
-  if (slug && open && slug !== open) return;
+  // Invalidate cached films even when not open; view hooks filter their slug.
   notifyProjectChanged({
     slug: slug || undefined,
     source: payload.source || "server",

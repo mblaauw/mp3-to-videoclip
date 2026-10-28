@@ -256,7 +256,7 @@ export function Spine({
           start_frame: frame,
           duration_frames: right.start_frame + right.duration_frames - frame,
         },
-      ]);
+      ], board);
       onBoardChange?.(updated);
       notifyProjectChanged();
     } catch (error) {

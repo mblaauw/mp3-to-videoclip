@@ -107,7 +107,9 @@ export function ImagesStage({
   const refreshPending = useRef(false);
   const lightboxRef = useRef<HTMLDivElement>(null);
 
+  const loadEpoch = useRef(0);
   const load = useCallback(async () => {
+    const epoch = ++loadEpoch.current;
     const [imagesResult, budgetResult, briefResult, boardResult, trackResult] =
       await Promise.allSettled([
         api.images(slug),
@@ -116,6 +118,7 @@ export function ImagesStage({
         api.storyboard(slug),
         api.track(slug),
       ]);
+    if (epoch !== loadEpoch.current) return;
     if (imagesResult.status === "fulfilled") {
       setShots(imagesResult.value.shots);
       setError(null);
@@ -142,6 +145,7 @@ export function ImagesStage({
     setError(null);
     consumed.current = null;
     void load();
+    return () => { loadEpoch.current += 1; };
   }, [load]);
 
   const paid = usePaidImages(slug, reserve, () => {

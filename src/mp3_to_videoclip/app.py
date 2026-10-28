@@ -198,7 +198,19 @@ class StudioGuard:
                     watcher.absorb(slug)
                 except Exception:  # noqa: BLE001 - a notice never fails a saved write
                     pass
-            runner.bus.publish("project.changed", {"project": slug, "source": "request"})
+            part = path.split("/")[4:5]
+            artifact = part[0] if part else None
+            artifact = {
+                "proof-shots": "brief",
+                "music-notes": "track",
+                "music-mode": "track",
+                "analyze": "track",
+                "graphics-review": "graphics",
+            }.get(artifact, artifact)
+            runner.bus.publish(
+                "project.changed",
+                {"project": slug, "source": "request", "artifact": artifact},
+            )
         if library:
             runner.bus.publish("library.changed", {"source": "request"})
 
