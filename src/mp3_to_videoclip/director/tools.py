@@ -550,5 +550,5 @@ def _render(root, arguments, runner):
         fn = services.render.render_final if kind == "final" else services.render.render_preview
         return await asyncio.to_thread(fn, root)
 
-    job_id = runner.submit("render", root.name, work, blocking=True)
+    job_id = runner.submit("render", root.name, work, blocking=True, render_kind=kind)
     return {"job_id": job_id, "kind": kind, "status": "queued"}

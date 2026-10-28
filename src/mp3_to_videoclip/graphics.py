@@ -48,6 +48,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from . import operations
 from .branding import load_brand, paste_collaboration_mark
 from .models import Storyboard
 from .timeline import (
@@ -1940,6 +1941,7 @@ def _build_track(parts, directory: Path, canvas, fps: int) -> Path:
     return track
 
 
+@operations.progress_scope(stage="final-composite")
 def compose(
     root: Path | str,
     base: Path | str,
@@ -1980,12 +1982,15 @@ def compose(
     directory = root / "work" / "graphics" / VERSION
     directory.mkdir(parents=True, exist_ok=True)
 
-    for part in parts:
+    for part_index, part in enumerate(parts, 1):
         content = element_content(part["kind"], spec, part)
         if spec.get("renderer") == "remotion":
             from .remotion import overlay_clip
 
-            clip = overlay_clip(part, spec, palette, canvas, fps, directory)
+            with operations.progress_scope(
+                part=f"{part['kind']} {part['id']}", part_index=part_index, part_total=len(parts)
+            ):
+                clip = overlay_clip(part, spec, palette, canvas, fps, directory)
             part.update({"path": str(clip), "sha256": _file_hash(clip), "key": clip.stem})
             continue
         key = element_key(
@@ -1994,18 +1999,23 @@ def compose(
         clip = directory / f"{part['kind']}-{part['id']}-{key}.mov"
         created = not clip.exists()
         if created:
-            _write_overlay(clip, _part_frames(part, spec, palette, canvas, fps), canvas, fps)
+            with operations.progress_scope(
+                part=f"{part['kind']} {part['id']}", part_index=part_index, part_total=len(parts)
+            ):
+                _write_overlay(clip, _part_frames(part, spec, palette, canvas, fps), canvas, fps)
         part["path"] = clip
         part["key"] = key
         part["sha256"] = _validate_overlay(clip, canvas, part["frames"])["sha256"]
         _cache_integrity(clip, created=created)
 
+    operations.phase("assembling-graphics")
     track = _build_track(parts, directory, canvas, fps)
     output = _unique_output(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.stem}.partial{output.suffix}")
     temporary.unlink(missing_ok=True)
     try:
+        operations.phase("compositing")
         _run(
             [
                 "ffmpeg",
@@ -2045,6 +2055,7 @@ def compose(
                 str(temporary),
             ]
         )
+        operations.phase("verifying-output")
         _probe(temporary)
         final_frames = _count_frames(temporary)
         if final_frames != base_facts["frames"]:

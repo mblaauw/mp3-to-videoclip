@@ -421,7 +421,7 @@ def test_film_checklist_tracks_the_real_final_gate(client, project, monkeypatch)
     monkeypatch.setattr(
         client.app.state.runner,
         "submit",
-        lambda kind, slug, factory, *, blocking=False: (
+        lambda kind, slug, factory, *, blocking=False, render_kind=None: (
             submitted.append((kind, slug)) or "job-final"
         ),
     )
@@ -453,7 +453,9 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
     monkeypatch.setattr(
         client.app.state.runner,
         "submit",
-        lambda kind, slug, factory, *, blocking=False: submitted.append((kind, slug)) or "job-1",
+        lambda kind, slug, factory, *, blocking=False, render_kind=None: (
+            submitted.append((kind, slug)) or "job-1"
+        ),
     )
     queued = client.post("/api/projects/production/render", json={"kind": "preview"})
     assert queued.json() == {"job_id": "job-1", "kind": "preview", "status": "queued"}

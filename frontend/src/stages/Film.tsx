@@ -19,9 +19,10 @@ import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
 import type { EditTransition } from "../baseFilm";
 import { setEditTransition, TRANSITION_TYPES } from "../film/editTimeline";
+import { deliveryWorkflow } from "../film/deliveryWorkflow";
 import type { Stage } from "../shell/nextStep";
 import { JobBanner } from "../jobs/JobBanner";
-import { useProjectJobs } from "../jobs/store";
+import { useJobs, useProjectJobs } from "../jobs/store";
 import { notifyProjectChanged, useProjectChanged } from "../shell/projectEvents";
 import { SHOW_EDIT_FILE } from "../shell/SettingsDialog";
 import { usePlayerControls, usePlayerTime } from "../spine/player";
@@ -254,6 +255,7 @@ export function FilmStage({
     void load();
   });
   const renderJobs = useProjectJobs(slug, "render");
+  const { jobs } = useJobs();
   const rendering = renderJobs.length > 0;
 
   useEffect(() => {
@@ -483,6 +485,7 @@ export function FilmStage({
       ? "Every gate is approved. The final render is a local job."
       : `Still needed: ${checklist.outstanding.join(" · ")}`
     : "Reading the delivery gates…";
+  const workflow = deliveryWorkflow(files, checklist, graphics, jobs.filter((job) => job.project === slug && job.kind === "render"));
 
   return (
     <>
@@ -579,16 +582,13 @@ export function FilmStage({
             <section className="delivery-card">
               <header>
                 <div>
-                  <h2>Ready to deliver</h2>
-                  <p>
-                    {checklist?.can_final
-                      ? "All gates are approved."
-                      : "Each line is a real gate; the final stays disabled until they pass."}
-                  </p>
+                  <h2>{workflow.title}</h2>
+                  <p role="status" aria-live="polite">{workflow.detail}</p>
+                  {workflow.notice && <p role="status">{workflow.notice}</p>}
                 </div>
                 {checklist && (
-                  <span className={`delivery-state ${checklist.can_final ? "ready" : ""}`}>
-                    {checklist.can_final ? "Ready" : `${checklist.outstanding.length} to go`}
+                  <span className={`delivery-state ${workflow.ready ? "ready" : ""}`}>
+                    {workflow.ready ? "Delivery ready" : checklist.can_final ? "Gates approved" : `${checklist.outstanding.length} gates to go`}
                   </span>
                 )}
               </header>
@@ -667,7 +667,7 @@ export function FilmStage({
                                 disabled={!canApproveTitles || busy !== null}
                                 onClick={() => void approveTitles(item)}
                               >
-                                {busy === "titles-approval" ? "Approving…" : "Approve titles"}
+                                {busy === "titles-approval" ? "Approving…" : "Approve intro/credits"}
                               </Button>
                             </>
                           )}
@@ -684,6 +684,7 @@ export function FilmStage({
                           >
                             {busy === "base" ? "Queueing…" : "Check titles"}
                           </Button>
+                          <span className="hint">Check titles renders a base first, then prepares real graphics samples. Your intro/credits approval is manual; this does not render a final.</span>
                         </span>
                       )}
                     </div>
@@ -1078,7 +1079,7 @@ export function FilmStage({
                 disabled={!canApproveTitles || busy !== null}
                 onClick={() => void approveTitles(titlesLine)}
               >
-                {busy === "titles-approval" ? "Approving…" : "Approve titles"}
+                {busy === "titles-approval" ? "Approving…" : "Approve intro/credits"}
               </Button>
             )}
             <Button size="small" variant="quiet" onClick={() => setSamplesOpen(false)}>

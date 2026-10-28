@@ -133,6 +133,7 @@ def test_a_failed_job_still_announces_the_change_and_its_film():
             "job_id": job_id,
             "kind": "render",
             "project": "film-b",
+            "render_kind": None,
             "error": "renderer exploded",
         }
         assert any(item["event"] == "project.changed" for item in events)

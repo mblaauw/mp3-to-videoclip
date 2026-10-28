@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mp3_to_videoclip import operations
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.render import render as _render
 from mp3_to_videoclip.storage import file_hash, inside, read_snapshot, write_json
@@ -52,6 +53,7 @@ def _stamp(root: Path, output: Path, report: dict, kind: str, provenance: dict) 
         report["final_output_sha256"] = report["output_sha256"]
 
 
+@operations.progress_scope(stage="base-render")
 def render_base(root: Path, output: Path | None = None) -> dict:
     """Render the selected stills without graphics; this is never delivery."""
     P.require_approval(root, "stills")
@@ -86,6 +88,7 @@ def render_base(root: Path, output: Path | None = None) -> dict:
     return report
 
 
+@operations.progress_scope(stage="final-render")
 def render_final(root: Path, output: Path | None = None) -> dict:
     """Render delivery: compose approved graphics over the reviewed base."""
     # The full-stills decision is the last human gate before a delivery render.
@@ -137,6 +140,7 @@ def render_final(root: Path, output: Path | None = None) -> dict:
     return report
 
 
+@operations.progress_scope(stage="preview-render")
 def render_preview(root: Path, output: Path | None = None) -> dict:
     """Marked preview plus the exact review report the preview approval binds."""
     project = P.load_project(root)

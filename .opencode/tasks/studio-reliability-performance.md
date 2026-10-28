@@ -31,7 +31,7 @@ Publication authority follows the approved phase plan and repository policy.
 | --- | --- | --- |
 | 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | merged PR #38 at `2afc1cc` |
 | 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | merged PR #39 at `3375eb1` |
-| 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | T6 implemented; T7 next |
+| 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | implemented; final checks/publication active |
 | 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | pending phase 3 |
 
 ## Acceptance
@@ -101,8 +101,28 @@ local performance and quality evidence, not just encoder flags.
   Concurrent edits during render preserve the output but make it unready.
   Focused route/export/adapter/preview checks: 60 passed; frontend 69 passed,
   TypeScript and shipped build green. No existing production report rewritten.
-- Next: T7 phase-aware delivery progress and browser fixture acceptance, then
-  full phase checks/fresh review before Phase 3 publication.
+- T6 commit `00586c2`; independent frozen review found two delivery-safety
+  defects. Corrected: certify the compositor's actual versioned output, never
+  overwrite the occupied destination's report; require nonempty graphics
+  provenance for signature-required finals. Regressions cover missing/empty/
+  whitespace provenance and preserved old movie/report bytes.
+- T7 implemented: persisted render purpose, stage/part/frame progress with
+  boundary resets, persistent workflow and explicit manual intro/credits review.
+  No pixel/timing/encoding changes. Independent progress review found approved
+  titles could request impossible reapproval while another gate was outstanding;
+  corrected and regression added. Frontend 74 passed; renderer Node 24 passed;
+  build, Ruff lint/format passed. Focused backend 79 passed.
+- Fixture-only browser acceptance passed at 1440/390 px, including stage flow,
+  review sample keyboard controls, explicit approval, approved-but-blocked gates,
+  verification, Cancel → stopping, failure, file labels/download targets and
+  reload persistence. No console errors/document overflow; own port 18973 closed.
+  Evidence `.opencode/scratch/phase3-acceptance-report.md`, current complete
+  fingerprint `eee5763da9b5cf0dedd2d9631d396ada3fcb27142a4b0127892025214ea0b9e2`.
+  UI state evidence is stubbed; no engine, production approval or pixel claim.
+- Initial full phase check: 1096 passed, 1 skipped, 1 failure: old strict SSE
+  assertion omitted the intentionally additive nullable render purpose field.
+  Updated that assertion; full same-code suite rerunning. Next: freeze T7,
+  correction verification, push/PR/current-head CI/merge, then T8 diagnostics.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required
