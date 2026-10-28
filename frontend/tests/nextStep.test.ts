@@ -522,7 +522,7 @@ test("film is ready when every gate is approved", () => {
     budget,
   );
   assert.equal(step.tone, "done");
-  assert.match(step.title, /Ready to deliver/);
+  assert.match(step.title, /Ready to render final/);
   assert.equal(step.actions[0].target, "render");
 });
 
@@ -553,7 +553,7 @@ test("film skips the preview and titles when this production has neither gate", 
     budget,
   );
   assert.equal(step.tone, "done");
-  assert.match(step.title, /Ready to deliver/);
+  assert.match(step.title, /Ready to render final/);
 });
 
 test("film keeps the preview gate when the production records one", () => {

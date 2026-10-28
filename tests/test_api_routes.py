@@ -421,7 +421,7 @@ def test_film_checklist_tracks_the_real_final_gate(client, project, monkeypatch)
     monkeypatch.setattr(
         client.app.state.runner,
         "submit",
-        lambda kind, slug, factory, *, blocking=False: (
+        lambda kind, slug, factory, *, blocking=False, render_kind=None: (
             submitted.append((kind, slug)) or "job-final"
         ),
     )
@@ -453,7 +453,9 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
     monkeypatch.setattr(
         client.app.state.runner,
         "submit",
-        lambda kind, slug, factory, *, blocking=False: submitted.append((kind, slug)) or "job-1",
+        lambda kind, slug, factory, *, blocking=False, render_kind=None: (
+            submitted.append((kind, slug)) or "job-1"
+        ),
     )
     queued = client.post("/api/projects/production/render", json={"kind": "preview"})
     assert queued.json() == {"job_id": "job-1", "kind": "preview", "status": "queued"}
@@ -471,10 +473,10 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
     (project / "renders" / "a.mp4").write_bytes(b"x")
     (project / "previews").mkdir()
     (project / "previews" / "p.mp4").write_bytes(b"p")
-    assert client.get("/api/projects/production/exports").json() == {
-        "exports": ["a.mp4"],
-        "previews": ["p.mp4"],
-    }
+    files = client.get("/api/projects/production/exports").json()
+    assert files["exports"] == ["a.mp4"]
+    assert files["previews"] == ["p.mp4"]
+    assert {file["classification"] for file in files["files"]} == {"unknown"}
     played = client.get("/api/projects/production/film/renders/a.mp4")
     assert played.status_code == 200
     assert played.headers["content-type"] == "video/mp4"

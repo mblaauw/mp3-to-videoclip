@@ -1066,6 +1066,8 @@ export interface components {
             project: string;
             /** Queued At */
             queued_at?: number | null;
+            /** Render Kind */
+            render_kind?: string | null;
             /** Started At */
             started_at?: number | null;
             /** Status */
@@ -1098,6 +1100,8 @@ export interface components {
             project: string;
             /** Queued At */
             queued_at?: number | null;
+            /** Render Kind */
+            render_kind?: string | null;
             /** Started At */
             started_at?: number | null;
             /** Status */
@@ -1112,11 +1116,22 @@ export interface components {
             done: number;
             /** Message */
             message?: string | null;
+            /** Part */
+            part?: string | null;
+            /** Part Index */
+            part_index?: number | null;
+            /** Part Total */
+            part_total?: number | null;
             /**
              * Phase
              * @default
              */
             phase: string;
+            /**
+             * Stage
+             * @default
+             */
+            stage: string;
             /**
              * Total
              * @default 0

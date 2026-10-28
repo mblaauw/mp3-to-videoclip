@@ -52,7 +52,7 @@ class FakeRunner:
     def __init__(self):
         self.submitted = []
 
-    def submit(self, kind, project, factory, *, blocking=False):
+    def submit(self, kind, project, factory, *, blocking=False, render_kind=None):
         assert blocking is True
         self.submitted.append((kind, project))
         return "job-1"

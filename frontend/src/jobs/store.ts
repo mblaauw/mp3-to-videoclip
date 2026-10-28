@@ -38,6 +38,7 @@ type JobEventName = (typeof JOB_EVENTS)[number];
 type ServerEvent = {
   job_id?: string;
   kind?: string;
+  render_kind?: Job["render_kind"];
   project?: string;
   error?: string;
   progress?: Partial<Job["progress"]>;
@@ -184,6 +185,7 @@ function handleJob(name: JobEventName, event: Event) {
     upsert({
       id: jobId,
       kind: payload.kind || "job",
+      render_kind: payload.render_kind,
       project: payload.project || "",
       status: "queued",
       progress: { done: 0, total: 0, unit: "", phase: "" },
@@ -207,7 +209,7 @@ function handleJob(name: JobEventName, event: Event) {
     const current = snapshot.jobs.find((entry) => entry.id === jobId);
     patch(jobId, {
       status: current?.status === "stopping" ? "stopping" : "running",
-      progress: { ...(current?.progress || { done: 0, total: 0, unit: "" }), ...payload.progress } as Job["progress"],
+      progress: payload.progress as Job["progress"],
     });
     return;
   }

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from . import operations
 from .storage import (
     digest,
     file_hash,
@@ -157,6 +158,7 @@ def save_credits(root: Path, cards, *, use_as_template: bool = False) -> list:
     return normalized
 
 
+@operations.progress_scope(stage="graphics-review")
 def prepare_review(root: Path, base: Path, project) -> dict:
     from .graphics import implementation_revision, preflight_frames
 
@@ -172,6 +174,7 @@ def prepare_review(root: Path, base: Path, project) -> dict:
     directory = root / "work/reviews" / f"signature-{key}"
     preflight = directory / "preflight.json"
     if not preflight.exists() or read_json(preflight).get("implementation_revision") != revision:
+        operations.phase("sampling-graphics")
         report = preflight_frames(root, base, directory)
         preflight = Path(report["sidecar"])
     samples = {}
@@ -194,6 +197,7 @@ def prepare_review(root: Path, base: Path, project) -> dict:
         "warning": "Inspect the actual composited preflight samples in Studio, then approve graphics with the inspected attestation; this base is not final.",
     }
     write_json(root / REVIEW, value)
+    operations.phase("awaiting-owner-review")
     return value
 
 

@@ -16,6 +16,10 @@ class JobProgress(BaseModel):
     unit: str = ""
     phase: str = ""
     message: str | None = None
+    stage: str = ""
+    part: str | None = None
+    part_index: int | None = None
+    part_total: int | None = None
 
 
 class JobOut(BaseModel):
@@ -31,6 +35,7 @@ class JobOut(BaseModel):
     finished_at: float | None = None
     historical: bool = False
     blocking: bool = False
+    render_kind: str | None = None
 
 
 class JobDetailOut(JobOut):

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, type Job } from "../api";
 import { Button, StatusDot } from "../ui";
 import { useProjectJobs } from "./store";
+import { DELIVERY_STAGES } from "../film/deliveryWorkflow";
 
 const TITLE: Record<string, string> = {
   images: "Making stills",
@@ -24,6 +25,10 @@ const PHASE: Record<string, string> = {
   encoding: "Encoding",
   "muxing-audio": "Adding the music",
   "verifying-output": "Checking the file",
+  "sampling-graphics": "Preparing actual composited samples",
+  "awaiting-owner-review": "Samples prepared — your intro/credits review is next",
+  "assembling-graphics": "Assembling graphics track",
+  compositing: "Adding approved intro/credits to the reviewed base",
 };
 
 function phaseWords(phase: string | undefined): string {
@@ -37,7 +42,11 @@ export function jobLine(job: Job): string {
   if (job.status === "stopping") return "Stopping — waiting for work already started to finish";
   if (job.status === "interrupted") return "Interrupted — check existing results before retrying";
   if (job.status === "queued") parts.push("Waiting for the film's previous job");
-  else if (progress.phase) parts.push(phaseWords(progress.phase));
+  else {
+    if (progress.stage) parts.push(DELIVERY_STAGES[progress.stage] || phaseWords(progress.stage));
+    if (progress.part) parts.push(`${progress.part}${progress.part_index && progress.part_total ? ` (${progress.part_index} of ${progress.part_total} parts)` : ""}`);
+    if (progress.phase) parts.push(phaseWords(progress.phase));
+  }
   if (progress.total > 0) {
     parts.push(`${progress.done} of ${progress.total}${progress.unit ? ` ${progress.unit}` : ""}`);
   }
@@ -69,7 +78,7 @@ export function JobBanner({
           <div className="job-banner-row" key={job.id}>
             <StatusDot tone={job.status === "running" ? "run" : "you"} />
             <div className="job-banner-copy">
-              <b>{TITLE[job.kind] || job.kind.replace(/_/g, " ")}</b>
+              <b>{job.kind === "render" && job.render_kind ? `Rendering ${job.render_kind}` : TITLE[job.kind] || job.kind.replace(/_/g, " ")}</b>
               <span>{jobLine(job) || "Working…"}</span>
             </div>
             <Button
@@ -95,7 +104,8 @@ export function JobBanner({
             <div
               className={`job-bar ${percent === null ? "indeterminate" : ""}`}
               role="progressbar"
-              aria-label={`${TITLE[job.kind] || job.kind} progress`}
+              aria-label={`${job.progress.stage ? DELIVERY_STAGES[job.progress.stage] || job.progress.stage : TITLE[job.kind] || job.kind}: ${phaseWords(job.progress.phase) || "current phase"} progress${job.progress.part ? ` — ${job.progress.part}` : ""}`}
+              aria-valuetext={jobLine(job)}
               {...(percent === null
                 ? {}
                 : { "aria-valuemin": 0, "aria-valuemax": total, "aria-valuenow": done })}

@@ -203,6 +203,37 @@ def active() -> Operation | None:
 # worker thread) to stream progress to the browser. Like the receipt, it is
 # observation only: an observer error is swallowed and never reaches the work.
 _OBSERVER: contextvars.ContextVar = contextvars.ContextVar("operation_observer", default=None)
+_PROGRESS_SCOPE: contextvars.ContextVar = contextvars.ContextVar("progress_scope", default=None)
+
+
+@contextlib.contextmanager
+def progress_scope(*, stage=None, part=None, part_index=None, part_total=None):
+    """Label observed work without changing rendering or operation ownership.
+
+    Also usable as a decorator. Nested scopes inherit their delivery stage;
+    counters belong only to the current phase and part, never the whole job.
+    """
+    values = dict(_PROGRESS_SCOPE.get() or {})
+    if stage is not None and stage != values.get("stage"):
+        values = {"stage": stage}
+    values.update(
+        {
+            key: value
+            for key, value in {
+                "stage": stage,
+                "part": part,
+                "part_index": part_index,
+                "part_total": part_total,
+            }.items()
+            if value is not None
+        }
+    )
+    token = _PROGRESS_SCOPE.set(values)
+    try:
+        _notify("phase", {"phase": "starting"})
+        yield
+    finally:
+        _PROGRESS_SCOPE.reset(token)
 
 
 # A cooperative stop request for the same context (the Studio's Cancel button).
@@ -242,7 +273,14 @@ def _notify(event: str, data: dict) -> None:
     if callback is None:
         return
     try:
-        callback(event, {key: value for key, value in data.items() if value is not None})
+        callback(
+            event,
+            {
+                key: value
+                for key, value in {**(_PROGRESS_SCOPE.get() or {}), **data}.items()
+                if value is not None
+            },
+        )
     except Exception:  # noqa: BLE001 - monitoring never breaks the observed work
         pass
 

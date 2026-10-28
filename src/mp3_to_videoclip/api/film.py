@@ -229,7 +229,7 @@ async def render(slug: str, request: Request, payload: dict):
         }[kind]
         return await asyncio.to_thread(fn, root)
 
-    job_id = runner.submit("render", slug, work, blocking=True)
+    job_id = runner.submit("render", slug, work, blocking=True, render_kind=kind)
     return {"job_id": job_id, "kind": kind, "status": "queued"}
 
 
@@ -245,11 +245,19 @@ def _films(directory: Path) -> list[str]:
 
 
 @router.get("/exports")
-async def list_exports(slug: str, request: Request):
+@read_endpoint
+def list_exports(slug: str, request: Request):
+    from mp3_to_videoclip.domain.exports import describe
+
     root = project_root(request, slug)
+    exports = _films(root / "renders")
+    previews = _films(root / "previews")
     return {
-        "exports": _films(root / "renders"),
-        "previews": _films(root / "previews"),
+        "exports": exports,
+        "previews": previews,
+        "signature_required": P.requires_signature(root, P.load_project(root)),
+        "files": [describe(root, "renders", name) for name in exports]
+        + [describe(root, "previews", name) for name in previews],
     }
 
 

@@ -10,15 +10,19 @@ import {
   type GraphicsReview,
   type ImageShot,
   type Storyboard,
+  type FilmFile,
+  type FilmExports,
 } from "../api";
 import { ArtifactRating } from "../ArtifactRating";
+import { filmFiles, filmLabel, selectFilm } from "../filmFiles";
 import { RendererSetup } from "../RendererSetup";
 import type { BaseFilmInput } from "../baseFilm";
 import type { EditTransition } from "../baseFilm";
 import { setEditTransition, TRANSITION_TYPES } from "../film/editTimeline";
+import { deliveryWorkflow } from "../film/deliveryWorkflow";
 import type { Stage } from "../shell/nextStep";
 import { JobBanner } from "../jobs/JobBanner";
-import { useProjectJobs } from "../jobs/store";
+import { useJobs, useProjectJobs } from "../jobs/store";
 import { notifyProjectChanged, useProjectChanged } from "../shell/projectEvents";
 import { SHOW_EDIT_FILE } from "../shell/SettingsDialog";
 import { usePlayerControls, usePlayerTime } from "../spine/player";
@@ -27,7 +31,6 @@ import { ShotThumb } from "../storyboard/ShotThumb";
 import { Button, ErrorState, LoadingState, useFocusTrap } from "../ui";
 const LivePlayer = lazy(() => import("../LivePlayer"));
 
-type FilmFile = { kind: "previews" | "renders"; name: string };
 
 type LiveState = {
   input: BaseFilmInput;
@@ -163,8 +166,8 @@ export function FilmStage({
   // preview reads the exact clock itself.
   const playerTime = usePlayerTime(0.1);
   const [tab, setTab] = useState<"cut" | "files">("cut");
-  const [previews, setPreviews] = useState<string[]>([]);
-  const [exports, setExports] = useState<string[]>([]);
+  const [files, setFiles] = useState<FilmFile[]>([]);
+  const [signatureRequired, setSignatureRequired] = useState<boolean | undefined>();
   const [selected, setSelected] = useState<FilmFile | null>(null);
   const [live, setLive] = useState<LiveState | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -191,20 +194,12 @@ export function FilmStage({
   const previewsKey = useRef("");
   const samplesRef = useRef<HTMLDivElement>(null);
 
-  const applyFiles = useCallback((value: { exports: string[]; previews: string[] }) => {
+  const applyFiles = useCallback((value: FilmExports) => {
     previewsKey.current = value.previews.join("|");
-    setPreviews(value.previews);
-    setExports(value.exports);
-    setSelected((current) => {
-      const all = [
-        ...value.previews.map((name) => ({ kind: "previews" as const, name })),
-        ...value.exports.map((name) => ({ kind: "renders" as const, name })),
-      ];
-      if (current && all.some((file) => file.kind === current.kind && file.name === current.name)) {
-        return current;
-      }
-      return all[0] || null;
-    });
+    const all = filmFiles(value);
+    setFiles(all);
+    setSignatureRequired(value.signature_required);
+    setSelected((current) => selectFilm(all, current));
   }, []);
 
   const loadEpoch = useRef(0);
@@ -260,6 +255,7 @@ export function FilmStage({
     void load();
   });
   const renderJobs = useProjectJobs(slug, "render");
+  const { jobs } = useJobs();
   const rendering = renderJobs.length > 0;
 
   useEffect(() => {
@@ -420,10 +416,6 @@ export function FilmStage({
     }
   };
 
-  const files: FilmFile[] = [
-    ...previews.map((name) => ({ kind: "previews" as const, name })),
-    ...exports.map((name) => ({ kind: "renders" as const, name })),
-  ];
   const src = selected
     ? `/api/projects/${slug}/film/${selected.kind}/${encodeURIComponent(selected.name)}`
     : null;
@@ -493,6 +485,7 @@ export function FilmStage({
       ? "Every gate is approved. The final render is a local job."
       : `Still needed: ${checklist.outstanding.join(" · ")}`
     : "Reading the delivery gates…";
+  const workflow = deliveryWorkflow(files, checklist, graphics, jobs.filter((job) => job.project === slug && job.kind === "render"));
 
   return (
     <>
@@ -589,16 +582,13 @@ export function FilmStage({
             <section className="delivery-card">
               <header>
                 <div>
-                  <h2>Ready to deliver</h2>
-                  <p>
-                    {checklist?.can_final
-                      ? "All gates are approved."
-                      : "Each line is a real gate; the final stays disabled until they pass."}
-                  </p>
+                  <h2>{workflow.title}</h2>
+                  <p role="status" aria-live="polite">{workflow.detail}</p>
+                  {workflow.notice && <p role="status">{workflow.notice}</p>}
                 </div>
                 {checklist && (
-                  <span className={`delivery-state ${checklist.can_final ? "ready" : ""}`}>
-                    {checklist.can_final ? "Ready" : `${checklist.outstanding.length} to go`}
+                  <span className={`delivery-state ${workflow.ready ? "ready" : ""}`}>
+                    {workflow.ready ? "Delivery ready" : checklist.can_final ? "Gates approved" : `${checklist.outstanding.length} gates to go`}
                   </span>
                 )}
               </header>
@@ -677,7 +667,7 @@ export function FilmStage({
                                 disabled={!canApproveTitles || busy !== null}
                                 onClick={() => void approveTitles(item)}
                               >
-                                {busy === "titles-approval" ? "Approving…" : "Approve titles"}
+                                {busy === "titles-approval" ? "Approving…" : "Approve intro/credits"}
                               </Button>
                             </>
                           )}
@@ -694,6 +684,7 @@ export function FilmStage({
                           >
                             {busy === "base" ? "Queueing…" : "Check titles"}
                           </Button>
+                          <span className="hint">Check titles renders a base first, then prepares real graphics samples. Your intro/credits approval is manual; this does not render a final.</span>
                         </span>
                       )}
                     </div>
@@ -939,7 +930,7 @@ export function FilmStage({
               <h2>Screen</h2>
               {selected && (
                 <span className="hint">
-                  {selected.kind === "renders" ? "final" : "preview"} · {selected.name}
+                  {filmLabel(selected, signatureRequired)} · {selected.name}
                 </span>
               )}
             </header>
@@ -988,7 +979,7 @@ export function FilmStage({
             <header className="files-head">
               <div>
                 <h2>Rendered files</h2>
-                <p className="hint">Newest first. Previews are marked; finals are delivery.</p>
+                <p className="hint">Only a current verified final is ready for delivery.</p>
               </div>
             </header>
             {files.length === 0 ? (
@@ -1004,7 +995,7 @@ export function FilmStage({
                   return (
                     <li key={`${file.kind}/${file.name}`} className={active ? "active" : ""}>
                       <span className={`file-kind ${file.kind}`}>
-                        {file.kind === "renders" ? "final" : "preview"}
+                        {filmLabel(file, signatureRequired)}
                       </span>
                       <span className="file-name">
                         {films(file.name)}
@@ -1088,7 +1079,7 @@ export function FilmStage({
                 disabled={!canApproveTitles || busy !== null}
                 onClick={() => void approveTitles(titlesLine)}
               >
-                {busy === "titles-approval" ? "Approving…" : "Approve titles"}
+                {busy === "titles-approval" ? "Approving…" : "Approve intro/credits"}
               </Button>
             )}
             <Button size="small" variant="quiet" onClick={() => setSamplesOpen(false)}>

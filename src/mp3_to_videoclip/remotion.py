@@ -89,9 +89,7 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
     request_path = output.with_suffix(".request.json")
     write_json(request_path, request_body)
     progress_path = output.with_name(f".{output.stem}.progress.json")
-    operations.phase(
-        "rendering-visuals", note=f"{kind} {frames} frames", total=frames, unit="frames", done=0
-    )
+    operations.phase("validating-request", note=f"{kind} {frames} frames")
     argv = [
         "node",
         str(ENGINE / "render.mjs"),
@@ -149,7 +147,7 @@ def _relay_progress(progress_path: Path, frames: int) -> None:
     operations.tick(
         phase=info.get("phase"),
         done=info.get("done"),
-        total=info.get("total") or frames,
+        total=info.get("total"),
         unit=info.get("unit"),
     )
 

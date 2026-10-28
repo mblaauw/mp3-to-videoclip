@@ -58,6 +58,7 @@ class Job:
     error: str | None = None
     historical: bool = False
     blocking: bool = False
+    render_kind: str | None = None
 
 
 class JobRunner:
@@ -126,6 +127,7 @@ class JobRunner:
                     or job.status not in STATUSES
                     or not isinstance(job.blocking, bool)
                     or not isinstance(job.kind, str)
+                    or job.render_kind not in (None, "preview", "base", "final")
                     or not isinstance(job.progress, dict)
                     or any(
                         not isinstance(value, (int, float)) or not math.isfinite(value)
@@ -161,7 +163,14 @@ class JobRunner:
     def _event(self, name: str, job: Job, **extra: Any) -> None:
         self._save(job)
         self._bus.publish(
-            name, {"job_id": job.id, "kind": job.kind, "project": job.project, **extra}
+            name,
+            {
+                "job_id": job.id,
+                "kind": job.kind,
+                "project": job.project,
+                "render_kind": job.render_kind,
+                **extra,
+            },
         )
 
     def submit(
@@ -171,6 +180,7 @@ class JobRunner:
         coro_factory: Callable[[], Awaitable[Any]],
         *,
         blocking: bool = False,
+        render_kind: str | None = None,
     ) -> str:
         """Queue work, declaring whether cancellation can leave a blocking worker.
 
@@ -183,9 +193,11 @@ class JobRunner:
             raise RuntimeError("job runner is stopping")
         if not isinstance(blocking, bool):
             raise TypeError("blocking must be a bool")
+        if render_kind not in (None, "preview", "base", "final"):
+            raise ValueError("invalid render kind")
         self._project_root(project)
         job_id = uuid.uuid4().hex[:12]
-        job = Job(id=job_id, kind=kind, project=project, blocking=blocking)
+        job = Job(id=job_id, kind=kind, project=project, blocking=blocking, render_kind=render_kind)
         self._jobs[job_id] = job
         # Store the factory before the id is queued so the loop always finds it.
         self._factories[job_id] = coro_factory
@@ -283,7 +295,28 @@ class JobRunner:
             if job.status not in ("running", "stopping"):
                 return
             progress = dict(job.progress)
-            for key in ("done", "total", "unit", "phase"):
+            changed_scope = any(
+                key in data and data[key] != progress.get(key)
+                for key in ("stage", "part", "part_index", "phase")
+            )
+            if changed_scope:
+                progress.update(done=0, total=0, unit="")
+                progress.pop("message", None)
+                if (
+                    "stage" in data and data["stage"] != progress.get("stage")
+                ) or "part" not in data:
+                    for key in ("part", "part_index", "part_total"):
+                        progress.pop(key, None)
+            for key in (
+                "done",
+                "total",
+                "unit",
+                "phase",
+                "stage",
+                "part",
+                "part_index",
+                "part_total",
+            ):
                 if key in data and data[key] is not None:
                     progress[key] = data[key]
             if "message" in data:
@@ -291,7 +324,7 @@ class JobRunner:
             job.progress = progress
             now = time.monotonic()
             done_changed = progress.get("done") != last["done"]
-            if not done_changed and now - last["at"] < PROGRESS_INTERVAL:
+            if not changed_scope and not done_changed and now - last["at"] < PROGRESS_INTERVAL:
                 return
             last["at"] = now
             previous, last["done"] = last["done"], progress.get("done")
