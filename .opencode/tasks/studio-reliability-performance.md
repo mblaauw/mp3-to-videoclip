@@ -121,8 +121,13 @@ local performance and quality evidence, not just encoder flags.
   UI state evidence is stubbed; no engine, production approval or pixel claim.
 - Initial full phase check: 1096 passed, 1 skipped, 1 failure: old strict SSE
   assertion omitted the intentionally additive nullable render purpose field.
-  Updated that assertion; full same-code suite rerunning. Next: freeze T7,
-  correction verification, push/PR/current-head CI/merge, then T8 diagnostics.
+  Updated that assertion; full same-code suite passed: 1097 passed, 1 skipped
+  in 105.82 s (`.opencode/scratch/phase3-pytest.log`).
+- Phase 3 code frozen at `c58fa0b`; T6 safety correction `bc91768` separately
+  committed. Fresh revision-bound correction reviews accepted both provenance
+  blockers and the workflow correction. Frontend API regeneration is clean.
+  PR #40 opened; current-head CI/merge pending. Next: integrate after green,
+  then T8 reproducible render diagnostics and bounded local benchmarks.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required
