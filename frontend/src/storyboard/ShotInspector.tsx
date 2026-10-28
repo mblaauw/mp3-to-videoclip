@@ -14,7 +14,7 @@ import { AutoTextarea } from "../ui/AutoTextarea";
 import { SHOT_KINDS, isPaidShot, kindMeta, kindOf } from "../shotKinds";
 import { Button } from "../ui";
 import { ShotThumb } from "./ShotThumb";
-import { InspectorSaveGuard, remainingDraft } from "./inspectorSave";
+import { InspectorSaveGuard, leaveInspector, remainingDraft } from "./inspectorSave";
 
 function clock(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
@@ -136,29 +136,30 @@ export function ShotInspector({
   };
 
   const savePatch = async (patch: Partial<Shot> = {}) => {
-    if (!shot) return;
+    if (!shot) return false;
     const merged = { ...draftRef.current, ...patch };
-    if (!Object.keys(merged).length) return;
+    if (!Object.keys(merged).length) return true;
     const ticket = saves.current.begin(identity);
-    if (!ticket) return;
+    if (!ticket) return false;
     setBusy(true);
     setError(null);
     try {
       const updated = await api.patchShots(slug, [{ id: shot.id, ...merged }], draftBase.current ?? shot);
-      if (!saves.current.current(ticket, identity)) return;
+      if (!saves.current.current(ticket, identity)) return false;
       const savedShot = updated.shots.find((item) => item.id === shot.id);
       if (!savedShot) throw new Error("The saved shot is missing. Reload and review the storyboard.");
       // The next edit is based on our acknowledged write, not the pre-write ETag.
       draftBase.current = savedShot;
+      const remaining = remainingDraft<Shot>(draftRef.current, merged);
+      draftRef.current = remaining;
+      setDraft(remaining);
       onBoardChange(updated);
-      setDraft((current) => {
-        if (!saves.current.current(ticket, identity)) return current;
-        return remainingDraft<Shot>(current, merged);
-      });
       flash();
       notifyProjectChanged();
+      return Object.keys(remaining).length === 0;
     } catch (caught) {
       if (saves.current.current(ticket, identity)) setError(String(caught));
+      return false;
     } finally {
       if (saves.current.finish(ticket, identity)) setBusy(false);
     }
@@ -238,17 +239,22 @@ export function ShotInspector({
     setDraft((valueDraft) => ({ ...valueDraft, ...next }));
   };
 
+  const leave = (action: () => void) => leaveInspector({
+    saving: () => saves.current.isSaving(),
+    dirty: () => Object.keys(draftRef.current).length > 0,
+    save: () => savePatch(),
+    leave: action,
+  });
+
   const go = async (offset: number) => {
     if (!board) return;
     const next = board.shots[index + offset];
     if (!next) return;
-    if (Object.keys(draft).length) await save();
-    onSelect(next.id);
+    await leave(() => onSelect(next.id));
   };
 
   const close = async () => {
-    if (Object.keys(draft).length) await save();
-    onClose();
+    await leave(onClose);
   };
 
   const paidKind = isPaidShot(current);
@@ -273,7 +279,7 @@ export function ShotInspector({
           size="small"
           variant="quiet"
           aria-label="Previous shot"
-          disabled={index <= 0}
+          disabled={busy || index <= 0}
           onClick={() => void go(-1)}
         >
           ←
@@ -282,12 +288,12 @@ export function ShotInspector({
           size="small"
           variant="quiet"
           aria-label="Next shot"
-          disabled={!board || index >= board.shots.length - 1}
+          disabled={busy || !board || index >= board.shots.length - 1}
           onClick={() => void go(1)}
         >
           →
         </Button>
-        <Button size="small" variant="quiet" aria-label="Close inspector" onClick={() => void close()}>
+        <Button size="small" variant="quiet" aria-label="Close inspector" disabled={busy} onClick={() => void close()}>
           ×
         </Button>
       </header>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { InspectorSaveGuard, remainingDraft } from "../src/storyboard/inspectorSave.ts";
+import { InspectorSaveGuard, leaveInspector, remainingDraft } from "../src/storyboard/inspectorSave.ts";
 import { bindRevision, revisionHeaders } from "../src/api/resources.ts";
 
 test("only one write may be pending for the selected shot", () => {
@@ -86,4 +86,41 @@ test("surviving draft uses the acknowledged shot revision rather than its own st
   assert.equal(base, savedShot);
   assert.equal(revisionHeaders(base, "film", "storyboard")["If-Match"], '"v2"');
   assert.ok(guard.begin("a"), "the surviving draft can start its next save");
+});
+
+test("navigation is refused during a pending save without discarding newer typing", async () => {
+  let left = false;
+  const draft = { purpose: "newer typing" };
+  const guard = new InspectorSaveGuard();
+  guard.select("a");
+  guard.begin("a");
+  assert.equal(await leaveInspector({
+    saving: () => guard.isSaving(), dirty: () => !!draft.purpose,
+    save: async () => { throw new Error("must not start a second save"); },
+    leave: () => { left = true; },
+  }), false);
+  assert.equal(left, false);
+  assert.equal(draft.purpose, "newer typing");
+});
+
+test("navigation stays on the selected shot after a failed save or surviving draft", async () => {
+  for (const success of [false, true]) {
+    let left = false;
+    assert.equal(await leaveInspector({
+      saving: () => false, dirty: () => true,
+      save: async () => success, leave: () => { left = true; },
+    }), false);
+    assert.equal(left, false);
+  }
+});
+
+test("navigation flushes a draft and leaves only after acknowledgement", async () => {
+  const order: string[] = [];
+  let dirty = true;
+  assert.equal(await leaveInspector({
+    saving: () => false, dirty: () => dirty,
+    save: async () => { order.push("saved"); dirty = false; return true; },
+    leave: () => { order.push("left"); },
+  }), true);
+  assert.deepEqual(order, ["saved", "left"]);
 });

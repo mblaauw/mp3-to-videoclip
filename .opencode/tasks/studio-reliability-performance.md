@@ -87,6 +87,11 @@ local performance and quality evidence, not just encoder flags.
   no precise end-to-end speedup or physical disk IO claim. All copy files removed
   by temporary-directory cleanup; original production untouched.
 - Next: commit T4/T5 separately, publish/check Phase 2; then T6/T7 delivery clarity.
+- T4 `80e658d`, T5 `8f63345`, PR #39. Frozen review caught inspector navigation
+  discarding newer typing during an outstanding save. Corrected with an explicit
+  acknowledged-save navigation boundary; failed/pending/surviving drafts keep
+  selection. Frontend now 67 passed and shipped build regenerated. Backend
+  remains the exact 1076-pass snapshot. CI must pass the corrected PR head.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required

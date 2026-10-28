@@ -32,6 +32,26 @@ export class InspectorSaveGuard {
     this.pending = false;
     return true;
   }
+
+  isSaving(): boolean {
+    return this.pending;
+  }
+}
+
+/** Navigation may not discard pending, failed or newly typed draft values. */
+export async function leaveInspector({
+  saving, dirty, save, leave,
+}: {
+  saving: () => boolean;
+  dirty: () => boolean;
+  save: () => Promise<boolean>;
+  leave: () => void;
+}): Promise<boolean> {
+  if (saving()) return false;
+  if (dirty() && !(await save())) return false;
+  if (saving() || dirty()) return false;
+  leave();
+  return true;
 }
 
 /** Only clear values acknowledged by this write; typing during it survives. */
