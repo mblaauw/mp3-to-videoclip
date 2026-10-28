@@ -30,8 +30,8 @@ Publication authority follows the approved phase plan and repository policy.
 | Phase | Tasks | State |
 | --- | --- | --- |
 | 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | merged PR #38 at `2afc1cc` |
-| 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | accepted locally; freezing/publishing |
-| 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | pending phase 2 |
+| 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | merged PR #39 at `3375eb1` |
+| 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | T6 implemented; T7 next |
 | 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | pending phase 3 |
 
 ## Acceptance
@@ -44,7 +44,7 @@ local performance and quality evidence, not just encoder flags.
 
 ## Checkpoint
 
-- Branch: `reliability/phase-2`; base `2afc1cc`; T1 `d8d5d89`, T2 `285e0cb`,
+- Branch: `reliability/phase-3`; base `3375eb1`; T1 `d8d5d89`, T2 `285e0cb`,
   T3 `44f6a36`. Phase 1 GitHub CI passed before merge.
 - T1 accepted: 45 snapshot tests passed, including JSONL restore, mutation
   detection, secret exclusions and exclusive publication. Fresh review found
@@ -92,6 +92,17 @@ local performance and quality evidence, not just encoder flags.
   acknowledged-save navigation boundary; failed/pending/surviving drafts keep
   selection. Frontend now 67 passed and shipped build regenerated. Backend
   remains the exact 1076-pass snapshot. CI must pass the corrected PR head.
+- Phase 2 correction `7b299da` passed GitHub CI and fresh navigation review;
+  merged PR #39. No bypass/stale checks used. Phase 3 was prepared on its tested
+  head while CI ran, then fast-forwarded to the integrated merge before commit.
+- T6 implemented: report-backed base/preview/final/unknown exports, current-byte
+  and graphics checks, immutable pre-render provenance and stable file selection.
+  Budget changes do not make output metadata stale; root brand is tracked.
+  Concurrent edits during render preserve the output but make it unready.
+  Focused route/export/adapter/preview checks: 60 passed; frontend 69 passed,
+  TypeScript and shipped build green. No existing production report rewritten.
+- Next: T7 phase-aware delivery progress and browser fixture acceptance, then
+  full phase checks/fresh review before Phase 3 publication.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required

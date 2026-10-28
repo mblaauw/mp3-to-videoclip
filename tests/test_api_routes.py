@@ -471,10 +471,10 @@ def test_film_graphics_render_and_exports(client, project, monkeypatch):
     (project / "renders" / "a.mp4").write_bytes(b"x")
     (project / "previews").mkdir()
     (project / "previews" / "p.mp4").write_bytes(b"p")
-    assert client.get("/api/projects/production/exports").json() == {
-        "exports": ["a.mp4"],
-        "previews": ["p.mp4"],
-    }
+    files = client.get("/api/projects/production/exports").json()
+    assert files["exports"] == ["a.mp4"]
+    assert files["previews"] == ["p.mp4"]
+    assert {file["classification"] for file in files["files"]} == {"unknown"}
     played = client.get("/api/projects/production/film/renders/a.mp4")
     assert played.status_code == 200
     assert played.headers["content-type"] == "video/mp4"

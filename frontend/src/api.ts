@@ -819,7 +819,7 @@ export const api = {
       body: JSON.stringify({ edit }),
     }),
   exports: (slug: string) =>
-    request<{ exports: string[]; previews: string[] }>(
+    request<FilmExports>(
       `/api/projects/${slug}/exports`,
     ),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
@@ -952,4 +952,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ kind }),
     }),
+};
+export type FilmFile = {
+  kind: "previews" | "renders";
+  name: string;
+  classification: "base" | "preview" | "final" | "unknown";
+  verified: boolean;
+  current: boolean;
+  delivery_ready: boolean;
+  reason?: string | null;
+};
+export type FilmExports = {
+  exports: string[];
+  previews: string[];
+  files?: FilmFile[];
+  signature_required?: boolean;
 };
