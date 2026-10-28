@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root, valid_slug
 from mp3_to_videoclip.domain import archive
+from mp3_to_videoclip.read_snapshots import read_endpoint
 from mp3_to_videoclip.storage import RevisionConflict, digest, inside, read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["film"])
@@ -51,7 +52,8 @@ async def put_graphics_credits(slug: str, request: Request, payload: dict):
 
 
 @router.get("/graphics-review")
-async def get_graphics_review(slug: str, request: Request):
+@read_endpoint
+def get_graphics_review(slug: str, request: Request):
     """The preflight samples the graphics approval must inspect."""
     root = project_root(request, slug)
     path = root / P.STAGE_FILES["graphics"]
@@ -114,7 +116,8 @@ async def get_graphics_sample(slug: str, name: str, request: Request):
 
 
 @router.get("/edit")
-async def get_edit(slug: str, request: Request, response: Response):
+@read_endpoint
+def get_edit(slug: str, request: Request, response: Response):
     """The edit list plus the report computed from the current board."""
     from mp3_to_videoclip import edits
 
@@ -129,7 +132,8 @@ async def get_edit(slug: str, request: Request, response: Response):
 
 
 @router.get("/film/checklist")
-async def get_delivery_checklist(slug: str, request: Request):
+@read_endpoint
+def get_delivery_checklist(slug: str, request: Request):
     """The gates behind *Render final*, computed with the engine's own checks."""
     from mp3_to_videoclip.domain import delivery
 
@@ -141,7 +145,8 @@ async def get_delivery_checklist(slug: str, request: Request):
 
 
 @router.get("/edit/summary")
-async def get_edit_summary(slug: str, request: Request):
+@read_endpoint
+def get_edit_summary(slug: str, request: Request):
     """The human-readable cut list Film shows; work/edit.json stays authoritative."""
     from mp3_to_videoclip import edits
 
@@ -184,7 +189,8 @@ async def put_edit(slug: str, request: Request, payload: dict, response: Respons
 
 
 @router.get("/preview")
-async def preview_input(slug: str, request: Request):
+@read_endpoint
+def preview_input(slug: str, request: Request):
     """The live Player payload: the renderer's shot fields plus local URLs."""
     from mp3_to_videoclip import services
 

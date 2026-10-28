@@ -14,6 +14,12 @@ Publication authority follows the approved phase plan and repository policy.
 ## Session budget
 
 - Started: 2026-10-27T19:38:25Z; deadline: 2026-10-27T21:08:25Z (up to 90 min).
+- Interrupted between 2026-10-27T20:28Z and the owner's explicit resume request.
+  Resumed: 2026-10-28T02:31:09Z; new bounded cycle deadline 04:01:09Z.
+  No work is claimed for the interruption. No test/render process is active.
+- Further harness/user interruptions occurred; the owner explicitly requested
+  continue again at the 2026-10-28T08:23:00Z status check. This bounded cycle ends
+  by 09:53:00Z; elapsed idle interruption time is not engineering evidence.
 - Spending cap: $0 new provider spend.
 - Initial revision: `b6c3e4fc3d894995483b4cf070836e8a54b82324`; initially clean.
 - Studio processes are running; no active render/pytest process was observed.
@@ -23,8 +29,8 @@ Publication authority follows the approved phase plan and repository policy.
 
 | Phase | Tasks | State |
 | --- | --- | --- |
-| 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | verified; publishing |
-| 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | pending phase 1 |
+| 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | merged PR #38 at `2afc1cc` |
+| 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | accepted locally; freezing/publishing |
 | 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | pending phase 2 |
 | 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | pending phase 3 |
 
@@ -38,7 +44,8 @@ local performance and quality evidence, not just encoder flags.
 
 ## Checkpoint
 
-- Branch: `reliability/phase-1`; T1 `d8d5d89`, T2 `285e0cb`.
+- Branch: `reliability/phase-2`; base `2afc1cc`; T1 `d8d5d89`, T2 `285e0cb`,
+  T3 `44f6a36`. Phase 1 GitHub CI passed before merge.
 - T1 accepted: 45 snapshot tests passed, including JSONL restore, mutation
   detection, secret exclusions and exclusive publication. Fresh review found
   secret-root/output-symlink gaps; both were corrected and checks rerun. Capture
@@ -60,8 +67,26 @@ local performance and quality evidence, not just encoder flags.
   fixed. Focused runner/receipt/API/director integration: 37 passed.
 - Frontend tests: 47 passed; API types regenerated; TypeScript/build clean.
   Ruff check and format clean. No production files or owner processes changed.
-- Current task: phase 1 frozen-revision verification and publication. Next:
-  fresh phase tests/startup, PR/checks; then T4 on the integrated phase baseline.
+- T4 implemented: per-operation coherent reads, indexed reviews, unique dependency
+  hashing and threadpool GET handlers. Review found/fixed captured-context cache
+  lifetime, nested-root retirement and plate publication races. Focused suites:
+  159 passed, 1 skipped; 79-shot fixture hashes source/79 images/shared ref once.
+- T5 implemented: shared GET resources, selective invalidation, epoch guards and
+  object-bound conditional writes. Review found track/edit-summary invalidation
+  and inspector late-save/self-conflict gaps. Latest correction wrote helper/tests
+  before its session response timed out; parent verification is required.
+- Phase 2 full background suite completed: 1076 passed, 1 skipped in 152.61 s
+  (`.opencode/scratch/phase2-pytest.log`). Earlier foreground timeouts stopped at
+  different positions with no failure trace; no deterministic hang reproduced.
+  Focused read-snapshot suite: 13 passed. Frontend: 64 passed, including selection
+  ownership, pending saves, revision handoff and track/edit-summary invalidation.
+  TypeScript and rebuilt shipped frontend passed; ruff/diff checks clean.
+- Copy-only 79-shot zero-bars HTTP measurements, warm: Images 58.7 ms /38.1 MB
+  binary reads; approvals 63.7 ms /38.1 MB; checklist 84.0 ms /38.1 MB; Player
+  42.1 ms /5.29 MB. These include HTTP, unlike initial direct-function probes;
+  no precise end-to-end speedup or physical disk IO claim. All copy files removed
+  by temporary-directory cleanup; original production untouched.
+- Next: commit T4/T5 separately, publish/check Phase 2; then T6/T7 delivery clarity.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required

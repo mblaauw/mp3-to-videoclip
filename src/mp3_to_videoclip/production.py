@@ -33,6 +33,7 @@ from .storage import (
     read_json,
     read_optional,
     require_revision,
+    snapshot_read,
     state_mutation,
     write_json,
 )
@@ -327,6 +328,7 @@ def _init_signature(root: Path, project: Project) -> None:
     write_json(root / "work/graphics-spec.json", spec)
 
 
+@snapshot_read
 def load_project(root: Path, verify_source=True) -> Project:
     project = Project.model_validate(read_json(root / "project.json"))
     if verify_source and file_hash(inside(root, project.source)) != project.source_sha256:
@@ -383,6 +385,7 @@ def legacy_brief_hash(brief: Brief) -> str:
     return digest(brief.model_dump(exclude={"creative"}))
 
 
+@snapshot_read
 def load_brief(root: Path) -> Brief:
     return Brief.model_validate(read_json(root / "brief.json"))
 
@@ -732,6 +735,7 @@ def init_events(root: Path) -> EventMap:
     return events
 
 
+@snapshot_read
 def load_board(root: Path, *, verify_source: bool = True) -> Storyboard:
     board = Storyboard.model_validate(read_json(root / STAGE_FILES["storyboard"]))
     return validate_board(root, board, verify_source=verify_source)
@@ -1102,6 +1106,7 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
     }
 
 
+@snapshot_read
 def image_spec(root: Path, shot: Shot, *, verify_source: bool = True) -> dict:
     if shot.asset_shot_id is not None:
         board = load_board(root, verify_source=verify_source)
@@ -1403,6 +1408,7 @@ def _local_proof_entries(root: Path, board: Storyboard, project: Project) -> lis
     return entries
 
 
+@snapshot_read
 def stage_hash(root: Path, stage: str) -> str:
     project = load_project(root)
     upstream = effective_upstream(root, stage)
@@ -1455,6 +1461,7 @@ def stage_hash(root: Path, stage: str) -> str:
     return digest({"project": project_payload(project), "upstream": parent, "content": value})
 
 
+@snapshot_read
 def require_approval(root: Path, stage: str):
     """Check gates; Studio attestations are consistency claims, not proof of human acts."""
     if stage == "lyrics" and load_project(root).music_mode == "instrumental":

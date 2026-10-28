@@ -17,6 +17,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.api.errors import error_response
 from mp3_to_videoclip.domain import approval_changes, approvals
+from mp3_to_videoclip.read_snapshots import read_endpoint
 from mp3_to_videoclip.storage import ProjectBusy, read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["approvals"])
@@ -123,7 +124,8 @@ def _approval(root, stage: str) -> dict:
 
 
 @router.get("/approvals", response_model=ApprovalsOut)
-async def get_approvals(slug: str, request: Request, stages: str | None = None):
+@read_endpoint
+def get_approvals(slug: str, request: Request, stages: str | None = None):
     root = project_root(request, slug)
     wanted = STAGES
     if stages:
@@ -132,7 +134,8 @@ async def get_approvals(slug: str, request: Request, stages: str | None = None):
 
 
 @router.get("/approvals/{stage}/changes")
-async def get_approval_changes(slug: str, stage: str, request: Request):
+@read_endpoint
+def get_approval_changes(slug: str, stage: str, request: Request):
     """The reason and a short before/after diff for a changed decision."""
     if stage not in P.UPSTREAM:
         return error_response("unknown approval stage", "approval_not_found", 404)

@@ -1,6 +1,7 @@
 """Atomic artifacts, content-bound approvals and single-writer project locks."""
 
 import contextlib
+import copy
 import errno
 import fcntl
 import functools
@@ -10,9 +11,112 @@ import os
 import tempfile
 import threading
 import time
+from contextvars import ContextVar
 from pathlib import Path
 
+_READ_SNAPSHOT: ContextVar[dict | None] = ContextVar("read_snapshot", default=None)
 
+
+def _read_cache():
+    snapshot = _READ_SNAPSHOT.get()
+    if snapshot and snapshot["thread"] == threading.get_ident() and snapshot["enabled"]:
+        return snapshot["values"]
+    return None
+
+
+def _retire_read_snapshot():
+    snapshot = _READ_SNAPSHOT.get()
+    while snapshot and snapshot["thread"] == threading.get_ident():
+        snapshot["enabled"] = False
+        snapshot["values"].clear()
+        snapshot = snapshot.get("parent")
+
+
+@contextlib.contextmanager
+def read_snapshot(root: Path):
+    """One coherent, synchronous read calculation; never wrap IO/network jobs.
+
+    Values are private to this operation and thread, not a cross-request cache.
+    A writer boundary permanently retires them, even if the write fails.
+    Nested distinct roots must be acquired in sorted resolved-path order.
+    """
+    root = Path(root).resolve()
+    current = _READ_SNAPSHOT.get()
+    if _read_cache() is not None and current["root"] == root:
+        yield
+        return
+    # Cross-root nesting is supported in a deterministic order, preventing two
+    # readers from taking A/B and B/A locks. Reentrant ancestor roots are safe.
+    ancestors = []
+    parent = current
+    while parent and parent["thread"] == threading.get_ident():
+        if parent["active"]:
+            ancestors.append(parent["root"])
+        parent = parent.get("parent")
+    if ancestors and root not in ancestors and str(root) < max(map(str, ancestors)):
+        raise RuntimeError("nested read snapshots must acquire roots in sorted path order")
+    with state_lock(root):
+        snapshot = {
+            "root": root,
+            "thread": threading.get_ident(),
+            "enabled": True,
+            "active": True,
+            "values": {},
+            "parent": current,
+        }
+        token = _READ_SNAPSHOT.set(snapshot)
+        try:
+            yield
+        finally:
+            snapshot["active"] = False
+            snapshot["enabled"] = False
+            snapshot["values"].clear()
+            _READ_SNAPSHOT.reset(token)
+
+
+def snapshot_read(function=None, *, private=False):
+    """Memoize reads in scope; only private, read-only indexes may borrow values.
+
+    Public readers always return defensive copies. ``private=True`` is reserved
+    for internal indexes whose contents must never be mutated or returned.
+    """
+    import inspect
+
+    if function is None:
+        return functools.partial(snapshot_read, private=private)
+    signature = inspect.signature(function)
+
+    @functools.wraps(function)
+    def cached(*args, **kwargs):
+        cache = _read_cache()
+        if cache is None:
+            return function(*args, **kwargs)
+        bound = signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+
+        def key_value(value):
+            if isinstance(value, Path):
+                return str(value.resolve())
+            if hasattr(value, "model_dump"):
+                return value.model_dump()
+            return value
+
+        key = (function, digest({k: key_value(v) for k, v in bound.arguments.items()}))
+        if key not in cache:
+            try:
+                cache[key] = (True, function(*args, **kwargs))
+            except (OSError, ValueError) as exc:
+                cache[key] = (False, copy.copy(exc))
+                raise
+        succeeded, value = cache[key]
+        if not succeeded:
+            raise copy.copy(value)
+        return value if private else copy.deepcopy(value)
+
+    return cached
+
+
+@snapshot_read
 def read_json(path: Path):
     return json.loads(path.read_text())
 
@@ -39,6 +143,7 @@ def digest(value) -> str:
     ).hexdigest()
 
 
+@snapshot_read
 def file_hash(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -65,6 +170,7 @@ def sync_directory(directory: Path) -> None:
 
 
 def write_json(path: Path, value):
+    _retire_read_snapshot()
     path.parent.mkdir(parents=True, exist_ok=True)
     data = json.dumps(value, indent=2, allow_nan=False) + "\n"
     fd, name = tempfile.mkstemp(prefix=".write-", dir=path.parent)
@@ -151,6 +257,7 @@ def state_mutation(function):
 
     @functools.wraps(function)
     def locked(root, *args, **kwargs):
+        _retire_read_snapshot()
         with state_lock(root):
             return function(root, *args, **kwargs)
 

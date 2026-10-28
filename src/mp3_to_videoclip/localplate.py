@@ -9,6 +9,7 @@ the plate renderer version. The same inputs always produce the same picture.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -435,7 +436,12 @@ def render(
         except OSError:
             pass
     image = _compose(root, project, shot, asset=asset, sources=sources)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    image.save(temporary, format="PNG")
-    temporary.replace(path)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=directory)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            image.save(handle, format="PNG")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
     return path

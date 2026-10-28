@@ -13,6 +13,7 @@ from pathlib import Path
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import shotkinds
 from mp3_to_videoclip.branding import pack_hash, render_brand_plate
+from mp3_to_videoclip.read_snapshots import read_operation
 from mp3_to_videoclip.remotion import data_url
 from mp3_to_videoclip.storage import digest, inside, read_json
 
@@ -53,6 +54,7 @@ def _pane_payload(root: Path, slug: str, assets: dict, pane, source) -> dict:
     }
 
 
+@read_operation
 def player_input(root: Path, slug: str) -> dict:
     from mp3_to_videoclip import edits
 
