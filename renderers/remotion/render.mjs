@@ -24,7 +24,6 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  renameSync,
   rmSync,
   statSync,
   unlinkSync,
@@ -40,6 +39,7 @@ import {fail, requestSha256, resolveChrome, validateRequest} from "./src/request
 import {createProgressWriter} from "./src/progress.mjs";
 import {createDiagnostics} from "./src/diagnostics.mjs";
 import {benchmarkOptions as resolveBenchmarkOptions} from "./src/benchmark-profiles.mjs";
+import {ensureBundleCache} from "./src/bundle-cache.mjs";
 
 const RENDERER_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ENTRY_POINT = path.join(RENDERER_ROOT, "src", "index.jsx");
@@ -158,7 +158,7 @@ function listFiles(root, prefix = "") {
  */
 export function bundleKey(assetRoot) {
   const hash = createHash("sha256");
-  hash.update("mp3-to-videoclip-remotion-bundle-v1\n");
+  hash.update("mp3-to-videoclip-remotion-bundle-v2\n");
   for (const [relative, full] of listFiles(SRC_DIR)) {
     hash.update(`src:${relative}:${sha256File(full)}\n`);
   }
@@ -166,48 +166,32 @@ export function bundleKey(assetRoot) {
   for (const [relative, full] of listFiles(assetRoot)) {
     hash.update(`asset:${relative}:${sha256File(full)}\n`);
   }
-  return hash.digest("hex").slice(0, 32);
+  return hash.digest("hex");
 }
 
 /** Bundle into `cacheDir` unless a complete bundle is already there. */
 async function ensureBundle(cacheDir, assetRoot, progress) {
-  const indexHtml = path.join(cacheDir, "index.html");
-  if (existsSync(indexHtml)) {
-    progress.update({phase: "bundle-cached"});
-    return {serveUrl: cacheDir, bundleCached: true};
-  }
-  mkdirSync(path.dirname(cacheDir), {recursive: true});
-  const staging = `${cacheDir}.staging-${process.pid}`;
-  rmSync(staging, {recursive: true, force: true});
-  await bundle({
-    entryPoint: ENTRY_POINT,
-    outDir: staging,
-    publicDir: assetRoot,
-    rootDir: RENDERER_ROOT,
-    enableCaching: true,
-    onProgress: (percent) => {
-      progress.update({
-        phase: "bundling-assets",
-        done: Math.round(Math.min(Math.max(Number(percent) || 0, 0), 1) * 100),
-        total: 100,
-        unit: "percent",
-      });
-    },
+  const result = await ensureBundleCache({
+    cacheDir,
+    key: path.basename(cacheDir),
+    build: (staging) => bundle({
+      entryPoint: ENTRY_POINT,
+      outDir: staging,
+      publicDir: assetRoot,
+      rootDir: RENDERER_ROOT,
+      enableCaching: true,
+      onProgress: (percent) => {
+        progress.update({
+          phase: "bundling-assets",
+          done: Math.round(Math.min(Math.max(Number(percent) || 0, 0), 1) * 100),
+          total: 100,
+          unit: "percent",
+        });
+      },
+    }),
   });
-  try {
-    renameSync(staging, cacheDir);
-  } catch (error) {
-    if (existsSync(indexHtml)) {
-      // Another process published the same key first: reuse it.
-      rmSync(staging, {recursive: true, force: true});
-    } else {
-      // A half-written cache entry from an earlier crash: replace it.
-      rmSync(cacheDir, {recursive: true, force: true});
-      renameSync(staging, cacheDir);
-    }
-  }
-  if (!existsSync(indexHtml)) fail(`bundle at ${cacheDir} has no index.html`);
-  return {serveUrl: cacheDir, bundleCached: false};
+  if (result.bundleCached) progress.update({phase: "bundle-cached"});
+  return result;
 }
 
 /** Publish `temp` at `target` with an exclusive hard link: never overwrite. */
