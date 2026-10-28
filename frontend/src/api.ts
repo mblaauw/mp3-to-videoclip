@@ -1,9 +1,10 @@
 import type { components } from "./api/schema";
-import { readApiError } from "./api/errors";
+import { readApiError } from "./api/errors.ts";
 import type { PreviewShot } from "./baseFilm";
-import { toast } from "./toast";
+import { toast } from "./toast.ts";
+import { bindRevision, resources, revisionHeaders } from "./api/resources.ts";
 
-export { ApiError } from "./api/errors";
+export { ApiError } from "./api/errors.ts";
 
 type Schemas = components["schemas"];
 
@@ -626,16 +627,41 @@ export type ImageEstimateResponse = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-  });
-  if (!res.ok) {
-    const error = await readApiError(res);
-    toast(error.message);
-    throw error;
-  }
-  return (await res.json()) as T;
+  const method = init?.method?.toUpperCase() || "GET";
+  const project = path.match(/^\/api\/projects\/([^/?]+)(?:\/([^/?]+))?/);
+  const mutation = method !== "GET" && method !== "HEAD";
+  const invalidate = () => resources.invalidate({ slug: project?.[1] });
+  const load = async (): Promise<T> => {
+    if (mutation) invalidate();
+    const res = await fetch(path, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    }).finally(() => { if (mutation) invalidate(); });
+    if (!res.ok) {
+      const error = await readApiError(res);
+      toast(error.message);
+      throw error;
+    }
+    // Also invalidate reads started while the write was in progress.
+    if (mutation) invalidate();
+    const value = (await res.json()) as T;
+    if (project) {
+      const artifact = project[2] || "project";
+      const etag = res.headers.get("ETag");
+      bindRevision(value, project[1], artifact, etag);
+      if (value && typeof value === "object") {
+        const nested = value as Record<string, unknown>;
+        if (artifact === "edit") bindRevision(nested.edit, project[1], "edit", etag);
+        if (artifact === "intake") bindRevision(nested.brief, project[1], "brief", etag);
+        if (artifact === "storyboard" && Array.isArray(nested.shots)) {
+          nested.shots.forEach((shot) => bindRevision(shot, project[1], "storyboard", etag));
+        }
+      }
+    }
+    return value;
+  };
+  return !mutation && (project || ["/api/projects", "/api/settings", "/api/setup"].includes(path))
+    ? resources.read(path, load) : load();
 }
 
 export const api = {
@@ -688,6 +714,7 @@ export const api = {
       toast(error.message);
       throw error;
     }
+    resources.invalidate();
     return (await res.json()) as {
       slug: string;
       title: string;
@@ -748,8 +775,22 @@ export const api = {
     ),
   preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
   edit: (slug: string) => request<EditSummary>(`/api/projects/${slug}/edit`),
-  editSummary: (slug: string) =>
-    request<CutSummary>(`/api/projects/${slug}/edit/summary`),
+  editSummary: async (slug: string): Promise<CutSummary> => {
+    const [cut, base] = await Promise.all([
+      request<CutSummary>(`/api/projects/${slug}/edit/summary`),
+      request<EditSummary>(`/api/projects/${slug}/edit`),
+    ]);
+    // Transfer provenance only for the exact revision-bearing edit payload.
+    if (cut.edit) {
+      const etag = revisionHeaders(base.edit, slug, "edit")["If-Match"];
+      if (!base.edit || !etag || JSON.stringify(cut.edit) !== JSON.stringify(base.edit)) {
+        resources.invalidate({ slug, artifact: "edit" });
+        throw new Error("The cut changed while loading. Reload and review before editing.");
+      }
+      bindRevision(cut.edit, slug, "edit", etag);
+    }
+    return cut;
+  },
   checklist: (slug: string) =>
     request<DeliveryChecklist>(`/api/projects/${slug}/film/checklist`),
   history: (slug: string, artifact: string) =>
@@ -771,9 +812,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({}),
     }),
-  saveEdit: (slug: string, edit: unknown) =>
+  saveEdit: (slug: string, edit: unknown, base?: unknown) =>
     request<EditSummary>(`/api/projects/${slug}/edit`, {
       method: "PUT",
+      headers: revisionHeaders(base, slug, "edit"),
       body: JSON.stringify({ edit }),
     }),
   exports: (slug: string) =>
@@ -828,14 +870,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ timing: "adaptive" }),
     }),
-  patchBrief: (slug: string, patch: Partial<Brief>) =>
+  patchBrief: (slug: string, patch: Partial<Brief>, base?: Brief) =>
     request<Brief>(`/api/projects/${slug}/brief`, {
       method: "PATCH",
+      headers: revisionHeaders(base, slug, "brief"),
       body: JSON.stringify(patch),
     }),
-  patchShots: (slug: string, changes: Partial<Shot>[]) =>
+  patchShots: (slug: string, changes: Partial<Shot>[], base?: Storyboard | Shot) =>
     request<Storyboard>(`/api/projects/${slug}/storyboard/shots`, {
       method: "PATCH",
+      headers: revisionHeaders(base, slug, "storyboard"),
       body: JSON.stringify({ changes }),
     }),
   reviewImage: (

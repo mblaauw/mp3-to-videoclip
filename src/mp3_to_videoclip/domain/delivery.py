@@ -12,6 +12,7 @@ from pathlib import Path
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import reviews, shotkinds
+from mp3_to_videoclip.read_snapshots import read_operation
 from mp3_to_videoclip.storage import digest
 
 
@@ -110,6 +111,7 @@ def _line(
     }
 
 
+@read_operation
 def build(root: Path) -> dict:
     root = Path(root)
     project = P.load_project(root, verify_source=False)

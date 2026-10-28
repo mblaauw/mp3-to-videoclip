@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   type ApprovalState,
@@ -256,7 +256,10 @@ function FilmShellContent({
   const [directorOpen, setDirectorOpen] = useState(() => window.innerWidth > 1180);
   const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
 
+  const loadEpoch = useRef(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = useCallback(async () => {
+    const epoch = ++loadEpoch.current;
     const [
       approvalResult,
       imageResult,
@@ -276,6 +279,10 @@ function FilmShellContent({
       api.intake(slug),
       api.settings(),
     ]);
+    if (epoch !== loadEpoch.current) return;
+    const failure = [approvalResult, imageResult, budgetResult, boardResult, trackResult, editResult, intakeResult, settingsResult].find((result) => result.status === "rejected");
+    setLoadError(failure?.status === "rejected" ? String(failure.reason) : null);
+    if (failure?.status === "rejected") toast(`Could not refresh film data: ${String(failure.reason)}`);
     if (approvalResult.status === "fulfilled") {
       setApprovals(approvalMap(approvalResult.value.stages));
       setApprovalStates(
@@ -307,6 +314,7 @@ function FilmShellContent({
 
   useEffect(() => {
     void load();
+    return () => { loadEpoch.current += 1; };
   }, [load, revision]);
 
   useProjectChanged(slug, () => setRevision((value) => value + 1));
@@ -387,7 +395,7 @@ function FilmShellContent({
 
   const saveCutBoundary = async (next: EditPayload): Promise<boolean> => {
     try {
-      const saved = await api.saveEdit(slug, next);
+      const saved = await api.saveEdit(slug, next, editPayload);
       setEditPayload(saved.present ? saved.edit ?? next : null);
       setEditOwnsTiming(saved.present);
       notifyProjectChanged();
@@ -522,6 +530,7 @@ function FilmShellContent({
           }}
         />
         <main className="shell-main">
+          {loadError && <p role="alert">Could not refresh film data: {loadError}</p>}
           <NextStepBar
             step={step}
             ready={approvalsLoaded}

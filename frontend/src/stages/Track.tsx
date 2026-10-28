@@ -52,9 +52,12 @@ export function TrackStage({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const savedTimer = useRef<number | null>(null);
 
+  const loadEpoch = useRef(0);
   const load = useCallback(async () => {
+    const epoch = ++loadEpoch.current;
     try {
       const next = await api.track(slug);
+      if (epoch !== loadEpoch.current) return;
       setData(next);
       setNames(
         (next.music?.sections || []).map(
@@ -63,6 +66,7 @@ export function TrackStage({ slug }: { slug: string }) {
       );
       setError(null);
     } catch (caught) {
+      if (epoch !== loadEpoch.current) return;
       setError(String(caught));
     }
   }, [slug]);
@@ -74,6 +78,7 @@ export function TrackStage({ slug }: { slug: string }) {
     setDraft("");
     setTranscribeNote(false);
     void load();
+    return () => { loadEpoch.current += 1; };
   }, [load]);
 
   useEffect(() => {

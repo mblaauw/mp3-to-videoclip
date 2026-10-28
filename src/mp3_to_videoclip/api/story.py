@@ -111,12 +111,15 @@ def _intake_payload(root: Path, *, analysis_needed: bool = False) -> dict:
 
 
 @router.get("/intake")
-async def get_intake(slug: str, request: Request):
-    return _intake_payload(project_root(request, slug))
+async def get_intake(slug: str, request: Request, response: Response):
+    value = _intake_payload(project_root(request, slug))
+    # The nested brief is a valid editing base for PATCH /brief.
+    response.headers["ETag"] = f'"{digest(value["brief"])}"'
+    return value
 
 
 @router.put("/intake")
-async def update_intake(slug: str, request: Request, payload: dict):
+async def update_intake(slug: str, request: Request, payload: dict, response: Response):
     root = project_root(request, slug)
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="intake must be a JSON object")
@@ -129,4 +132,6 @@ async def update_intake(slug: str, request: Request, payload: dict):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _intake_payload(root, analysis_needed=result["analysis_needed"])
+    value = _intake_payload(root, analysis_needed=result["analysis_needed"])
+    response.headers["ETag"] = f'"{digest(value["brief"])}"'
+    return value

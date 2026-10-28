@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { draftError } from "../api/resources";
 import {
   api,
   type CutSection,
@@ -58,12 +59,14 @@ function reviewKey(value: GraphicsReview | null): string {
 
 function TransitionEditor({
   shot,
+  base,
   busy,
   onSave,
 }: {
   shot: CutShot;
+  base: import("../api").EditPayload;
   busy: boolean;
-  onSave: (change: Partial<EditTransition>) => Promise<void>;
+  onSave: (change: Partial<EditTransition>, base: import("../api").EditPayload) => Promise<boolean>;
 }) {
   const [type, setType] = useState<EditTransition["type"]>(
     (shot.transition.type as EditTransition["type"]) || "cut",
@@ -71,6 +74,15 @@ function TransitionEditor({
   const [frames, setFrames] = useState(shot.transition.frames);
   const [reason, setReason] = useState(shot.transition.reason || "");
   const [saving, setSaving] = useState(false);
+  const draftBase = useRef(base);
+  const dirty = useRef(false);
+  useEffect(() => {
+    if (dirty.current || saving) return;
+    draftBase.current = base;
+    setType((shot.transition.type as EditTransition["type"]) || "cut");
+    setFrames(shot.transition.frames);
+    setReason(shot.transition.reason || "");
+  }, [base, shot, saving]);
   const named = type !== "cut";
   const canSave =
     named && reason.trim().length > 0 && !saving && !busy && frames >= 0 && frames <= 48;
@@ -79,7 +91,7 @@ function TransitionEditor({
     if (!canSave) return;
     setSaving(true);
     try {
-      await onSave({ type, frames, reason: reason.trim() });
+      if (await onSave({ type, frames, reason: reason.trim() }, draftBase.current)) dirty.current = false;
     } finally {
       setSaving(false);
     }
@@ -94,6 +106,7 @@ function TransitionEditor({
           value={type}
           disabled={saving}
           onChange={(event) => {
+            dirty.current = true;
             const next = event.target.value as EditTransition["type"];
             setType(next);
             if (next !== "cut" && frames === 0) setFrames(6);
@@ -115,7 +128,7 @@ function TransitionEditor({
           max={48}
           value={frames}
           disabled={!named || saving}
-          onChange={(event) => setFrames(Number(event.target.value))}
+          onChange={(event) => { dirty.current = true; setFrames(Number(event.target.value)); }}
         />
       </label>
       {named && (
@@ -127,7 +140,7 @@ function TransitionEditor({
             maxLength={240}
             disabled={saving}
             placeholder="Lift the chorus…"
-            onChange={(event) => setReason(event.target.value)}
+            onChange={(event) => { dirty.current = true; setReason(event.target.value); }}
           />
         </label>
       )}
@@ -194,7 +207,9 @@ export function FilmStage({
     });
   }, []);
 
+  const loadEpoch = useRef(0);
   const load = useCallback(async () => {
+    const epoch = ++loadEpoch.current;
     const [
       filesResult,
       cutResult,
@@ -210,14 +225,15 @@ export function FilmStage({
       api.images(slug),
       api.graphicsReview(slug),
     ]);
+    if (epoch !== loadEpoch.current) return;
+    const failure = [filesResult, cutResult, checklistResult, boardResult, imagesResult, graphicsResult].find((result) => result.status === "rejected");
+    setError(failure?.status === "rejected" ? String(failure.reason) : null);
     if (filesResult.status === "fulfilled") applyFiles(filesResult.value);
     if (cutResult.status === "fulfilled") setCut(cutResult.value);
-    else setCut(null);
     if (checklistResult.status === "fulfilled") {
       setChecklist(checklistResult.value);
       setChecklistError(null);
     } else {
-      setChecklist(null);
       setChecklistError(String(checklistResult.reason));
     }
     if (boardResult.status === "fulfilled") {
@@ -227,14 +243,13 @@ export function FilmStage({
     if (graphicsResult.status === "fulfilled") {
       setGraphics(graphicsResult.value);
       graphicsKey.current = reviewKey(graphicsResult.value);
-    } else {
-      setGraphics(null);
     }
     setLoaded(true);
   }, [applyFiles, slug]);
 
   useEffect(() => {
     void load();
+    return () => { loadEpoch.current += 1; };
   }, [load]);
 
   // Renders are background jobs; the server announces when one finishes (and
@@ -280,7 +295,6 @@ export function FilmStage({
       })
       .catch(() => {
         if (cancelled) return;
-        setLive(null);
         setLiveError("The live preview could not be read. Check the storyboard and stills.");
       });
     return () => {
@@ -323,18 +337,19 @@ export function FilmStage({
     }
   };
 
-  const saveTransition = async (shotId: string, change: Partial<EditTransition>) => {
-    if (!cut?.edit) return;
+  const saveTransition = async (shotId: string, change: Partial<EditTransition>, base: import("../api").EditPayload): Promise<boolean> => {
     setBusy(`join:${shotId}`);
     setError(null);
     try {
-      await api.saveEdit(slug, setEditTransition(cut.edit, shotId, change));
+      await api.saveEdit(slug, setEditTransition(base, shotId, change), base);
       setCut(await api.editSummary(slug));
       setNotice(`Saved the join into ${shotId}.`);
       notifyProjectChanged();
       await load();
+      return true;
     } catch (caught) {
-      setError(String(caught));
+      setError(draftError(caught));
+      return false;
     } finally {
       setBusy(null);
     }
@@ -353,7 +368,7 @@ export function FilmStage({
       notifyProjectChanged();
       await load();
     } catch (caught) {
-      setError(String(caught));
+      setError(draftError(caught));
       setNotice(null);
     } finally {
       setBusy(null);
@@ -889,10 +904,11 @@ export function FilmStage({
                                 )}
                                 {cut.edit && (
                                   <TransitionEditor
-                                    key={`${shot.shot_id}-${shot.transition.type}-${shot.transition.frames}-${shot.transition.reason}`}
+                                    key={shot.shot_id}
+                                    base={cut.edit}
                                     shot={shot}
                                     busy={busy === `join:${shot.shot_id}`}
-                                    onSave={(change) => saveTransition(shot.shot_id, change)}
+                                    onSave={(change, base) => saveTransition(shot.shot_id, change, base)}
                                   />
                                 )}
                               </div>

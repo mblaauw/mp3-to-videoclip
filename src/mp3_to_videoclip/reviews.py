@@ -2,17 +2,36 @@
 
 from pathlib import Path
 
-from .storage import digest, file_hash, inside, read_json, state_mutation, write_json
+from .storage import digest, file_hash, inside, read_json, snapshot_read, state_mutation, write_json
 
 REVIEWS = "work/reviews.json"
 
 
-def _version(root, shot_id, version):
+@snapshot_read(private=True)
+def _shot_assets(root):
+    """Borrowed operation-private index; callers must not mutate its contents."""
     from . import production as P
+
+    return {shot.id: shot for shot in P.load_board(root).shots}, read_json(
+        root / "work/assets.json"
+    )
+
+
+@snapshot_read(private=True)
+def _review_index(root):
+    path = root / REVIEWS
+    history = read_json(path) if path.exists() else []
+    return {
+        tuple(record.get(key) for key in ("shot_id", "version", "sha256", "input_hash")): record
+        for record in history
+    }
+
+
+def _version(root, shot_id, version):
     from . import shotkinds
 
-    board = P.load_board(root)
-    shot = next((s for s in board.shots if s.id == shot_id), None)
+    by_id, assets = _shot_assets(root)
+    shot = by_id.get(shot_id)
     if shot is None:
         raise ValueError("unknown review shot")
     if shotkinds.is_local(shot) and shot.asset_shot_id is None:
@@ -20,7 +39,6 @@ def _version(root, shot_id, version):
             f"{shot.kind} shot {shot.id} is rendered locally; there is no image to review"
         )
     owner = shot.asset_shot_id or shot.id
-    assets = read_json(root / "work/assets.json")
     entry = assets.get(owner, {})
     number = entry.get("selected") if version is None else version
     chosen = next((v for v in entry.get("versions", []) if v["version"] == number), None)
@@ -71,18 +89,11 @@ def record_review(
     return record
 
 
+@snapshot_read
 def verdict_for(root: Path, shot_id: str, version=None):
     shot, owner, chosen = _version(root, shot_id, version)
-    path = root / REVIEWS
-    history = read_json(path) if path.exists() else []
-    return next(
-        (
-            r
-            for r in reversed(history)
-            if r.get("shot_id") == owner
-            and all(r.get(key) == chosen.get(key) for key in ("version", "sha256", "input_hash"))
-        ),
-        None,
+    return _review_index(root).get(
+        (owner, chosen.get("version"), chosen.get("sha256"), chosen.get("input_hash"))
     )
 
 

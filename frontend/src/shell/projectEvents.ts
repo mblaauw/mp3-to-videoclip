@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useRef } from "react";
+import { resources } from "../api/resources.ts";
 
 export const PROJECT_CHANGED = "studio:project-changed";
 
@@ -27,6 +28,8 @@ export type ProjectChangeDetail = {
   any: boolean;
   sources: string[];
   artifacts: string[];
+  /** Keep slug/artifact associations: a batch must not form a cross product. */
+  changes?: ProjectChange[];
 };
 
 const COALESCE_MS = 120;
@@ -38,11 +41,13 @@ function flush() {
   const batch = pending;
   pending = [];
   if (!batch.length) return;
+  batch.forEach((change) => resources.invalidate(change));
   const detail: ProjectChangeDetail = {
     slugs: [...new Set(batch.map((item) => item.slug).filter(Boolean) as string[])],
     any: batch.some((item) => !item.slug),
     sources: [...new Set(batch.map((item) => item.source || "local"))],
     artifacts: [...new Set(batch.map((item) => item.artifact).filter(Boolean) as string[])],
+    changes: batch,
   };
   window.dispatchEvent(new CustomEvent<ProjectChangeDetail>(PROJECT_CHANGED, { detail }));
 }

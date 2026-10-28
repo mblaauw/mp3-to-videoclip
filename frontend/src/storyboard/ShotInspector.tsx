@@ -14,6 +14,7 @@ import { AutoTextarea } from "../ui/AutoTextarea";
 import { SHOT_KINDS, isPaidShot, kindMeta, kindOf } from "../shotKinds";
 import { Button } from "../ui";
 import { ShotThumb } from "./ShotThumb";
+import { InspectorSaveGuard, leaveInspector, remainingDraft } from "./inspectorSave";
 
 function clock(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
@@ -80,8 +81,18 @@ export function ShotInspector({
   const timer = useRef<number | null>(null);
   const savedTimer = useRef<number | null>(null);
   const draftRef = useRef<Partial<Shot>>({});
+  // Freeze the revision when a draft starts, even if the shell refreshes its board.
+  const draftBase = useRef<Shot | null>(null);
+  const observedShot = useRef<Shot | null>(null);
+  if (observedShot.current !== shot) {
+    if (!Object.keys(draft).length) draftBase.current = shot;
+    observedShot.current = shot;
+  }
   draftRef.current = draft;
-  const saveSeq = useRef(0);
+  const saves = useRef(new InspectorSaveGuard());
+  const identity = JSON.stringify([slug, shotId]);
+  // Invalidate during render too: an old response may arrive before effects run.
+  saves.current.select(identity);
   const paid = usePaidImages(slug, reserve, () => {
     notifyProjectChanged();
     setSaved(true);
@@ -89,12 +100,21 @@ export function ShotInspector({
 
   useEffect(() => {
     setDraft({});
+    draftRef.current = {};
+    draftBase.current = shot;
     setLines({});
     setError(null);
+    setBusy(false);
+    setSaved(false);
     paid.clear();
     // The paid flow belongs to one shot; never carry a quote to the next.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shotId]);
+    return () => {
+      saves.current.invalidate();
+      if (timer.current) window.clearTimeout(timer.current);
+      if (savedTimer.current) window.clearTimeout(savedTimer.current);
+    };
+  }, [identity]);
 
   useEffect(
     () => () => {
@@ -116,32 +136,32 @@ export function ShotInspector({
   };
 
   const savePatch = async (patch: Partial<Shot> = {}) => {
-    if (!shot) return;
+    if (!shot) return false;
     const merged = { ...draftRef.current, ...patch };
-    if (!Object.keys(merged).length) return;
-    const sequence = saveSeq.current + 1;
-    saveSeq.current = sequence;
+    if (!Object.keys(merged).length) return true;
+    const ticket = saves.current.begin(identity);
+    if (!ticket) return false;
     setBusy(true);
     setError(null);
     try {
-      const updated = await api.patchShots(slug, [{ id: shot.id, ...merged }]);
-      if (sequence !== saveSeq.current) return;
+      const updated = await api.patchShots(slug, [{ id: shot.id, ...merged }], draftBase.current ?? shot);
+      if (!saves.current.current(ticket, identity)) return false;
+      const savedShot = updated.shots.find((item) => item.id === shot.id);
+      if (!savedShot) throw new Error("The saved shot is missing. Reload and review the storyboard.");
+      // The next edit is based on our acknowledged write, not the pre-write ETag.
+      draftBase.current = savedShot;
+      const remaining = remainingDraft<Shot>(draftRef.current, merged);
+      draftRef.current = remaining;
+      setDraft(remaining);
       onBoardChange(updated);
-      setDraft((current) => {
-        const next = { ...current };
-        for (const [key, value] of Object.entries(merged)) {
-          if (JSON.stringify(current[key as keyof Shot]) === JSON.stringify(value)) {
-            delete next[key as keyof Shot];
-          }
-        }
-        return next;
-      });
       flash();
       notifyProjectChanged();
+      return Object.keys(remaining).length === 0;
     } catch (caught) {
-      if (sequence === saveSeq.current) setError(String(caught));
+      if (saves.current.current(ticket, identity)) setError(String(caught));
+      return false;
     } finally {
-      if (sequence === saveSeq.current) setBusy(false);
+      if (saves.current.finish(ticket, identity)) setBusy(false);
     }
   };
 
@@ -155,7 +175,7 @@ export function ShotInspector({
   };
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || busy) return;
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       timer.current = null;
@@ -165,7 +185,7 @@ export function ShotInspector({
       if (timer.current) window.clearTimeout(timer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft]);
+  }, [draft, busy, identity]);
 
   if (!shot || !current) return null;
 
@@ -219,17 +239,22 @@ export function ShotInspector({
     setDraft((valueDraft) => ({ ...valueDraft, ...next }));
   };
 
+  const leave = (action: () => void) => leaveInspector({
+    saving: () => saves.current.isSaving(),
+    dirty: () => Object.keys(draftRef.current).length > 0,
+    save: () => savePatch(),
+    leave: action,
+  });
+
   const go = async (offset: number) => {
     if (!board) return;
     const next = board.shots[index + offset];
     if (!next) return;
-    if (Object.keys(draft).length) await save();
-    onSelect(next.id);
+    await leave(() => onSelect(next.id));
   };
 
   const close = async () => {
-    if (Object.keys(draft).length) await save();
-    onClose();
+    await leave(onClose);
   };
 
   const paidKind = isPaidShot(current);
@@ -254,7 +279,7 @@ export function ShotInspector({
           size="small"
           variant="quiet"
           aria-label="Previous shot"
-          disabled={index <= 0}
+          disabled={busy || index <= 0}
           onClick={() => void go(-1)}
         >
           ←
@@ -263,12 +288,12 @@ export function ShotInspector({
           size="small"
           variant="quiet"
           aria-label="Next shot"
-          disabled={!board || index >= board.shots.length - 1}
+          disabled={busy || !board || index >= board.shots.length - 1}
           onClick={() => void go(1)}
         >
           →
         </Button>
-        <Button size="small" variant="quiet" aria-label="Close inspector" onClick={() => void close()}>
+        <Button size="small" variant="quiet" aria-label="Close inspector" disabled={busy} onClick={() => void close()}>
           ×
         </Button>
       </header>

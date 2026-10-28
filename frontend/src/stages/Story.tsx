@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { draftError } from "../api/resources";
 import {
   api,
   type ApprovalChanges,
@@ -71,6 +72,11 @@ export function StoryStage({
   const treatmentLast = useRef("");
   const treatmentRef = useRef("");
   const savingRef = useRef(false);
+  const treatmentBase = useRef<Brief | null>(null);
+  const fieldsBase = useRef<Brief | null>(null);
+  const importBase = useRef<Brief | null>(null);
+  const fieldValues = useRef({ direction, style });
+  fieldValues.current = { direction, style };
 
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -79,12 +85,16 @@ export function StoryStage({
     setSaveFailed(false);
   };
 
+  const loadEpoch = useRef(0);
   const load = useCallback(async () => {
+    const epoch = ++loadEpoch.current;
     try {
       const [nextBrief, nextTreatments] = await Promise.all([
         api.brief(slug),
         api.treatments(slug),
       ]);
+      if (epoch !== loadEpoch.current) return;
+      if (treatmentBase.current || fieldsBase.current || importBase.current) return;
       setBrief(nextBrief);
       setTreatments(nextTreatments);
       setTreatment(nextBrief.treatment || "");
@@ -94,9 +104,10 @@ export function StoryStage({
       treatmentLast.current = nextBrief.treatment || "";
       setError(null);
     } catch (caught) {
+      if (epoch !== loadEpoch.current) return;
       setError(String(caught));
     } finally {
-      setLoading(false);
+      if (epoch === loadEpoch.current) setLoading(false);
     }
   }, [slug]);
 
@@ -110,6 +121,7 @@ export function StoryStage({
     treatmentRef.current = "";
     setLoading(true);
     void load();
+    return () => { loadEpoch.current += 1; };
   }, [load]);
 
   useProjectChanged(slug, () => {
@@ -156,7 +168,8 @@ export function StoryStage({
       setSavingTreatment(true);
       setError(null);
       try {
-        const updated = await api.patchBrief(slug, { treatment: value });
+        const updated = await api.patchBrief(slug, { treatment: value }, treatmentBase.current ?? brief);
+        treatmentBase.current = treatmentRef.current === value ? null : updated;
         treatmentLast.current = updated.treatment || "";
         setBrief(updated);
         if (treatmentRef.current === value) {
@@ -167,7 +180,7 @@ export function StoryStage({
         setRevision((current) => current + 1);
         notifyProjectChanged({ slug });
       } catch (caught) {
-        setError(String(caught));
+        setError(draftError(caught));
         setSaveFailed(true);
       } finally {
         savingRef.current = false;
@@ -178,10 +191,10 @@ export function StoryStage({
   );
 
   useEffect(() => {
-    if (!brief || treatment === treatmentLast.current) return;
+    if (!brief || saveFailed || treatment === treatmentLast.current) return;
     const timer = window.setTimeout(() => void saveTreatment(treatment), 800);
     return () => window.clearTimeout(timer);
-  }, [brief, saveTreatment, treatment]);
+  }, [brief, saveTreatment, treatment, saveFailed]);
 
   const saveFields = async () => {
     if (!brief) return;
@@ -191,26 +204,31 @@ export function StoryStage({
       nextDirection === (brief.direction || "") &&
       nextStyle === (brief.style || "")
     ) {
+      fieldsBase.current = null;
       setFieldsDirty(false);
       return;
     }
     if (savingFields) return;
-    setFieldsDirty(false);
     setSavingFields(true);
     setError(null);
     try {
       const updated = await api.patchBrief(slug, {
         direction: nextDirection,
         style: nextStyle,
-      });
+      }, fieldsBase.current ?? brief);
       setBrief(updated);
-      setDirection(updated.direction || "");
-      setStyle(updated.style || "");
+      const unchanged = fieldValues.current.direction.trim() === nextDirection && fieldValues.current.style.trim() === nextStyle;
+      fieldsBase.current = unchanged ? null : updated;
+      if (unchanged) {
+        setDirection(updated.direction || "");
+        setStyle(updated.style || "");
+        setFieldsDirty(false);
+      }
       flashSaved();
       setRevision((current) => current + 1);
       notifyProjectChanged({ slug });
     } catch (caught) {
-      setError(String(caught));
+      setError(draftError(caught));
       setSaveFailed(true);
     } finally {
       setSavingFields(false);
@@ -218,10 +236,10 @@ export function StoryStage({
   };
 
   useEffect(() => {
-    if (!brief || !fieldsDirty) return;
+    if (!brief || saveFailed || !fieldsDirty) return;
     const timer = window.setTimeout(() => void saveFields(), 800);
     return () => window.clearTimeout(timer);
-  }, [brief, direction, fieldsDirty, style]);
+  }, [brief, direction, fieldsDirty, style, saveFailed]);
 
   const intakeChanged = (updated: IntakePayload) => {
     onIntakeChange(updated);
@@ -263,7 +281,8 @@ export function StoryStage({
     setImporting(true);
     setError(null);
     try {
-      const updated = await api.patchBrief(slug, { treatment: value });
+      const updated = await api.patchBrief(slug, { treatment: value }, importBase.current ?? brief);
+      importBase.current = null;
       const saved = updated.treatment || "";
       treatmentLast.current = saved;
       treatmentRef.current = saved;
@@ -275,7 +294,7 @@ export function StoryStage({
       notifyProjectChanged();
       askWriter(IMPORT_PROMPT);
     } catch (caught) {
-      setError(String(caught));
+      setError(draftError(caught));
     } finally {
       setImporting(false);
     }
@@ -313,8 +332,9 @@ export function StoryStage({
         Writer reads it as your story and improves it instead of replacing it.
       </p>
       <AutoTextarea
+        disabled={importing}
         value={importText}
-        onChange={(event) => setImportText(event.target.value)}
+        onChange={(event) => { importBase.current = event.target.value ? importBase.current ?? brief : null; setImportText(event.target.value); }}
         minRows={6}
         maxRows={24}
         placeholder="Paste your concept or treatment…"
@@ -497,6 +517,8 @@ export function StoryStage({
                 value={direction}
                 onChange={(event) => {
                   setDirection(event.target.value.replace(/\n/g, " "));
+                  fieldsBase.current ??= brief;
+                  setSaveFailed(false);
                   setFieldsDirty(true);
                 }}
                 onKeyDown={(event) => {
@@ -519,6 +541,8 @@ export function StoryStage({
                 value={style}
                 onChange={(event) => {
                   setStyle(event.target.value.replace(/\n/g, " "));
+                  fieldsBase.current ??= brief;
+                  setSaveFailed(false);
                   setFieldsDirty(true);
                 }}
                 onKeyDown={(event) => {
@@ -539,6 +563,8 @@ export function StoryStage({
             value={treatment}
             minRows={12}
             onChange={(value) => {
+              treatmentBase.current ??= brief;
+              setSaveFailed(false);
               setTreatment(value);
               treatmentRef.current = value;
             }}

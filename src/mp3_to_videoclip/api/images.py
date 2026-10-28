@@ -12,7 +12,8 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip import reviews, services, shotkinds
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.domain import budget
-from mp3_to_videoclip.storage import digest, inside
+from mp3_to_videoclip.read_snapshots import read_endpoint
+from mp3_to_videoclip.storage import digest, inside, read_json
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["images"])
 
@@ -22,14 +23,13 @@ def _decisions(root, reserve_usd):
 
 
 @router.get("/images")
-async def get_images(slug: str, request: Request):
+@read_endpoint
+def get_images(slug: str, request: Request):
     root = project_root(request, slug)
     assets_path = root / "work" / "assets.json"
     assets = {}
     if assets_path.is_file():
-        import json
-
-        assets = json.loads(assets_path.read_text())
+        assets = read_json(assets_path)
     board = P.load_board(root) if (root / "work" / "storyboard.json").is_file() else None
     shots = []
     if board is not None:
@@ -77,7 +77,8 @@ async def get_images(slug: str, request: Request):
 
 
 @router.get("/plates/{shot_id}")
-async def get_plate(slug: str, shot_id: str, request: Request):
+@read_endpoint
+def get_plate(slug: str, shot_id: str, request: Request):
     root = project_root(request, slug)
     try:
         target = P.local_plate_path(root, shot_id)

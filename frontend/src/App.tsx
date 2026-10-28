@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ProjectSummary } from "./api";
 import { ArchiveShell, FilmShell, LibraryShell } from "./shell/FilmShell";
 import { goArchive, goFilm, goLibrary, useHashRoute } from "./shell/route";
@@ -14,14 +14,19 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = () => setSettingsOpen(true);
 
+  const loadEpoch = useRef(0);
   const refresh = useCallback(async () => {
+    const epoch = ++loadEpoch.current;
     try {
-      setProjects(await api.projects());
+      const next = await api.projects();
+      if (epoch !== loadEpoch.current) return;
+      setProjects(next);
       setError(null);
     } catch (caught) {
+      if (epoch !== loadEpoch.current) return;
       setError(String(caught));
     } finally {
-      setLoading(false);
+      if (epoch === loadEpoch.current) setLoading(false);
     }
   }, []);
 
