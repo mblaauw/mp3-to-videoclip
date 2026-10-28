@@ -11,6 +11,19 @@ renderer replacement. Preserve unrelated work and all existing productions.
 One commit per numbered task; one PR per phase, with same-revision verification.
 Publication authority follows the approved phase plan and repository policy.
 
+## Accepted outcome
+
+All numbered tasks T1–T10 have engineering acceptance. T9 delivers measured
+diagnostics and the plan's explicit safe deferral, **not** an encoder/concurrency
+default change or generalized render speedup. Portable folders and existing
+productions remain authoritative and unchanged by this engineering work.
+
+Frozen final code: `4f5853b` (bundle-v2 correction atop reviewed `ef59b76`).
+Publication: PRs #38, #39, #40 and #41; GitHub owns their current CI/merge state.
+No further ready engineering task remains in the approved milestone. Hardware,
+raw capture, rerender pixel variation and exit-tail investigation are disclosed
+limitations, not silently expanded follow-up scope.
+
 ## Session budget
 
 - Started: 2026-10-27T19:38:25Z; deadline: 2026-10-27T21:08:25Z (up to 90 min).
@@ -20,6 +33,15 @@ Publication authority follows the approved phase plan and repository policy.
 - Further harness/user interruptions occurred; the owner explicitly requested
   continue again at the 2026-10-28T08:23:00Z status check. This bounded cycle ends
   by 09:53:00Z; elapsed idle interruption time is not engineering evidence.
+- Last pre-handoff clock check was 09:21:49Z. After the bounded T9 child returned,
+  the next observed clock was 10:58:57Z, beyond the cycle deadline. No engineering
+  work is claimed for the unobserved gap. Implementation stopped; only final
+  verification and this checkpoint followed. Resume requires a fresh owner cycle.
+- Owner requested continue; resumed at 2026-10-28T11:08:18Z with a new bounded
+  cycle deadline 12:38:18Z. Ready order: independent T8 cleanup/T10 cache review,
+  finish bounded T9 evidence or explicitly defer unsupported adoption, verify
+  frozen Phase4 checks/runtime, commit/publish/current-head CI/merge. Scope,
+  publication authority and zero-provider-spend cap are unchanged.
 - Spending cap: $0 new provider spend.
 - Initial revision: `b6c3e4fc3d894995483b4cf070836e8a54b82324`; initially clean.
 - Studio processes are running; no active render/pytest process was observed.
@@ -31,8 +53,8 @@ Publication authority follows the approved phase plan and repository policy.
 | --- | --- | --- |
 | 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | merged PR #38 at `2afc1cc` |
 | 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | merged PR #39 at `3375eb1` |
-| 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | implemented; final checks/publication active |
-| 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | pending phase 3 |
+| 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | merged PR #40 at `7fe6f96` |
+| 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | accepted, T9 default adoption deferred; publication PR #41 |
 
 ## Acceptance
 
@@ -44,7 +66,7 @@ local performance and quality evidence, not just encoder flags.
 
 ## Checkpoint
 
-- Branch: `reliability/phase-3`; base `3375eb1`; T1 `d8d5d89`, T2 `285e0cb`,
+- Branch: `reliability/phase-4`; base `7fe6f96`; T1 `d8d5d89`, T2 `285e0cb`,
   T3 `44f6a36`. Phase 1 GitHub CI passed before merge.
 - T1 accepted: 45 snapshot tests passed, including JSONL restore, mutation
   detection, secret exclusions and exclusive publication. Fresh review found
@@ -128,6 +150,158 @@ local performance and quality evidence, not just encoder flags.
   blockers and the workflow correction. Frontend API regeneration is clean.
   PR #40 opened; current-head CI/merge pending. Next: integrate after green,
   then T8 reproducible render diagnostics and bounded local benchmarks.
+- Phase 3 evidence head `ab23264` passed current-head CI; PR #40 merged at
+  `7fe6f96`. Same-snapshot affected/golden/parity checks: 53 passed; real local
+  renderer smoke passed. No production app restart or artifact mutation.
+- T8 implemented observation-only renderer/adapter/compositor timing reports and
+  opt-in isolated synthetic 1080p benchmark. No quality/encoder/concurrency change.
+  Initial base run partial (2 cold/1 warm within 180s); alpha 2 cold/2 warm.
+  Observed libx264 / prores_ks, PNG/image2pipe, parallel encoding, concurrency 2.
+  Base subprocess overhead outside measured rendering remains unexplained.
+  Targeted Python/golden 19 passed, Node 26 passed, real smoke and alpha extrema
+  (0,255) passed. Next: freeze/repeat baseline, review T8, then benchmark T9
+  candidates without changing master defaults; T10 selected-asset cache boundary.
+- Phase 4 HEAD `ea98503` (T8). Final unchanged-renderer baseline completed two
+  cold/warm pairs for both base and alpha. Base subprocess medians cold/warm
+  47.49/47.10 s; renderMedia 20.83/20.80 s. Alpha subprocess 6.00/5.17 s;
+  renderMedia 4.63/4.52 s. Dominant base observation is unexplained subprocess
+  overhead, not isolated encoding. Evidence in approved temporary directory
+  `t8-render-final/benchmark.json`, frozen renderer source hashes included.
+- Independent T8 review accepted diagnostics/noninterference but blocked timeout
+  cleanup: subprocess timeout killed Node without bounding detached Chrome.
+  Uncommitted correction tracks owned PID/start identities, graceful termination,
+  bounded escalation and survivor checks. Five local-process regression tests
+  pass; correction still requires independent review. No benchmark/render/ffmpeg
+  process remained in the final scoped process check; owner Studio was untouched.
+- T9 uncommitted opt-in candidate harness and base-only VideoToolbox-20M profile.
+  Completed software runs: c1 one replicate (18.46s), c2 one (48.60s), c3 two
+  (median45.72s); all warm, exact 288 frames/1080p24/BT.709/silent and SSIM1.0.
+  Interrupted second c2; hardware runs not reached. Raw CDP capability probe
+  confirms the installed browser lacks Page.remotionCreateFramePool. No browser
+  replacement, hardware/concurrency default adoption or speedup claim. T9 remains
+  partial, not accepted. Evidence `t9-render-candidates-final/candidates.json`.
+- T10 uncommitted visual-only cache identity and immutable selected-asset
+  publications; budget-only reuse, selected/native-pane pixel dependencies,
+  strict SHA/full-key receipts and historical creation timers distinguished.
+  Adapter/golden tests43 passed; independent review and runtime/cache acceptance
+  still pending. Code-only bundle separation deliberately not introduced.
+- Final worktree verification: pytest1128 passed/1 skipped in120.04s; renderer
+  Node26 passed; Ruff lint/format and diff checks passed. Frontend unchanged from
+  accepted Phase3. Tested uncommitted seven-file fingerprint before checkpoint
+  documentation-only updates:
+  `84e4265d7fb69121f75c3ba3e248b8ffc545952a61aff31b57f19b8e3bee0444`.
+  All Phase4 changes remain local; no Phase4 PR or merge. No golden regeneration,
+  provider spend, production rewrite, approval, owner restart or cleanup.
+- Next owner-authorized cycle: review T8 cleanup/T9 harness/T10 frozen diff,
+  resolve findings and add acceptance evidence; finish or explicitly defer T9's
+  missing hardware/quality measurements, commit tasks separately, run same-head
+  full checks/startup, then publish Phase4 with current-head CI. Do not treat the
+  passing tests or child 'complete' status as final milestone acceptance.
+- Resumed-cycle progress: T8 cleanup review rejected ancestry polling's initial
+  inspection, orphan and second-resolution identity gaps. Replaced with an
+  inherited cryptographic run nonce, UID-scoped discovery, immediate nonce
+  revalidation and independent Popen cleanup. Eleven local-process tests passed;
+  fresh review accepted the supported environment-inheriting renderer scope.
+  Correction committed `95709ec`; arbitrary environment-scrubbing programs are
+  explicitly outside this opt-in runner's contract. Raw environments never logged.
+- T10 review found same-key silent render creation unprotected across processes.
+  Added per-visual-cache lock through strict receipt publication, never a long
+  project-state lock; distinct final muxes run after release. Deterministic
+  synchronized two-process contention test proves one invocation and two successful
+  consumers. Independent correction review accepted adapter hash
+  `55522e28389074c907ba3549933955017b5a1f11426064b3c64df4a01b6183ed`.
+- T9 adds replicated software/all/hardware suites, warm-cache and actual encoder
+  assertions, nonzero partial exits and opt-in profile tests. Source review found
+  raw CDP probe could allow implicit browser acquisition with a malformed baseline;
+  corrected with explicit existing local executable validation and a refusing
+  download callback. Six candidate-script tests pass; correction review pending.
+- Serial full T9 comparison running with a 660s budget in approved temporary
+  `t9-resumed-comparison/`, shell job `sh_1823b11c3001zwAUxzBqhK5ifT`.
+  No concurrent rendering/quality acceptance runs; Node sources remain frozen.
+  Ready next: inspect completed evidence, runtime cache/alpha/audio acceptance,
+  same-head full suite and phase publication. No master defaults changed.
+- Full synthetic T9 series completed: two measured runs each c1/c2/c3/software
+  and c2/VideoToolbox, all warm, exact frames/canvas/fps/colour/silent contracts.
+  Median subprocess wall c1 18.64s, c2 46.82s, c3 47.21s, VT-c2 46.63s.
+  Software decoded SSIM1.0; actual h264_videotoolbox20M SSIM0.999306. Hardware
+  policy is not quality-equivalent and offers no material wall improvement here;
+  master hardware adoption will be deferred. Source reports record exact hashes.
+- T9 browser-preflight correction accepted by independent review; removed an
+  ignored openBrowser option instead of claiming an unsupported API safeguard.
+  Only the validated explicit existing executable prevents implicit acquisition.
+- Per-cache creation correction and T10 visual/selected-assets boundary accepted
+  by independent review. Focused cleanup/candidate/adapter/golden suite55 passed.
+  Freezing cache implementation before runtime acceptance. No deletion or repair
+  of old caches is part of this change; code-plus-selected-assets bundle remains.
+- To qualify a base-only concurrency change, a second serial comparison now uses
+  read-only, SHA-verified copies of selected tree-of-love images s003/s006/s038
+  in a synthetic12s test cut. No production timeline changed. Baseline includes
+  an opt-in external active-resource probe, not renderer/dependency patches.
+  Evidence `t9-real-image-comparison/`, shell `sh_18243aa6d001lLzO5wa3pBW6HD`.
+  Adoption still requires completed replicated measurements and visual/alpha/
+  audio acceptance; no default has changed yet.
+- T10 frozen at `b8a2bdc` after accepted correction review. T8 correction
+  `95709ec` and T10 remain local; phase publication waits for all acceptance.
+- Real-image series completed all six measured software runs plus warm-up:
+  median subprocess c1 45.85s / c2 46.43s / c3 46.08s; renderMedia
+  34.70s / 32.71s / 32.69s. Synthetic c1 wall advantage did not generalize.
+  Exact decoded-frame comparisons failed, including same-setting replicates
+  (93/288 differences in most comparisons, 177 for c3r1). No universal speedup
+  or quality-equivalent setting is established. T9 acceptance is diagnostics and
+  explicit deferral under the approved fallback, not production acceleration.
+- Decision: retain every master codec/capture/concurrency/quality/canvas/fps
+  default. Do not adopt VideoToolbox20M or c1. Raw capture needs a different
+  browser capability, not authorized browser replacement. Opt-in experiments stay
+  separated from Studio/defaults. No renderer pixel components changed.
+- External source-preserving exit probe observed TCP server/pipe resources after
+  final JSON and later process exit; no referenced timeout observed in that tail.
+  Root cause remains unproven; no forced exit, timer workaround or dependency patch.
+- Two-image bounded independent visual review (child `ses_e7daf472fffeuPK5YMSCg5YeT3`)
+  found no conspicuous sampled framing/dissolve/artifact difference and no opaque
+  black alpha matte. This does not override failed hashes or authorize an artistic
+  approval. Source-copy SHA checks passed; all original production bytes preserved.
+- T10 real runtime fixture passed: budget/history reuse, camera invalidation with
+  bundle reuse, selected-pixel invalidation, source immutability and identical audio
+  packets. Four outputs verified exact48 frames. One614-byte selected image per
+  publication excluded1,179,648 bytes of preserved fixture history. No global
+  storage saving/cleanup claim. Evidence `t10-runtime-acceptance/acceptance.json`.
+- Final alpha smoke passed: actual prores_ks/PNG, graphics concurrency2 unchanged,
+  48frames1080p, alpha extrema0/255 and exact frame24 RGBA parity with T8.
+  Evidence `phase4-alpha-acceptance/acceptance.json`; own-child cleanup completed.
+- Full current-source suite1139 passed/1 skipped in127.50s. Fresh fixture-only
+  actual-app/built-frontend acceptance at1440/390 passed26 state assertions,
+  12startup-route checks, no console errors/document overflow; ownport18974closed.
+  UI evidence `.opencode/scratch/phase4-ui-report.md`; current-source fingerprint
+  `b4ecf0e3503d75bd4385cfeca99fdb6bd8606c3d3e7a063757d39bfabb7ef527`.
+  This complements—not replaces—the independent real engine/cache/alpha checks.
+- Next: commit T9 experiment/deferral, final frozen checks/types/build/smoke,
+  current-head revision review, push/Phase4 PR/CI/merge. Zero provider spend;
+  no production writes, user approvals, cleanup or owner-app restart.
+- T9 frozen `ef59b76`; final independent revision-bound Phase4 review accepted
+  that exact snapshot with no remaining critical cross-boundary finding. Full
+  same-HEAD rerun1139 passed/1 skipped in125.38s
+  (`.opencode/scratch/phase4-frozen-pytest.log`). Renderer28/frontend74 passed;
+  API regeneration, TypeScript/shipped build, Ruff lint/format and real renderer
+  smoke passed. Shipped frontend rebuilt identically; golden files unchanged.
+  Worktree clean at freeze. PR #41 published from that code; final integration
+  requires current-head CI, never stale/empty checks. All engineering acceptance
+  is complete; CI/publication state is tracked by PR #41 rather than duplicated.
+- Final parent boundary audit found the pre-existing Node bundle cache still
+  trusted index.html and could delete/repair a partial entry. Corrected before
+  merge at `4f5853b`: v2 full-SHA keys, exact membership/content manifest checks,
+  symlink/nonregular rejection, unique staging and serialized atomic publication.
+  Missing/corrupt/partial entries, old v1 caches and stale locks are preserved,
+  not repaired. Crash-left locks fail visibly. Independent correction review
+  accepted; a direct stale-lock preservation regression also passed.
+- Final `4f5853b` execution: full pytest1139 passed/1 skipped in123.65s
+  (`.opencode/scratch/phase4-final-v2-pytest.log`), Node47 passed, Ruff lint/format
+  clean. Real cache/audio and alpha acceptance reran on v2 and passed with the
+  same alpha RGBA hash; startup routes all200 and frontend rebuilt identically.
+  Runtime evidence `t10-v2-runtime-acceptance/` and `phase4-v2-alpha-acceptance/`.
+  Prior measured comparison reports retain their original source hashes and are
+  not represented as post-v2 throughput measurements. Rendering defaults remain
+  unchanged; no speedup claim or forced process-exit workaround.
+  PR #41 must pass the new final evidence head, not the earlier green head.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required

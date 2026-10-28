@@ -24,7 +24,6 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  renameSync,
   rmSync,
   statSync,
   unlinkSync,
@@ -38,6 +37,9 @@ import {renderMedia, selectComposition} from "@remotion/renderer";
 
 import {fail, requestSha256, resolveChrome, validateRequest} from "./src/request.mjs";
 import {createProgressWriter} from "./src/progress.mjs";
+import {createDiagnostics} from "./src/diagnostics.mjs";
+import {benchmarkOptions as resolveBenchmarkOptions} from "./src/benchmark-profiles.mjs";
+import {ensureBundleCache} from "./src/bundle-cache.mjs";
 
 const RENDERER_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ENTRY_POINT = path.join(RENDERER_ROOT, "src", "index.jsx");
@@ -69,7 +71,7 @@ const KIND_SETTINGS = {
   },
 };
 
-const USAGE = "usage: node render.mjs <request.json|-> [--cache-dir <dir>] [--progress <file>]";
+const USAGE = "usage: node render.mjs <request.json|-> [--cache-dir <dir>] [--progress <file>] [--benchmark-profile videotoolbox-20m]";
 
 function remotionVersion() {
   try {
@@ -83,9 +85,15 @@ function parseArgs(argv) {
   let requestPath = null;
   let cacheRoot = DEFAULT_CACHE_ROOT;
   let progressFile = null;
+  let benchmarkProfile = null;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") return {help: true};
+    if (arg === "--benchmark-profile") {
+      benchmarkProfile = argv[++index];
+      if (benchmarkProfile !== "videotoolbox-20m") fail("unknown benchmark profile");
+      continue;
+    }
     if (arg === "--cache-dir") {
       index += 1;
       if (!argv[index]) fail(`--cache-dir needs a directory (${USAGE})`);
@@ -111,7 +119,7 @@ function parseArgs(argv) {
     requestPath = arg;
   }
   if (requestPath === null) fail(`a request file is required (${USAGE})`);
-  return {help: false, requestPath, cacheRoot, progressFile};
+  return {help: false, requestPath, cacheRoot, progressFile, benchmarkProfile};
 }
 
 function loadRequest(requestPath) {
@@ -150,7 +158,7 @@ function listFiles(root, prefix = "") {
  */
 export function bundleKey(assetRoot) {
   const hash = createHash("sha256");
-  hash.update("mp3-to-videoclip-remotion-bundle-v1\n");
+  hash.update("mp3-to-videoclip-remotion-bundle-v2\n");
   for (const [relative, full] of listFiles(SRC_DIR)) {
     hash.update(`src:${relative}:${sha256File(full)}\n`);
   }
@@ -158,48 +166,32 @@ export function bundleKey(assetRoot) {
   for (const [relative, full] of listFiles(assetRoot)) {
     hash.update(`asset:${relative}:${sha256File(full)}\n`);
   }
-  return hash.digest("hex").slice(0, 32);
+  return hash.digest("hex");
 }
 
 /** Bundle into `cacheDir` unless a complete bundle is already there. */
 async function ensureBundle(cacheDir, assetRoot, progress) {
-  const indexHtml = path.join(cacheDir, "index.html");
-  if (existsSync(indexHtml)) {
-    progress.update({phase: "bundle-cached"});
-    return {serveUrl: cacheDir, bundleCached: true};
-  }
-  mkdirSync(path.dirname(cacheDir), {recursive: true});
-  const staging = `${cacheDir}.staging-${process.pid}`;
-  rmSync(staging, {recursive: true, force: true});
-  await bundle({
-    entryPoint: ENTRY_POINT,
-    outDir: staging,
-    publicDir: assetRoot,
-    rootDir: RENDERER_ROOT,
-    enableCaching: true,
-    onProgress: (percent) => {
-      progress.update({
-        phase: "bundling-assets",
-        done: Math.round(Math.min(Math.max(Number(percent) || 0, 0), 1) * 100),
-        total: 100,
-        unit: "percent",
-      });
-    },
+  const result = await ensureBundleCache({
+    cacheDir,
+    key: path.basename(cacheDir),
+    build: (staging) => bundle({
+      entryPoint: ENTRY_POINT,
+      outDir: staging,
+      publicDir: assetRoot,
+      rootDir: RENDERER_ROOT,
+      enableCaching: true,
+      onProgress: (percent) => {
+        progress.update({
+          phase: "bundling-assets",
+          done: Math.round(Math.min(Math.max(Number(percent) || 0, 0), 1) * 100),
+          total: 100,
+          unit: "percent",
+        });
+      },
+    }),
   });
-  try {
-    renameSync(staging, cacheDir);
-  } catch (error) {
-    if (existsSync(indexHtml)) {
-      // Another process published the same key first: reuse it.
-      rmSync(staging, {recursive: true, force: true});
-    } else {
-      // A half-written cache entry from an earlier crash: replace it.
-      rmSync(cacheDir, {recursive: true, force: true});
-      renameSync(staging, cacheDir);
-    }
-  }
-  if (!existsSync(indexHtml)) fail(`bundle at ${cacheDir} has no index.html`);
-  return {serveUrl: cacheDir, bundleCached: false};
+  if (result.bundleCached) progress.update({phase: "bundle-cached"});
+  return result;
 }
 
 /** Publish `temp` at `target` with an exclusive hard link: never overwrite. */
@@ -234,7 +226,7 @@ function refuseRemoteAsset(src) {
 }
 
 async function run() {
-  const {help, requestPath, cacheRoot, progressFile} = parseArgs(process.argv.slice(2));
+  const {help, requestPath, cacheRoot, progressFile, benchmarkProfile} = parseArgs(process.argv.slice(2));
   if (help) {
     process.stdout.write(`${USAGE}\n`);
     return;
@@ -242,15 +234,20 @@ async function run() {
   const progress = createProgressWriter(progressFile);
   progress.update({phase: "validating-request"});
   try {
-    await render(progress, requestPath, cacheRoot);
+    await render(progress, requestPath, cacheRoot, benchmarkProfile);
   } finally {
     progress.close();
   }
 }
 
-async function render(progress, requestPath, cacheRoot) {
+async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
+  const totalStarted = performance.now();
+  const diagnostics = createDiagnostics();
   const request = loadRequest(requestPath);
   const normalized = validateRequest(request);
+  // Explicit experimental policy, never a fallback or a production default.
+  // No CRF: 20 Mbit/s target is not quality-equivalent to the default libx264.
+  const benchmarkOptions = resolveBenchmarkOptions(benchmarkProfile, normalized.kind);
   const sha = requestSha256(request);
   if (existsSync(normalized.output)) {
     fail(`output ${normalized.output} already exists; refusing to overwrite`);
@@ -260,7 +257,9 @@ async function render(progress, requestPath, cacheRoot) {
 
   const cacheKey = bundleKey(normalized.assetRoot);
   const cacheDir = path.join(cacheRoot, cacheKey);
+  const bundleStarted = performance.now();
   const {serveUrl, bundleCached} = await ensureBundle(cacheDir, normalized.assetRoot, progress);
+  const bundleMs = performance.now() - bundleStarted;
 
   const inputProps = {
     kind: normalized.kind,
@@ -285,6 +284,8 @@ async function render(progress, requestPath, cacheRoot) {
   progress.update({phase: "selecting-composition"});
   const started = process.hrtime.bigint();
   const composition = await selectComposition({...shared, id: settings.compositionId});
+  const setupMs = Number(process.hrtime.bigint() - started) / 1e6;
+  let renderMediaMs;
   const extension = path.extname(normalized.output);
   const tempOutput = path.join(
     path.dirname(normalized.output),
@@ -297,8 +298,10 @@ async function render(progress, requestPath, cacheRoot) {
       total: normalized.frames,
       unit: "frames",
     });
+    const mediaStarted = performance.now();
     await renderMedia({
       ...shared,
+      ...benchmarkOptions,
       composition,
       codec: settings.codec,
       outputLocation: tempOutput,
@@ -311,7 +314,10 @@ async function render(progress, requestPath, cacheRoot) {
       overwrite: false,
       concurrency: normalized.concurrency,
       onDownload: refuseRemoteAsset,
+      onStart: diagnostics.onStart,
+      ffmpegOverride: diagnostics.ffmpegOverride,
       onProgress: (info) => {
+        diagnostics.onProgress(info);
         const done = Number(info?.renderedFrames ?? info?.encodedFrames ?? 0);
         progress.update({
           phase: "rendering-frames",
@@ -321,6 +327,7 @@ async function render(progress, requestPath, cacheRoot) {
         });
       },
     });
+    renderMediaMs = performance.now() - mediaStarted;
     const size = statSync(tempOutput, {throwIfNoEntry: false})?.size ?? 0;
     if (size <= 0) fail(`renderer produced no frames at ${tempOutput}`);
     progress.update({phase: "publishing-output"});
@@ -341,6 +348,18 @@ async function render(progress, requestPath, cacheRoot) {
     render_seconds: Number(renderSeconds.toFixed(3)),
     remotion_version: remotionVersion(),
     bundle_cached: bundleCached,
+    diagnostics: {
+      ...diagnostics.data,
+      ...(benchmarkProfile ? {benchmark_profile: benchmarkProfile,
+        benchmark_policy: benchmarkOptions,
+        benchmark_fallback: "forbidden: hardware acceleration required"} : {}),
+      bundle_ms: bundleMs,
+      composition_setup_ms: setupMs,
+      render_media_ms: renderMediaMs,
+      total_ms: performance.now() - totalStarted,
+      requested: {codec: settings.codec, imageFormat: settings.imageFormat,
+        pixelFormat: settings.pixelFormat, concurrency: normalized.concurrency},
+    },
   };
   writeExclusive(sidecarPath, `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify({...report, output: normalized.output, sidecar: sidecarPath})}\n`);
