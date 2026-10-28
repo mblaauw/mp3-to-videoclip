@@ -77,12 +77,18 @@ def describe(root: Path, directory: str, name: str) -> dict:
             "input_metadata_hash"
         ] != input_metadata_hash(root):
             result.update(current=False, reason="Render inputs have changed")
-        if report.get("graphics_approval_hash"):
+        graphics_provenance = report.get("graphics_approval_hash")
+        signature_required = kind == "final" and P.requires_signature(root)
+        if signature_required and (
+            not isinstance(graphics_provenance, str) or not graphics_provenance.strip()
+        ):
+            result.update(current=False, reason="Graphics provenance cannot be verified")
+        elif graphics_provenance:
             try:
                 graphics_hash = P.stage_hash(root, "graphics")
             except (OSError, ValueError, KeyError, TypeError):
                 graphics_hash = None
-            if report["graphics_approval_hash"] != graphics_hash:
+            if graphics_provenance != graphics_hash:
                 result.update(current=False, reason="Graphics approval has changed")
         if report.get("current") is False:
             result.update(current=False, reason="Inputs changed during rendering")

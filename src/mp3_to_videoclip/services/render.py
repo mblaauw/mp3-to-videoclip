@@ -109,7 +109,9 @@ def render_final(root: Path, output: Path | None = None) -> dict:
         report["delivery_ready"] = True
         # compose already checked frames, identical audio and faststart.
         report["verified"] = True
-        _stamp(root, output, report, "final", provenance)
+        # The compositor versions an occupied destination. Its returned path is
+        # authoritative; never certify or overwrite the old movie's sidecar.
+        _stamp(root, Path(report["output"]), report, "final", provenance)
         _write_report(Path(report["output"]), report)
         return report
 
