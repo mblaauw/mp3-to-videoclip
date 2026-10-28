@@ -97,13 +97,21 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
         "--progress",
         str(progress_path.resolve()),
     ]
+    started = time.perf_counter()
     stdout, stderr = _run_streaming(argv, output, progress_path, frames)
+    invoke_seconds = time.perf_counter() - started
     progress_path.unlink(missing_ok=True)
     if stdout is None:
         raise ValueError("Local Remotion render failed: " + stderr[-4000:])
     if not output.is_file():
         raise ValueError("Remotion returned without an output")
-    return {"renderer_revision": revision, "request_sha256": file_hash(request_path)}
+    sidecar = Path(f"{output}.render.json")
+    return {
+        "renderer_revision": revision,
+        "request_sha256": file_hash(request_path),
+        "invoke_seconds": invoke_seconds,
+        "renderer_report": read_json(sidecar) if sidecar.is_file() else None,
+    }
 
 
 def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: int):
@@ -316,6 +324,7 @@ def render_base(
     if partial.exists():
         raise ValueError(f"Unresolved partial render: {partial}")
     operations.phase("muxing-audio", note="original audio muxed over the silent visual base")
+    mux_started = time.perf_counter()
     try:
         R._run(
             [
@@ -345,15 +354,24 @@ def render_base(
                 str(partial),
             ]
         )
+        mux_seconds = time.perf_counter() - mux_started
+        verification_started = time.perf_counter()
         facts = R._validate_output(partial, project, audio, R.audio_seconds(audio))
         operations.phase("verifying-output", note="frames, fps, dimensions and audio identity")
         if facts["video"]["frames"] != project.total_frames:
             raise ValueError("Remotion mux changed the exact frame count")
+        verification_seconds = time.perf_counter() - verification_started
         os.link(partial, output)
     finally:
         partial.unlink(missing_ok=True)
     report = {
         "output": str(output),
+        "timings_seconds": {"mux": mux_seconds, "output_verification": verification_seconds},
+        "renderer_report": (
+            read_json(Path(f"{silent}.render.json"))
+            if Path(f"{silent}.render.json").is_file()
+            else None
+        ),
         **facts,
         "verified": True,
         "renderer_backend": "remotion",
@@ -423,6 +441,7 @@ def overlay_clip(part, spec, palette, canvas, fps, directory: Path) -> Path:
     else:
         G._cache_integrity(alpha, created=False)
     temp = path.with_name(f".{path.stem}.partial.mov")
+    conversion_started = time.perf_counter()
     try:
         G._run(
             [
@@ -441,11 +460,21 @@ def overlay_clip(part, spec, palette, canvas, fps, directory: Path) -> Path:
                 str(temp),
             ]
         )
+        conversion_seconds = time.perf_counter() - conversion_started
+        verification_started = time.perf_counter()
         G._validate_overlay(temp, canvas, part["frames"])
+        verification_seconds = time.perf_counter() - verification_started
         os.link(temp, path)
     finally:
         temp.unlink(missing_ok=True)
     G._cache_integrity(path, created=True)
+    write_json(
+        path.with_suffix(".timings.json"),
+        {
+            "conversion_seconds": conversion_seconds,
+            "output_verification_seconds": verification_seconds,
+        },
+    )
     return path
 
 

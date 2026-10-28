@@ -38,6 +38,7 @@ import {renderMedia, selectComposition} from "@remotion/renderer";
 
 import {fail, requestSha256, resolveChrome, validateRequest} from "./src/request.mjs";
 import {createProgressWriter} from "./src/progress.mjs";
+import {createDiagnostics} from "./src/diagnostics.mjs";
 
 const RENDERER_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ENTRY_POINT = path.join(RENDERER_ROOT, "src", "index.jsx");
@@ -249,6 +250,8 @@ async function run() {
 }
 
 async function render(progress, requestPath, cacheRoot) {
+  const totalStarted = performance.now();
+  const diagnostics = createDiagnostics();
   const request = loadRequest(requestPath);
   const normalized = validateRequest(request);
   const sha = requestSha256(request);
@@ -260,7 +263,9 @@ async function render(progress, requestPath, cacheRoot) {
 
   const cacheKey = bundleKey(normalized.assetRoot);
   const cacheDir = path.join(cacheRoot, cacheKey);
+  const bundleStarted = performance.now();
   const {serveUrl, bundleCached} = await ensureBundle(cacheDir, normalized.assetRoot, progress);
+  const bundleMs = performance.now() - bundleStarted;
 
   const inputProps = {
     kind: normalized.kind,
@@ -285,6 +290,8 @@ async function render(progress, requestPath, cacheRoot) {
   progress.update({phase: "selecting-composition"});
   const started = process.hrtime.bigint();
   const composition = await selectComposition({...shared, id: settings.compositionId});
+  const setupMs = Number(process.hrtime.bigint() - started) / 1e6;
+  let renderMediaMs;
   const extension = path.extname(normalized.output);
   const tempOutput = path.join(
     path.dirname(normalized.output),
@@ -297,6 +304,7 @@ async function render(progress, requestPath, cacheRoot) {
       total: normalized.frames,
       unit: "frames",
     });
+    const mediaStarted = performance.now();
     await renderMedia({
       ...shared,
       composition,
@@ -311,7 +319,10 @@ async function render(progress, requestPath, cacheRoot) {
       overwrite: false,
       concurrency: normalized.concurrency,
       onDownload: refuseRemoteAsset,
+      onStart: diagnostics.onStart,
+      ffmpegOverride: diagnostics.ffmpegOverride,
       onProgress: (info) => {
+        diagnostics.onProgress(info);
         const done = Number(info?.renderedFrames ?? info?.encodedFrames ?? 0);
         progress.update({
           phase: "rendering-frames",
@@ -321,6 +332,7 @@ async function render(progress, requestPath, cacheRoot) {
         });
       },
     });
+    renderMediaMs = performance.now() - mediaStarted;
     const size = statSync(tempOutput, {throwIfNoEntry: false})?.size ?? 0;
     if (size <= 0) fail(`renderer produced no frames at ${tempOutput}`);
     progress.update({phase: "publishing-output"});
@@ -341,6 +353,15 @@ async function render(progress, requestPath, cacheRoot) {
     render_seconds: Number(renderSeconds.toFixed(3)),
     remotion_version: remotionVersion(),
     bundle_cached: bundleCached,
+    diagnostics: {
+      ...diagnostics.data,
+      bundle_ms: bundleMs,
+      composition_setup_ms: setupMs,
+      render_media_ms: renderMediaMs,
+      total_ms: performance.now() - totalStarted,
+      requested: {codec: settings.codec, imageFormat: settings.imageFormat,
+        pixelFormat: settings.pixelFormat, concurrency: normalized.concurrency},
+    },
   };
   writeExclusive(sidecarPath, `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify({...report, output: normalized.output, sidecar: sidecarPath})}\n`);

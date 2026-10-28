@@ -31,8 +31,8 @@ Publication authority follows the approved phase plan and repository policy.
 | --- | --- | --- |
 | 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | merged PR #38 at `2afc1cc` |
 | 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | merged PR #39 at `3375eb1` |
-| 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | implemented; final checks/publication active |
-| 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | pending phase 3 |
+| 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | merged PR #40 at `7fe6f96` |
+| 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | T8 implemented; repeated baseline pending |
 
 ## Acceptance
 
@@ -44,7 +44,7 @@ local performance and quality evidence, not just encoder flags.
 
 ## Checkpoint
 
-- Branch: `reliability/phase-3`; base `3375eb1`; T1 `d8d5d89`, T2 `285e0cb`,
+- Branch: `reliability/phase-4`; base `7fe6f96`; T1 `d8d5d89`, T2 `285e0cb`,
   T3 `44f6a36`. Phase 1 GitHub CI passed before merge.
 - T1 accepted: 45 snapshot tests passed, including JSONL restore, mutation
   detection, secret exclusions and exclusive publication. Fresh review found
@@ -128,6 +128,17 @@ local performance and quality evidence, not just encoder flags.
   blockers and the workflow correction. Frontend API regeneration is clean.
   PR #40 opened; current-head CI/merge pending. Next: integrate after green,
   then T8 reproducible render diagnostics and bounded local benchmarks.
+- Phase 3 evidence head `ab23264` passed current-head CI; PR #40 merged at
+  `7fe6f96`. Same-snapshot affected/golden/parity checks: 53 passed; real local
+  renderer smoke passed. No production app restart or artifact mutation.
+- T8 implemented observation-only renderer/adapter/compositor timing reports and
+  opt-in isolated synthetic 1080p benchmark. No quality/encoder/concurrency change.
+  Initial base run partial (2 cold/1 warm within 180s); alpha 2 cold/2 warm.
+  Observed libx264 / prores_ks, PNG/image2pipe, parallel encoding, concurrency 2.
+  Base subprocess overhead outside measured rendering remains unexplained.
+  Targeted Python/golden 19 passed, Node 26 passed, real smoke and alpha extrema
+  (0,255) passed. Next: freeze/repeat baseline, review T8, then benchmark T9
+  candidates without changing master defaults; T10 selected-asset cache boundary.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required

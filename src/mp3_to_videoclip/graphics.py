@@ -43,6 +43,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -1982,6 +1983,7 @@ def compose(
     directory = root / "work" / "graphics" / VERSION
     directory.mkdir(parents=True, exist_ok=True)
 
+    graphics_started = time.perf_counter()
     for part_index, part in enumerate(parts, 1):
         content = element_content(part["kind"], spec, part)
         if spec.get("renderer") == "remotion":
@@ -2009,13 +2011,17 @@ def compose(
         _cache_integrity(clip, created=created)
 
     operations.phase("assembling-graphics")
+    graphics_seconds = time.perf_counter() - graphics_started
+    assembly_started = time.perf_counter()
     track = _build_track(parts, directory, canvas, fps)
+    assembly_seconds = time.perf_counter() - assembly_started
     output = _unique_output(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.stem}.partial{output.suffix}")
     temporary.unlink(missing_ok=True)
     try:
         operations.phase("compositing")
+        composite_started = time.perf_counter()
         _run(
             [
                 "ffmpeg",
@@ -2056,6 +2062,8 @@ def compose(
             ]
         )
         operations.phase("verifying-output")
+        composite_seconds = time.perf_counter() - composite_started
+        verification_started = time.perf_counter()
         _probe(temporary)
         final_frames = _count_frames(temporary)
         if final_frames != base_facts["frames"]:
@@ -2069,6 +2077,7 @@ def compose(
             raise ComposeError("composed film is not faststart")
         if _file_hash(base) != base_facts["sha256"]:
             raise ComposeError("base changed during composition")
+        verification_seconds = time.perf_counter() - verification_started
         os.link(temporary, output)
     finally:
         # Published or not, the partial hardlink is always removed.
@@ -2076,6 +2085,12 @@ def compose(
 
     report = {
         "version": VERSION,
+        "timings_seconds": {
+            "graphics_elements": graphics_seconds,
+            "track_assembly": assembly_seconds,
+            "composite": composite_seconds,
+            "output_verification": verification_seconds,
+        },
         "output": str(output),
         "output_sha256": _file_hash(output),
         "base": {"path": str(base), **base_facts},
