@@ -41,7 +41,7 @@ Publication authority follows the approved phase plan and repository policy.
 | 1: correctness | T1 complete/consistent snapshots; T2 coordinated mutations/budget/recovery; T3 worker ownership/lifecycle receipts | merged PR #38 at `2afc1cc` |
 | 2: responsiveness | T4 read snapshots/indexes/hash reuse; T5 shared frontend resources/selective invalidation | merged PR #39 at `3375eb1` |
 | 3: delivery clarity | T6 truthful output classification; T7 visible intro/credits/review/composite workflow | merged PR #40 at `7fe6f96` |
-| 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | partial; T8 committed, T9/T10 uncommitted; review/publication pending |
+| 4: render performance | T8 diagnostics/benchmark; T9 measured acceleration; T10 precise cache dependencies | accepted locally with T9 adoption deferred; freezing/checking publication |
 
 ## Acceptance
 
@@ -227,6 +227,43 @@ local performance and quality evidence, not just encoder flags.
   Evidence `t9-real-image-comparison/`, shell `sh_18243aa6d001lLzO5wa3pBW6HD`.
   Adoption still requires completed replicated measurements and visual/alpha/
   audio acceptance; no default has changed yet.
+- T10 frozen at `b8a2bdc` after accepted correction review. T8 correction
+  `95709ec` and T10 remain local; phase publication waits for all acceptance.
+- Real-image series completed all six measured software runs plus warm-up:
+  median subprocess c1 45.85s / c2 46.43s / c3 46.08s; renderMedia
+  34.70s / 32.71s / 32.69s. Synthetic c1 wall advantage did not generalize.
+  Exact decoded-frame comparisons failed, including same-setting replicates
+  (93/288 differences in most comparisons, 177 for c3r1). No universal speedup
+  or quality-equivalent setting is established. T9 acceptance is diagnostics and
+  explicit deferral under the approved fallback, not production acceleration.
+- Decision: retain every master codec/capture/concurrency/quality/canvas/fps
+  default. Do not adopt VideoToolbox20M or c1. Raw capture needs a different
+  browser capability, not authorized browser replacement. Opt-in experiments stay
+  separated from Studio/defaults. No renderer pixel components changed.
+- External source-preserving exit probe observed TCP server/pipe resources after
+  final JSON and later process exit; no referenced timeout observed in that tail.
+  Root cause remains unproven; no forced exit, timer workaround or dependency patch.
+- Two-image bounded independent visual review (child `ses_e7daf472fffeuPK5YMSCg5YeT3`)
+  found no conspicuous sampled framing/dissolve/artifact difference and no opaque
+  black alpha matte. This does not override failed hashes or authorize an artistic
+  approval. Source-copy SHA checks passed; all original production bytes preserved.
+- T10 real runtime fixture passed: budget/history reuse, camera invalidation with
+  bundle reuse, selected-pixel invalidation, source immutability and identical audio
+  packets. Four outputs verified exact48 frames. One614-byte selected image per
+  publication excluded1,179,648 bytes of preserved fixture history. No global
+  storage saving/cleanup claim. Evidence `t10-runtime-acceptance/acceptance.json`.
+- Final alpha smoke passed: actual prores_ks/PNG, graphics concurrency2 unchanged,
+  48frames1080p, alpha extrema0/255 and exact frame24 RGBA parity with T8.
+  Evidence `phase4-alpha-acceptance/acceptance.json`; own-child cleanup completed.
+- Full current-source suite1139 passed/1 skipped in127.50s. Fresh fixture-only
+  actual-app/built-frontend acceptance at1440/390 passed26 state assertions,
+  12startup-route checks, no console errors/document overflow; ownport18974closed.
+  UI evidence `.opencode/scratch/phase4-ui-report.md`; current-source fingerprint
+  `b4ecf0e3503d75bd4385cfeca99fdb6bd8606c3d3e7a063757d39bfabb7ef527`.
+  This complements—not replaces—the independent real engine/cache/alpha checks.
+- Next: commit T9 experiment/deferral, final frozen checks/types/build/smoke,
+  current-head revision review, push/Phase4 PR/CI/merge. Zero provider spend;
+  no production writes, user approvals, cleanup or owner-app restart.
 - Phase 1 final code revision `414fc92`: 1063 pytest passed, 1 skipped; ruff
   check/format clean; frontend 47 passed, TypeScript/build/API types clean.
   Isolated app startup root/projects/jobs all HTTP 200 using the required

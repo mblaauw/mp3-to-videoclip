@@ -39,6 +39,7 @@ import {renderMedia, selectComposition} from "@remotion/renderer";
 import {fail, requestSha256, resolveChrome, validateRequest} from "./src/request.mjs";
 import {createProgressWriter} from "./src/progress.mjs";
 import {createDiagnostics} from "./src/diagnostics.mjs";
+import {benchmarkOptions as resolveBenchmarkOptions} from "./src/benchmark-profiles.mjs";
 
 const RENDERER_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ENTRY_POINT = path.join(RENDERER_ROOT, "src", "index.jsx");
@@ -70,7 +71,7 @@ const KIND_SETTINGS = {
   },
 };
 
-const USAGE = "usage: node render.mjs <request.json|-> [--cache-dir <dir>] [--progress <file>]";
+const USAGE = "usage: node render.mjs <request.json|-> [--cache-dir <dir>] [--progress <file>] [--benchmark-profile videotoolbox-20m]";
 
 function remotionVersion() {
   try {
@@ -84,9 +85,15 @@ function parseArgs(argv) {
   let requestPath = null;
   let cacheRoot = DEFAULT_CACHE_ROOT;
   let progressFile = null;
+  let benchmarkProfile = null;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") return {help: true};
+    if (arg === "--benchmark-profile") {
+      benchmarkProfile = argv[++index];
+      if (benchmarkProfile !== "videotoolbox-20m") fail("unknown benchmark profile");
+      continue;
+    }
     if (arg === "--cache-dir") {
       index += 1;
       if (!argv[index]) fail(`--cache-dir needs a directory (${USAGE})`);
@@ -112,7 +119,7 @@ function parseArgs(argv) {
     requestPath = arg;
   }
   if (requestPath === null) fail(`a request file is required (${USAGE})`);
-  return {help: false, requestPath, cacheRoot, progressFile};
+  return {help: false, requestPath, cacheRoot, progressFile, benchmarkProfile};
 }
 
 function loadRequest(requestPath) {
@@ -235,7 +242,7 @@ function refuseRemoteAsset(src) {
 }
 
 async function run() {
-  const {help, requestPath, cacheRoot, progressFile} = parseArgs(process.argv.slice(2));
+  const {help, requestPath, cacheRoot, progressFile, benchmarkProfile} = parseArgs(process.argv.slice(2));
   if (help) {
     process.stdout.write(`${USAGE}\n`);
     return;
@@ -243,17 +250,20 @@ async function run() {
   const progress = createProgressWriter(progressFile);
   progress.update({phase: "validating-request"});
   try {
-    await render(progress, requestPath, cacheRoot);
+    await render(progress, requestPath, cacheRoot, benchmarkProfile);
   } finally {
     progress.close();
   }
 }
 
-async function render(progress, requestPath, cacheRoot) {
+async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
   const totalStarted = performance.now();
   const diagnostics = createDiagnostics();
   const request = loadRequest(requestPath);
   const normalized = validateRequest(request);
+  // Explicit experimental policy, never a fallback or a production default.
+  // No CRF: 20 Mbit/s target is not quality-equivalent to the default libx264.
+  const benchmarkOptions = resolveBenchmarkOptions(benchmarkProfile, normalized.kind);
   const sha = requestSha256(request);
   if (existsSync(normalized.output)) {
     fail(`output ${normalized.output} already exists; refusing to overwrite`);
@@ -307,6 +317,7 @@ async function render(progress, requestPath, cacheRoot) {
     const mediaStarted = performance.now();
     await renderMedia({
       ...shared,
+      ...benchmarkOptions,
       composition,
       codec: settings.codec,
       outputLocation: tempOutput,
@@ -355,6 +366,9 @@ async function render(progress, requestPath, cacheRoot) {
     bundle_cached: bundleCached,
     diagnostics: {
       ...diagnostics.data,
+      ...(benchmarkProfile ? {benchmark_profile: benchmarkProfile,
+        benchmark_policy: benchmarkOptions,
+        benchmark_fallback: "forbidden: hardware acceleration required"} : {}),
       bundle_ms: bundleMs,
       composition_setup_ms: setupMs,
       render_media_ms: renderMediaMs,

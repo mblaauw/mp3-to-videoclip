@@ -107,6 +107,10 @@ Silent-movie creation has its own per-key cross-process lock through validation
 and receipt publication. Concurrent consumers wait for a complete receipt rather
 than racing the same request/movie paths. Final audio muxes occur after release;
 no project-state lock is held during the render.
+Selection publication deliberately copies bytes for isolation. It reduces the
+asset set copied into each bundle, not total existing disk use; publications and
+all historical staging/bundle entries are retained. No cleanup or global storage
+saving is claimed.
 
 Reports expose `visual_cache_hit`; on a hit, `renderer_report` is null and any
 creation-time renderer timers are labelled `historical_renderer_report`, rather
@@ -116,7 +120,8 @@ browser calls.
 
 ## T9 bounded candidate experiments (28 October 2026)
 
-No production default was changed. The opt-in command is:
+**Decision: keep every production default unchanged.** Encoder, capture,
+concurrency, resolution, fps and quality remain as before. The opt-in command is:
 
 ```sh
 uv run python scripts/benchmark_render_candidates.py --baseline-dir /absolute/t8-render-final --output-dir /absolute/new/t9-evidence --suite all --budget-seconds 660
@@ -134,6 +139,56 @@ opt-in, never a Studio job. An existing explicit executable in the baseline is
 required before any probe, so the raw CDP probe never requests an implicit browser.
 Measured runs must confirm a warm bundle and the actual expected encoder. A
 partial or contract-failing series exits nonzero and preserves its evidence.
+
+### Completed replicated comparisons
+
+The resumed synthetic series completed two measured runs per candidate, plus an
+excluded warm-up. All runs confirmed the expected encoder, warm bundle, 288
+frames, 1920×1080/24 fps, BT.709/yuv420p and no audio:
+
+| Synthetic candidate | Median subprocess wall | Median renderMedia | Decoded SSIM vs software baseline |
+| --- | --- | --- | --- |
+| libx264, concurrency 1 | 18.64 s | 17.88 s | 1.000000 |
+| libx264, concurrency 2 | 46.82 s | 20.66 s | 1.000000 |
+| libx264, concurrency 3 | 47.21 s | 24.78 s | 1.000000 |
+| h264_videotoolbox, concurrency 2, 20M | 46.63 s | 20.51 s | 0.999306 |
+
+VideoToolbox encoder selection was observed in actual FFmpeg arguments; physical
+device utilization was not measured. This bitrate policy is not equivalent to
+the software quality policy, and showed no material subprocess improvement.
+
+A second serial series used SHA-verified copies of three selected real stills
+from the latest production in a separate synthetic 12-second test cut. The
+original image bytes and production timeline were not changed. Two measured
+runs per software candidate yielded:
+
+| Real-image candidate | Median subprocess wall | Median renderMedia |
+| --- | --- | --- |
+| concurrency 1 | 45.85 s | 34.70 s |
+| concurrency 2 | 46.43 s | 32.71 s |
+| concurrency 3 | 46.08 s | 32.69 s |
+
+The synthetic concurrency-1 improvement did **not** generalize. Exact decoded
+frame hashes also differed between real-image outputs, including same-setting
+replicates: 93/288 differing frames for most comparisons to the first c2 run;
+177/288 for the second c3 run. SSIM was near—but not exactly—one. Reduced-size
+visual samples showed no conspicuous framing/dissolve/artifact difference, but
+that does not override failed exact parity or establish temporal quality.
+No encoder/concurrency candidate qualifies for adoption. Pixel components were
+not changed; the cause of real-image rerender variation remains unestablished.
+
+An external, opt-in Node resource probe observed a TCP server and pipe resources
+after final JSON, followed by delayed process exit. It observed no referenced
+timeout in that tail. This narrows the investigation but does not establish a
+root cause; no forced exit, blanket timer unref, browser replacement or dependency
+patch was introduced. Do not attribute the whole wall-time gap to encoding.
+
+Completed evidence is retained locally in `t9-resumed-comparison/` and
+`t9-real-image-comparison/`, including per-source hashes, probes, logs, copied
+inputs, outputs and frame-hash comparisons. The following partial trial remains
+historical, not the basis for a claimed speedup.
+
+### Initial partial trial
 
 | Software concurrency | Completed replicates | Subprocess wall | renderMedia |
 | --- | --- | --- | --- |
@@ -163,8 +218,8 @@ experiment: PNG capture and BT.709/yuv420p stay unchanged, hardware acceleration
 is required, and target bitrate is explicitly 20 Mbit/s with no CRF. Unsupported
 hardware must fail rather than silently fall back. Actual encoder is recorded
 by the existing FFmpeg observer, not inferred from the profile name. This policy
-is not quality-equivalent to the default software policy and was **not rendered
-within this budget**. Graphics requests reject the profile; the normal PNG /
+is not quality-equivalent to the default software policy and was not reached in
+the initial partial trial; the resumed series above did exercise it. Graphics requests reject the profile; the normal PNG /
 ProRes 4444 alpha path is untouched. No GUI surface or default adoption is added.
 
 Evidence: local approved temporary directory `t9-render-candidates-final/`, with
@@ -172,4 +227,18 @@ Evidence: local approved temporary directory `t9-render-candidates-final/`, with
 The earlier `t9-render-candidates/` contains a retained failed probe attempt
 (incorrect module import path), not benchmark evidence. Decision: defer raw
 capture, concurrency adoption and hardware adoption pending complete replicated
-measurements, an explained wall-time gap and human quality acceptance.
+measurements that generalize, an explained wall-time gap and quality acceptance.
+
+## Final runtime/cache acceptance
+
+A real local two-second fixture verified budget/history-only reuse of the same
+silent movie, camera invalidation with bundle reuse, selected-pixel invalidation,
+unchanged source bytes and identical output audio packets on reuse. Each selected
+publication contained one 614-byte fixture image; 1,179,648 bytes of deliberately
+unused history stayed outside those publications and remained preserved. This is
+not a production storage-reduction or full-film speedup claim.
+
+A final real 48-frame 1080p ProRes 4444 alpha render used the unchanged graphics
+concurrency 2, retained alpha extrema 0/255, and matched the T8 frame-24 decoded
+RGBA bytes exactly. Checkerboard review showed no full-frame opaque black matte.
+Full engine/golden tests additionally cover timing, compositing and audio checks.
