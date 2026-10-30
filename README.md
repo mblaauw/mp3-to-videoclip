@@ -35,6 +35,9 @@ references.
 - Intro, captions and credits are drawn in the film itself on integer-frame
   windows (`titles.py`). **Check titles** renders review stills of the real film
   in seconds; the final is one render pass with the reviewed titles.
+- Story starts from your own idea or from one to three concepts found in the
+  music. Your words are only sorted, never rewritten; concepts compare as beats on
+  the song, and the story reads against the song with the still at that moment.
 - Three production kinds (music video, promo, advert) with a kind-specific
   intake, `brief.intent`, selectable style presets and a kind-based signature
   package (`music_video` keeps the 25/40 opening and credits).

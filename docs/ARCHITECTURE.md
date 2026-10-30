@@ -25,6 +25,8 @@ projects/<slug>/
   project.json          slug, title, duration, fps, aspect, model settings, source hash
   media/song.mp3        immutable source audio
   brief.json            intent, treatment, look, characters, scenes, references
+  work/idea.jsonl       append-only: your pasted idea, word for word, and how it was sorted
+  work/story-beats.json when each passage of the treatment plays (outside any approval)
   work/audio/           derived excerpt WAV for promo/advert (source stays untouched)
   work/music.json       measured beats/energy/sections
   work/lyrics.json      supplied or transcribed lyrics (drafts until reviewed)
@@ -59,6 +61,18 @@ mandatories, avoid, CTA, length, window), selects a style preset and, for
 promo/advert, the excerpt window. The optionals are serialized only when set, so
 legacy brief and project payloads keep their approval hashes.
 
+Story opens on a choice. **Your idea** goes through `idea.py`: the paste is kept
+in `work/idea.jsonl` and saved whole as the treatment, so a failed Writer turn
+loses nothing. The Writer's `sort_idea` tool may only say which sentences are
+story, style, rules or avoid: anything not word for word in the paste, used twice
+or left out is refused, and the brief receives the paste's own characters. A sort
+is refused once the brief has been edited since, because it would overwrite those
+edits. **Concepts from the music** asks for one to three routes, each with beats
+timed on the song. `story_beats.py` stores when each passage plays outside the
+brief, so placing never un-approves the story. The treatment stays the only copy
+of the words: a passage that no longer matches reads as not on the song, and is
+never given a guessed time.
+
 `project.duration` is the film duration. `project.source_duration` is the full
 recording and `project.audio_window` is the absolute source window with fades.
 `audio.py` writes a derived PCM WAV under `work/audio/`, keyed by source hash and
@@ -80,7 +94,9 @@ one task at a time: `writer|editor/system.md`, `shared/truth.md`,
 `kinds/<kind>.md`, `styles/<preset>.md` (Writer only), the task file and its
 worked example. `director/prompts.py` chooses the task deterministically from
 the stage and the artifacts already written: Story moves from brief to concepts
-to script to revise; Storyboard loads the board task; Images loads prompts or
+to script to revise, and a treatment with no concepts on file goes straight to the
+script. A Story button that means one job (sort, concepts, place, script) names
+its task in the chat request; Storyboard loads the board task; Images loads prompts or
 review; Track and Film route to the Editor. The assembled text is under 2,000
 words per Writer task, excluding the project snapshot appended by the API.
 
@@ -93,7 +109,7 @@ prompt revision without changing any artifact schema or approval hash.
 ## Evaluation and ratings
 
 Three frozen fixtures and their automatic checks live in `tests/evals/`. The
-Writer checks cover three distinct concept structures, board coverage, local
+Writer checks cover one to three distinct concept structures, board coverage, local
 kinds for the advert and invented claims; the Editor checks cover edit-report
 hard findings and the advert's first-five-seconds/end-card rules. The command
 `uv run python -m tests.evals` writes one report page per current prompt hash,

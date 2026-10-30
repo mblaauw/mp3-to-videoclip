@@ -244,3 +244,14 @@ def test_a_story_with_no_placement_reads_by_paragraph_with_offsets(root):
     assert [item["text"] for item in items] == ["One walks.", "Two runs.", "Three stops."]
     assert all(item["start"] is None for item in items)
     assert [STORY[item["from"] : item["to"]] for item in items] == [item["text"] for item in items]
+
+
+def test_placing_the_story_never_un_approves_it(tmp_path):
+    root = make_api_project(tmp_path)
+    P.update_brief(root, {"treatment": STORY})
+    client = api_client(tmp_path)
+    url = "/api/projects/production/approvals"
+    stages = lambda: {item["stage"]: item for item in client.get(url).json()["stages"]}  # noqa: E731
+    before = stages()["brief"]["expected_hash"]
+    story_beats.place_story(root, _placed((0, 1, "One walks."), (1, 2, "Two runs. Three stops.")))
+    assert stages()["brief"]["expected_hash"] == before
