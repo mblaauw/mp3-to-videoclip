@@ -72,8 +72,9 @@ steps. Base: `main` at `646e5fa`.
    their exact output, and the `docs/primitives/` samples are regenerated.
 6. **Film controls.** Grade preset and look in the Film panel, with the Editor able to set them.
    Show the current cut's changes against the seed so the owner can see what the Editor did.
-7. **Shot colour check (D5).** Measure each still locally, report outliers and allow a small trim
-   per shot. Dropped if nothing is found on two films.
+7. **Shot colour check (D5). Dropped after measuring.** 4 of 38 stills on Tree of Love and 3 of 80
+   on Zero Bars were outliers by luminance or warmth. Those identifiable look deliberate, such as
+   a night scene, so an automatic trim would risk harming them. No code was added.
 8. **The real cut, the experiment and acceptance.** See below. Docs and the frontend build.
 
 ## Not changing
@@ -117,3 +118,54 @@ Critic, the Animator and video clips are later steps.
 
 The Critic, the Animator, generated video, first-and-last-frame weaves, parallax in the product,
 atmosphere overlays, halation, the first-cut runner, sound design and lip-sync.
+
+## Acceptance record, 30 Oct 2026
+
+Run on scratch copies. Real films were only read. No images, no paid image spend.
+
+**Live Editor turns, all six authorized.** Spend wasn't measured.
+
+| # | Model and gateway | Result |
+| --- | --- | --- |
+| 1 | `gemini-4-argon`, direct | Read its material and 23 stills, then the provider answered 503 |
+| 2 | `kimi-k3.1-pro`, direct | Ended at once with no work; the error wasn't captured |
+| 3 | `deepseek-v4-pro`, direct | **A complete cut** in about 10 minutes: no hard findings after one rejected accent amount |
+| 4 | `deepseek-v4-pro`, direct | Asked to check framing, it said it couldn't see the images and changed nothing, as its rules require |
+| 5 | `gpt-6.1-sol`, OpenCode | Couldn't read its own cut: the tool result was truncated to a file. Changed nothing, and said so |
+| 6 | `gpt-6.1-sol`, OpenCode | **Saw the stills**, moved 18 anchors and crops, kept all 4 crop cuts, and named 3 shots it couldn't check |
+
+The cut: a warm-cold-warm plan, a written feel per section, a dip to white at the peak, 2 dissolves,
+4 crop cuts tied to lines, 7 punch-ins, 2 light leaks, `film-fade` at 0.5 and a light look. It also added
+a title and four lyric lines, which nobody asked for: they're real words, but the owner decides.
+
+**Not done from D7:** the comparison with `deepseek-v4.1-flash`. Turns 1 and 2 were lost to the provider,
+and turn 6 went on vision. The prompt wording in `edit.md` was also changed during the test.
+
+**Found and fixed in the test.** A refused model call ended a turn in silence. On the OpenCode gateway the
+Editor couldn't read a whole cut, so `get_edit` now pages and `update_edit_shots` changes named shots.
+
+**The look.** Grain 0.4, weave 0.3, drift 0.4 on the full film: 772 s against 857 s without, which is noise
+since other work ran during the second, so no measurable cost. File size 57 MB to 104 MB. Grain held up on one
+frame after a CRF 28 re-encode; a sample of 20 s went from 1.2 MB to 1.4 MB.
+
+**Suggest a cut, no model.** On Tree of Love with line times: 18 joins moved by up to 1.38 s, 38 moves changed,
+2 accents, no dissolves, no holds, no hard findings. No holds at all is worth judging by eye.
+
+**Screen.** Suggest a cut, the look controls, crop rows and ticks, and the against-the-seed line all work in
+Film. At 0:35.8 the Player showed the same crop and lyric as the MP4, judged by eye on one moment. The whip sample
+was regenerated, but no cut here uses a whip, so the new whip has only been seen in that sample.
+
+**Parallax experiment, not in the product.** Depth Anything V2 Small on 5 stills, about 95 MB. Depth maps
+separate people from backgrounds cleanly. The go or no-go waits for the owner to watch the clips.
+
+**Colour.** See task 7.
+
+**Found, not fixed.** Two renders at once crashed their browser pages, probably from memory, and both hung for
+almost an hour with the progress file still updating and no frames moving. Rendering one at a time worked. A hung
+render should fail, not wait.
+
+**Not proven.** The owner hasn't watched any cut yet. Suggest a cut wasn't rendered on Zero Bars, which has no
+cut to compare. `s033`, `s036` and `s037` have unchecked framing. No Editor turn has run on a whole film with one
+vision model from the start. Render time was measured once each.
+
+Review page: `.opencode/scratch/first-cut-review/` (not committed).
