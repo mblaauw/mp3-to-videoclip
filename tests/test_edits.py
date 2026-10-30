@@ -573,3 +573,12 @@ def test_crop_cuts_are_bounded_counted_and_absent_when_unused(tmp_path):
         )
     with pytest.raises(ValueError):
         EditCrop(frame=6, zoom=1.7)
+
+
+def test_a_film_look_is_bounded_and_absent_when_unset():
+    from mp3_to_videoclip.models import FilmLook
+
+    assert "look" not in Grade().model_dump()
+    assert Grade(look=FilmLook(grain=0.4)).model_dump()["look"]["grain"] == 0.4
+    with pytest.raises(ValueError):
+        FilmLook(grain=1.5)

@@ -981,18 +981,30 @@ class EditSection(Model):
         return value
 
 
+class FilmLook(Model):
+    """Texture that keeps a still from feeling like a slide. Every amount is 0 to 1."""
+
+    grain: float = Field(default=0, ge=0, le=1)
+    weave: float = Field(default=0, ge=0, le=1)
+    drift: float = Field(default=0, ge=0, le=1)
+
+
 class Grade(Model):
     """A named look, with the legacy four sliders available as overrides."""
 
     preset: GradePreset = "neutral"
     strength: float = Field(default=1.0, ge=0, le=1)
     overrides: PostEffects | None = None
+    look: FilmLook | None = None
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
         value = handler(self)
         if value.get("overrides") is None:
             value.pop("overrides", None)
+        # Absent when unset, so a film without a look hashes as it always has.
+        if value.get("look") is None:
+            value.pop("look", None)
         return value
 
 

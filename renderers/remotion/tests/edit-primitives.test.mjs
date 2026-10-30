@@ -13,9 +13,11 @@ import {
   editTransitionStyle,
   flashViolations,
   gradeStyle,
+  lookState,
   splitLayout,
   textAnimationStyle,
   validateEditShot,
+  validateGrade,
 } from "../src/timing.mjs";
 import {validateBaseInput, validateRequest} from "../src/request.mjs";
 
@@ -238,4 +240,35 @@ test("crop cuts are validated like the Python model", () => {
   ]) {
     assert.throws(() => validateEditShot(withCrops(bad).edit, withCrops([])));
   }
+});
+
+test("the film look is off unless asked for, and the same frame always looks the same", () => {
+  assert.equal(lookState(undefined, 10, 0, 1920, 1080, 24), null);
+  assert.equal(lookState({grain: 0, weave: 0, drift: 0}, 10, 0, 1920, 1080, 24), null);
+  const look = {grain: 0.4, weave: 0.4, drift: 0.4};
+  assert.deepEqual(lookState(look, 10, 3, 1920, 1080, 24), lookState(look, 10, 3, 1920, 1080, 24));
+  assert.notDeepEqual(lookState(look, 10, 3, 1920, 1080, 24), lookState(look, 11, 3, 1920, 1080, 24));
+  assert.notEqual(
+    lookState(look, 10, 3, 1920, 1080, 24).transform,
+    lookState(look, 10, 4, 1920, 1080, 24).transform,
+  );
+});
+
+test("the film look's overscan always covers how far it moves", () => {
+  const width = 1920;
+  const height = 1080;
+  for (let frame = 0; frame < 2000; frame += 7) {
+    const {transform} = lookState({weave: 1, drift: 1}, frame, 2, width, height, 24);
+    const [, x, y, , scale] = transform.match(
+      /translate\((-?[\d.]+)px, (-?[\d.]+)px\) rotate\((-?[\d.]+)deg\) scale\(([\d.]+)\)/,
+    );
+    assert.ok(Math.abs(Number(x)) <= ((Number(scale) - 1) * width) / 2 + 0.01);
+    assert.ok(Math.abs(Number(y)) <= ((Number(scale) - 1) * height) / 2 + 0.01);
+  }
+});
+
+test("grade look values are bounded", () => {
+  assert.doesNotThrow(() => validateGrade({preset: "neutral", look: {grain: 1, drift: 0}}));
+  assert.throws(() => validateGrade({preset: "neutral", look: {grain: 2}}));
+  assert.throws(() => validateGrade({preset: "neutral", look: "heavy"}));
 });

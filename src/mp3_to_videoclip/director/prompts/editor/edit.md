@@ -45,7 +45,9 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    `kinetic_words`. Respect safe areas; never cover a face or the product.
 7. **Grade.** Choose one preset for the film: `neutral`, `warm-night`,
    `clean-day`, `monochrome`, `vivid` or `film-fade`, with strength 0–1. Use the
-   four slider overrides only when a preset is close but not enough.
+   four slider overrides only when a preset is close but not enough. Add `look` for
+   texture, each amount 0–1: `grain`, `weave` and `drift`. Drift lets a held still
+   breathe. A light touch is usually about 0.3–0.5; text stays crisp above it.
 8. **Self-review.** Call `get_edit` if an edit exists, or read the report returned
    by `update_edit`. Fix every hard finding and the warnings that matter, then
    save again.

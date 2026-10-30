@@ -672,6 +672,15 @@ export function validateGrade(value) {
   }
   const strength = requireNumber(value.strength ?? 1, "grade.strength");
   if (strength < 0 || strength > 1) fail("grade.strength must be between 0 and 1");
+  if (value.look !== undefined && value.look !== null) {
+    if (typeof value.look !== "object" || Array.isArray(value.look)) {
+      fail("grade.look must be an object");
+    }
+    for (const key of ["grain", "weave", "drift"]) {
+      const amount = requireNumber(value.look[key] ?? 0, `grade.look.${key}`);
+      if (amount < 0 || amount > 1) fail(`grade.look.${key} must be between 0 and 1`);
+    }
+  }
   if (value.overrides !== undefined && value.overrides !== null) {
     if (typeof value.overrides !== "object" || Array.isArray(value.overrides)) {
       fail("grade.overrides must be an object");
@@ -761,6 +770,56 @@ export function editTransitionStyle(value, progress) {
           ? `translateX(-${offset}%)`
           : `translateX(${offset}%)`;
   return {...defaultStyle, transform};
+}
+
+function frameNoise(frame, salt) {
+  // A small integer hash, so the same frame always gets the same value on any machine.
+  let value = (Math.imul(frame + 1, 2654435761) ^ Math.imul(salt + 1, 40503)) >>> 0;
+  value = Math.imul(value ^ (value >>> 15), 2246822519) >>> 0;
+  return ((value ^ (value >>> 13)) >>> 0) / 4294967295;
+}
+
+const GRAIN_STRENGTH = 0.26;
+const WEAVE_SHARE = 0.0011;
+const DRIFT_SHARE = 0.007;
+const DRIFT_TILT_DEGREES = 0.12;
+export const GRAIN_TILE = 256;
+
+/**
+ * The film look at one frame, or null when off. Pure and deterministic, so the
+ * Player and the MP4 draw the same thing. Each shot drifts on its own phase, and
+ * the picture is scaled just enough that no moved edge can show.
+ */
+export function lookState(look, frame, shotIndex, width, height, fps) {
+  if (look === undefined || look === null) return null;
+  const grain = Number(look.grain ?? 0);
+  const weave = Number(look.weave ?? 0);
+  const drift = Number(look.drift ?? 0);
+  if (grain <= 0 && weave <= 0 && drift <= 0) return null;
+  const seconds = frame / fps;
+  const phase = shotIndex * 1.7;
+  const reach = Math.min(width, height);
+  const driftPixels = drift * DRIFT_SHARE * reach;
+  const weavePixels = weave * WEAVE_SHARE * reach;
+  const dx =
+    driftPixels * (0.7 * Math.sin((2 * Math.PI * seconds) / 11 + phase) +
+      0.3 * Math.sin((2 * Math.PI * seconds) / 4.3 + phase * 2)) +
+    weavePixels * (frameNoise(frame, 1) * 2 - 1);
+  const dy =
+    driftPixels * (0.7 * Math.sin((2 * Math.PI * seconds) / 13 + phase + 1) +
+      0.3 * Math.sin((2 * Math.PI * seconds) / 5.1 + phase * 3)) +
+    weavePixels * (frameNoise(frame, 2) * 2 - 1);
+  const tilt = drift * DRIFT_TILT_DEGREES * Math.sin((2 * Math.PI * seconds) / 17 + phase);
+  const margin = driftPixels + weavePixels;
+  // Room for the shift on the short side, plus what the tilt swings into the corners.
+  const tiltMargin = (Math.abs(drift * DRIFT_TILT_DEGREES) * Math.PI) / 180;
+  const scale = 1 + (2 * margin) / reach + 2 * tiltMargin * (Math.max(width, height) / reach);
+  return {
+    transform: `translate(${dx.toFixed(3)}px, ${dy.toFixed(3)}px) rotate(${tilt.toFixed(4)}deg) scale(${scale.toFixed(5)})`,
+    grainOpacity: grain * GRAIN_STRENGTH,
+    grainX: Math.floor(frameNoise(frame, 3) * GRAIN_TILE),
+    grainY: Math.floor(frameNoise(frame, 4) * GRAIN_TILE),
+  };
 }
 
 /** Overlay strength and camera bump from the accents active at an absolute frame. */

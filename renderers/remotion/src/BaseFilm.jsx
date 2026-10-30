@@ -192,6 +192,14 @@ function TextLayer({item, absoluteFrame, width, height}) {
   );
 }
 
+// One tile of noise, drawn once and only moved per frame, which is what keeps it cheap.
+const GRAIN_IMAGE = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='${timing.GRAIN_TILE}' height='${timing.GRAIN_TILE}'>` +
+    "<filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='7' stitchTiles='stitch'/>" +
+    "<feColorMatrix type='saturate' values='0'/></filter>" +
+    "<rect width='100%' height='100%' filter='url(#g)'/></svg>",
+)}")`;
+
 export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height}) {
   const grade = timing.gradeStyle(span.grade, span.post_effects);
   const accent = timing.accentState(span.edit?.accents, absoluteFrame);
@@ -202,6 +210,8 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
     ...camera,
     zoom: camera.zoom * accent.punch,
   });
+  const {fps} = useVideoConfig();
+  const look = timing.lookState(span.grade?.look, absoluteFrame, span.index, width, height, fps);
   const panes = Array.isArray(span.split_panes) ? span.split_panes : [];
   const splitLayout = span.edit?.split_layout ?? "row";
   return (
@@ -221,6 +231,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
           height: rect.height,
           left: rect.left,
           top: rect.top,
+          transform: look?.transform,
         }}
       >
         <div
@@ -262,6 +273,18 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
           />
         ) : null}
       </div>
+      {look && look.grainOpacity > 0 ? (
+        <AbsoluteFill
+          style={{
+            backgroundImage: GRAIN_IMAGE,
+            backgroundSize: `${timing.GRAIN_TILE}px ${timing.GRAIN_TILE}px`,
+            backgroundPosition: `${look.grainX}px ${look.grainY}px`,
+            mixBlendMode: "overlay",
+            opacity: look.grainOpacity,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
       {(span.edit?.text ?? []).map((item) => (
         <TextLayer
           key={item.id}

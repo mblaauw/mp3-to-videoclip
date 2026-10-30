@@ -83,6 +83,7 @@ export type Grade = {
   preset: "neutral" | "warm-night" | "clean-day" | "monochrome" | "vivid" | "film-fade";
   strength: number;
   overrides?: PreviewShot["post_effects"];
+  look?: { grain: number; weave: number; drift: number } | null;
 };
 
 export type SplitPane = {
