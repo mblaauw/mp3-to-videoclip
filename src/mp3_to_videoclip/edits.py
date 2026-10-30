@@ -888,13 +888,8 @@ def cut_material(root: Path) -> dict:
     }
 
 
-@state_mutation
-def seed_edit(root: Path) -> EditDecisionList:
-    """Create the first edit without changing the approved cut.
-
-    The storyboard's join and camera controls are translated into edit language so
-    seeding is a move of ownership, not a rewrite of the film.
-    """
+def seed_edit_preview(root: Path) -> EditDecisionList:
+    """The cut seeding would write, without writing it."""
     from . import production as P
 
     board = P.load_board(root)
@@ -927,7 +922,20 @@ def seed_edit(root: Path) -> EditDecisionList:
         grade=Grade(),
         notes="Seeded from the storyboard; timing, motion and joins are now edit-owned.",
     )
-    return save_edit(root, edit, board=board)
+    edit.check_board(board)
+    return edit
+
+
+@state_mutation
+def seed_edit(root: Path) -> EditDecisionList:
+    """Create the first edit without changing the approved cut.
+
+    The storyboard's join and camera controls are translated into edit language so
+    seeding is a move of ownership, not a rewrite of the film.
+    """
+    from . import production as P
+
+    return save_edit(root, seed_edit_preview(root), board=P.load_board(root))
 
 
 def attach_edit(shots: list[RenderShot], edit: EditDecisionList | None) -> list[RenderShot]:

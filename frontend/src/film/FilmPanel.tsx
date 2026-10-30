@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EditPayload } from "../api";
+import { api, type EditPayload, type EditSuggestion } from "../api";
 import { ArtifactRating } from "../ArtifactRating";
 import type { EditMotion, EditTransition } from "../baseFilm";
 import { JobBanner } from "../jobs/JobBanner";
@@ -104,6 +104,7 @@ export function FilmPanel({
       ) : (
         <Overview
           film={film}
+          onChange={onChange}
           notes={notes}
           onSelect={onSelect}
           onSeekNote={onSeekNote}
@@ -114,14 +115,79 @@ export function FilmPanel({
   );
 }
 
+/** A cut worked out from the song's measurements, shown before anything changes. */
+function SuggestCut({
+  slug,
+  onChange,
+}: {
+  slug: string;
+  onChange: PanelEdit;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [suggestion, setSuggestion] = useState<EditSuggestion | null>(null);
+  if (!suggestion) {
+    return (
+      <div className="row-actions">
+        <Button
+          size="small"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            api
+              .suggestEdit(slug)
+              .then(setSuggestion, () => undefined)
+              .finally(() => setBusy(false));
+          }}
+        >
+          {busy ? "Working it out…" : "Suggest a cut"}
+        </Button>
+      </div>
+    );
+  }
+  const { changes } = suggestion;
+  return (
+    <div className="cut-suggestion" role="group" aria-label="Suggested cut">
+      <b>A cut from the song's sections and sung lines</b>
+      <ul>
+        <li>
+          {changes.joins_moved} joins move, by up to {changes.largest_move_seconds} s
+        </li>
+        <li>{changes.moves_changed} camera moves change, {changes.holds} shots hold</li>
+        <li>
+          {changes.accents} accents, {changes.dissolves} dissolves
+        </li>
+        <li>{changes.sections} sections get a written feel</li>
+      </ul>
+      <p className="hint">The stills, their order and any text stay as they are.</p>
+      <div className="row-actions">
+        <Button
+          size="small"
+          variant="primary"
+          onClick={() => {
+            onChange(suggestion.edit, "the suggested cut");
+            setSuggestion(null);
+          }}
+        >
+          Use this cut
+        </Button>
+        <Button size="small" variant="quiet" onClick={() => setSuggestion(null)}>
+          Not now
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function Overview({
   film,
+  onChange,
   notes,
   onSelect,
   onSeekNote,
   onNavigate,
 }: {
   film: FilmData;
+  onChange: PanelEdit;
   notes: CutNote[];
   onSelect: (selection: FilmSelection) => void;
   onSeekNote: (note: CutNote) => void;
@@ -156,6 +222,7 @@ function Overview({
             </div>
           )}
           {cut.notes && <p className="cut-notes">{cut.notes}</p>}
+          <SuggestCut slug={slug} onChange={onChange} />
           <ArtifactRating slug={slug} artifact="edit" />
           {notes.length > 0 && (
             <details className="panel-notes" open={notes.length <= 6}>
