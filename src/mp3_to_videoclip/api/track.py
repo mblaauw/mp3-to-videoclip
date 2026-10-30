@@ -7,6 +7,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from mp3_to_videoclip import lyric_tools
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.domain import lyric_timing, music_notes
@@ -83,6 +84,40 @@ async def put_music_notes(slug: str, request: Request, payload: dict):
         return music_notes.save(root, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/lyric-tools")
+async def get_lyric_tools(slug: str, request: Request):
+    project_root(request, slug)
+    return lyric_tools.status()
+
+
+def _submit_lyric_job(request: Request, kind: str, slug: str, work_fn) -> dict:
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+
+    async def work():
+        return await asyncio.to_thread(work_fn)
+
+    return {"job_id": runner.submit(kind, slug, work, blocking=True), "status": "queued"}
+
+
+@router.post("/lyric-tools/setup")
+async def setup_lyric_tools(slug: str, request: Request):
+    project_root(request, slug)
+    state = lyric_tools.status()
+    if not state["supported"]:
+        raise HTTPException(status_code=400, detail=state["reason"])
+    return _submit_lyric_job(request, "lyric_tools", slug, lyric_tools.install)
+
+
+@router.post("/lyric-timing/run")
+async def run_lyric_timing(slug: str, request: Request):
+    root = project_root(request, slug)
+    if not lyric_tools.status()["ready"]:
+        raise HTTPException(status_code=409, detail="set up the lyric tools first")
+    return _submit_lyric_job(request, "lyric_timing", slug, lambda: lyric_tools.time_lyrics(root))
 
 
 @router.get("/lyric-timing")

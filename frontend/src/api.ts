@@ -169,6 +169,13 @@ export type LyricLine = {
   source: "tapped" | "auto" | "lrc" | null;
 };
 
+export type LyricTools = {
+  supported: boolean;
+  reason: string | null;
+  ready: boolean;
+  download_gb: number;
+};
+
 export type LyricTiming = { lines: LyricLine[] };
 
 export type LyricTimingSave = {
@@ -931,6 +938,11 @@ export const api = {
     ),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
+  lyricTools: (slug: string) => request<LyricTools>(`/api/projects/${slug}/lyric-tools`),
+  setupLyricTools: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/lyric-tools/setup`, { method: "POST" }),
+  runLyricTiming: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/lyric-timing/run`, { method: "POST" }),
   lyricTiming: (slug: string) => request<LyricTiming>(`/api/projects/${slug}/lyric-timing`),
   saveLyricTiming: (slug: string, lines: LyricTimingSave[]) =>
     request<LyricTiming>(`/api/projects/${slug}/lyric-timing`, {

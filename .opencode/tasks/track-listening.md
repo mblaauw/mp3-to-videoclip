@@ -28,7 +28,8 @@ section starts by ear.
   outro about 3 s early.
 - Parakeet leaves out what it can't place. stable-ts places every word by design, so it
   can't report a miss.
-- Time: about 1m45 per song to isolate vocals on the CPU, under 10 s for Parakeet.
+- Time: about 1m45 per song to isolate vocals on an idle CPU, and about 4m30 through the
+  app with the Studio running; under 10 s for Parakeet.
 - Line timing has been judged by the owner's ear on Tree of Love only.
 
 ## What the code showed
@@ -48,7 +49,7 @@ section starts by ear.
 - **The Spine and its player are already under Track,** with the waveform, sections and
   playhead. The prototype's strip at the top would be a second player.
 - **The project needs Python 3.12–3.13,** while the test ran on 3.11 with `torch` 2.5.1
-  pinned for Demucs. The tools haven't been tried on the project's Python.
+  pinned for Demucs. A private environment keeps them apart.
 
 ## Decisions for the owner
 
@@ -119,16 +120,18 @@ No provider call is added; the tools run on this computer and the song isn't upl
 
 ## Risks
 
-- **Python and platform.** The tools may not install on 3.12–3.13 as pinned, so task 4 starts
-  by proving that. `parakeet-mlx` is Apple Silicon only; other machines keep tapping.
+- **Platform.** The private environment uses its own Python 3.11, the version tested, so the
+  project's Python doesn't matter. `parakeet-mlx` is Apple Silicon only; other machines keep
+  tapping.
 - **Few songs.** Two songs, one with a reference. A singer, language or dense mix could do
   worse, so times stay marked as estimates and fixable by ear.
 - **Tags aren't the song.** Suno can depart from its tags, which is why the structure is a
   proposal.
 - **Instrumental starts are untested.** They come from where the last word ends, and the test
   only scored sung starts.
-- **Licences.** Parakeet is CC BY 4.0, which needs attribution; Demucs and its weights have
-  not been checked. Task 4 records both in the docs, or stops if one blocks this.
+- **Licences and upkeep.** Parakeet is CC BY 4.0, which needs attribution. Demucs is MIT, its
+  repository is archived, and its README states no separate licence for the weights. Neither
+  blocks local use by the owner; the docs record both.
 - **PR order.** PRs 48–50 touch `director/context.py` and `docs/ARCHITECTURE.md`, and PR 48
   still targets `film/story-room`. Task 8 is simpler once they've landed.
 

@@ -176,6 +176,20 @@
   max-width: 100%;
 }
 
+.track-setup {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.track-setup p {
+  margin: 0;
+  color: var(--ink-2);
+  max-width: 60ch;
+}
+
 .track-tapbar {
   position: sticky;
   top: 8px;

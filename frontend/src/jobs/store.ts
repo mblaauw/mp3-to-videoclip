@@ -142,6 +142,8 @@ const FINISHED: Record<string, string> = {
   render: "The render finished.",
   analysis: "The song is measured.",
   transcription: "The lyrics are transcribed.",
+  lyric_tools: "The lyric tools are set up.",
+  lyric_timing: "The words are on the song.",
 };
 
 const FAILED: Record<string, string> = {
@@ -149,6 +151,8 @@ const FAILED: Record<string, string> = {
   render: "The render failed",
   analysis: "Measuring the song failed",
   transcription: "Transcription failed",
+  lyric_tools: "Setting up the lyric tools failed",
+  lyric_timing: "Timing the words failed",
 };
 
 function announce(name: JobEventName, payload: ServerEvent) {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LyricLine } from "../api";
+import { api, type LyricTools } from "../api";
+import { isActive, useProjectJobs } from "../jobs/store";
 import { usePlayerControls, usePlayerTime } from "../spine/player";
 import { clock } from "../spine/wave";
 import {
@@ -133,6 +135,39 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
   const sung = sungCount(lines);
   const timed = timedCount(lines);
   const nextLine = nextToTap(lines);
+  const [tools, setTools] = useState<LyricTools | null>(null);
+  const [askSetup, setAskSetup] = useState(false);
+  const timingJobs = useProjectJobs(slug, "lyric_timing");
+  const setupJobs = useProjectJobs(slug, "lyric_tools");
+  const timingBusy = timingJobs.some(isActive);
+  const setupBusy = setupJobs.some(isActive);
+
+  useEffect(() => {
+    let live = true;
+    api.lyricTools(slug).then(
+      (value) => {
+        if (live) setTools(value);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [setupBusy, slug]);
+
+  const timeAutomatically = async () => {
+    await flush();
+    if (tools?.ready) {
+      await api.runLyricTiming(slug);
+    } else {
+      setAskSetup(true);
+    }
+  };
+
+  const setUpTools = async () => {
+    setAskSetup(false);
+    await api.setupLyricTools(slug);
+  };
 
   useEffect(() => {
     setEditing(false);
@@ -217,11 +252,25 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
         </small>
         {musicVideo && !instrumental && hasLyrics && !editing && !tapping && (
           <div className="track-actions">
+            {tools?.supported && timed < sung && (
+              <button
+                type="button"
+                className="ui-btn ui-btn--small ui-btn--primary"
+                onClick={() => void timeAutomatically()}
+                disabled={timingBusy || setupBusy}
+              >
+                {timingBusy
+                  ? "Putting the words on…"
+                  : setupBusy
+                    ? "Setting up…"
+                    : "Put the words on the song"}
+              </button>
+            )}
             <button
               type="button"
-              className={`ui-btn ui-btn--small ${timed < sung ? "ui-btn--primary" : ""}`}
+              className="ui-btn ui-btn--small"
               onClick={startTapping}
-              disabled={timed === sung}
+              disabled={timed === sung || timingBusy}
             >
               {timed ? "Carry on tapping" : "Tap the words on"}
             </button>
@@ -264,6 +313,36 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
         </p>
       ) : hasLyrics && !editing ? (
         <>
+          {askSetup && tools && (
+            <div className="track-setup" role="group" aria-label="Set up the lyric tools">
+              <p>
+                Putting the words on the song uses free tools on this computer. Setting them up
+                downloads about {tools.download_gb} GB once. The song isn't uploaded.
+              </p>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="ui-btn ui-btn--primary ui-btn--small"
+                  onClick={() => void setUpTools()}
+                >
+                  Download and set up
+                </button>
+                <button
+                  type="button"
+                  className="ui-btn ui-btn--small ui-btn--quiet"
+                  onClick={() => setAskSetup(false)}
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          )}
+          {!!timed && !tapping && lines.some((line) => line.source === "auto") && (
+            <p className="hint">
+              Estimated from the song: click a line to hear it, and nudge it if
+              it's off. Lines they couldn't place stay untimed for you to tap.
+            </p>
+          )}
           {tapping && (
             <div className="track-tapbar" role="status">
               <button
