@@ -39,7 +39,7 @@ function sourceBars(
   return bars;
 }
 
-function imageUrl(slug: string, image: ImageShot | undefined): string | null {
+export function imageUrl(slug: string, image: ImageShot | undefined): string | null {
   if (!image) return null;
   if (image.plate) return image.plate;
   if (image.selected === null) return null;
@@ -61,6 +61,7 @@ export function Spine({
   onAudioWindowCommit,
   onBoardChange,
   readOnly = false,
+  bands = [],
 }: {
   slug: string;
   stage: string;
@@ -76,6 +77,8 @@ export function Spine({
   onAudioWindowCommit?: (window: AudioWindow) => Promise<boolean>;
   onBoardChange?: (board: Storyboard) => void;
   readOnly?: boolean;
+  /** The story's placed passages, drawn on the song while on Story. */
+  bands?: { start: number; end: number }[];
 }) {
   const player = usePlayer();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -602,6 +605,17 @@ export function Spine({
             />
           );
         })}
+        {bands.map((band) => (
+          <div
+            key={band.start}
+            className={`spine-band ${player.time >= band.start && player.time < band.end ? "on" : ""}`}
+            style={{
+              left: `${toPercent(band.start)}%`,
+              width: `${toPercent(band.end) - toPercent(band.start)}%`,
+            }}
+            aria-hidden="true"
+          />
+        ))}
         {player.loop && (
           <div
             className="spine-loop"

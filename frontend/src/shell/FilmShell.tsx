@@ -198,7 +198,11 @@ function StageView({
   reserve,
   onNavigate,
   images,
+  board,
+  onStoryBands,
 }: {
+  board: Storyboard | null;
+  onStoryBands: (bands: { start: number; end: number }[]) => void;
   filmSide: HTMLElement | null;
   filmLine: HTMLElement | null;
   filmFull: boolean;
@@ -230,6 +234,9 @@ function StageView({
         windowLocked={windowLocked}
         onIntakeChange={onIntakeChange}
         music={music}
+        board={board}
+        images={images}
+        onBands={onStoryBands}
       />
     );
   if (stage === "storyboard")
@@ -305,6 +312,7 @@ function FilmShellContent({
   const [images, setImages] = useState<ImageShot[]>([]);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [board, setBoard] = useState<Storyboard | null>(null);
+  const [storyBands, setStoryBands] = useState<{ start: number; end: number }[]>([]);
   const [music, setMusic] = useState<Music | null>(null);
   const [intake, setIntake] = useState<IntakePayload | null>(null);
   const [audioWindow, setAudioWindow] = useState<AudioWindow | null>(null);
@@ -638,6 +646,8 @@ function FilmShellContent({
                 reserve={reserve}
                 onNavigate={onNavigate}
                 images={images}
+                board={board}
+                onStoryBands={setStoryBands}
               />
             </div>
           </div>
@@ -685,6 +695,7 @@ function FilmShellContent({
           board={spineBoard}
           music={music}
           images={images}
+          bands={stage === "story" ? storyBands : []}
           audioWindow={audioWindow}
           sourcePeaks={intake?.peaks || []}
           sourceDuration={intake?.source_duration || project.duration || 0}

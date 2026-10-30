@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import type { AudioWindow, IntakePayload, Music } from "../api";
+import type { AudioWindow, ImageShot, IntakePayload, Music, Storyboard } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
+import { passageBeats } from "../story/beats";
 import { ConceptRoom } from "../story/ConceptRoom";
 import { CreditsCard } from "../story/CreditsCard";
 import { FilmFacts } from "../story/FilmFacts";
@@ -29,6 +30,9 @@ export function StoryStage({
   windowLocked = false,
   onIntakeChange,
   music,
+  board,
+  images,
+  onBands,
 }: {
   slug: string;
   intake: IntakePayload | null;
@@ -36,6 +40,10 @@ export function StoryStage({
   windowLocked?: boolean;
   onIntakeChange: (intake: IntakePayload) => void;
   music: Music | null;
+  board: Storyboard | null;
+  images: ImageShot[];
+  /** Hands the placed passages to the timeline, which lives in the shell. */
+  onBands: (bands: { start: number; end: number }[]) => void;
 }) {
   const story = useStoryData({ slug, intake, onIntakeChange });
   const { brief, concepts, loading, error, load } = story;
@@ -43,6 +51,13 @@ export function StoryStage({
   // Until you pick, a film opens where it is: its story, its concepts, or the start.
   const part: StoryPart =
     picked ?? (brief?.treatment?.trim() ? "story" : concepts.length ? "concept" : "start");
+
+  const { passages } = story;
+  useEffect(() => {
+    const placed = part === "story" ? passageBeats(passages) : [];
+    onBands(placed.map(({ start, end }) => ({ start, end })));
+    return () => onBands([]);
+  }, [onBands, part, passages]);
 
   useEffect(() => {
     const show = (event: Event) => {
@@ -122,7 +137,15 @@ export function StoryStage({
           onRead={() => setPicked("story")}
         />
       )}
-      {part === "story" && <ScriptPart story={story} />}
+      {part === "story" && (
+        <ScriptPart
+          slug={slug}
+          story={story}
+          board={board}
+          images={images}
+          onStart={() => setPicked("start")}
+        />
+      )}
       {part === "world" && <WorldPart slug={slug} story={story} intake={intake} />}
       {part === "credits" && <CreditsCard slug={slug} />}
         </>
