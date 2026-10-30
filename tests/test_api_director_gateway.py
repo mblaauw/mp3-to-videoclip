@@ -99,6 +99,36 @@ def test_chat_routes_a_writer_turn_through_the_gateway(tmp_path, monkeypatch):
     assert user_turn["prompt"]["files"]
 
 
+def test_only_the_writers_storyboard_turn_is_given_the_story_timings(tmp_path, monkeypatch):
+    make_api_project(tmp_path)
+    monkeypatch.setattr(director_api, "effective_settings", lambda: _settings())
+
+    async def gateway(settings, projects_dir):
+        return FakeGateway(FakeClient())
+
+    snapshots = []
+    original = director_api.build_context
+
+    def tracked(*args, **kwargs):
+        snapshots.append(original(*args, **kwargs))
+        return snapshots[-1]
+
+    monkeypatch.setattr(director_api, "get_gateway", gateway)
+    monkeypatch.setattr(director_api, "build_context", tracked)
+    client = api_client(tmp_path)
+
+    for payload in (
+        {"stage": "storyboard"},
+        {"stage": "story", "task": "storyboard"},
+        {"stage": "storyboard", "role": "editor"},
+        {"stage": "story"},
+    ):
+        response = client.post("/api/projects/production/chat", json={"message": "Go.", **payload})
+        assert response.status_code == 200
+
+    assert ["Story on the song" in text for text in snapshots] == [True, True, False, False]
+
+
 def test_chat_uses_the_editor_role_for_the_film_stage(tmp_path, monkeypatch):
     make_api_project(tmp_path)
     fake = FakeClient()

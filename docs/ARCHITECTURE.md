@@ -71,7 +71,9 @@ edits. **Concepts from the music** asks for one to three routes, each with beats
 timed on the song. `story_beats.py` stores when each passage plays outside the
 brief, so placing never un-approves the story. The treatment stays the only copy
 of the words: a passage that no longer matches reads as not on the song, and is
-never given a guessed time.
+never given a guessed time. The Writer's storyboard task sees these passages in its
+project snapshot and keeps each one's shots inside its time; they stay evidence, in
+no approval hash.
 
 `project.duration` is the film duration. `project.source_duration` is the full
 recording and `project.audio_window` is the absolute source window with fades.

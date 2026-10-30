@@ -198,9 +198,8 @@ async def post_chat(slug: str, request: Request, payload: dict):
         task=task,
     )
     promptlog.remember(root, bundle.meta)
-    system = (
-        bundle.text + "\n\n---\n\n" + build_context(slug, root.parent, stage=stage, context=context)
-    )
+    snapshot = build_context(slug, root.parent, stage=stage, context=context, task=bundle.task)
+    system = bundle.text + "\n\n---\n\n" + snapshot
 
     if settings.gateway == "opencode":
         try:

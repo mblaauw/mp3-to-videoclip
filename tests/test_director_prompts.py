@@ -222,6 +222,14 @@ def test_stored_versions_are_json_metadata(tmp_path):
     assert bundle.meta["kind"] == "advert"
 
 
+def test_the_storyboard_prompt_asks_for_shots_inside_each_passage(tmp_path):
+    root = make_api_project(tmp_path)
+    bundle = _bundle(root, "storyboard")
+    assert {"path": "writer/storyboard.md", "version": 2} in bundle.meta["files"]
+    assert "Keep each timed\npassage's shots inside its frames" in bundle.text
+    assert 'marked "not on the song" has no time' in bundle.text
+
+
 def test_artifact_writes_record_the_current_prompt_revision(tmp_path):
     from mp3_to_videoclip import production as P
     from mp3_to_videoclip import promptlog
