@@ -75,17 +75,23 @@ def render_base(root: Path, output: Path | None = None) -> dict:
         root / "work",
         brand=brand,
     )
-    from mp3_to_videoclip.signature import prepare_review
-
     report["delivery_ready"] = False
     _stamp(root, output, report, "base", provenance)
-    # Write the report before preparing the review: validate_review later reads
-    # this sidecar to prove the base belongs to the current storyboard/stills.
+    # Titles are reviewed from stills of the film itself (check_titles), so a
+    # base no longer prepares or replaces the titles review.
     _write_report(output, report)
-    if report["current"] and P.requires_signature(root, project):
-        report["graphics_review"] = prepare_review(root, output, project)
-        _write_report(output, report)
     return report
+
+
+def check_titles(root: Path) -> dict:
+    """Prepare the titles review: stills of the real film with its titles, no base."""
+    from mp3_to_videoclip.signature import prepare_titles_review
+
+    P.require_approval(root, "stills")
+    project = P.load_project(root)
+    if not P.requires_signature(root, project):
+        raise ValueError("this film has no intro or credits to check")
+    return prepare_titles_review(root, project)
 
 
 @operations.progress_scope(stage="final-render")

@@ -12,11 +12,11 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root, valid_slug
 from mp3_to_videoclip.domain import archive
 from mp3_to_videoclip.read_snapshots import read_endpoint
-from mp3_to_videoclip.storage import RevisionConflict, digest, inside, read_json
+from mp3_to_videoclip.storage import RevisionConflict, digest, inside, read_json, read_optional
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["film"])
 
-KINDS = ("preview", "base", "final")
+KINDS = ("preview", "titles", "base", "final")
 
 
 @router.get("/graphics")
@@ -60,17 +60,27 @@ def get_graphics_review(slug: str, request: Request):
     if not path.is_file():
         return {"available": False}
     review = read_json(path)
+    # A composition review records which frame, window and phase each sample shows.
+    labels = {}
+    if review.get("method") == "composition-v1":
+        recorded = read_optional(root / review.get("preflight", ""), {}) or {}
+        labels = {frame.get("image"): frame for frame in recorded.get("frames", [])}
     samples = []
     for relative in sorted(review.get("samples", {})):
         target = root / relative
         if not target.is_file():
             continue
         name = target.name
+        label = labels.get(relative, {})
         samples.append(
             {
                 "name": name,
                 "url": f"/api/projects/{slug}/graphics-review/{name}",
                 "sha256": review["samples"][relative],
+                "frame": label.get("frame"),
+                "seconds": label.get("seconds"),
+                "window": label.get("window"),
+                "phase": label.get("phase"),
             }
         )
     current = True
@@ -90,6 +100,7 @@ def get_graphics_review(slug: str, request: Request):
         "current": current,
         "reason": reason,
         "warning": review.get("warning"),
+        "method": review.get("method", "composite"),
         "base": review.get("base"),
         "samples": samples,
     }
@@ -206,8 +217,8 @@ async def render(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     kind = payload.get("kind", "preview")
     if kind not in KINDS:
-        raise HTTPException(status_code=400, detail="kind must be preview, base or final")
-    if kind in ("base", "final"):
+        raise HTTPException(status_code=400, detail="kind must be preview, titles, base or final")
+    if kind in ("titles", "base", "final"):
         try:
             P.require_approval(root, "stills")
             if kind == "final" and P.requires_signature(root):
@@ -224,6 +235,7 @@ async def render(slug: str, request: Request, payload: dict):
     async def work():
         fn = {
             "preview": services.render.render_preview,
+            "titles": services.render.check_titles,
             "base": services.render.render_base,
             "final": services.render.render_final,
         }[kind]

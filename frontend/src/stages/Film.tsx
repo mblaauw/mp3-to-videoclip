@@ -8,6 +8,7 @@ import {
   type DeliveryChecklist,
   type DeliveryLine,
   type GraphicsReview,
+  type GraphicsSample,
   type ImageShot,
   type Storyboard,
   type FilmFile,
@@ -43,6 +44,13 @@ type LiveState = {
   titles: BaseFilmInput["titles"];
   titlesNote: string | null;
 };
+
+/** "card-02 at 3:28 · frame 4992" for a composition sample; the file name otherwise. */
+function sampleLabel(sample: GraphicsSample | undefined): string {
+  if (!sample) return "Sample";
+  if (sample.frame == null || sample.seconds == null) return sample.name;
+  return `${sample.window ?? "film"} at ${clock(sample.seconds)} · frame ${sample.frame}`;
+}
 
 function clock(seconds: number): string {
   const value = Math.max(0, Math.floor(seconds));
@@ -356,12 +364,18 @@ export function FilmStage({
     }
   };
 
-  const render = async (kind: "preview" | "base" | "final") => {
+  const render = async (kind: "preview" | "titles" | "base" | "final") => {
     setBusy(kind);
     setError(null);
     setNotice(
       `${
-        kind === "final" ? "Final render" : kind === "base" ? "Titles check" : "Preview"
+        kind === "final"
+          ? "Final render"
+          : kind === "titles"
+            ? "Titles check"
+            : kind === "base"
+              ? "Base render"
+              : "Preview"
       } queued. Progress shows below; the file appears in Rendered files when it is done.`,
     );
     try {
@@ -703,14 +717,18 @@ export function FilmStage({
                             disabled={!stillsDone || busy !== null || rendering}
                             title={
                               stillsDone
-                                ? "Render a base and read the real title frames"
+                                ? "Render stills of the real film with its titles"
                                 : "Approve every still first."
                             }
-                            onClick={() => void render("base")}
+                            onClick={() => void render("titles")}
                           >
-                            {busy === "base" ? "Queueing…" : "Check titles"}
+                            {busy === "titles" ? "Queueing…" : "Check titles"}
                           </Button>
-                          <span className="hint">Check titles renders a base first, then prepares real graphics samples. Your intro/credits approval is manual; this does not render a final.</span>
+                          <span className="hint">
+                            Check titles renders stills of the real film with its titles; no base
+                            is needed. Your intro/credits approval is manual; this does not render a
+                            final.
+                          </span>
                         </span>
                       )}
                     </div>
@@ -1057,7 +1075,7 @@ export function FilmStage({
           ref={samplesRef}
         >
           <header>
-            <b>{samples[sampleIndex]?.name || "Sample"}</b>
+            <b>{sampleLabel(samples[sampleIndex])}</b>
             <span>
               {sampleIndex + 1} of {samples.length}
             </span>

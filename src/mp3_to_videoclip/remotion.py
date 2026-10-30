@@ -185,7 +185,7 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
     progress_path.unlink(missing_ok=True)
     if stdout is None:
         raise ValueError("Local Remotion render failed: " + stderr[-4000:])
-    if not output.is_file():
+    if not (output.is_dir() if kind == "stills" else output.is_file()):
         raise ValueError("Remotion returned without an output")
     sidecar = Path(f"{output}.render.json")
     return {
@@ -327,6 +327,78 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
     return compiled
 
 
+def _brand_inputs(project: Project, brand, assets: Path) -> dict:
+    """The rasterised opening brand plate, when the production has one."""
+    from .branding import pack_hash, render_brand_plate
+
+    if brand is None or not brand.plate:
+        return {}
+    plate = assets / f"brand-{pack_hash(brand)}-{project.width}x{project.height}.png"
+    if not plate.exists():
+        if brand.mark == "filmstrip":
+            raise ValueError(
+                "filmstrip identity belongs in Remotion graphics; set brand.plate=false"
+            )
+        render_brand_plate(brand, project, plate)
+    return {
+        "brand_plate": data_url(plate, "image/png"),
+        "brand_duration_frames": round(brand.duration_seconds * project.fps),
+    }
+
+
+def render_stills(
+    project: Project,
+    shots: list[RenderShot],
+    frames: list[int],
+    output: Path,
+    workdir: Path,
+    *,
+    brand=None,
+    titles: dict | None = None,
+) -> dict:
+    """PNG frames of the exact film composition (pictures, brand plate, titles).
+
+    ``output`` is a new directory; the renderer publishes it whole or not at all.
+    Returns the renderer's report, whose ``stills`` list each frame's file and
+    SHA-256. Nothing is encoded and no audio is read.
+    """
+    from . import render as R
+
+    R._validate_shots(project, shots)
+    output = Path(output).resolve()
+    if output.exists():
+        raise FileExistsError(output)
+    assets = Path(workdir).resolve() / "remotion-assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    compiled = compile_shots(shots, workdir, assets)
+    inputs = {
+        "shots": compiled,
+        "preview_banner": False,
+        "preview_placeholders": [],
+        "still_frames": sorted(set(frames)),
+        **_brand_inputs(project, brand, assets),
+    }
+    if titles is not None:
+        inputs["titles"] = titles
+    result = invoke(
+        "stills",
+        output,
+        selected_asset_root(compiled, assets),
+        (project.width, project.height),
+        project.fps,
+        project.total_frames,
+        inputs,
+    )
+    report = result.get("renderer_report") or {}
+    stills = report.get("stills") or []
+    if [still.get("frame") for still in stills] != inputs["still_frames"]:
+        raise ValueError("Remotion returned a different set of stills than requested")
+    for still in stills:
+        if file_hash(output / still["file"]) != still["sha256"]:
+            raise ValueError(f"still {still['file']} changed after rendering")
+    return {**result, "stills": stills}
+
+
 def render_base(
     project: Project,
     shots: list[RenderShot],
@@ -345,7 +417,6 @@ def render_base(
     pass; without it the request and the visual cache key are unchanged.
     """
     from . import render as R
-    from .branding import pack_hash, render_brand_plate
 
     R._validate_shots(project, shots)
     output = Path(output).resolve()
@@ -362,16 +433,7 @@ def render_base(
     }
     if titles is not None:
         inputs["titles"] = titles
-    if brand is not None and brand.plate:
-        plate = assets / f"brand-{pack_hash(brand)}-{project.width}x{project.height}.png"
-        if not plate.exists():
-            if brand.mark == "filmstrip":
-                raise ValueError(
-                    "filmstrip identity belongs in Remotion graphics; set brand.plate=false"
-                )
-            render_brand_plate(brand, project, plate)
-        inputs["brand_plate"] = data_url(plate, "image/png")
-        inputs["brand_duration_frames"] = round(brand.duration_seconds * project.fps)
+    inputs.update(_brand_inputs(project, brand, assets))
     revision = implementation_hash()
     selected = selected_asset_root(compiled, assets)
     key = visual_identity(project, inputs, revision)

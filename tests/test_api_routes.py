@@ -506,11 +506,16 @@ def test_graphics_review_lists_and_serves_only_review_samples(client, project):
     assert "incomplete" in body["reason"]
     assert "graphics-spec.json" not in body["reason"]
     assert body["warning"].startswith("Inspect")
+    assert body["method"] == "composite"
     assert body["samples"] == [
         {
             "name": "001-intro.png",
             "url": "/api/projects/production/graphics-review/001-intro.png",
             "sha256": "a" * 64,
+            "frame": None,
+            "seconds": None,
+            "window": None,
+            "phase": None,
         }
     ]
 

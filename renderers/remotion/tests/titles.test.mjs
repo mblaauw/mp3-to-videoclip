@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {validateTitles} from "../src/request.mjs";
+import {validateStillFrames, validateTitles} from "../src/request.mjs";
 import {titleWindowAt} from "../src/timing.mjs";
 
 const windows = [
@@ -73,4 +73,12 @@ test("titles that overlap, overrun, repeat or float are refused", () => {
 test("titles draw only local bytes", () => {
   assert.throws(() => validateTitles(titles({logo: "https://example.com/x.svg"}), 5755), /embedded local SVG/);
   assert.throws(() => validateTitles(titles({font: "https://example.com/f.woff2"}), 5755), /local embedded bytes/);
+});
+
+test("review stills are unique ascending frames inside the film", () => {
+  assert.deepEqual(validateStillFrames([0, 300, 5754], 5755), [0, 300, 5754]);
+  assert.throws(() => validateStillFrames([], 5755), /1\.\.64 frames/);
+  assert.throws(() => validateStillFrames([300, 300], 5755), /unique and in ascending order/);
+  assert.throws(() => validateStillFrames([5755], 5755), /past the film/);
+  assert.throws(() => validateStillFrames([1.5], 5755), /integer/);
 });

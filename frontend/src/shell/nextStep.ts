@@ -486,7 +486,7 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
         graphics?.state === "stale"
           ? "The titles changed. Check them again."
           : "Check the titles on real frames.",
-      detail: "Check titles renders a base first and prepares graphics samples. Inspect them and explicitly approve intro/credits before the final composite.",
+      detail: "Check titles renders stills of the real film with its titles. Inspect them and explicitly approve intro/credits before the final.",
       actions: [{ label: "Check titles", target: "render", kind: "primary" }],
     };
   }

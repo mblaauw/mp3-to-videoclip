@@ -17,6 +17,7 @@
 //
 // base     -> h264 / yuv420p / silent
 // graphics -> prores 4444 / png / yuva444p10le / muted, preserving alpha
+// stills   -> PNG frames of the Base composition into a new directory
 import {createHash} from "node:crypto";
 import {
   existsSync,
@@ -24,6 +25,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   unlinkSync,
@@ -33,7 +35,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 
 import {bundle} from "@remotion/bundler";
-import {renderMedia, selectComposition} from "@remotion/renderer";
+import {renderMedia, renderStill, selectComposition} from "@remotion/renderer";
 
 import {fail, requestSha256, resolveChrome, validateRequest} from "./src/request.mjs";
 import {createProgressWriter} from "./src/progress.mjs";
@@ -68,6 +70,13 @@ const KIND_SETTINGS = {
     imageFormat: "png",
     pixelFormat: "yuva444p10le",
     proResProfile: "4444",
+  },
+  stills: {
+    compositionId: "Base",
+    codec: null,
+    imageFormat: "png",
+    pixelFormat: null,
+    proResProfile: undefined,
   },
 };
 
@@ -286,6 +295,27 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
   const composition = await selectComposition({...shared, id: settings.compositionId});
   const setupMs = Number(process.hrtime.bigint() - started) / 1e6;
   let renderMediaMs;
+  if (normalized.kind === "stills") {
+    const stills = await renderStills(progress, shared, composition, normalized);
+    const report = {
+      frames: normalized.frames,
+      width: normalized.width,
+      height: normalized.height,
+      fps: normalized.fps,
+      kind: normalized.kind,
+      request_sha256: sha,
+      render_seconds: Number((Number(process.hrtime.bigint() - started) / 1e9).toFixed(3)),
+      remotion_version: remotionVersion(),
+      bundle_cached: bundleCached,
+      stills,
+      diagnostics: {bundle_ms: bundleMs, composition_setup_ms: setupMs,
+        total_ms: performance.now() - totalStarted},
+    };
+    const sidecarPath = `${normalized.output}.render.json`;
+    writeExclusive(sidecarPath, `${JSON.stringify(report, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({...report, output: normalized.output, sidecar: sidecarPath})}\n`);
+    return;
+  }
   const extension = path.extname(normalized.output);
   const tempOutput = path.join(
     path.dirname(normalized.output),
@@ -363,6 +393,39 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
   };
   writeExclusive(sidecarPath, `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify({...report, output: normalized.output, sidecar: sidecarPath})}\n`);
+}
+
+/** Render each requested frame to PNG in a private directory, then publish it whole. */
+async function renderStills(progress, shared, composition, normalized) {
+  const temp = path.join(
+    path.dirname(normalized.output),
+    `.${path.basename(normalized.output)}.render-${process.pid}`,
+  );
+  mkdirSync(temp);
+  try {
+    const stills = [];
+    for (const [index, frame] of normalized.stills.entries()) {
+      progress.update({phase: "rendering-stills", done: index, total: normalized.stills.length,
+        unit: "stills"});
+      const name = `f${String(frame).padStart(5, "0")}.png`;
+      await renderStill({
+        ...shared,
+        composition,
+        frame,
+        output: path.join(temp, name),
+        imageFormat: "png",
+        overwrite: false,
+        onDownload: refuseRemoteAsset,
+      });
+      stills.push({frame, file: name, sha256: sha256File(path.join(temp, name))});
+    }
+    progress.update({phase: "publishing-output"});
+    if (existsSync(normalized.output)) fail(`output ${normalized.output} already exists; refusing to overwrite`);
+    renameSync(temp, normalized.output);
+    return stills;
+  } finally {
+    rmSync(temp, {recursive: true, force: true});
+  }
 }
 
 run().catch((error) => {

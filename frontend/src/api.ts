@@ -336,6 +336,11 @@ export type GraphicsSample = {
   name: string;
   url: string;
   sha256: string;
+  /** Composition reviews: the film frame, its time and the title window shown. */
+  frame?: number | null;
+  seconds?: number | null;
+  window?: string | null;
+  phase?: string | null;
 };
 
 export type GraphicsReview = {
@@ -343,6 +348,7 @@ export type GraphicsReview = {
   current?: boolean;
   reason?: string | null;
   warning?: string;
+  method?: "composite" | "composition-v1";
   base?: string;
   samples?: GraphicsSample[];
 };
@@ -953,7 +959,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  render: (slug: string, kind: "preview" | "base" | "final") =>
+  render: (slug: string, kind: "preview" | "titles" | "base" | "final") =>
     request<unknown>(`/api/projects/${slug}/render`, {
       method: "POST",
       body: JSON.stringify({ kind }),

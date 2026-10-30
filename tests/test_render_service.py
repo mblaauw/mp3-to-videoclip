@@ -175,7 +175,7 @@ def test_signature_final_composes_the_reviewed_base(tmp_path, monkeypatch):
     assert sidecar["input_hash"] == "c" * 64
 
 
-def test_base_writes_the_report_and_prepares_the_graphics_review(tmp_path, monkeypatch):
+def test_base_writes_the_report_and_leaves_the_titles_review_alone(tmp_path, monkeypatch):
     root = make_api_project(tmp_path)
     add_assets(root)
     stored = read_json(root / "project.json")
@@ -187,16 +187,17 @@ def test_base_writes_the_report_and_prepares_the_graphics_review(tmp_path, monke
     monkeypatch.setattr(services.render.P, "require_approval", lambda *_args: None)
     monkeypatch.setattr(services.render, "_render", _fake_render(calls))
     monkeypatch.setattr(signature, "current_input_hash", lambda _root: "b" * 64)
-    monkeypatch.setattr(
-        signature,
-        "prepare_review",
-        lambda _root, base, _project: {"base": str(base.relative_to(_root))},
-    )
+
+    def no_review(*_args):
+        raise AssertionError("a base must not prepare or replace the titles review")
+
+    monkeypatch.setattr(signature, "prepare_review", no_review)
+    monkeypatch.setattr(signature, "prepare_titles_review", no_review)
 
     report = services.render.render_base(root, output)
 
     assert report["delivery_ready"] is False
-    assert report["graphics_review"]["base"] == "renders/base-v001.mp4"
+    assert "graphics_review" not in report
     sidecar = read_json(output.with_suffix(".json"))
     assert sidecar["input_hash"] == "b" * 64
     assert sidecar["delivery_ready"] is False

@@ -2,7 +2,7 @@ import type { DeliveryChecklist, FilmFile, GraphicsReview, Job } from "../api.ts
 
 export const DELIVERY_STAGES: Record<string, string> = {
   "base-render": "Base film",
-  "graphics-review": "Graphics review preparation",
+  "graphics-review": "Titles review stills",
   "preview-render": "Marked preview",
   "final-render": "Final film",
   "final-composite": "Final composite",
@@ -21,7 +21,8 @@ export function deliveryWorkflow(
   if (active) {
     if (active.status === "stopping") return result("Stopping render", "Waiting for work already started to finish. No next stage starts automatically.");
     return result(active.status === "queued" ? "Render queued" : DELIVERY_STAGES[active.progress.stage || ""] || `Rendering ${active.render_kind || "film"}`,
-      active.render_kind === "base" ? "The base is not delivery. Graphics samples come next, then your explicit intro/credits approval."
+      active.render_kind === "titles" ? "Rendering stills of the real film with its titles. Your explicit intro/credits approval comes next."
+        : active.render_kind === "base" ? "The base is not delivery and does not prepare the titles review."
         : "The file must finish and pass verification before it is ready. No approval is automatic.");
   }
   if (files.some((file) => file.classification === "final" && file.current && file.verified && file.delivery_ready)) {
@@ -35,6 +36,5 @@ export function deliveryWorkflow(
     ? result("Ready for final composite", "Render final reuses the reviewed base, adds the approved intro/credits, then verifies the file. It does not rerender the base.")
     : result("Finish the delivery gates", "Intro/credits are already approved. Complete the remaining gates below before rendering the final composite; no second titles approval is needed.");
   if (graphics?.available && graphics.current === true && graphics.samples?.length) return result("Your intro/credits review", "Inspect every actual composited sample, then explicitly approve intro/credits. Rendering final remains a separate action.");
-  const base = files.some((file) => file.classification === "base" && file.current && file.verified);
-  return result(base ? "Prepare current graphics review" : "Render the base first", "Check titles renders a base film and prepares graphics samples. Then: your intro/credits review → final composite → verification → ready for delivery. A base is not final.");
+  return result(graphics?.available ? "Check the titles again" : "Check the titles", "Check titles renders stills of the real film with its titles. Then: your intro/credits review → final render → verification → ready for delivery.");
 }

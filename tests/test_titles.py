@@ -164,3 +164,94 @@ def test_the_player_gets_the_planned_titles_or_says_why_not(tmp_path):
     payload = player_input(root, "production")
     assert payload["titles"] is None
     assert "overlaps the credits" in payload["titles_note"]
+
+
+def _review_root(tmp_path, monkeypatch):
+    from test_signature_iteration import signature_root
+
+    from mp3_to_videoclip import remotion, signature
+    from mp3_to_videoclip.storage import file_hash
+
+    draft = signature.draft_spec
+
+    def remotion_draft(title):
+        spec = draft(title)
+        spec["renderer"] = "remotion"
+        spec["intro"]["mark"] = {"kind": "filmstrip"}
+        spec["intro"]["names"] = signature.FILMSTRIP_NAMES
+        return spec
+
+    # Shape the spec before the fixture approves anything that binds it.
+    monkeypatch.setattr(signature, "draft_spec", remotion_draft)
+    root = signature_root(tmp_path)
+    renders = []
+
+    def fake_stills(project, shots, frames, output, workdir, *, brand=None, titles=None):
+        renders.append((list(frames), titles))
+        output.mkdir(parents=True)
+        stills = []
+        for frame in sorted(set(frames)):
+            name = f"f{frame:05d}.png"
+            (output / name).write_bytes(f"frame {frame}".encode())
+            stills.append({"frame": frame, "file": name, "sha256": file_hash(output / name)})
+        return {"stills": stills}
+
+    monkeypatch.setattr(remotion, "render_stills", fake_stills)
+    monkeypatch.setattr(remotion, "implementation_hash", lambda: "renderer-r1")
+    return root, renders
+
+
+def test_a_titles_review_is_drawn_from_the_film_and_needs_no_base(tmp_path, monkeypatch):
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip import signature
+    from mp3_to_videoclip.services import render
+    from mp3_to_videoclip.storage import read_json
+
+    root, renders = _review_root(tmp_path, monkeypatch)
+    assert not list((root / "renders").glob("*base*")) if (root / "renders").exists() else True
+
+    review = render.check_titles(root)
+    assert review["method"] == "composition-v1"
+    assert "base" not in review
+    frames, titles = renders[0]
+    windows = {w["id"]: w for w in titles["windows"]}
+    # Every non-intro window is sampled at its middle frame.
+    for window in windows.values():
+        if window["kind"] != "intro":
+            assert window["start_frame"] + window["frames"] // 2 in frames
+    recorded = read_json(root / review["preflight"])
+    assert len(recorded["frames"]) == len(review["samples"]) == len(frames)
+    assert {f["window"] for f in recorded["frames"]} >= set(windows) - {"intro"}
+
+    assert signature.validate_review(root, P.load_project(root)) == review
+    P.approve(root, "graphics", "test inspected samples", inspected=True)
+    P.require_approval(root, "graphics")
+
+    # A second check with unchanged inputs reuses the same stills.
+    assert render.check_titles(root)["samples"] == review["samples"]
+    assert len(renders) == 1
+
+
+@pytest.mark.parametrize("change", ["spec", "sample", "renderer", "edit"])
+def test_any_bound_input_makes_the_titles_review_stale(tmp_path, monkeypatch, change):
+    from mp3_to_videoclip import edits, remotion, signature
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.services import render
+    from mp3_to_videoclip.storage import read_json, write_json
+
+    root, _renders = _review_root(tmp_path, monkeypatch)
+    review = render.check_titles(root)
+    if change == "spec":
+        spec = read_json(root / signature.SPEC)
+        spec["credits"]["cards"] = [["MUSIC", "Someone else"]]
+        write_json(root / signature.SPEC, spec)
+    elif change == "sample":
+        (root / next(iter(review["samples"]))).write_bytes(b"edited")
+    elif change == "renderer":
+        monkeypatch.setattr(remotion, "implementation_hash", lambda: "renderer-r2")
+    else:
+        # The review binds the cut file through input_metadata_hash; this
+        # fixture is not a Remotion production, so seed_edit would refuse it.
+        write_json(root / edits.EDIT, {"marker": "a new cut"})
+    with pytest.raises(ValueError):
+        signature.validate_review(root, P.load_project(root))

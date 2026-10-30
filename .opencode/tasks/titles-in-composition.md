@@ -157,3 +157,19 @@ policy, and deleting the FFmpeg/Pillow paths (assessment phase 2).
   its filmstrip mark at 3:30 drew in the Player, and the toggle removed them.
   Follow-up outside this phase: `index.html` has no `Cache-Control`, so a
   browser can keep running an old build after an update.
+- **T5 done.** "Check titles" is a `titles` render job that calls
+  `signature.prepare_titles_review`. It renders review stills of the Film
+  composition through a new `stills` request kind (Remotion `renderStill`,
+  published as a whole directory) and writes a `composition-v1` review. That
+  review binds the spec, the planned titles, the stills/storyboard input hash,
+  `input_metadata_hash` (so the cut too), the renderer revision and every
+  sample's bytes. `validate_review` handles both methods. A base render no
+  longer prepares or replaces the titles review. The job runner allows the
+  `titles` kind, including when restoring jobs after a restart; the scratch run
+  first failed on the runner's own list of kinds.
+  - Scratch Tree of Love through the UI: the job took **14.1 s** (the old route
+    was a ~14 min base render plus samples). It produced the same 17 moments
+    as the old review: 10 opening phases, identity, 5 cards and lockup, 46 MB.
+  - Against the old composite samples of the same frames: 44.8–47.7 dB PSNR,
+    99.9th percentile ≤ 7 levels, no pixel more than 64 levels off. No layout
+    difference, only H.264 noise.
