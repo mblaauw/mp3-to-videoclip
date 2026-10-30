@@ -7,6 +7,7 @@ import {
   type Brief,
   type Concept,
   type Idea,
+  type IdeaParts,
   type StoryPassage,
   type IntakePayload,
   type TreatmentsPayload,
@@ -311,6 +312,18 @@ export function useStoryData({
     );
   };
 
+  const moveIdeaSentence = async (parts: IdeaParts) => {
+    setError(null);
+    try {
+      const saved = await api.sortIdea(slug, parts);
+      setIdea(saved.idea);
+      setRevision((current) => current + 1);
+      notifyProjectChanged({ slug });
+    } catch (caught) {
+      setError(draftError(caught));
+    }
+  };
+
   /** One more route: the ones on file stay exactly as they are. */
   const askForAnother = () => {
     runWriter(
@@ -385,6 +398,7 @@ export function useStoryData({
     writeConcepts,
     askForAnother,
     buildOn,
+    moveIdeaSentence,
   };
 }
 

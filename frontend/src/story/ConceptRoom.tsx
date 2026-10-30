@@ -6,6 +6,7 @@ import { Waveform } from "../spine/Waveform";
 import { releaseMouseFocus } from "../film/selection";
 import { Button } from "../ui";
 import { conceptBeats, passageBeats } from "./beats";
+import { IDEA_PARTS, moveSentence, PART_NAMES, sentences } from "./sorting";
 import type { StoryData } from "./useStoryData";
 
 const OWN = "own";
@@ -163,9 +164,41 @@ function ConceptDetail({
   );
 }
 
+/** Fixes a wrong guess by hand. The server holds a move to the same word-for-word rule. */
+function MoveSentences({ story }: { story: StoryData }) {
+  const { idea, moveIdeaSentence } = story;
+  if (!idea?.sorted) return null;
+  const parts = idea.sorted;
+  return (
+    <ul className="story-move-list">
+      {sentences(parts).map((sentence) => (
+        <li key={`${sentence.part}-${sentence.index}`}>
+          <span>{sentence.text}</span>
+          <select
+            aria-label={`Move "${sentence.text.slice(0, 40)}"`}
+            value={sentence.part}
+            onChange={(event) =>
+              void moveIdeaSentence(
+                moveSentence(parts, sentence, event.target.value as (typeof IDEA_PARTS)[number]),
+              )
+            }
+          >
+            {IDEA_PARTS.map((part) => (
+              <option value={part} key={part}>
+                {PART_NAMES[part]}
+              </option>
+            ))}
+          </select>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function OwnDetail({ story, onRead }: { story: StoryData; onRead: () => void }) {
   const { chosen, concepts, idea, writerBusy, sortMyIdea, startFromIdea, askForAnother } = story;
   const [count, setCount] = useState(2);
+  const [moving, setMoving] = useState(false);
   if (!idea) return null;
   const sorted = idea.sorted;
   const noStory = !!sorted && sorted.story.length === 0;
@@ -186,11 +219,22 @@ function OwnDetail({ story, onRead }: { story: StoryData; onRead: () => void }) 
             or rules is still in with it.
           </p>
         )}
-        {sorted && !noStory && (
+        {sorted && idea.current && (
           <p className="hint story-detail-note">
-            This is how the Writer read it. It didn't change your words.
+            {idea.sorted_by === "owner"
+              ? "This is how you sorted it."
+              : "This is how the Writer read it. It didn't change your words."}{" "}
+            <button type="button" className="story-edit-link inline" onClick={() => setMoving(!moving)}>
+              {moving ? "Done moving" : "Move a sentence"}
+            </button>
           </p>
         )}
+        {sorted && !idea.current && (
+          <p className="hint story-detail-note">
+            The story, style or rules have been edited since, so change them directly from here on.
+          </p>
+        )}
+        {moving && idea.current && <MoveSentences story={story} />}
         <div className="row-actions">
           {!sorted && (
             <Button variant="primary" disabled={writerBusy} onClick={sortMyIdea}>
@@ -246,7 +290,7 @@ function OwnDetail({ story, onRead }: { story: StoryData; onRead: () => void }) 
             </div>
           </div>
         )}
-        {!noStory && (
+        {!noStory && !moving && (
           <div className="story-own-text story-read">{sorted?.story.join("\n\n") ?? idea.text}</div>
         )}
       </div>
