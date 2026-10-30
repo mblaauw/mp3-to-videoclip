@@ -97,9 +97,16 @@ In Storyboard, drag the gold boundaries over the waveform (or focus one and use
 the arrow keys) to retime the cut; later cuts stay put. Film shows a live Player
 preview from the selected stills and the source audio before you render. It runs
 the renderer's own composition and timing module, not a second approximation.
-Once Film seeds an edit, the same gold boundaries on that screen write the cut
-(`PUT /edit`), and every shot's incoming transition and handle are editable
-inline in the cut list.
+
+
+**Film** is the editing workspace: the live picture takes the screen, and the
+timeline below it is the film itself, a strip of the stills with the song above and
+the titles below. Once a first cut exists, click a seam between two pictures to
+change that join, shift-click for several, or drag it to retime; a camera move is
+one click on the shot. Changes save as you make them, and `⌘Z` undoes several steps.
+The panel on the right follows what you select, and delivery (reviews, credits and
+the final) opens there. `F` is full view, `[` and `]` step between joins, and the
+arrow keys step frames. The Director stays closed here until you ask for it.
 
 ### Screens
 
@@ -114,10 +121,6 @@ inline in the cut list.
 ![A still in the review lightbox](docs/screenshots/images-lightbox-1440.webp)
 
 *The review lightbox — Keep, Redo or remake, with the exact version and prompt on screen.*
-
-![The Film stage at 1440 px](docs/screenshots/film-cut-1440.webp)
-
-*Film — the delivery gates, the readable cut and the inline joins above the live preview.*
 
 ![The library at 390 px](docs/screenshots/library-390.webp)
 

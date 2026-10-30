@@ -1,5 +1,5 @@
 import type { EditPayload, Storyboard } from "../api";
-import type { EditTransition } from "../baseFilm";
+import type { EditMotion, EditTransition } from "../baseFilm";
 
 /** Drag limits for the join between two edit-owned shots. */
 export type BoundaryLimits = { low: number; high: number };
@@ -106,6 +106,57 @@ export function setEditTransition(
         },
       };
     }),
+  };
+}
+
+/** Written for a join or move you picked yourself; a note can replace it (D1). */
+export const SET_BY_HAND = "Set by hand";
+
+/** The longest transition every listed join can take: shorter than both its shots. */
+export function joinMaxFrames(edit: EditPayload, shotIds: string[]): number {
+  let max = 48;
+  edit.shots.forEach((shot, index) => {
+    if (!shotIds.includes(shot.shot_id) || index === 0) return;
+    max = Math.min(max, shot.duration_frames - 1, edit.shots[index - 1].duration_frames - 1);
+  });
+  return Math.max(0, max);
+}
+
+/** Give each listed join a type, keeping any reason it already has. */
+export function setJoins(
+  edit: EditPayload,
+  shotIds: string[],
+  type: EditTransition["type"],
+  frames: number,
+): EditPayload {
+  return shotIds.reduce((next, shotId) => {
+    const current = next.shots.find((shot) => shot.shot_id === shotId)?.transition_in.reason;
+    return setEditTransition(next, shotId, { type, frames, reason: current || SET_BY_HAND });
+  }, edit);
+}
+
+/** The same restrained moves the first cut seeds from storyboard cameras. */
+const MOTION_SCALES: Record<EditMotion["type"], [number, number]> = {
+  hold: [1, 1],
+  push_in: [1, 1.08],
+  pull_back: [1.08, 1],
+  pan_left: [1.08, 1.08],
+  pan_right: [1.08, 1.08],
+};
+
+export function setEditMotion(
+  edit: EditPayload,
+  shotId: string,
+  type: EditMotion["type"],
+): EditPayload {
+  const [from, to] = MOTION_SCALES[type];
+  return {
+    ...edit,
+    shots: edit.shots.map((shot) =>
+      shot.shot_id === shotId
+        ? { ...shot, motion: { ...shot.motion, type, from, to, reason: SET_BY_HAND } }
+        : shot,
+    ),
   };
 }
 

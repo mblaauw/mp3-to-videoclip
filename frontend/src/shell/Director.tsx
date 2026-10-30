@@ -316,6 +316,7 @@ export function Director({
   selectedShots = [],
   onClose,
   onSettings,
+  onBusyChange,
 }: {
   slug: string;
   stage: Stage;
@@ -324,6 +325,8 @@ export function Director({
   selectedShots?: string[];
   onClose: () => void;
   onSettings: () => void;
+  /** Lets the shell keep the drawer open while a reply is being written. */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const player = usePlayerClock();
   const defaultRole: Role = ["story", "storyboard", "images"].includes(stage)
@@ -332,6 +335,9 @@ export function Director({
   const [items, setItems] = useState<ChatItem[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<Role>(defaultRole);
   const [gateway, setGateway] = useState("opencode");

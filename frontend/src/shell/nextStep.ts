@@ -45,6 +45,8 @@ export type ProjectFacts = {
   /** Present on library summaries: whether the stills gate sits behind preview. */
   preview_required?: boolean;
   stage_states?: Partial<Record<Stage, StageState>>;
+  /** Film knows a current titles review is waiting to be inspected. */
+  titles_review_ready?: boolean;
 };
 
 export type ApprovalFacts = {
@@ -56,6 +58,8 @@ export type ApprovalFacts = {
 };
 
 export type ImageFacts = {
+  /** Paid stills whose selected version came from an older prompt. */
+  stale?: number;
   total: number;
   selected: number;
   kept: number;
@@ -449,13 +453,32 @@ function imagesStep(
   };
 }
 
-function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
+/** Stills are approved with the cut, so a new cut needs that sign-off, not a new review. */
+function onlyTheCutChanged(approvals: ApprovalMap, images: ImageFacts): boolean {
+  return (
+    approval(approvals, "stills")?.state === "stale" &&
+    !!approval(approvals, "stills")?.expected_hash &&
+    images.kept === images.total &&
+    images.selected === images.total &&
+    !images.stale
+  );
+}
+
+function filmStep(project: ProjectFacts, approvals: ApprovalMap, images: ImageFacts): NextStep {
   if (stateOf(project, "film") === "done") {
     return {
       tone: "done",
       title: "Final ready.",
       detail: "A verified final of the current cut is under Rendered files.",
       actions: [],
+    };
+  }
+  if (onlyTheCutChanged(approvals, images)) {
+    return {
+      tone: "changed",
+      title: "The cut changed.",
+      detail: "No picture changed. Approving records this cut for the final.",
+      actions: approvedAction("Approve this cut", "stills"),
     };
   }
   if (!(stateOf(project, "images") === "done" || approved(approvals, "stills"))) {
@@ -480,6 +503,14 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
   }
   const graphics = approval(approvals, "graphics");
   if (project.signature_required !== false && (!graphics || graphics.state !== "approved")) {
+    if (project.titles_review_ready) {
+      return {
+        tone: "you",
+        title: "Review the titles.",
+        detail: "Open every sample, then approve intro/credits.",
+        actions: [{ label: "Review titles", target: "render", kind: "primary" }],
+      };
+    }
     return {
       tone: graphics?.state === "stale" ? "changed" : "you",
       title:
@@ -511,7 +542,7 @@ export function nextStep(
   if (stage === "story") return storyStep(project, approvals);
   if (stage === "storyboard") return storyboardStep(project, approvals);
   if (stage === "images") return imagesStep(project, approvals, images, budget);
-  return filmStep(project, approvals);
+  return filmStep(project, approvals, images);
 }
 
 export function stageWord(state: StageState | undefined): string {

@@ -196,8 +196,9 @@ library uses those without re-hashing every gate. Inside a production one
 `spine/Spine.tsx` draws the waveform, filmstrip, sections and playhead from that
 store, and Storyboard owns boundary dragging (the old `Timeline.tsx` is gone).
 Film's Remotion `LivePlayer` seeks from the same time, so switching stages keeps
-the playhead. The director is a drawer that is open by default above 1180 px and
-an overlay below it; approvals and library refreshes travel over a
+the playhead. The director is a drawer, open by default above 1180 px except on
+Film, remembered per stage, and an overlay below that width; approvals and library
+refreshes travel over a
 `studio:project-changed` event.
 
 ### Live updates
@@ -225,8 +226,18 @@ film is open, and resyncs everything after a reconnect. GET handlers must never
 write what the watcher fingerprints (`tests/test_live_updates.py` pins this), or
 a read would reload every open view forever.
 
+Film is a workspace rather than a page. `stages/Film.tsx` holds the selection and
+renders the viewer in the main area and, through portals into shell slots,
+`film/FilmPanel.tsx` and `film/FilmTimeline.tsx`; the Director takes the panel's slot
+while open, so nothing remounts. `film/cutEditor.ts` shows a change at once and saves
+one at a time against the revision the server last returned, and keeps the session's
+earlier cuts for undo. `film/cutNotes.ts` turns report codes into plain notes. The
+stills approval binds the cut, so a new cut un-approves it; with every still kept,
+Film asks for that sign-off in one click instead of sending you to Images.
+
 Approvals are made in one place per screen: the sticky next-step bar (with an
-optional note), or the attested preview/titles lines on Film. Stage pages show a
+optional note; in Film's top bar without one), or the attested preview/titles lines
+in Film's delivery panel. Stage pages show a
 read-only sign-off strip (`ApprovalBar`) fed by the shell's single approvals
 snapshot. A busy production (another writer holds the project lock) answers
 409 `project_busy`. Cancelling an image batch stops admission through

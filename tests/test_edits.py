@@ -448,3 +448,21 @@ def test_split_preview_carries_native_pane_sources(tmp_path):
     compiled_split = next(shot for shot in compiled if shot["id"] == "s003")
     assert len(compiled_split["split_panes"]) == 2
     assert all(pane["image"] for pane in compiled_split["split_panes"])
+
+
+def test_a_density_warning_needs_a_pace_target_to_compare_against(tmp_path):
+    root = _energetic_root(tmp_path)
+    edit = _energetic_edit()
+    sections = [section.model_copy(update={"density_per_10s": 0}) for section in edit.sections]
+    assert sections
+
+    def density(value):
+        return [
+            finding
+            for finding in edits.report(root, edit=value)["warnings"]
+            if finding["code"] == "density_target"
+        ]
+
+    assert not density(edit.model_copy(update={"sections": sections}))
+    far = [section.model_copy(update={"density_per_10s": 99}) for section in edit.sections]
+    assert density(edit.model_copy(update={"sections": far}))

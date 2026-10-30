@@ -519,7 +519,8 @@ def report(
                     ),
                 }
             )
-        if abs(density - section.density_per_10s) > 2.0:
+        # A seeded section has no target (0), so there is nothing to compare against.
+        if section.density_per_10s > 0 and abs(density - section.density_per_10s) > 2.0:
             warnings.append(
                 {
                     "code": "density_target",

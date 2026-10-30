@@ -872,33 +872,7 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   transform: translateX(-50%);
-}
-
-/* ------------------------------------------------------------ film layout */
-.film-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
-  gap: var(--s-5);
-  align-items: start;
-}
-.film-top.single {
-  grid-template-columns: minmax(0, 1fr);
-}
-.film-top > .live-preview {
-  margin: 0;
-}
-.film-top > .delivery-card {
-  position: sticky;
-  top: 72px;
-}
-@media (max-width: 1280px) {
-  .film-top {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .film-top > .delivery-card {
-    position: static;
-  }
-}
+}/* ------------------------------------------------------------ film layout */
 
 @media (max-width: 900px) {
   :root {
@@ -937,7 +911,4 @@
   flex: 1 1 240px;
   min-width: 0;
   font-size: var(--t-13);
-}
-.film-top.single > .live-preview {
-  max-width: 1100px;
 }

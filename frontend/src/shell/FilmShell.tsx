@@ -96,6 +96,7 @@ function imageFacts(shots: ImageShot[], reserve: string, proofIds: string[]): Im
     total: paid.length,
     selected: paid.filter((shot) => shot.selected !== null).length,
     kept: paid.filter((shot) => shot.review?.verdict === "accept").length,
+    stale: paid.filter((shot) => shot.selected !== null && shot.stale).length,
     missing: missing.length,
     missing_ids: missing.map((shot) => shot.id),
     reserve_usd: reserve,
@@ -117,6 +118,7 @@ function approvalWord(value: ApprovalFacts | undefined): StageState {
 function derivedStates(
   project: ProjectSummary,
   approvals: ApprovalMap,
+  images: ImageFacts,
 ): Partial<Record<Stage, StageState>> {
   const base = { ...(project.stage_states || {}) } as Partial<Record<Stage, StageState>>;
   base.story = approvalWord(approvals.brief);
@@ -125,6 +127,14 @@ function derivedStates(
   if (base.storyboard !== "done") {
     base.images = "not_ready";
   } else if (approvals.stills?.state === "approved") {
+    base.images = "done";
+  } else if (
+    approvals.stills?.state === "stale" &&
+    images.total > 0 &&
+    images.kept === images.total &&
+    !images.stale
+  ) {
+    // Every picture is still kept; only the cut moved, and Film asks for that sign-off.
     base.images = "done";
   } else if (approvals.stills?.state === "stale" || approvals.proof?.state === "stale") {
     base.images = "changed";
@@ -146,7 +156,36 @@ function scrollTo(selector: string, delay = 60) {
 
 type PaidRequest = NonNullable<NextAction["paid"]>;
 
+const DIRECTOR_OPEN = "studio.director.";
+
+/** Film gives the picture its room; other stages keep the Director beside the work. */
+function directorDefault(stage: Stage): boolean {
+  try {
+    const saved = window.localStorage.getItem(DIRECTOR_OPEN + stage);
+    if (saved !== null) return saved === "1";
+  } catch {
+    // Storage can be blocked; the default still works.
+  }
+  return stage !== "film" && window.innerWidth > 1180;
+}
+
+function rememberDirector(stage: Stage, open: boolean) {
+  try {
+    window.localStorage.setItem(DIRECTOR_OPEN + stage, open ? "1" : "0");
+  } catch {
+    // Storage can be blocked; the choice just lasts this visit.
+  }
+}
+
 function StageView({
+  filmSide,
+  filmLine,
+  filmFull,
+  onFilmFull,
+  onShowFilmPanel,
+  deliveryAsk,
+  onTitlesReady,
+  music,
   slug,
   stage,
   intake,
@@ -160,6 +199,14 @@ function StageView({
   onNavigate,
   images,
 }: {
+  filmSide: HTMLElement | null;
+  filmLine: HTMLElement | null;
+  filmFull: boolean;
+  onFilmFull: (next: boolean) => void;
+  onShowFilmPanel: () => void;
+  deliveryAsk: number;
+  onTitlesReady: (ready: boolean) => void;
+  music: Music | null;
   slug: string;
   stage: Stage;
   intake: IntakePayload | null;
@@ -196,7 +243,20 @@ function StageView({
         onNavigate={onNavigate}
       />
     );
-  return <FilmStage slug={slug} onNavigate={onNavigate} />;
+  return (
+    <FilmStage
+      slug={slug}
+      onNavigate={onNavigate}
+      sideSlot={filmSide}
+      lineSlot={filmLine}
+      music={music}
+      full={filmFull}
+      onFull={onFilmFull}
+      onShowPanel={onShowFilmPanel}
+      deliveryAsk={deliveryAsk}
+      onTitlesReady={onTitlesReady}
+    />
+  );
 }
 
 export function FilmShell({
@@ -256,7 +316,17 @@ function FilmShellContent({
   const [inspectorShot, setInspectorShot] = useState<string | null>(null);
   const [directorShots, setDirectorShots] = useState<string[]>([]);
   const [pendingPaid, setPendingPaid] = useState<PaidRequest | null>(null);
-  const [directorOpen, setDirectorOpen] = useState(() => window.innerWidth > 1180);
+  const [directorOpen, setDirectorOpenState] = useState(() => directorDefault(stage));
+  const directorBusy = useRef(false);
+  const setDirectorOpen = (open: boolean) => {
+    setDirectorOpenState(open);
+    rememberDirector(stage, open);
+  };
+  const [filmSide, setFilmSide] = useState<HTMLElement | null>(null);
+  const [filmLine, setFilmLine] = useState<HTMLElement | null>(null);
+  const [filmFull, setFilmFull] = useState(false);
+  const [deliveryAsk, setDeliveryAsk] = useState(0);
+  const [titlesReady, setTitlesReady] = useState(false);
   const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
 
   const loadEpoch = useRef(0);
@@ -324,6 +394,12 @@ function FilmShellContent({
 
   useEffect(() => {
     if (stage !== "storyboard") setInspectorShot(null);
+    if (stage !== "film") {
+      setFilmFull(false);
+      setDeliveryAsk(0);
+    }
+    // Each stage reopens as you left it, but a reply being written is never cut off.
+    if (!directorBusy.current) setDirectorOpenState(directorDefault(stage));
   }, [stage]);
 
   useEffect(() => {
@@ -364,7 +440,7 @@ function FilmShellContent({
   };
   const authoritative = approvalsLoaded && Object.keys(approvals).length > 0;
   const states = authoritative
-    ? derivedStates(project, approvals)
+    ? derivedStates(project, approvals, facts)
     : (project.stage_states as Partial<Record<Stage, StageState>> | undefined);
   const analysisRunning = jobs.some(
     (job) =>
@@ -380,6 +456,7 @@ function FilmShellContent({
   const projectFacts: ProjectFacts = {
     ...project,
     stage_states: shellStates,
+    titles_review_ready: titlesReady,
     prompt_version: intake?.prompt_version ?? null,
     profile_version: intake?.brief?.creative?.profile_version ?? 0,
     has_message: intake ? Boolean(intake.intent?.message?.trim()) : undefined,
@@ -395,20 +472,6 @@ function FilmShellContent({
       ? `${baseAudio}?v=${committedWindow.start}-${committedWindow.end}-${committedWindow.fade_in}-${committedWindow.fade_out}`
       : baseAudio;
   const spineBoard = board && editPayload ? applyEditBoard(board, editPayload) : board;
-
-  const saveCutBoundary = async (next: EditPayload): Promise<boolean> => {
-    try {
-      const saved = await api.saveEdit(slug, next, editPayload);
-      setEditPayload(saved.present ? saved.edit ?? next : null);
-      setEditOwnsTiming(saved.present);
-      notifyProjectChanged();
-      onProjectsChanged();
-      return true;
-    } catch (error) {
-      toast(`Could not save the cut: ${String(error)}`);
-      return false;
-    }
-  };
 
   const commitAudioWindow = async (window: AudioWindow): Promise<boolean> => {
     const previous = intake?.audio_window || null;
@@ -480,14 +543,9 @@ function FilmShellContent({
       scrollTo(".signoff");
       return;
     }
-    if (action.target === "preview") {
+    if (action.target === "preview" || action.target === "render") {
       if (stage !== "film") onNavigate("film");
-      scrollTo(".live-preview");
-      return;
-    }
-    if (action.target === "render") {
-      if (stage !== "film") onNavigate("film");
-      scrollTo(".delivery-card");
+      setDeliveryAsk(Date.now());
       return;
     }
     if (action.target === "make-missing") {
@@ -509,12 +567,17 @@ function FilmShellContent({
   return (
     <ApprovalsProvider value={{ states: approvalStates, loaded: approvalsLoaded }}>
     <PlayerProvider src={playerSrc} fallbackDuration={intake?.duration || project.duration || 0}>
-      <div className="shell">
+      <div className={`shell ${stage === "film" ? "on-film" : ""} ${filmFull ? "film-full" : ""}`}>
         <TopBar
           project={project}
           stage={stage}
           budget={budget}
           stageStates={shellStates}
+          next={
+            stage === "film" ? (
+              <NextStepBar compact step={step} ready={approvalsLoaded} onAction={act} />
+            ) : null
+          }
           onNavigate={onNavigate}
           onSettings={onSettings}
           onBudgetChanged={() => {
@@ -529,21 +592,31 @@ function FilmShellContent({
               setDirectorOpen(true);
               return;
             }
-            setDirectorOpen((open) => !open);
+            setDirectorOpen(!directorOpen);
           }}
         />
         <main className="shell-main">
           {loadError && <p role="alert">Could not refresh film data: {loadError}</p>}
-          <NextStepBar
-            step={step}
-            ready={approvalsLoaded}
-            onAction={act}
-            back={previousStage ? { label: previousStage.label, onClick: () => onNavigate(previousStage.id) } : null}
-          />
+          {stage !== "film" && (
+            <NextStepBar
+              step={step}
+              ready={approvalsLoaded}
+              onAction={act}
+              back={previousStage ? { label: previousStage.label, onClick: () => onNavigate(previousStage.id) } : null}
+            />
+          )}
           <div className="stage-pad">
             <div className={stage === "images" ? "images-body" : undefined}>
               <StageView
                 key={slug}
+                filmSide={filmSide}
+                filmLine={filmLine}
+                music={music}
+                filmFull={filmFull}
+                onFilmFull={setFilmFull}
+                onShowFilmPanel={() => setDirectorOpen(false)}
+                deliveryAsk={deliveryAsk}
+                onTitlesReady={setTitlesReady}
                 slug={slug}
                 stage={stage}
                 intake={intake}
@@ -581,6 +654,9 @@ function FilmShellContent({
             slug={slug}
             stage={stage}
             open
+            onBusyChange={(busy) => {
+              directorBusy.current = busy;
+            }}
             prefill={directorPrompt}
             selectedShots={
               stage === "storyboard" ? (inspectorShot ? [inspectorShot] : directorShots) : []
@@ -588,7 +664,12 @@ function FilmShellContent({
             onClose={() => setDirectorOpen(false)}
             onSettings={onSettings}
           />
+        ) : stage === "film" ? (
+          <aside className="film-side" aria-label="Film panel" ref={setFilmSide} />
         ) : null}
+        {stage === "film" ? (
+          <div className="film-line" ref={setFilmLine} />
+        ) : (
         <Spine
           slug={slug}
           stage={stage}
@@ -603,10 +684,9 @@ function FilmShellContent({
           onAudioWindow={setAudioWindow}
           onAudioWindowCommit={commitAudioWindow}
           onBoardChange={setBoard}
-          edit={stage === "film" ? editPayload : null}
-          onEditChange={stage === "film" ? saveCutBoundary : undefined}
           readOnly={stage === "storyboard" && editOwnsTiming}
         />
+        )}
       </div>
     </PlayerProvider>
     </ApprovalsProvider>
