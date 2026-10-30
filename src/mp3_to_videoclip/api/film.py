@@ -91,7 +91,7 @@ def get_graphics_review(slug: str, request: Request):
         validate_review(root, P.load_project(root))
     except OSError:
         current = False
-        reason = "the graphics review is incomplete; render a current base and review it"
+        reason = "the titles review is incomplete; check the titles again"
     except (ValueError, KeyError) as exc:
         current = False
         reason = str(exc)

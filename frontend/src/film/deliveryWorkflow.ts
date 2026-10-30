@@ -33,8 +33,8 @@ export function deliveryWorkflow(
     "This production does not require intro/credits. Render final after the gates pass; the output is then verified.");
   const titles = checklist.lines.find((line) => line.id === "titles");
   if (titles?.state === "done") return checklist.can_final
-    ? result("Ready for final composite", "Render final reuses the reviewed base, adds the approved intro/credits, then verifies the file. It does not rerender the base.")
-    : result("Finish the delivery gates", "Intro/credits are already approved. Complete the remaining gates below before rendering the final composite; no second titles approval is needed.");
-  if (graphics?.available && graphics.current === true && graphics.samples?.length) return result("Your intro/credits review", "Inspect every actual composited sample, then explicitly approve intro/credits. Rendering final remains a separate action.");
+    ? result("Ready to render final", "Render final draws the film with the intro/credits you approved, exactly as reviewed, then verifies the file.")
+    : result("Finish the delivery gates", "Intro/credits are already approved. Complete the remaining gates below before rendering the final; no second titles approval is needed.");
+  if (graphics?.available && graphics.current === true && graphics.samples?.length) return result("Your intro/credits review", "Inspect every sample of the film with its titles, then explicitly approve intro/credits. Rendering final remains a separate action.");
   return result(graphics?.available ? "Check the titles again" : "Check the titles", "Check titles renders stills of the real film with its titles. Then: your intro/credits review → final render → verification → ready for delivery.");
 }

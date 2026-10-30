@@ -198,9 +198,9 @@ def build(root: Path) -> dict:
                 "This film has no separate graphics pass."
                 if not signature
                 else (
-                    "The composited titles are approved."
+                    "The titles are approved."
                     if graphics_ok
-                    else "Render a base and inspect the real frames."
+                    else "Check titles, then inspect the film frames with their titles."
                 )
             ),
             required=signature,

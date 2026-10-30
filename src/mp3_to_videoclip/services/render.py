@@ -1,4 +1,6 @@
-"""Render service: Remotion base/preview, FFmpeg graphics composite for delivery."""
+"""Render service: Remotion preview, base, titles review and final; the older
+FFmpeg graphics composite remains for reviews recorded before the titles moved
+into the composition."""
 
 from __future__ import annotations
 
@@ -83,6 +85,48 @@ def render_base(root: Path, output: Path | None = None) -> dict:
     return report
 
 
+def _titled_final_inputs(root: Path, project, review: dict) -> dict:
+    """Everything the titled final draws, read in the caller's snapshot.
+
+    The titles must hash to the reviewed ones, so the final draws exactly what
+    was inspected.
+    """
+    from mp3_to_videoclip import titles
+    from mp3_to_videoclip.storage import digest
+
+    payload = titles.render_input(root)
+    if digest(payload) != review["titles_hash"]:
+        raise ValueError("the planned titles changed after review; check the titles again")
+    return {
+        "titles": payload,
+        "shots": P.resolved_assets(root),
+        "brand": P.load_brand(root),
+        "provenance": _provenance(root, "final", graphics=True),
+    }
+
+
+def _render_titled_final(
+    root: Path, project, directory: Path, output: Path | None, review: dict, inputs: dict
+) -> dict:
+    """One Remotion pass: the reviewed pictures with the reviewed titles drawn in."""
+    output = output or _next_output(directory, f"{project.slug}-final")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    report = _render(
+        project,
+        inputs["shots"],
+        P.render_audio(root, project),
+        output,
+        root / "work",
+        brand=inputs["brand"],
+        titles=inputs["titles"],
+    )
+    report["delivery_ready"] = True
+    report["graphics_review_method"] = review["method"]
+    _stamp(root, output, report, "final", inputs["provenance"])
+    _write_report(output, report)
+    return report
+
+
 def check_titles(root: Path) -> dict:
     """Prepare the titles review: stills of the real film with its titles, no base."""
     from mp3_to_videoclip.signature import prepare_titles_review
@@ -104,15 +148,22 @@ def render_final(root: Path, output: Path | None = None) -> dict:
     directory.mkdir(parents=True, exist_ok=True)
 
     if P.requires_signature(root, project):
-        from mp3_to_videoclip.graphics import compose
-        from mp3_to_videoclip.signature import validate_review
+        from mp3_to_videoclip.signature import COMPOSITION_METHOD, validate_review
 
         # Both the approval record and the reviewed bytes must still match.
         with read_snapshot(root):
             P.require_approval(root, "graphics")
             review = validate_review(root, project)
-            base = inside(root, review["base"])
-            provenance = _provenance(root, "final", graphics=True)
+            if review.get("method") == COMPOSITION_METHOD:
+                inputs = _titled_final_inputs(root, project, review)
+            else:
+                inputs = None
+                base = inside(root, review["base"])
+                provenance = _provenance(root, "final", graphics=True)
+        if inputs is not None:
+            return _render_titled_final(root, project, directory, output, review, inputs)
+        from mp3_to_videoclip.graphics import compose
+
         output = output or _next_output(directory, f"{project.slug}-final")
         report = compose(root, base, output)
         report["delivery_ready"] = True

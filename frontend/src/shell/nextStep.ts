@@ -494,7 +494,7 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
     tone: "done",
     title: "Ready to render final.",
     detail: project.signature_required !== false
-      ? "Every gate is approved. Final reuses the reviewed base, adds approved intro/credits, then verifies delivery."
+      ? "Every gate is approved. Render final draws the film with the intro/credits you approved, then verifies delivery."
       : "Every gate is approved. Render the final locally, then verify the file before delivery.",
     actions: [{ label: "Render final", target: "render", kind: "primary" }],
   };

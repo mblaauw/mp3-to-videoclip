@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pytest
 from test_edits import _energetic_edit, _energetic_root
@@ -255,3 +256,36 @@ def test_any_bound_input_makes_the_titles_review_stale(tmp_path, monkeypatch, ch
         write_json(root / edits.EDIT, {"marker": "a new cut"})
     with pytest.raises(ValueError):
         signature.validate_review(root, P.load_project(root))
+
+
+def test_a_reviewed_film_renders_its_final_in_one_pass_with_the_reviewed_titles(
+    tmp_path, monkeypatch
+):
+    from test_render_service import _fake_render
+
+    from mp3_to_videoclip import graphics
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.services import render
+    from mp3_to_videoclip.storage import read_json
+
+    root, renders = _review_root(tmp_path, monkeypatch)
+    review = render.check_titles(root)
+    P.approve(root, "graphics", "test inspected samples", inspected=True)
+
+    def no_compose(*_args, **_kwargs):
+        raise AssertionError("a composition-reviewed final is one pass, never a composite")
+
+    monkeypatch.setattr(graphics, "compose", no_compose)
+    calls = []
+    monkeypatch.setattr(render, "_render", _fake_render(calls))
+
+    report = render.render_final(root)
+
+    assert len(calls) == 1
+    assert calls[0]["titles"] == renders[0][1]
+    assert report["delivery_ready"] is True
+    assert report["graphics_review_method"] == "composition-v1"
+    assert report["graphics_approval_hash"] == P.stage_hash(root, "graphics")
+    sidecar = read_json(Path(report["output"]).with_suffix(".json"))
+    assert sidecar["render_kind"] == "final" and sidecar["current"] is True
+    assert review["titles_hash"]
