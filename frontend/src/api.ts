@@ -159,6 +159,25 @@ export type Music = {
   warnings?: string[];
 };
 
+export type LyricLine = {
+  index: number;
+  text: string;
+  /** A `[Spoken Hook]` line: a heading of the song, never sung or timed. */
+  tag: string | null;
+  start: number | null;
+  end: number | null;
+  source: "tapped" | "auto" | "lrc" | null;
+};
+
+export type LyricTiming = { lines: LyricLine[] };
+
+export type LyricTimingSave = {
+  index: number;
+  start: number;
+  end: number | null;
+  source: "tapped" | "auto";
+};
+
 export type TrackData = {
   music: Music | null;
   lyrics: Lyrics | null;
@@ -912,6 +931,12 @@ export const api = {
     ),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
+  lyricTiming: (slug: string) => request<LyricTiming>(`/api/projects/${slug}/lyric-timing`),
+  saveLyricTiming: (slug: string, lines: LyricTimingSave[]) =>
+    request<LyricTiming>(`/api/projects/${slug}/lyric-timing`, {
+      method: "PUT",
+      body: JSON.stringify({ lines }),
+    }),
   saveLyrics: (slug: string, text: string) =>
     request<{ status?: string; segments?: number; lines?: number; error?: string }>(
       `/api/projects/${slug}/lyrics`,

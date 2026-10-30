@@ -118,7 +118,7 @@
 
 .track-words {
   max-width: 62ch;
-  font-family: var(--read, Baskerville, "Baskerville Old Face", Georgia, serif);
+  font-family: var(--read);
   font-size: 18px;
   line-height: 1.5;
 }
@@ -131,6 +131,78 @@
   padding: 1px 6px 1px 0;
   border-radius: 3px;
   white-space: pre-line;
+}
+
+.track-tag {
+  margin: 18px 0 3px 58px;
+  color: var(--muted);
+  font: 420 12px/1.4 var(--font);
+}
+
+.track-tag:first-child {
+  margin-top: 2px;
+}
+
+.track-line.next {
+  outline: 1px solid var(--gold);
+  outline-offset: -1px;
+}
+
+.track-nudge {
+  display: inline-flex;
+  gap: 2px;
+  grid-column: 2;
+}
+
+.track-nudge button {
+  padding: 2px 5px;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  color: var(--muted);
+  font: 420 12px/1 var(--font);
+  cursor: pointer;
+}
+
+.track-nudge button:hover {
+  color: var(--ink);
+}
+
+.track-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  max-width: 100%;
+}
+
+.track-tapbar {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.track-tapbar p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink-2);
+  font: 400 20px/1.3 var(--read);
+}
+
+.track-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .track-line.timed {
@@ -154,14 +226,6 @@
   text-align: right;
 }
 
-.track-words.untimed .track-line {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.track-words.untimed .track-line time {
-  display: none;
-}
-
 @media (max-width: 900px) {
   .track-room {
     grid-template-columns: minmax(0, 1fr);
@@ -178,5 +242,13 @@
 
   .track-shape {
     display: none;
+  }
+
+  .track-tag {
+    margin-left: 50px;
+  }
+
+  .track-line {
+    grid-template-columns: 42px minmax(0, 1fr);
   }
 }

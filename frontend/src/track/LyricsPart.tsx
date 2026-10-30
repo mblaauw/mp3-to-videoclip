@@ -1,7 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { LyricLine } from "../api";
 import { usePlayerControls, usePlayerTime } from "../spine/player";
 import { clock } from "../spine/wave";
+import {
+  applyTap,
+  lineAt,
+  nextToTap,
+  nudge,
+  sungCount,
+  timedCount,
+  undoTap,
+} from "./lyricTiming";
+import { useLyricTiming } from "./useLyricTiming";
 import type { TrackModel } from "./useTrackData";
+
+const REWIND_AFTER_UNDO = 3;
+const LEAD_IN = 2;
 
 function lrcText(segments: { start: number; text: string }[]): string {
   return segments
@@ -13,19 +27,30 @@ function lrcText(segments: { start: number; text: string }[]): string {
     .join("\n");
 }
 
-/** Timed lines: the current one lights up and stays in view while the song plays. */
-export function TimedLines({ lines }: { lines: { start: number; text: string }[] }) {
-  const { seek, play, playing } = usePlayerControls();
+/** The words: the sounding line lights up and stays in view while the song plays. */
+function WordRows({
+  lines,
+  tapping,
+  picked,
+  onPick,
+  onNudge,
+}: {
+  lines: LyricLine[];
+  tapping: boolean;
+  picked: number;
+  onPick: (index: number) => void;
+  onNudge: (index: number, seconds: number) => void;
+}) {
+  const { playing } = usePlayerControls();
   const time = usePlayerTime(0.1);
+  const current = lineAt(lines, time);
+  const next = tapping ? nextToTap(lines) : -1;
   const box = useRef<HTMLDivElement>(null);
-  let current = -1;
-  lines.forEach((line, index) => {
-    if (line.start <= time) current = index;
-  });
+  const focus = tapping ? next : playing ? current : -1;
 
   useEffect(() => {
-    if (!playing || current < 0) return;
-    const row = box.current?.children[current];
+    if (focus < 0) return;
+    const row = box.current?.querySelector(`[data-line="${focus}"]`);
     if (!(row instanceof HTMLElement)) return;
     const view = row.closest(".shell-main")?.getBoundingClientRect();
     const rect = row.getBoundingClientRect();
@@ -33,23 +58,58 @@ export function TimedLines({ lines }: { lines: { start: number; text: string }[]
       const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       row.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
     }
-  }, [current, playing]);
+  }, [focus]);
 
   return (
     <div className="track-words" ref={box}>
-      {lines.map((line, index) => (
-        <div
-          className={`track-line timed ${index === current ? "now" : ""}`}
-          key={`${line.start}-${index}`}
-          onClick={() => {
-            seek(line.start);
-            play();
-          }}
-        >
-          <time>{clock(line.start)}</time>
-          <span>{line.text}</span>
-        </div>
-      ))}
+      {lines.map((line, index) =>
+        line.tag ? (
+          <div className="track-tag" key={index}>
+            {line.tag}
+          </div>
+        ) : (
+          <div
+            key={index}
+            data-line={index}
+            className={[
+              "track-line",
+              line.start !== null ? "timed" : "",
+              index === current ? "now" : "",
+              index === next ? "next" : "",
+            ].join(" ")}
+            onClick={() => {
+              if (line.start !== null && !tapping) onPick(index);
+            }}
+          >
+            <time>{line.start !== null ? clock(line.start) : ""}</time>
+            <span>{line.text}</span>
+            {index === picked && line.start !== null && !tapping && (
+              <span className="track-nudge">
+                <button
+                  type="button"
+                  aria-label={`Move "${line.text}" a quarter second earlier`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onNudge(index, -0.25);
+                  }}
+                >
+                  −¼ s
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Move "${line.text}" a quarter second later`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onNudge(index, 0.25);
+                  }}
+                >
+                  +¼ s
+                </button>
+              </span>
+            )}
+          </div>
+        ),
+      )}
     </div>
   );
 }
@@ -58,29 +118,87 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
   const { data, lyricsSaving, saveLyrics } = model;
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
+  const [tapping, setTapping] = useState(false);
+  const [picked, setPicked] = useState(-1);
+  const [clearing, setClearing] = useState(false);
+  const player = usePlayerControls();
+  const { seek, play, pause, setRate, current, rate } = player;
+  const segments = data?.lyrics?.segments || [];
+  const words = data?.lyrics?.lines || [];
+  const hasLyrics = segments.length > 0 || words.length > 0;
+  const instrumental = data?.music_mode === "instrumental";
+  const musicVideo = !data || data.kind === "music_video";
+  const timing = useLyricTiming(slug, data?.lyrics);
+  const { lines, change, flush } = timing;
+  const sung = sungCount(lines);
+  const timed = timedCount(lines);
+  const nextLine = nextToTap(lines);
 
   useEffect(() => {
     setEditing(false);
     setDraft("");
+    setTapping(false);
+    setPicked(-1);
   }, [slug]);
 
-  const segments = data?.lyrics?.segments || [];
-  const lines = data?.lyrics?.lines || [];
-  const hasLyrics = segments.length > 0 || lines.length > 0;
-  const instrumental = data?.music_mode === "instrumental";
-  const musicVideo = !data || data.kind === "music_video";
-
   const startEditing = () => {
-    setDraft(lines.length ? lines.join("\n") : lrcText(segments));
+    setDraft(words.length ? words.join("\n") : lrcText(segments));
     setEditing(true);
   };
 
   const save = async () => {
+    await flush();
     if (await saveLyrics(draft)) {
       setEditing(false);
       setDraft("");
     }
   };
+
+  const stopTapping = useCallback(() => {
+    setTapping(false);
+    pause();
+    setRate(1);
+    void flush();
+  }, [flush, pause, setRate]);
+
+  const startTapping = () => {
+    setPicked(-1);
+    const starts = lines.flatMap((line) => (line.start !== null ? [line.start] : []));
+    seek(starts.length ? Math.max(0, Math.max(...starts) - LEAD_IN) : 0);
+    setTapping(true);
+    play();
+  };
+
+  const tap = useCallback(() => change(applyTap(lines, current())), [change, current, lines]);
+
+  const undo = useCallback(() => {
+    const result = undoTap(lines);
+    if (!result) return;
+    change(result.lines);
+    seek(Math.max(0, result.time - REWIND_AFTER_UNDO));
+  }, [change, lines, seek]);
+
+  // While tapping, Space marks a line instead of pausing, so it's taken before the player sees it.
+  useEffect(() => {
+    if (!tapping) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select")) return;
+      if (event.code === "Space") {
+        if (target?.closest("button")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) tap();
+      } else if (event.key === "Backspace") {
+        event.preventDefault();
+        undo();
+      } else if (event.key === "Escape") {
+        stopTapping();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [stopTapping, tap, tapping, undo]);
 
   return (
     <section className="track-lyrics" aria-label="Lyrics">
@@ -89,12 +207,50 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
         <small>
           {!musicVideo
             ? "Not part of this film"
-            : segments.length
-              ? `${segments.length} timed lines`
-              : lines.length
-                ? `${lines.length} lines, no times`
-                : "Not added yet"}
+            : !hasLyrics
+              ? "Not added yet"
+              : timed === sung
+                ? `${sung} lines, all on the song`
+                : timed
+                  ? `${timed} of ${sung} lines on the song`
+                  : `${sung} lines, no times yet`}
         </small>
+        {musicVideo && !instrumental && hasLyrics && !editing && !tapping && (
+          <div className="track-actions">
+            <button
+              type="button"
+              className={`ui-btn ui-btn--small ${timed < sung ? "ui-btn--primary" : ""}`}
+              onClick={startTapping}
+              disabled={timed === sung}
+            >
+              {timed ? "Carry on tapping" : "Tap the words on"}
+            </button>
+            {timed > 0 && (
+              <button
+                type="button"
+                className="ui-btn ui-btn--small"
+                onBlur={() => setClearing(false)}
+                onClick={() => {
+                  if (!clearing) {
+                    setClearing(true);
+                    return;
+                  }
+                  setClearing(false);
+                  change(
+                    lines.map((line) =>
+                      line.source === "lrc" ? line : { ...line, start: null, end: null, source: null },
+                    ),
+                  );
+                }}
+              >
+                {clearing ? `Clear all ${timed} times?` : "Clear the times"}
+              </button>
+            )}
+            <button type="button" className="ui-btn ui-btn--small" onClick={startEditing}>
+              Edit lyrics
+            </button>
+          </div>
+        )}
       </div>
       {!musicVideo ? (
         <p className="hint">
@@ -108,24 +264,54 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
         </p>
       ) : hasLyrics && !editing ? (
         <>
-          {segments.length ? (
-            <TimedLines lines={segments} />
-          ) : (
-            <div className="track-words untimed">
-              {lines.map((line, index) => (
-                <div className="track-line" key={`${line}-${index}`}>
-                  <time />
-                  <span>{line}</span>
-                </div>
-              ))}
+          {tapping && (
+            <div className="track-tapbar" role="status">
+              <button
+                type="button"
+                className="ui-btn ui-btn--primary"
+                onClick={tap}
+                disabled={nextLine < 0}
+              >
+                Space: this line starts now
+              </button>
+              <button type="button" className="ui-btn ui-btn--small" onClick={undo} disabled={!timed}>
+                Undo
+              </button>
+              <div className="ui-seg" role="group" aria-label="Speed">
+                <button type="button" aria-pressed={rate === 1} onClick={() => setRate(1)}>
+                  1×
+                </button>
+                <button type="button" aria-pressed={rate === 0.75} onClick={() => setRate(0.75)}>
+                  0.75×
+                </button>
+              </div>
+              <button type="button" className="ui-btn ui-btn--small" onClick={stopTapping}>
+                Done
+              </button>
+              <span className="track-count">
+                {timed} of {sung}
+              </span>
+              <p>{nextLine >= 0 ? lines[nextLine].text : "That's every line. Click one to hear it and nudge it."}</p>
             </div>
           )}
-          {!segments.length && <p className="hint">These lines have no timestamps; none were invented.</p>}
-          <div className="row-actions">
-            <button type="button" className="ui-btn ui-btn--small" onClick={startEditing}>
-              Edit lyrics
-            </button>
-          </div>
+          <WordRows
+            lines={lines}
+            tapping={tapping}
+            picked={picked}
+            onPick={(index) => {
+              const start = lines[index].start;
+              if (start === null) return;
+              setPicked(index);
+              seek(start);
+              play();
+            }}
+            onNudge={(index, seconds) => {
+              const next = nudge(lines, index, seconds);
+              change(next);
+              const start = next[index].start;
+              if (start !== null) seek(start);
+            }}
+          />
         </>
       ) : (
         <>
@@ -135,7 +321,7 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
             rows={10}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={"Paste the words, one line at a time.\nLRC timestamps are welcome."}
+            placeholder={"Paste the words, one line at a time.\n[Verse] and [Hook] style names become headings, and LRC timestamps are welcome."}
             aria-label="Paste lyrics or LRC"
           />
           <div className="row-actions">

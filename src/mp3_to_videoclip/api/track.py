@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
-from mp3_to_videoclip.domain import music_notes
+from mp3_to_videoclip.domain import lyric_timing, music_notes
 from mp3_to_videoclip.storage import (
     inside,
     project_lock,
@@ -81,6 +81,20 @@ async def put_music_notes(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     try:
         return music_notes.save(root, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/lyric-timing")
+async def get_lyric_timing(slug: str, request: Request):
+    return lyric_timing.view(project_root(request, slug))
+
+
+@router.put("/lyric-timing")
+async def put_lyric_timing(slug: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    try:
+        return lyric_timing.save(root, payload, P.load_project(root).duration)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
