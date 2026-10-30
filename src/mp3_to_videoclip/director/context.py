@@ -109,11 +109,40 @@ def _music(root: Path) -> str:
     return text
 
 
+def _story_on_song(root: Path, project) -> list[str]:
+    """When each passage plays, for the board. Evidence only: no approval reads this."""
+    from mp3_to_videoclip import story_beats, timeline
+
+    heading = "## Story on the song (evidence, not an approval)"
+    try:
+        lines = []
+        placed = 0
+        for item in story_beats.passages(root):
+            start, end = item["start"], item["end"]
+            # A time past the film is left over from another excerpt, so it is no time at all.
+            if start is None or end is None or end > project.duration + 0.5:
+                lines.append(f"- not on the song: {_clip(item['text'])}")
+                continue
+            first = timeline.frame_number(start, project.fps)
+            last = min(timeline.frame_number(end, project.fps), project.total_frames)
+            lines.append(f"- {start:.2f}-{end:.2f}s (frames {first}-{last}): {_clip(item['text'])}")
+            placed += 1
+    except Exception as exc:  # noqa: BLE001
+        return [
+            heading,
+            f"- Unavailable ({_clip(exc, 80)}): treat every passage as not on the song.",
+        ]
+    if not lines:
+        return [heading, "- No treatment yet."]
+    return [f"{heading}: {placed} of {len(lines)} placed", *lines]
+
+
 def build_context(
     slug: str,
     projects_dir: Path | None = None,
     stage: str | None = None,
     context: dict | None = None,
+    task: str | None = None,
 ) -> str:
     """Compact project snapshot for the director's system prompt."""
     from mp3_to_videoclip import production as P
@@ -202,7 +231,13 @@ def build_context(
             )
         else:
             lines.append("- Characters: none.")
+        waiting = P.unconfirmed_permissions(brief)
+        if waiting:
+            lines.append(f"- Owner must confirm permission for: {', '.join(waiting)}.")
         lines.append("")
+        if task == "storyboard":
+            lines.extend(_story_on_song(root, project))
+            lines.append("")
         if board is None:
             lines.append("## Shots\nNo storyboard yet.")
             return "\n".join(lines)

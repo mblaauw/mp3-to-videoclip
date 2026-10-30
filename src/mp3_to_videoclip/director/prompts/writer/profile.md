@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: profile
 role: writer
 ---
@@ -32,7 +32,10 @@ For each character:
   `attributes`.
 - `default_state`: the state most shots use.
 - `references`: supplied or permitted images only; never invent a real likeness.
-- `permission_confirmed`: true only when the user confirmed it.
+
+Do not send `permission_confirmed`: it is the owner's gate and tools ignore it.
+A new character starts unconfirmed. After saving, name anyone in
+`owner_must_confirm` and ask the owner to tick them on Story's Characters card.
 
 **Scenes.** Every recurring place whose geography or light must stay consistent.
 Give `id` and a `description` of place, time, light and recurring props. Keep

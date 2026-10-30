@@ -13,12 +13,13 @@ import json
 from pathlib import Path
 
 import pytest
-from api_support import add_assets, make_api_project
+from api_support import add_assets, api_client, make_api_project
 from PIL import Image
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import services
-from mp3_to_videoclip.director import tools
+from mp3_to_videoclip.director import prompts, tools
+from mp3_to_videoclip.director.context import build_context
 from mp3_to_videoclip.storage import digest, read_json, write_json
 
 
@@ -656,3 +657,176 @@ def test_a_film_length_passed_as_shot_length_is_refused_before_it_locks_the_boar
     )
     assert "length of one shot" in result["error"]
     assert not (root / P.STAGE_FILES["storyboard"]).exists()
+
+
+def _call(name, tmp_path, **arguments):
+    return json.loads(
+        asyncio.run(
+            tools.dispatch(name, {"slug": "production", **arguments}, projects_dir=tmp_path)
+        )
+    )
+
+
+def _character(character_id="keeper", **overrides):
+    return {"id": character_id, "identity": "invented lighthouse keeper, 60s", **overrides}
+
+
+def _store_permissions(root, *, value):
+    """Write the gate directly: one stored character "hero" plus the fixture's references."""
+    brief = read_json(root / "brief.json")
+    brief["characters"] = [_character("hero")]
+    for entry in [*brief["characters"], *brief["creative"]["references"]]:
+        entry["permission_confirmed"] = value
+    write_json(root / "brief.json", brief)
+
+
+def test_the_writer_tool_schema_does_not_offer_the_permission_flag():
+    assert "permission_confirmed" not in json.dumps(tools.TOOLS)
+
+
+@pytest.mark.parametrize("claimed", [True, "true", 1])
+def test_set_creative_profile_cannot_confirm_a_new_character(tmp_path, claimed):
+    root = make_api_project(tmp_path)
+    payload = _profile_payload(characters=[_character(permission_confirmed=claimed)])
+    payload.pop("slug")
+    result = _call("set_creative_profile", tmp_path, **payload)
+    assert result["characters"][0]["permission_confirmed"] is False
+    assert "keeper" in result["owner_must_confirm"]
+    assert P.load_brief(root).characters[0].permission_confirmed is False
+
+
+@pytest.mark.parametrize("claimed", [True, "true", 1])
+def test_update_brief_cannot_confirm_a_new_character(tmp_path, claimed):
+    root = make_api_project(tmp_path)
+    result = _call(
+        "update_brief",
+        tmp_path,
+        patch={"characters": [_character(permission_confirmed=claimed)]},
+    )
+    assert result["characters"][0]["permission_confirmed"] is False
+    assert "keeper" in result["owner_must_confirm"]
+    assert P.load_brief(root).characters[0].permission_confirmed is False
+
+
+def test_update_brief_cannot_confirm_a_new_reference(tmp_path):
+    root = make_api_project(tmp_path)
+    existing = read_json(root / "brief.json")["creative"]["references"]
+    added = {**existing[0], "id": "new-reference", "permission_confirmed": True}
+    _call("update_brief", tmp_path, patch={"creative": {"references": [*existing, added]}})
+    stored = {r.id: r.permission_confirmed for r in P.load_brief(root).creative.references}
+    assert stored["new-reference"] is False
+    assert stored[existing[0]["id"]] is True
+
+
+def test_writer_tools_cannot_flip_a_stored_false_by_either_route(tmp_path):
+    root = make_api_project(tmp_path)
+    _store_permissions(root, value=False)
+    before = read_json(root / "brief.json")
+    characters = [{**value, "permission_confirmed": True} for value in before["characters"]]
+    references = [
+        {**value, "permission_confirmed": True} for value in before["creative"]["references"]
+    ]
+
+    result = _call(
+        "update_brief",
+        tmp_path,
+        patch={"characters": characters, "creative": {"references": references}},
+    )
+    assert "error" not in result
+    assert read_json(root / "brief.json") == before
+
+    payload = _profile_payload(characters=characters)
+    payload.pop("slug")
+    assert "error" not in _call("set_creative_profile", tmp_path, **payload)
+    after = P.load_brief(root)
+    assert [c.permission_confirmed for c in after.characters] == [False]
+    assert [r.permission_confirmed for r in after.creative.references] == [False] * len(references)
+
+
+@pytest.mark.parametrize("sent", [{}, {"permission_confirmed": False}])
+def test_a_profile_rewrite_keeps_an_owner_confirmation(tmp_path, sent):
+    root = make_api_project(tmp_path)
+    _store_permissions(root, value=True)
+    before = P.load_brief(root)
+    confirmed = before.characters[0]
+    payload = _profile_payload(
+        characters=[_character(confirmed.id, **sent), _character("newcomer")]
+    )
+    payload.pop("slug")
+    result = _call("set_creative_profile", tmp_path, **payload)
+    stored = {c.id: c.permission_confirmed for c in P.load_brief(root).characters}
+    assert stored == {confirmed.id: True, "newcomer": False}
+    assert result["owner_must_confirm"] == ["newcomer"]
+    # Rewriting the profile leaves the references it does not own alone too.
+    assert P.load_brief(root).creative.references == before.creative.references
+
+
+def test_a_brief_patch_keeps_an_owner_confirmation(tmp_path):
+    root = make_api_project(tmp_path)
+    _store_permissions(root, value=True)
+    before = read_json(root / "brief.json")
+    characters = [{**value, "permission_confirmed": False} for value in before["characters"]]
+    result = _call("update_brief", tmp_path, patch={"characters": characters})
+    assert "owner_must_confirm" not in result
+    assert read_json(root / "brief.json") == before
+
+
+def test_the_owner_confirms_and_revokes_through_the_studio_route(tmp_path):
+    root = make_api_project(tmp_path)
+    _store_permissions(root, value=False)
+    character = read_json(root / "brief.json")["characters"][0]
+    client = api_client(tmp_path)
+    url = "/api/projects/production/brief"
+
+    confirmed = client.patch(
+        url, json={"characters": [{**character, "permission_confirmed": True}]}
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["characters"][0]["permission_confirmed"] is True
+    assert P.load_brief(root).characters[0].permission_confirmed is True
+
+    # What the owner confirmed then survives the Writer's next rewrite.
+    payload = _profile_payload(characters=[_character(character["id"])])
+    payload.pop("slug")
+    _call("set_creative_profile", tmp_path, **payload)
+    assert P.load_brief(root).characters[0].permission_confirmed is True
+
+    revoked = client.patch(url, json={"characters": [{**character, "permission_confirmed": False}]})
+    assert revoked.json()["characters"][0]["permission_confirmed"] is False
+    assert P.load_brief(root).characters[0].permission_confirmed is False
+
+
+def test_the_refusal_tells_the_writer_to_ask_the_owner(tmp_path):
+    root = make_api_project(tmp_path)
+    _store_permissions(root, value=False)
+    with pytest.raises(ValueError) as refused:
+        P.approve(root, "brief", "user")
+    message = str(refused.value)
+    assert "permission to upload/depict hero is not confirmed" in message
+    assert "Only the owner" in message
+    assert "Characters card" in message
+    assert "ask them" in message
+
+
+def test_the_snapshot_names_who_is_waiting_for_the_owner(tmp_path):
+    root = make_api_project(tmp_path)
+    _store_permissions(root, value=True)
+    assert "Owner must confirm" not in build_context("production", projects_dir=tmp_path)
+    _store_permissions(root, value=False)
+    assert "Owner must confirm permission for: hero" in build_context(
+        "production", projects_dir=tmp_path
+    )
+
+
+def test_the_profile_prompt_no_longer_teaches_the_writer_to_set_the_flag(tmp_path):
+    root = make_api_project(tmp_path)
+    text = prompts.assemble(
+        root,
+        "story",
+        role="writer",
+        kind="music_video",
+        style_preset="clean-photographic-v1",
+        task="profile",
+    ).text
+    assert '"permission_confirmed": true' not in text
+    assert "Do not send `permission_confirmed`" in text

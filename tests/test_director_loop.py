@@ -11,10 +11,19 @@ import asyncio
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from api_support import add_assets, make_api_project
 
-from mp3_to_videoclip.director.llm import TextDelta, ToolCall, TurnResult, Usage
+from mp3_to_videoclip.director.llm import (
+    IDLE_LIMIT,
+    MAX_RETRIES,
+    DirectorLLM,
+    TextDelta,
+    ToolCall,
+    TurnResult,
+    Usage,
+)
 from mp3_to_videoclip.director.loop import run_turn
 
 
@@ -277,3 +286,156 @@ def test_each_role_sees_and_writes_only_its_own_thread(tmp_path, monkeypatch):
         "brief rewritten",
     ]
     assert len(load_messages(root)) == len(stored)
+
+
+class _Delta:
+    def __init__(self, content=None, tool_calls=None):
+        self.content = content
+        self.tool_calls = tool_calls
+
+
+class _Chunk:
+    usage = None
+
+    def __init__(self, delta, finish_reason=None):
+        self.choices = [SimpleNamespace(delta=delta, finish_reason=finish_reason)]
+
+
+def _tool_delta(name=None, arguments=None):
+    function = SimpleNamespace(name=name, arguments=arguments)
+    return _Delta(tool_calls=[SimpleNamespace(index=0, id="call-1", function=function)])
+
+
+class _FakeStream:
+    """An OpenAI stream that sends its chunks and then, if told to, goes silent."""
+
+    def __init__(self, chunks, stall):
+        self.chunks = chunks
+        self.stall = stall
+        self.closed = False
+
+    async def __aiter__(self):
+        for chunk in self.chunks:
+            yield chunk
+        if self.stall:
+            await asyncio.Event().wait()
+
+    async def close(self):
+        self.closed = True
+
+
+def _llm_over(stream, idle_limit=0.05):
+    llm = DirectorLLM(
+        base_url="http://127.0.0.1:9/v1", api_key="test", model="m", idle_limit=idle_limit
+    )
+
+    async def create(**kwargs):
+        return stream
+
+    llm._client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    return llm
+
+
+def test_a_stalled_tool_call_ends_the_turn_with_a_plain_error_and_writes_nothing(
+    tmp_path, monkeypatch
+):
+    root = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    before = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    # A real write, cut off halfway through its arguments.
+    stream = _FakeStream(
+        [
+            _Chunk(_Delta(content="Rewriting the story. ")),
+            _Chunk(_tool_delta(name="update_brief")),
+            _Chunk(_tool_delta(arguments='{"slug": "demo", "brief": {"title": "Half')),
+        ],
+        stall=True,
+    )
+
+    async def run():
+        return [
+            event
+            async for event in run_turn(
+                _llm_over(stream), root, "demo", "Rewrite it.", "system", role="writer"
+            )
+        ]
+
+    events = asyncio.run(asyncio.wait_for(run(), 5))
+
+    last = events[-1]
+    assert last.kind == "done"
+    assert last.payload["stalled"] is True
+    assert "The Writer sent nothing" in last.payload["error"]
+    assert "Nothing was lost" in last.payload["error"]
+    assert stream.closed
+    # The reader saw the tool call being written, and it never ran.
+    assert any(e.kind == "progress" and e.tool == "update_brief" for e in events)
+    assert not [e for e in events if e.kind == "tool"]
+
+    chat = root / "work" / "chat.jsonl"
+    stored = [json.loads(line) for line in chat.read_text().splitlines()]
+    assert [(m["role"], m["content"]) for m in stored] == [
+        ("user", "Rewrite it."),
+        ("assistant", "Rewriting the story. "),
+    ]
+    after = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    assert {path: data for path, data in after.items() if path != chat} == before
+
+
+def test_a_model_that_never_answers_is_bounded_too(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    llm = _llm_over(_FakeStream([], stall=False))
+
+    async def create(**kwargs):
+        await asyncio.Event().wait()
+
+    llm._client.chat.completions.create = create
+
+    async def run():
+        return [event async for event in run_turn(llm, root, "demo", "Hello?", "system")]
+
+    events = asyncio.run(asyncio.wait_for(run(), 5))
+    assert [event.kind for event in events] == ["done"]
+    assert "The Director sent nothing" in events[0].payload["error"]
+
+
+def test_slow_tool_arguments_that_keep_arriving_are_not_a_stall(tmp_path, monkeypatch):
+    """The whole call outlasts the limit; no single gap does."""
+    root = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    class Trickle(_FakeStream):
+        async def __aiter__(self):
+            yield _Chunk(_tool_delta(name="get_project"))
+            for part in ('{"slug"', ': "de', 'mo"', "}"):
+                await asyncio.sleep(0.1)
+                yield _Chunk(_tool_delta(arguments=part))
+
+    class Then(_FakeStream):
+        async def __aiter__(self):
+            yield _Chunk(_Delta(content="Done."), finish_reason="stop")
+
+    streams = iter([Trickle([], False), Then([], False)])
+    llm = _llm_over(None, idle_limit=0.3)
+
+    async def create(**kwargs):
+        return next(streams)
+
+    llm._client.chat.completions.create = create
+
+    async def run():
+        return [event async for event in run_turn(llm, root, "demo", "Go.", "system")]
+
+    events = asyncio.run(run())
+    assert events[-1].kind == "done"
+    assert "error" not in events[-1].payload
+    assert any("Demo" in e.result for e in events if e.kind == "tool")
+
+
+def test_the_direct_client_does_not_keep_the_library_defaults():
+    llm = DirectorLLM(base_url="http://127.0.0.1:9/v1", api_key="test", model="m")
+    assert llm._client.timeout.read == IDLE_LIMIT
+    assert llm._client.max_retries == MAX_RETRIES
+    # A long tool call takes a minute or more and must fit well inside the limit.
+    assert IDLE_LIMIT >= 120

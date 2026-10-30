@@ -106,7 +106,9 @@ edits. **Concepts from the music** asks for one to three routes, each with beats
 timed on the song. `story_beats.py` stores when each passage plays outside the
 brief, so placing never un-approves the story. The treatment stays the only copy
 of the words: a passage that no longer matches reads as not on the song, and is
-never given a guessed time.
+never given a guessed time. The Writer's storyboard task sees these passages in its
+project snapshot and keeps each one's shots inside its time; they stay evidence, in
+no approval hash.
 
 `project.duration` is the film duration. `project.source_duration` is the full
 recording and `project.audio_window` is the absolute source window with fades.
@@ -140,6 +142,12 @@ the current turn; `work/prompt-artifacts.jsonl` appends the same metadata when a
 tool writes the brief, treatments, proof shots or storyboard. Chat history keeps
 the metadata on the user turn. A bad output can therefore be traced to the exact
 prompt revision without changing any artifact schema or approval hash.
+
+`permission_confirmed` is an owner-only gate. `production.update_brief` and
+`set_creative_profile` keep the stored value on every write and start new entries
+at false; only `PATCH /brief`, the Characters card's route, passes `owner=True`.
+A Writer learns who is waiting from `owner_must_confirm` in those tools' results,
+the project snapshot and the refusal itself, and asks the owner.
 
 ## Evaluation and ratings
 
@@ -334,6 +342,16 @@ OpenCode session and keeps the partial text. The session is reused per
 production and role while its model fingerprint matches; a primary agent's
 model is **not** applied at session creation, so the gateway sets the session
 model explicitly.
+
+Silence is bounded on both paths. The direct stream ends a turn after 180 s with no
+chunk (`IDLE_LIMIT`, waiting for the first response included), and any chunk counts,
+so tool-call arguments that are still arriving are never cut off. The gateway uses
+the same limit, 300 s while a tool call's arguments are open because its events say
+nothing until they are complete, and keeps the 900 s limit on a whole turn. Only this
+session's events count there, not heartbeats or other sessions. Either way the turn
+ends with a `done` event carrying a plain `error` and `stalled`, and tool calls
+only run once complete, so nothing half-written is applied. `progress` events tell the
+Director what is being written, and after 60 s with nothing new it offers Stop.
 
 Known v2.1.4 limits: the event stream ignores `Last-Event-ID`, so a reconnect
 must refetch `/api/session/{id}/message`; interrupt ends the step as

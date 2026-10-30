@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 example: profile
 ---
 ## Worked example
@@ -13,12 +13,12 @@ dawn. The same movement is repeated in both places.
    "states": {
      "rehearsal": {"description": "grey leotard, bare feet, damp hair"},
      "stage": {"description": "ivory stage dress, hair slicked back"}},
-   "default_state": "rehearsal", "references": [], "permission_confirmed": true},
+   "default_state": "rehearsal", "references": []},
   {"id": "partner", "identity": "man, early 30s, olive skin, short dark hair, lean",
    "states": {
      "rehearsal": {"description": "black shorts and tank, bare feet"},
      "stage": {"description": "ivory shirt, dark trousers"}},
-   "default_state": "rehearsal", "references": [], "permission_confirmed": true}],
+   "default_state": "rehearsal", "references": []}],
  "scenes": [
   {"id": "rehearsal-room", "description": "A bare studio at night: one high window, wet lino, a cold practical light and rain on the glass."},
   {"id": "stage", "description": "A dark stage at dawn: a single warm side light, dry boards, a pale cyclorama."}],

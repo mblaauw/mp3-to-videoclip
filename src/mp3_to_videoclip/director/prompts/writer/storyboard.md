@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: storyboard
 role: writer
 ---
@@ -54,6 +54,16 @@ strong still as a `reprise` instead of buying another image. Text cards read at
 about 0.3 s per word plus one second and stay at seven words or fewer. A split
 or card is a shot in its own right, not a free overlay.
 
+## The story on the song
+
+The snapshot's "Story on the song" lists the treatment in order. Keep each timed
+passage's shots inside its frames: none starts before them, runs past them or
+straddles two passages. Frames between passages are free for shots that carry one
+into the next. A passage marked "not on the song" has no time: keep its shots in
+story order between its timed neighbours, never state or guess a time for it, and
+name it in your reply. The times guide you and approve nothing. If a timed passage
+cannot hold its shots, say so rather than quietly crossing the line.
+
 ## Output
 
 Use `update_shots` with one change per shot. It validates the whole board,
@@ -68,6 +78,7 @@ one exists; never renumber existing IDs.
   point?
 - Is there at least one designed or reused shot where the kind allows it, so the
   film is not wall-to-wall generated stills?
+- Do the shots of every timed passage stay inside that passage's frames?
 - Does every text card say only what the user supplied?
 - If a proof shot became local, re-pick paid proof shots with `set_proof_shots`;
   a card or end card can never be an accepted-image proof.

@@ -4,6 +4,7 @@ import { readApiError } from "../api/errors";
 import { usePlayerClock } from "../spine/player";
 import { AutoTextarea, Button, Markdown, StatusDot } from "../ui";
 import { CloseIcon } from "../ui/icons";
+import { quietLine, writingLine, type Writing } from "./directorActivity";
 import { stageLabel } from "./stages";
 import type { Stage } from "./nextStep";
 import { notifyProjectChanged } from "./projectEvents";
@@ -353,8 +354,13 @@ export function Director({
     writer: "the configured Writer",
     editor: "the configured Editor",
   });
+  const [writing, setWriting] = useState<Writing | null>(null);
+  const [quietSeconds, setQuietSeconds] = useState(0);
+  const [stalled, setStalled] = useState<string | null>(null);
   const [stuck, setStuck] = useState(true);
   const [unseen, setUnseen] = useState(false);
+  const lastHeard = useRef(0);
+  const lastAsked = useRef<{ message: string; task?: string } | null>(null);
   const stopRef = useRef<AbortController | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const seq = useRef(0);
@@ -368,6 +374,7 @@ export function Director({
     // Switching threads mid-reply would drop the streaming answer.
     if (!busyRef.current) setRole(defaultRole);
     setError(null);
+    setStalled(null);
     // A stage change changes who answers; each role keeps its own thread.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
@@ -472,10 +479,20 @@ export function Director({
   // Follow the conversation only while the reader is at the bottom; someone
   // scrolling back to re-read an answer is not yanked down by the next token.
   const stuckRef = useRef(true);
+  const hasWriting = writing !== null;
+  const quiet = busy ? quietLine(quietSeconds) : null;
   useEffect(() => {
     if (stuckRef.current) scrollToEnd();
     else setUnseen(true);
-  }, [items, busy, scrollToEnd]);
+  }, [items, busy, hasWriting, quiet, stalled, scrollToEnd]);
+
+  useEffect(() => {
+    if (!busy) return;
+    const timer = window.setInterval(() => {
+      setQuietSeconds((Date.now() - lastHeard.current) / 1000);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [busy]);
 
   const onScroll = () => {
     const element = listRef.current;
@@ -565,6 +582,11 @@ export function Director({
     setStuck(true);
     setBusy(true);
     setError(null);
+    setStalled(null);
+    setWriting(null);
+    setQuietSeconds(0);
+    lastHeard.current = Date.now();
+    lastAsked.current = { message, task };
     const controller = new AbortController();
     stopRef.current = controller;
     try {
@@ -600,8 +622,20 @@ export function Director({
         } catch {
           return;
         }
+        if (event.kind === "progress") {
+          const tool = event.tool;
+          if (tool) setWriting({ tool, chars: Number(event.payload?.chars) || 0 });
+          return;
+        }
+        if (event.kind !== "done") setWriting(null);
         if (event.kind === "text") appendAssistant(event.text || "");
-        else if (event.kind === "tool") {
+        else if (event.kind === "done") {
+          const failure = event.payload?.error;
+          if (typeof failure === "string" && failure) {
+            if (event.payload?.stalled) setStalled(failure);
+            else setError(failure);
+          }
+        } else if (event.kind === "tool") {
           if (event.result) addToolResult(event);
           else addToolStart(event);
         } else if (event.kind === "ask") {
@@ -627,6 +661,8 @@ export function Director({
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        lastHeard.current = Date.now();
+        setQuietSeconds(0);
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
@@ -639,6 +675,8 @@ export function Director({
     } finally {
       stopRef.current = null;
       setBusy(false);
+      setWriting(null);
+      setQuietSeconds(0);
       composerRef.current?.focus();
     }
   };
@@ -647,6 +685,8 @@ export function Director({
     stopRef.current?.abort();
     stopRef.current = null;
     setBusy(false);
+    setWriting(null);
+    setQuietSeconds(0);
   };
 
   const undo = async (item: ToolItem) => {
@@ -771,9 +811,41 @@ export function Director({
             </div>
           ),
         )}
-        {busy && !lastWasTool && items[items.length - 1]?.kind !== "assistant" && (
+        {busy && writing ? (
           <div className="director-activity">
-            <StatusDot tone="run" /> Thinking…
+            <StatusDot tone="run" /> {writingLine(role === "writer" ? "Writer" : "Editor", writing)}
+          </div>
+        ) : (
+          busy &&
+          !lastWasTool &&
+          items[items.length - 1]?.kind !== "assistant" && (
+            <div className="director-activity">
+              <StatusDot tone="run" /> Thinking…
+            </div>
+          )
+        )}
+        {quiet && (
+          <div className="director-quiet" role="status">
+            <p>{quiet}</p>
+            <Button size="small" onClick={stop}>
+              Stop
+            </Button>
+          </div>
+        )}
+        {stalled && (
+          <div className="director-error" role="alert">
+            <p>{stalled}</p>
+            {!busy && lastAsked.current && (
+              <Button
+                size="small"
+                onClick={() => {
+                  const asked = lastAsked.current;
+                  if (asked) void send(asked.message, asked.task);
+                }}
+              >
+                Ask again
+              </Button>
+            )}
           </div>
         )}
         {error && (
@@ -797,7 +869,7 @@ export function Director({
             </Button>
           </div>
         )}
-        {!items.length && !busy && !error && (
+        {!items.length && !busy && !error && !stalled && (
           <div className="director-empty">
             <p>
               Ask for a change.{" "}
