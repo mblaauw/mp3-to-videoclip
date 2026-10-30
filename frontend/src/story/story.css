@@ -1,0 +1,120 @@
+/* The Story room: a start, concepts on the song, the story read against it. */
+.story-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  margin-bottom: var(--s-4);
+}
+.story-world {
+  display: grid;
+  gap: var(--s-4);
+  max-width: 76ch;
+}
+.story-start-title {
+  font-size: 24px;
+  font-weight: 680;
+  letter-spacing: -0.012em;
+  margin: 0 0 var(--s-4);
+}
+.story-start-warning {
+  margin: 0 0 var(--s-4);
+  max-width: 76ch;
+  color: var(--ink-2);
+}
+.story-doors {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: stretch;
+}
+.story-door {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: var(--s-5);
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+}
+.story-door h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 660;
+}
+.story-door > p {
+  margin: 0;
+}
+.story-door > p:not(.hint) {
+  color: var(--ink-2);
+}
+.story-read-input {
+  width: 100%;
+  padding: var(--s-3);
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 400 18px/1.5 var(--read);
+}
+.story-door-song {
+  position: relative;
+  height: 56px;
+  background: var(--well);
+  overflow: hidden;
+}
+.story-door-song .spine-wave {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.story-facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13.5px;
+}
+.story-facts > div {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: var(--s-3);
+}
+.story-facts dt {
+  color: var(--muted);
+}
+.story-facts dd {
+  margin: 0;
+}
+.story-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+.story-count span {
+  margin-right: var(--s-2);
+}
+.story-count button {
+  width: 40px;
+  height: 36px;
+  background: var(--raised);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+.story-count button:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+.story-count button[aria-pressed="true"] {
+  background: var(--gold-wash);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+@media (max-width: 860px) {
+  .story-doors {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

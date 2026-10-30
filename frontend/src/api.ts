@@ -196,6 +196,29 @@ export type TreatmentsPayload = {
   chosen_id?: string | null;
 };
 
+export type IdeaPart = "story" | "style" | "rules" | "avoid";
+export type IdeaParts = Record<IdeaPart, string[]>;
+
+/** Your newest paste, word for word, and how it is sorted now. */
+export type Idea = {
+  id: string;
+  at: string;
+  text: string;
+  sorted: IdeaParts | null;
+  sorted_by: "writer" | "owner" | null;
+  /** False once the brief has been edited since, so sorting would overwrite that. */
+  current: boolean;
+};
+
+/** A run of the treatment, placed on the song or (null times) not yet. */
+export type StoryPassage = {
+  text: string;
+  start: number | null;
+  end: number | null;
+  from: number;
+  to: number;
+};
+
 export type Intent = {
   kind?: string;
   objective?: string;
@@ -772,6 +795,19 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ music_mode }),
     }),
+  idea: (slug: string) => request<{ idea: Idea | null }>(`/api/projects/${slug}/idea`),
+  keepIdea: (slug: string, text: string) =>
+    request<{ idea: Idea }>(`/api/projects/${slug}/idea`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  sortIdea: (slug: string, parts: IdeaParts) =>
+    request<{ idea: Idea }>(`/api/projects/${slug}/idea/sorted`, {
+      method: "PUT",
+      body: JSON.stringify(parts),
+    }),
+  storyPassages: (slug: string) =>
+    request<{ passages: StoryPassage[] }>(`/api/projects/${slug}/story-passages`),
   treatments: (slug: string) =>
     request<TreatmentsPayload>(`/api/projects/${slug}/treatments`),
   putTreatments: (slug: string, payload: { concepts: Concept[]; chosen_id?: string | null }) =>

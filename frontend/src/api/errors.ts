@@ -17,7 +17,7 @@ const COPY: Record<string, string> = {
   approval_stale: "The stage changed. Check the current version before approving again.",
   approval_not_found: "That approval stage does not exist.",
   message_too_long:
-    "That message is too long. Paste long treatments into Story under “I already have a concept”, then ask the Writer to improve them.",
+    "That message is too long. Paste your idea into Story under Start instead.",
   not_found: "That item could not be found.",
   payload_too_large: "That file is too large.",
   unsupported_media_type: "That file type is not supported here.",

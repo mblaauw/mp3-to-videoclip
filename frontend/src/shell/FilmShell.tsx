@@ -24,7 +24,7 @@ import { StoryStage } from "../stages/Story";
 import { StoryboardStage } from "../stages/Storyboard";
 import { TrackStage } from "../stages/Track";
 import { toast } from "../toast";
-import { Director } from "./Director";
+import { Director, type DirectorPrompt } from "./Director";
 import { ArchiveFilm } from "./ArchiveFilm";
 import { Library } from "./Library";
 import { NextStepBar } from "./NextStepBar";
@@ -229,6 +229,7 @@ function StageView({
         audioWindow={audioWindow}
         windowLocked={windowLocked}
         onIntakeChange={onIntakeChange}
+        music={music}
       />
     );
   if (stage === "storyboard")
@@ -327,7 +328,7 @@ function FilmShellContent({
   const [filmFull, setFilmFull] = useState(false);
   const [deliveryAsk, setDeliveryAsk] = useState(0);
   const [titlesReady, setTitlesReady] = useState(false);
-  const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
+  const [directorPrompt, setDirectorPrompt] = useState<DirectorPrompt | null>(null);
 
   const loadEpoch = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -420,10 +421,15 @@ function FilmShellContent({
 
   useEffect(() => {
     const ask = (event: Event) => {
-      const detail = (event as CustomEvent<{ text?: string }>).detail;
+      const detail = (event as CustomEvent<{ text?: string; send?: boolean; task?: string }>).detail;
       setInspectorShot(null);
       setDirectorOpen(true);
-      setDirectorPrompt({ text: detail?.text || "", at: Date.now() });
+      setDirectorPrompt({
+        text: detail?.text || "",
+        at: Date.now(),
+        send: detail?.send,
+        task: detail?.task,
+      });
     };
     window.addEventListener("studio:ask-director", ask);
     return () => window.removeEventListener("studio:ask-director", ask);

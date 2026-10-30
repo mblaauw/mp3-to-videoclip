@@ -9,6 +9,7 @@ import "./shell/shell.css";
 import "./storyboard/storyboard.css";
 import "./images/images.css";
 import "./film/film.css";
+import "./story/story.css";
 import "./shell/settings.css";
 import "./rating.css";
 import "./styles/polish.css";

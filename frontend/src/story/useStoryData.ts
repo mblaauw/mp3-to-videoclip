@@ -5,28 +5,13 @@ import {
   type ApprovalChanges,
   type ApprovalState,
   type Brief,
+  type Idea,
   type IntakePayload,
   type TreatmentsPayload,
 } from "../api";
 import { useApprovals } from "../ApprovalBar";
 import { notifyProjectChanged, useProjectChanged } from "../shell/projectEvents";
 import type { SaveStatus } from "../ui/SaveState";
-
-function conceptPrompt(hasTreatment = false): string {
-  if (hasTreatment) {
-    return (
-      "Give me three new directions that build on the treatment in brief.treatment. " +
-      "Keep its story, characters and ending and stay structurally different from each other."
-    );
-  }
-  return "Give me three new directions for this film. Keep them structurally different and concrete.";
-}
-
-const IMPORT_PROMPT =
-  "The concept I already had is saved as brief.treatment. Read it with get_brief first. " +
-  "Keep its story, characters and ending, improve only what is weak, vague or not shootable, " +
-  "and save the improved treatment with update_brief. Then propose three structurally different " +
-  "concepts that build on it instead of replacing it.";
 
 /** Everything Story reads and saves. The parts below only draw it. */
 export function useStoryData({
@@ -47,8 +32,9 @@ export function useStoryData({
   const [savingTreatment, setSavingTreatment] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
   const [fieldsDirty, setFieldsDirty] = useState(false);
-  const [importText, setImportText] = useState("");
-  const [importing, setImporting] = useState(false);
+  const [idea, setIdea] = useState<Idea | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [writerBusy, setWriterBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
@@ -57,9 +43,11 @@ export function useStoryData({
   const savingRef = useRef(false);
   const treatmentBase = useRef<Brief | null>(null);
   const fieldsBase = useRef<Brief | null>(null);
-  const importBase = useRef<Brief | null>(null);
   const fieldValues = useRef({ direction, style });
   fieldValues.current = { direction, style };
+
+  const concepts = treatments?.concepts || treatments?.treatments || [];
+  const chosen = treatments?.chosen_id || null;
 
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -72,14 +60,16 @@ export function useStoryData({
   const load = useCallback(async () => {
     const epoch = ++loadEpoch.current;
     try {
-      const [nextBrief, nextTreatments] = await Promise.all([
+      const [nextBrief, nextTreatments, nextIdea] = await Promise.all([
         api.brief(slug),
         api.treatments(slug),
+        api.idea(slug),
       ]);
       if (epoch !== loadEpoch.current) return;
-      if (treatmentBase.current || fieldsBase.current || importBase.current) return;
+      if (treatmentBase.current || fieldsBase.current) return;
       setBrief(nextBrief);
       setTreatments(nextTreatments);
+      setIdea(nextIdea.idea);
       setTreatment(nextBrief.treatment || "");
       setDirection(nextBrief.direction || "");
       setStyle(nextBrief.style || "");
@@ -97,6 +87,7 @@ export function useStoryData({
   useEffect(() => {
     setBrief(null);
     setTreatments(null);
+    setIdea(null);
     setChanges(null);
     setTreatment("");
     setDirection("");
@@ -254,33 +245,52 @@ export function useStoryData({
     }
   };
 
-  const askWriter = (text = conceptPrompt(!!brief?.treatment?.trim())) => {
+  useEffect(() => {
+    const busy = (event: Event) => setWriterBusy(Boolean((event as CustomEvent<boolean>).detail));
+    window.addEventListener("studio:writer-busy", busy);
+    return () => window.removeEventListener("studio:writer-busy", busy);
+  }, []);
+
+  /** Opens the Writer with this in the composer, to read and send yourself. */
+  const askWriter = (text: string) => {
     window.dispatchEvent(new CustomEvent("studio:ask-director", { detail: { text } }));
   };
 
-  const importConcept = async () => {
-    const value = importText.trim();
-    if (!value || !brief || importing || savingTreatment || savingFields) return;
-    setImporting(true);
+  /** Sends the Writer one named job now, with the Director open so you can watch it. */
+  const runWriter = (text: string, task: string) => {
+    window.dispatchEvent(new CustomEvent("studio:ask-director", { detail: { text, task, send: true } }));
+  };
+
+  const sortMyIdea = () => {
+    runWriter("Sort the idea I just pasted and put its story on the song. Keep my words.", "import");
+  };
+
+  const startFromIdea = async (text: string) => {
+    if (!brief || starting) return false;
+    setStarting(true);
     setError(null);
     try {
-      const updated = await api.patchBrief(slug, { treatment: value }, importBase.current ?? brief);
-      importBase.current = null;
-      const saved = updated.treatment || "";
-      treatmentLast.current = saved;
-      treatmentRef.current = saved;
-      setTreatment(saved);
-      setBrief(updated);
-      setImportText("");
-      flashSaved();
-      setRevision((current) => current + 1);
-      notifyProjectChanged();
-      askWriter(IMPORT_PROMPT);
+      const saved = await api.keepIdea(slug, text);
+      setIdea(saved.idea);
+      if (chosen) await api.putTreatments(slug, { concepts, chosen_id: null });
+      notifyProjectChanged({ slug });
+      sortMyIdea();
+      return true;
     } catch (caught) {
       setError(draftError(caught));
+      return false;
     } finally {
-      setImporting(false);
+      setStarting(false);
     }
+  };
+
+  /** Concepts from the music, within any style or rules already on the brief. */
+  const writeConcepts = (count: number) => {
+    runWriter(
+      `Write ${count === 1 ? "one concept" : `${count} concepts`} from the measured music. ` +
+        "Keep to any style and rules I already gave.",
+      "concepts",
+    );
   };
 
   const saveStatus: SaveStatus =
@@ -294,9 +304,6 @@ export function useStoryData({
             ? "saved"
             : "idle";
 
-  const concepts = treatments?.concepts || treatments?.treatments || [];
-  const chosen = treatments?.chosen_id || null;
-
   return {
     brief,
     concepts,
@@ -306,8 +313,9 @@ export function useStoryData({
     treatment,
     direction,
     style,
-    importText,
-    importing,
+    idea,
+    starting,
+    writerBusy,
     savingTreatment,
     savingFields,
     loading,
@@ -317,12 +325,10 @@ export function useStoryData({
     treatmentBase,
     treatmentRef,
     fieldsBase,
-    importBase,
     load,
     setTreatment,
     setDirection,
     setStyle,
-    setImportText,
     setSaveFailed,
     setFieldsDirty,
     saveTreatment,
@@ -331,7 +337,10 @@ export function useStoryData({
     briefChanged,
     chooseConcept,
     askWriter,
-    importConcept,
+    runWriter,
+    sortMyIdea,
+    startFromIdea,
+    writeConcepts,
   };
 }
 

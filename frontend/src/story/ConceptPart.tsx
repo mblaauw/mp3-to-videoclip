@@ -1,5 +1,4 @@
 import type { AudioWindow, IntakePayload } from "../api";
-import { AutoTextarea } from "../ui/AutoTextarea";
 import { Button } from "../ui";
 import { BriefCard } from "./BriefCard";
 import type { StoryData } from "./useStoryData";
@@ -67,55 +66,8 @@ export function FilmFacts({
   );
 }
 
-export function ConceptPart({ story }: { story: StoryData }) {
-  const {
-    brief,
-    concepts,
-    chosen,
-    importText,
-    importing,
-    savingTreatment,
-    savingFields,
-    importBase,
-    setImportText,
-    chooseConcept,
-    askWriter,
-    importConcept,
-  } = story;
-
-  const conceptImport = (
-    <>
-      <p className="hint">
-        Paste a concept, outline or full treatment. It is saved as the Treatment first, so the
-        Writer reads it as your story and improves it instead of replacing it.
-      </p>
-      <AutoTextarea
-        disabled={importing}
-        value={importText}
-        onChange={(event) => { importBase.current = event.target.value ? importBase.current ?? brief : null; setImportText(event.target.value); }}
-        minRows={6}
-        maxRows={24}
-        placeholder="Paste your concept or treatment…"
-        aria-label="Concept you already have"
-      />
-      <div className="row-actions">
-        <Button
-          variant="primary"
-          size="small"
-          disabled={!importText.trim() || importing || savingTreatment || savingFields}
-          onClick={() => void importConcept()}
-        >
-          {importing ? "Saving…" : "Save and open the Writer"}
-        </Button>
-        {brief?.treatment?.trim() && (
-          <span className="hint">
-            Replaces the current treatment. The previous version stays in the brief history.
-          </span>
-        )}
-      </div>
-    </>
-  );
-
+export function ConceptPart({ story, onStart }: { story: StoryData; onStart: () => void }) {
+  const { concepts, chosen, chooseConcept, writeConcepts, writerBusy } = story;
   return (
     <section className="stage-block concepts-block">
       <h2>
@@ -139,28 +91,15 @@ export function ConceptPart({ story }: { story: StoryData }) {
             ))}
           </div>
           <div className="row-actions">
-            <Button size="small" variant="quiet" onClick={() => askWriter()}>
+            <Button size="small" variant="quiet" disabled={writerBusy} onClick={() => writeConcepts(3)}>
               Ask for three more
             </Button>
           </div>
-          <details className="concept-import">
-            <summary>I already have a concept</summary>
-            <div className="concept-import-body">{conceptImport}</div>
-          </details>
         </>
       ) : (
         <div className="empty-block">
-          <p>
-            No concepts yet. Ask the Writer for three directions, or start from one you already
-            have.
-          </p>
-          <Button variant="primary" onClick={() => askWriter()}>
-            Ask the Writer for three directions
-          </Button>
-          <div className="concept-import concept-import-open">
-            <h3>I already have a concept</h3>
-            <div className="concept-import-body">{conceptImport}</div>
-          </div>
+          <p>{writerBusy ? "The Writer is working on this." : "No concepts yet."}</p>
+          {!writerBusy && <Button onClick={onStart}>Choose how to start</Button>}
         </div>
       )}
     </section>

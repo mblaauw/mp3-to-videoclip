@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
-import type { AudioWindow, IntakePayload } from "../api";
+import type { AudioWindow, IntakePayload, Music } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
 import { ConceptPart, FilmFacts } from "../story/ConceptPart";
 import { CreditsCard } from "../story/CreditsCard";
 import { ScriptPart } from "../story/ScriptPart";
+import { StartPart } from "../story/StartPart";
 import { StoryChanges } from "../story/StoryChanges";
 import { useStoryData } from "../story/useStoryData";
 import { WorldPart } from "../story/WorldPart";
 import { Button, EmptyState, ErrorState, LoadingState } from "../ui";
 
-export type StoryPart = "concept" | "story" | "world" | "credits";
+export type StoryPart = "start" | "concept" | "story" | "world" | "credits";
 
 const PARTS: { id: StoryPart; label: string }[] = [
+  { id: "start", label: "Start" },
   { id: "concept", label: "Concept" },
   { id: "story", label: "Story" },
   { id: "world", label: "World" },
@@ -25,18 +27,21 @@ export function StoryStage({
   audioWindow,
   windowLocked = false,
   onIntakeChange,
+  music,
 }: {
   slug: string;
   intake: IntakePayload | null;
   audioWindow: AudioWindow | null;
   windowLocked?: boolean;
   onIntakeChange: (intake: IntakePayload) => void;
+  music: Music | null;
 }) {
   const story = useStoryData({ slug, intake, onIntakeChange });
-  const { brief, loading, error, load } = story;
+  const { brief, concepts, loading, error, load } = story;
   const [picked, setPicked] = useState<StoryPart | null>(null);
-  // Until you pick, a film with a story opens on it and a new film on the concepts.
-  const part: StoryPart = picked ?? (brief?.treatment?.trim() ? "story" : "concept");
+  // Until you pick, a film opens where it is: its story, its concepts, or the start.
+  const part: StoryPart =
+    picked ?? (brief?.treatment?.trim() ? "story" : concepts.length ? "concept" : "start");
 
   useEffect(() => {
     const show = (event: Event) => {
@@ -80,6 +85,8 @@ export function StoryStage({
 
       <StoryChanges story={story} />
 
+      {brief && (
+        <>
       <nav className="story-parts" aria-label="Story parts">
         {PARTS.map((item) => (
           <Button
@@ -94,21 +101,24 @@ export function StoryStage({
         ))}
       </nav>
 
-      {part === "concept" && (
-        <>
-          <FilmFacts
-            slug={slug}
-            story={story}
-            intake={intake}
-            audioWindow={audioWindow}
-            windowLocked={windowLocked}
-          />
-          <ConceptPart story={story} />
-        </>
+      {(part === "start" || part === "concept") && (
+        <FilmFacts
+          slug={slug}
+          story={story}
+          intake={intake}
+          audioWindow={audioWindow}
+          windowLocked={windowLocked}
+        />
       )}
+      {part === "start" && (
+        <StartPart story={story} music={music} onStarted={() => setPicked("concept")} />
+      )}
+      {part === "concept" && <ConceptPart story={story} onStart={() => setPicked("start")} />}
       {part === "story" && <ScriptPart story={story} />}
       {part === "world" && <WorldPart slug={slug} story={story} intake={intake} />}
       {part === "credits" && <CreditsCard slug={slug} />}
+        </>
+      )}
     </>
   );
 }

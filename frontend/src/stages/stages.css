@@ -95,17 +95,6 @@
   gap: var(--s-7);
   align-items: start;
 }
-.story-parts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-1);
-  margin-bottom: var(--s-4);
-}
-.story-world {
-  display: grid;
-  gap: var(--s-4);
-  max-width: 76ch;
-}
 .story-columns {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
 }
