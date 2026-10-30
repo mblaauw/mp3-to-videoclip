@@ -52,12 +52,34 @@
 
 .track-sec {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px 72px;
+  grid-template-columns: 26px minmax(0, 1fr) 44px 72px;
   align-items: center;
   gap: 8px;
   padding: 3px 6px 3px 4px;
   border-left: 3px solid transparent;
   border-radius: 4px;
+}
+
+.track-sec.now {
+  background: var(--gold-wash);
+}
+
+.track-play {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.track-play:hover {
+  border-color: var(--gold);
+  color: var(--gold);
 }
 
 .track-sec input {
@@ -111,6 +133,20 @@
   white-space: pre-line;
 }
 
+.track-line.timed {
+  cursor: pointer;
+}
+
+.track-line.timed:hover {
+  background: var(--panel);
+}
+
+.track-line.now,
+.track-line.now:hover {
+  background: var(--gold-wash);
+  color: var(--gold-strong);
+}
+
 .track-line time {
   color: var(--muted);
   font: 420 12px/1 var(--font);
@@ -137,7 +173,7 @@
   }
 
   .track-sec {
-    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-columns: 26px minmax(0, 1fr) 44px;
   }
 
   .track-shape {

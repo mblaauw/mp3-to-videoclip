@@ -46,7 +46,16 @@ export function TrackStage({ slug }: { slug: string }) {
       )}
       {!data && !error && <LoadingState>Reading the song and its sections…</LoadingState>}
       {data && (
-        <div className="track-room">
+        <div
+          className="track-room"
+          onPointerUp={(event) => {
+            // A click shouldn't leave Space bound to the button it landed on.
+            if (event.target instanceof Element) {
+              const button = event.target.closest("button");
+              if (button instanceof HTMLElement) window.setTimeout(() => button.blur(), 0);
+            }
+          }}
+        >
           <SectionsPart model={model} />
           <LyricsPart slug={slug} model={model} />
         </div>
