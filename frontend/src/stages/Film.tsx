@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Music } from "../api";
+import { api, type EditPayload, type Music } from "../api";
+import { CutEditor } from "../film/cutEditor";
 import { CutList } from "../film/CutList";
-import { DeliveryCard } from "../film/DeliveryCard";
 import { applyEditBoard } from "../film/editTimeline";
+import { FilmPanel } from "../film/FilmPanel";
 import { FilmTimeline } from "../film/FilmTimeline";
 import { LiveViewer } from "../film/LiveViewer";
 import { RenderedFiles } from "../film/RenderedFiles";
@@ -13,7 +14,8 @@ import { useFilmData } from "../film/useFilmData";
 import { RendererSetup } from "../RendererSetup";
 import type { Stage } from "../shell/nextStep";
 import { usePlayerControls } from "../spine/player";
-import { CreditsCard } from "../story/CreditsCard";
+import { notifyProjectChanged } from "../shell/projectEvents";
+import { toast } from "../toast";
 import { Button, ErrorState, LoadingState } from "../ui";
 
 type FilmTab = "cut" | "list" | "files";
@@ -37,6 +39,7 @@ export function FilmStage({
   music,
   full,
   onFull,
+  onShowPanel,
 }: {
   slug: string;
   onNavigate: (stage: Stage) => void;
@@ -45,14 +48,29 @@ export function FilmStage({
   music: Music | null;
   full: boolean;
   onFull: (next: boolean) => void;
+  /** The Director holds the panel's slot while open; this hands it back. */
+  onShowPanel: () => void;
 }) {
   const film = useFilmData(slug);
-  const { error, notice, load, loaded, rendererReady, setRendererReady } = film;
+  const { error, notice, load, loaded, setRendererReady } = film;
   const [tab, setTab] = useState<FilmTab>("cut");
   const [selection, setSelection] = useState<FilmSelection>(null);
   const [zoom, setZoom] = useState(1);
   const player = usePlayerControls();
-  const edit = film.cut?.present ? film.cut.edit : null;
+  const [, redraw] = useState(0);
+  const editor = useRef<CutEditor | null>(null);
+  if (!editor.current) {
+    editor.current = new CutEditor(
+      async (next, base) => {
+        const saved = await api.saveEdit(slug, next, base);
+        return saved.edit ?? next;
+      },
+      () => redraw((value) => value + 1),
+    );
+  }
+  const serverEdit = film.cut?.present ? film.cut.edit : null;
+  useEffect(() => editor.current?.sync(serverEdit), [serverEdit]);
+  const edit = editor.current.current ?? serverEdit;
   const timelineBoard = film.board && edit ? applyEditBoard(film.board, edit) : film.board;
   const fps = timelineBoard?.fps || 24;
 
@@ -63,7 +81,7 @@ export function FilmStage({
       const id = stepJoin(timelineBoard.shots, Math.round(player.current() * fps), direction);
       const shot = timelineBoard.shots.find((item) => item.id === id);
       if (!id || !shot) return;
-      setSelection({ kind: "join", ids: [id] });
+      select({ kind: "join", ids: [id] });
       player.seek((shot.start_frame - 1) / fps);
     },
     clear: () => setSelection(null),
@@ -95,12 +113,56 @@ export function FilmStage({
     return () => window.removeEventListener("keydown", onKey);
   }, [fps]);
 
-  const moveBoundary = useCallback(
-    (next: import("../api").EditPayload) => {
-      void film.saveCut(next);
+  /** Apply a change now, save it in order, then bring the Player up to date. */
+  const change = useCallback(
+    async (next: EditPayload, label: string): Promise<boolean> => {
+      const result = await editor.current!.apply(next);
+      if (result === "saved") {
+        film.setNotice(label);
+        notifyProjectChanged();
+        await film.reloadLive();
+        return true;
+      }
+      if (result === "conflict") {
+        toast("This cut changed somewhere else, so your last change was not saved. The latest cut is loaded.");
+        await film.load();
+      } else if (result === "failed") {
+        toast(`Could not save the cut: ${label}.`);
+      }
+      return false;
     },
     [film],
   );
+
+  const watchStop = useRef<(() => void) | null>(null);
+  const { clock: playerClock, playing } = player;
+  useEffect(() => {
+    if (!playing && watchStop.current) {
+      watchStop.current();
+      watchStop.current = null;
+    }
+  }, [playing]);
+  /** Play two seconds either side of a join, with sound, then stop. */
+  const watchJoin = (id: string) => {
+    const shot = edit?.shots.find((item) => item.shot_id === id);
+    if (!shot) return;
+    const end = (shot.start_frame + shot.transition_in.frames) / fps + 2;
+    watchStop.current?.();
+    player.seek(Math.max(0, shot.start_frame / fps - 2));
+    player.play();
+    const stop = playerClock.subscribe(() => {
+      if (playerClock.get() < end) return;
+      stop();
+      watchStop.current = null;
+      player.pause();
+    });
+    watchStop.current = stop;
+  };
+
+  const select = (next: FilmSelection) => {
+    setSelection(next);
+    if (next && !sideSlot) onShowPanel();
+  };
 
   return (
     <div className="film-work">
@@ -130,7 +192,7 @@ export function FilmStage({
         <LiveViewer film={film} full={full} onFull={onFull} />
       ) : tab === "list" ? (
         <div className="film-scroll">
-          <CutList film={film} onNavigate={onNavigate} onFiles={() => setTab("files")} />
+          <CutList film={film} onNavigate={onNavigate} />
         </div>
       ) : (
         <div className="film-scroll">
@@ -140,10 +202,15 @@ export function FilmStage({
       {sideSlot &&
         loaded &&
         createPortal(
-          <>
-            {rendererReady !== false && <DeliveryCard film={film} onNavigate={onNavigate} />}
-            <CreditsCard slug={slug} />
-          </>,
+          <FilmPanel
+            film={film}
+            edit={edit}
+            selection={selection}
+            onSelect={select}
+            onChange={change}
+            onWatchJoin={watchJoin}
+            onNavigate={onNavigate}
+          />,
           sideSlot,
         )}
       {lineSlot &&
@@ -158,11 +225,9 @@ export function FilmStage({
             selection={selection}
             zoom={zoom}
             onZoom={setZoom}
-            onSelectJoin={(id, additive) =>
-              setSelection((current) => selectJoin(current, id, additive))
-            }
-            onSelectShot={(id) => setSelection({ kind: "shot", id })}
-            onMoveBoundary={moveBoundary}
+            onSelectJoin={(id, additive) => select(selectJoin(selection, id, additive))}
+            onSelectShot={(id) => select({ kind: "shot", id })}
+            onMoveBoundary={(next, label) => void change(next, label)}
           />,
           lineSlot,
         )}

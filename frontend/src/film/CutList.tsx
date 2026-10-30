@@ -1,11 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import type { CutShot, EditPayload } from "../api";
 import { ArtifactRating } from "../ArtifactRating";
-import type { EditTransition } from "../baseFilm";
 import type { Stage } from "../shell/nextStep";
 import { ShotThumb } from "../storyboard/ShotThumb";
-import { Button } from "../ui";
-import { TRANSITION_TYPES } from "./editTimeline";
+import { SeedCut } from "./SeedCut";
 import type { FilmData } from "./useFilmData";
 
 function clock(seconds: number): string {
@@ -17,110 +13,14 @@ function duration(seconds: number): string {
   return `${seconds.toFixed(1)} s`;
 }
 
-function TransitionEditor({
-  shot,
-  base,
-  busy,
-  onSave,
-}: {
-  shot: CutShot;
-  base: EditPayload;
-  busy: boolean;
-  onSave: (change: Partial<EditTransition>, base: EditPayload) => Promise<boolean>;
-}) {
-  const [type, setType] = useState<EditTransition["type"]>(
-    (shot.transition.type as EditTransition["type"]) || "cut",
-  );
-  const [frames, setFrames] = useState(shot.transition.frames);
-  const [reason, setReason] = useState(shot.transition.reason || "");
-  const [saving, setSaving] = useState(false);
-  const draftBase = useRef(base);
-  const dirty = useRef(false);
-  useEffect(() => {
-    if (dirty.current || saving) return;
-    draftBase.current = base;
-    setType((shot.transition.type as EditTransition["type"]) || "cut");
-    setFrames(shot.transition.frames);
-    setReason(shot.transition.reason || "");
-  }, [base, shot, saving]);
-  const named = type !== "cut";
-  const canSave =
-    named && reason.trim().length > 0 && !saving && !busy && frames >= 0 && frames <= 48;
-
-  const save = async () => {
-    if (!canSave) return;
-    setSaving(true);
-    try {
-      if (await onSave({ type, frames, reason: reason.trim() }, draftBase.current)) dirty.current = false;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="cut-transition-edit">
-      <label>
-        <span>Into {shot.shot_id}</span>
-        <select
-          aria-label={`Transition into ${shot.shot_id}`}
-          value={type}
-          disabled={saving}
-          onChange={(event) => {
-            dirty.current = true;
-            const next = event.target.value as EditTransition["type"];
-            setType(next);
-            if (next !== "cut" && frames === 0) setFrames(6);
-          }}
-        >
-          {TRANSITION_TYPES.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>Frames</span>
-        <input
-          aria-label={`Transition frames into ${shot.shot_id}`}
-          type="number"
-          min={0}
-          max={48}
-          value={frames}
-          disabled={!named || saving}
-          onChange={(event) => { dirty.current = true; setFrames(Number(event.target.value)); }}
-        />
-      </label>
-      {named && (
-        <label className="reason">
-          <span>Why this join</span>
-          <input
-            aria-label={`Reason for the join into ${shot.shot_id}`}
-            value={reason}
-            maxLength={240}
-            disabled={saving}
-            placeholder="Lift the chorus…"
-            onChange={(event) => { dirty.current = true; setReason(event.target.value); }}
-          />
-        </label>
-      )}
-      <Button size="small" disabled={!canSave} onClick={() => void save()}>
-        {saving ? "Saving…" : "Save join"}
-      </Button>
-    </div>
-  );
-}
-
 export function CutList({
   film,
   onNavigate,
-  onFiles,
 }: {
   film: FilmData;
   onNavigate: (stage: Stage) => void;
-  onFiles: () => void;
 }) {
-  const { slug, cut, board, busy, seedCut, groups, boardById, imageById, saveTransition, showEditFile } = film;
+  const { slug, cut, board, groups, boardById, imageById, showEditFile } = film;
   const fps = board?.fps || 24;
   return (
           <section className="cut-section">
@@ -129,49 +29,15 @@ export function CutList({
                 <h2>{cut?.present ? "The cut" : "The film cut"}</h2>
                 <p>
                   {cut?.present
-                    ? "How each shot arrives, what moves, and why. The cut owns timing."
+                    ? "How each shot arrives, what moves, and why. Change them on the timeline."
                     : "The storyboard owns timing until the Editor cuts the film."}
                 </p>
               </div>
               <ArtifactRating slug={slug} artifact="edit" />
             </header>
 
-            {!board ? (
-              <div className="card seed-cut">
-                <h3>The storyboard comes first</h3>
-                <p>
-                  Film reads the cut from the approved storyboard. Make the storyboard,
-                  then let the Editor cut it.
-                </p>
-                <div className="row-actions">
-                  <Button variant="primary" onClick={() => onNavigate("storyboard")}>
-                    Go to Storyboard
-                  </Button>
-                </div>
-              </div>
-            ) : !cut?.present ? (
-              <div className="card seed-cut">
-                <h3>Let the Editor cut it</h3>
-                <p>
-                  The film already plays with the storyboard's timing. Move order, spans,
-                  motion, transitions, accents and grade into a cut to shape it.
-                </p>
-                <div className="row-actions">
-                  <Button
-                    variant="primary"
-                    disabled={busy !== null}
-                    onClick={() => void seedCut()}
-                  >
-                    {busy === "seed" ? "Cutting…" : "Make a first cut"}
-                  </Button>
-                  <Button variant="quiet" onClick={onFiles}>
-                    Keep the storyboard timing
-                  </Button>
-                </div>
-                <p className="hint">
-                  Keeping it costs nothing and keeps every current approval valid.
-                </p>
-              </div>
+            {!cut?.present ? (
+              <SeedCut film={film} board={board} onNavigate={onNavigate} />
             ) : (
               <>
                 {cut.hard.length > 0 && (
@@ -283,15 +149,6 @@ export function CutList({
                                       </span>
                                     ))}
                                   </div>
-                                )}
-                                {cut.edit && (
-                                  <TransitionEditor
-                                    key={shot.shot_id}
-                                    base={cut.edit}
-                                    shot={shot}
-                                    busy={busy === `join:${shot.shot_id}`}
-                                    onSave={(change, base) => saveTransition(shot.shot_id, change, base)}
-                                  />
                                 )}
                               </div>
                             </article>

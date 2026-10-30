@@ -172,6 +172,7 @@ function StageView({
   filmLine,
   filmFull,
   onFilmFull,
+  onShowFilmPanel,
   music,
   slug,
   stage,
@@ -190,6 +191,7 @@ function StageView({
   filmLine: HTMLElement | null;
   filmFull: boolean;
   onFilmFull: (next: boolean) => void;
+  onShowFilmPanel: () => void;
   music: Music | null;
   slug: string;
   stage: Stage;
@@ -236,6 +238,7 @@ function StageView({
       music={music}
       full={filmFull}
       onFull={onFilmFull}
+      onShowPanel={onShowFilmPanel}
     />
   );
 }
@@ -587,6 +590,7 @@ function FilmShellContent({
                 music={music}
                 filmFull={filmFull}
                 onFilmFull={setFilmFull}
+                onShowFilmPanel={() => setDirectorOpen(false)}
                 slug={slug}
                 stage={stage}
                 intake={intake}

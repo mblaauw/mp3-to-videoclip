@@ -6,7 +6,6 @@ import {
   type CutSummary,
   type DeliveryChecklist,
   type DeliveryLine,
-  type EditPayload,
   type FilmExports,
   type FilmFile,
   type GraphicsReview,
@@ -14,12 +13,11 @@ import {
   type Storyboard,
 } from "../api";
 import { draftError } from "../api/resources";
-import type { BaseFilmInput, EditTransition } from "../baseFilm";
+import type { BaseFilmInput } from "../baseFilm";
 import { filmFiles, selectFilm } from "../filmFiles";
 import { useJobs, useProjectJobs } from "../jobs/store";
 import { notifyProjectChanged, useProjectChanged } from "../shell/projectEvents";
 import { SHOW_EDIT_FILE } from "../shell/SettingsDialog";
-import { setEditTransition } from "./editTimeline";
 import { deliveryWorkflow } from "./deliveryWorkflow";
 
 export type LiveState = {
@@ -132,47 +130,48 @@ export function useFilmData(slug: string) {
   const { jobs } = useJobs();
   const rendering = renderJobs.length > 0;
 
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .preview(slug)
-      .then((payload) => {
-        if (cancelled) return;
-        if (!payload.available) {
-          setLive(null);
-          setLiveError(
-            payload.reason ?? "The storyboard must exist before a live preview can play.",
-          );
-          return;
-        }
-        const scale = Math.min(1, 1280 / payload.width);
-        setLive({
-          input: {
-            shots: payload.shots,
-            preview_banner: payload.preview_banner,
-            preview_placeholders: payload.preview_placeholders,
-            brand_plate: payload.brand_plate ?? null,
-            brand_duration_frames: payload.brand_duration_frames,
-          },
-          audio: payload.audio,
-          durationInFrames: payload.durationInFrames,
-          fps: payload.fps,
-          width: Math.round(payload.width * scale),
-          height: Math.round(payload.height * scale),
-          stale: payload.stale_shots.length,
-          titles: payload.titles ?? null,
-          titlesNote: payload.titles_note ?? null,
-        });
-        setLiveError(null);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setLiveError("The live preview could not be read. Check the storyboard and stills.");
+  const liveEpoch = useRef(0);
+  const reloadLive = useCallback(async () => {
+    const epoch = ++liveEpoch.current;
+    try {
+      const payload = await api.preview(slug);
+      if (epoch !== liveEpoch.current) return;
+      if (!payload.available) {
+        setLive(null);
+        setLiveError(payload.reason ?? "The storyboard must exist before a live preview can play.");
+        return;
+      }
+      const scale = Math.min(1, 1280 / payload.width);
+      setLive({
+        input: {
+          shots: payload.shots,
+          preview_banner: payload.preview_banner,
+          preview_placeholders: payload.preview_placeholders,
+          brand_plate: payload.brand_plate ?? null,
+          brand_duration_frames: payload.brand_duration_frames,
+        },
+        audio: payload.audio,
+        durationInFrames: payload.durationInFrames,
+        fps: payload.fps,
+        width: Math.round(payload.width * scale),
+        height: Math.round(payload.height * scale),
+        stale: payload.stale_shots.length,
+        titles: payload.titles ?? null,
+        titlesNote: payload.titles_note ?? null,
       });
+      setLiveError(null);
+    } catch {
+      if (epoch !== liveEpoch.current) return;
+      setLiveError("The live preview could not be read. Check the storyboard and stills.");
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    void reloadLive();
     return () => {
-      cancelled = true;
+      liveEpoch.current += 1;
     };
-  }, [slug, revision]);
+  }, [reloadLive, revision]);
 
   const seedCut = async () => {
     setBusy("seed");
@@ -187,38 +186,6 @@ export function useFilmData(slug: string) {
       await load();
     } catch (caught) {
       setError(String(caught));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  /** Save a whole cut made elsewhere (a moved boundary). */
-  const saveCut = async (next: EditPayload): Promise<boolean> => {
-    setError(null);
-    try {
-      await api.saveEdit(slug, next, cut?.edit ?? undefined);
-      setCut(await api.editSummary(slug));
-      notifyProjectChanged();
-      return true;
-    } catch (caught) {
-      setError(draftError(caught));
-      return false;
-    }
-  };
-
-  const saveTransition = async (shotId: string, change: Partial<EditTransition>, base: EditPayload): Promise<boolean> => {
-    setBusy(`join:${shotId}`);
-    setError(null);
-    try {
-      await api.saveEdit(slug, setEditTransition(base, shotId, change), base);
-      setCut(await api.editSummary(slug));
-      setNotice(`Saved the join into ${shotId}.`);
-      notifyProjectChanged();
-      await load();
-      return true;
-    } catch (caught) {
-      setError(draftError(caught));
-      return false;
     } finally {
       setBusy(null);
     }
@@ -366,6 +333,7 @@ export function useFilmData(slug: string) {
     setRendererReady,
     busy,
     notice,
+    setNotice,
     error,
     cut,
     checklist,
@@ -394,8 +362,7 @@ export function useFilmData(slug: string) {
     workflow,
     load,
     seedCut,
-    saveCut,
-    saveTransition,
+    reloadLive,
     render,
     approvePreview,
     approveTitles,

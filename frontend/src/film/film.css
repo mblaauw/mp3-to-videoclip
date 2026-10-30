@@ -779,15 +779,117 @@
 }
 .film-side {
   grid-area: side;
-  width: var(--inspector-w);
+  width: 360px;
   min-height: 0;
   overflow-y: auto;
   border-left: 1px solid var(--line);
   background: var(--panel);
 }
-.film-side > .delivery-card,
-.film-side > .credits-card {
-  margin: var(--s-3);
+.film-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-4);
+}
+.panel-head h2 {
+  margin: 0;
+  font-size: var(--t-18);
+  font-weight: var(--w-bold);
+  line-height: var(--lh-tight);
+}
+.panel-head .hint {
+  margin: 2px 0 0;
+}
+.panel-sub {
+  margin: 0 0 6px;
+  color: var(--ink-2);
+  font-size: var(--t-13);
+  font-weight: var(--w-medium);
+}
+.panel-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-13);
+}
+.panel-stats b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+.join-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.join-pair > div {
+  position: relative;
+  min-width: 0;
+}
+.join-pair small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.join-pair i {
+  position: absolute;
+  top: 28%;
+  right: -12px;
+  color: var(--gold);
+  font-size: 11px;
+  font-style: normal;
+}
+.panel-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.panel-options button {
+  min-height: 34px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--ink-2);
+  font-size: var(--t-13);
+  line-height: 1.2;
+}
+.panel-options button:hover:not(:disabled) {
+  border-color: var(--line);
+  color: var(--ink);
+}
+.panel-options button[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  color: var(--ink);
+}
+.panel-options button:disabled {
+  opacity: 0.45;
+}
+.panel-field {
+  display: grid;
+  gap: 4px;
+  color: var(--ink-2);
+  font-size: var(--t-13);
+}
+.panel-field span {
+  display: flex;
+  justify-content: space-between;
+}
+.panel-field em {
+  color: var(--muted);
+  font-style: normal;
+}
+.panel-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+.film-panel .delivery-card {
+  padding: 0;
+  border: 0;
+  background: none;
 }
 /* The timeline is the film. */
 .shell.on-film {
