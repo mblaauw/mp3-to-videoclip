@@ -202,6 +202,9 @@ def build_context(
             )
         else:
             lines.append("- Characters: none.")
+        waiting = P.unconfirmed_permissions(brief)
+        if waiting:
+            lines.append(f"- Owner must confirm permission for: {', '.join(waiting)}.")
         lines.append("")
         if board is None:
             lines.append("## Shots\nNo storyboard yet.")
