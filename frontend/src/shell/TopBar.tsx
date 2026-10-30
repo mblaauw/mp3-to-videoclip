@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type Budget, type Job, type ProjectSummary } from "../api";
 import { useJobs } from "../jobs/store";
 import { toast } from "../toast";
@@ -237,6 +237,7 @@ export function TopBar({
   onBudgetChanged,
   directorOpen,
   onDirector,
+  next = null,
 }: {
   project: ProjectSummary | null;
   stage: Stage | null;
@@ -247,6 +248,8 @@ export function TopBar({
   onBudgetChanged: () => void;
   directorOpen: boolean;
   onDirector: () => void;
+  /** Film's one next action, in the bar so the picture keeps its height. */
+  next?: ReactNode;
 }) {
   const { jobs } = useJobs();
   const [pop, setPop] = useState<"budget" | "jobs" | null>(null);
@@ -342,6 +345,7 @@ export function TopBar({
           </nav>
         </>
       )}
+      {next}
       <div className="top-right" ref={rightRef}>
         {project && (
           <button

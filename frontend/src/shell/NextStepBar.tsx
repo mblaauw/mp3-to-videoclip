@@ -19,12 +19,15 @@ export function NextStepBar({
   ready = true,
   onAction,
   back,
+  compact = false,
 }: {
   step: NextStep;
   ready?: boolean;
   onAction: (action: NextAction, note?: string) => void | Promise<unknown>;
   /** The previous stage, so the way back is as obvious as the way forward. */
   back?: { label: string; onClick: () => void } | null;
+  /** One line for Film's top bar; the detail moves to a tooltip. */
+  compact?: boolean;
 }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -68,7 +71,12 @@ export function NextStepBar({
   const primary = step.actions.findIndex((action) => action.approve);
 
   return (
-    <div className={`next-bar ${step.tone}`} role="status" aria-live="polite">
+    <div
+      className={`next-bar ${step.tone} ${compact ? "compact" : ""}`}
+      role="status"
+      aria-live="polite"
+      title={compact ? step.detail : undefined}
+    >
       {back && (
         <button type="button" className="next-back" onClick={back.onClick}>
           <span aria-hidden="true">←</span> {back.label}
@@ -77,10 +85,11 @@ export function NextStepBar({
       <div className="next-say">
         <StatusDot tone={TONE[step.tone]} />
         <strong>{step.title}</strong>
-        {step.detail && <span>{step.detail}</span>}
+        {step.detail && !compact && <span>{step.detail}</span>}
       </div>
       <div className="next-actions">
         {approving &&
+          !compact &&
           (noteOpen ? (
             <input
               ref={noteRef}

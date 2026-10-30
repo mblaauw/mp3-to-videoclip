@@ -697,20 +697,21 @@
   display: flex;
   flex-direction: column;
 }
-.film-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--line-soft);
-}
 .film-notice {
+  max-width: 260px;
   margin: 0;
   color: var(--muted);
   font-size: var(--t-13);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.film-viewer-bar .board-tabs {
+  flex: none;
+}
+.film-tabbar {
+  border-top: 0;
+  border-bottom: 1px solid var(--line-soft);
 }
 .film-scroll {
   flex: 1;
@@ -740,9 +741,10 @@
   overflow: hidden;
 }
 .film-viewer-bar {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: var(--s-4);
+  gap: var(--s-3);
   padding: var(--s-1) var(--s-3);
   border-top: 1px solid var(--line-soft);
   background: var(--panel);
@@ -890,6 +892,175 @@
   padding: 0;
   border: 0;
   background: none;
+}
+/* The next action lives in the top bar on Film. */
+.shell.on-film .step-state {
+  display: none;
+}
+.next-bar.compact {
+  position: static;
+  flex: 1 1 0;
+  flex-wrap: nowrap;
+  min-width: 0;
+  justify-content: flex-end;
+  gap: var(--s-3);
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.next-bar.compact .next-say {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.next-bar.compact .next-say strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--t-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.next-bar.compact .next-actions {
+  flex: none;
+}
+.panel-delivery {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line-soft);
+}
+.panel-gates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-13);
+}
+.panel-gates > li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.gate-mark {
+  flex: none;
+  width: 14px;
+  color: var(--gold);
+  text-align: center;
+}
+.panel-gates > li.done .gate-mark {
+  color: var(--sage);
+}
+.gate-copy {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  color: var(--ink-2);
+}
+.gate-copy b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+.gate-copy em {
+  color: var(--gold);
+  font-style: normal;
+}
+.gate-act {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 6px;
+}
+.sample-list {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sample-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--ink-2);
+  font-size: var(--t-12);
+  text-align: left;
+}
+.sample-list button:hover {
+  background: var(--raised);
+  color: var(--ink);
+}
+.sample-list button.open {
+  border-color: var(--gold);
+}
+.sample-list button.seen span::before {
+  content: "✓ ";
+  color: var(--sage);
+}
+.sample-list img {
+  flex: none;
+  width: 54px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+.film-picture {
+  position: relative;
+}
+.film-sample {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  margin: 0;
+  background: #000;
+}
+.film-sample img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.film-sample figcaption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: 6px var(--s-3);
+  background: rgba(20, 21, 24, 0.86);
+  color: var(--ink-2);
+  font-size: var(--t-13);
+}
+.film-sample figcaption b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+.film-sample figcaption span {
+  flex: 1;
+}
+.film-sample button {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--ink-2);
+}
+.film-sample button:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+.film-sample button:disabled {
+  opacity: 0.4;
 }
 /* The timeline is the film. */
 .shell.on-film {
@@ -1170,8 +1341,7 @@
 .shell.film-full .spine,
 .shell.film-full .film-line,
 .shell.film-full .director,
-.shell.film-full .next-bar,
-.shell.film-full .film-bar {
+.shell.film-full .film-tabbar {
   display: none;
 }
 .shell.film-full .film-frame {

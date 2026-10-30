@@ -668,3 +668,40 @@ test("a running batch replaces the make button instead of offering a second batc
   assert.match(step.title, /Making stills/);
   assert.match(step.detail || "", /2 of 4 images/);
 });
+
+test("a new cut with every still kept is approved on Film, not sent back to Images", () => {
+  const stale = { ...approvals(), stills: { state: "stale" as const, expected_hash: "h" } };
+  const step = nextStep(
+    "film",
+    project({ stage_states: states({ story: "done", storyboard: "done", images: "done", film: "you" }) }),
+    stale,
+    { ...images(), total: 3, selected: 3, kept: 3, stale: 0 },
+    budget,
+  );
+  assert.match(step.title, /The cut changed/);
+  assert.equal(step.actions[0].approve, "stills");
+  const changedPicture = nextStep(
+    "film",
+    project({ stage_states: states({ story: "done", storyboard: "done", images: "changed", film: "not_ready" }) }),
+    stale,
+    { ...images(), total: 3, selected: 3, kept: 3, stale: 1 },
+    budget,
+  );
+  assert.match(changedPicture.title, /Approve every picture/);
+});
+
+test("a titles review waiting to be inspected is what the bar asks for", () => {
+  const step = nextStep(
+    "film",
+    project({
+      preview_required: false,
+      titles_review_ready: true,
+      stage_states: states({ story: "done", storyboard: "done", images: "done", film: "you" }),
+    }),
+    { ...approvals(), stills: { state: "approved" as const }, graphics: { state: "stale" as const } },
+    images(),
+    budget,
+  );
+  assert.match(step.title, /Review the titles/);
+  assert.equal(step.actions[0].target, "render");
+});

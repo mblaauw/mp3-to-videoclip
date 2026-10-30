@@ -6,10 +6,9 @@ import { JobBanner } from "../jobs/JobBanner";
 import type { Stage } from "../shell/nextStep";
 import { clock } from "../spine/wave";
 import { ShotThumb } from "../storyboard/ShotThumb";
-import { CreditsCard } from "../story/CreditsCard";
 import { Button } from "../ui";
 import type { CutNote } from "./cutNotes";
-import { DeliveryCard } from "./DeliveryCard";
+import { DeliveryPanel } from "./DeliveryPanel";
 import {
   joinMaxFrames,
   setEditMotion,
@@ -79,6 +78,8 @@ export function FilmPanel({
           onChange={onChange}
           onDone={() => onSelect(null)}
         />
+      ) : selection?.kind === "delivery" ? (
+        <DeliveryPanel film={film} onNavigate={onNavigate} onBack={() => onSelect(null)} />
       ) : note ? (
         <>
           <header className="panel-head">
@@ -126,7 +127,7 @@ function Overview({
   onSeekNote: (note: CutNote) => void;
   onNavigate: (stage: Stage) => void;
 }) {
-  const { cut, board, rendererReady, slug } = film;
+  const { cut, board, rendererReady, slug, workflow } = film;
   return (
     <>
       <header className="panel-head">
@@ -180,8 +181,15 @@ function Overview({
           )}
         </>
       )}
-      {rendererReady !== false && <DeliveryCard film={film} onNavigate={onNavigate} />}
-      <CreditsCard slug={slug} />
+      {rendererReady !== false && (
+        <div className="panel-delivery">
+          <b>{workflow.title}</b>
+          <p className="hint">{film.finalHint}</p>
+          <Button size="small" variant="quiet" onClick={() => onSelect({ kind: "delivery" })}>
+            Open delivery and credits
+          </Button>
+        </div>
+      )}
     </>
   );
 }

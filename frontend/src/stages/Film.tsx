@@ -9,7 +9,6 @@ import { FilmPanel } from "../film/FilmPanel";
 import { FilmTimeline } from "../film/FilmTimeline";
 import { LiveViewer } from "../film/LiveViewer";
 import { RenderedFiles } from "../film/RenderedFiles";
-import { SamplesDialog } from "../film/SamplesDialog";
 import { selectJoin, stepJoin, type FilmSelection } from "../film/selection";
 import { useFilmData } from "../film/useFilmData";
 import { RendererSetup } from "../RendererSetup";
@@ -41,6 +40,8 @@ export function FilmStage({
   full,
   onFull,
   onShowPanel,
+  deliveryAsk,
+  onTitlesReady,
 }: {
   slug: string;
   onNavigate: (stage: Stage) => void;
@@ -51,6 +52,9 @@ export function FilmStage({
   onFull: (next: boolean) => void;
   /** The Director holds the panel's slot while open; this hands it back. */
   onShowPanel: () => void;
+  /** Bumped when the next-step bar asks for the delivery panel. */
+  deliveryAsk: number;
+  onTitlesReady: (ready: boolean) => void;
 }) {
   const film = useFilmData(slug);
   const { error, notice, load, loaded, setRendererReady } = film;
@@ -96,8 +100,14 @@ export function FilmStage({
       select({ kind: "join", ids: [id] });
       player.seek((shot.start_frame - 1) / fps);
     },
-    clear: () => setSelection(null),
-    nudge: (frames) => player.seek(player.current() + frames / fps),
+    clear: () => {
+      if (film.samplesOpen) film.setSamplesOpen(false);
+      else setSelection(null);
+    },
+    nudge: (frames) => {
+      if (film.samplesOpen) film.openSample(film.sampleIndex + Math.sign(frames));
+      else player.seek(player.current() + frames / fps);
+    },
     zoomBy: (by) => setZoom((value) => Math.max(1, Math.min(8, value + by))),
   };
   const undoKey = useRef<() => Promise<void>>(async () => {});
@@ -202,29 +212,49 @@ export function FilmStage({
     if (next && !sideSlot) onShowPanel();
   };
 
+  const titlesReady = film.samples.length > 0 && film.graphics?.current !== false;
+  useEffect(() => {
+    onTitlesReady(titlesReady);
+    return () => onTitlesReady(false);
+  }, [titlesReady, onTitlesReady]);
+
+  useEffect(() => {
+    if (!deliveryAsk) return;
+    setTab("cut");
+    setSelection({ kind: "delivery" });
+    onShowPanel();
+    // Only a new ask opens it; the handler changes on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryAsk]);
+
+  const tabs = (
+    <div className="board-tabs" role="group" aria-label="Film view">
+      {TABS.map((item) => (
+        <Button
+          key={item.id}
+          size="small"
+          variant={tab === item.id ? "primary" : "quiet"}
+          aria-pressed={tab === item.id}
+          onClick={() => setTab(item.id)}
+        >
+          {item.label}
+        </Button>
+      ))}
+    </div>
+  );
+  const status = (
+    <>
+      {notice && <p className="film-notice">{notice}</p>}
+      {!!editor.current.history.length && (
+        <Button size="small" variant="quiet" onClick={() => void undo()} title="Undo (⌘Z)">
+          Undo
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <div className="film-work">
-      <div className="film-bar">
-        <div className="board-tabs" role="group" aria-label="Film view">
-          {TABS.map((item) => (
-            <Button
-              key={item.id}
-              size="small"
-              variant={tab === item.id ? "primary" : "quiet"}
-              aria-pressed={tab === item.id}
-              onClick={() => setTab(item.id)}
-            >
-              {item.label}
-            </Button>
-          ))}
-        </div>
-        {notice && <p className="film-notice">{notice}</p>}
-        {!!editor.current.history.length && (
-          <Button size="small" variant="quiet" onClick={() => void undo()} title="Undo (⌘Z)">
-            Undo
-          </Button>
-        )}
-      </div>
       {error && (
         <ErrorState what="working on the film" error={error} compact onRetry={() => void load()} />
       )}
@@ -232,15 +262,27 @@ export function FilmStage({
       {!loaded ? (
         <LoadingState>Reading the film, its gates and the cut…</LoadingState>
       ) : tab === "cut" ? (
-        <LiveViewer film={film} full={full} onFull={onFull} />
+        <LiveViewer film={film} full={full} onFull={onFull} tabs={tabs} status={status} />
       ) : tab === "list" ? (
-        <div className="film-scroll">
-          <CutList film={film} onNavigate={onNavigate} />
-        </div>
+        <>
+          <div className="film-viewer-bar film-tabbar">
+            {tabs}
+            {status}
+          </div>
+          <div className="film-scroll">
+            <CutList film={film} onNavigate={onNavigate} />
+          </div>
+        </>
       ) : (
-        <div className="film-scroll">
-          <RenderedFiles film={film} />
-        </div>
+        <>
+          <div className="film-viewer-bar film-tabbar">
+            {tabs}
+            {status}
+          </div>
+          <div className="film-scroll">
+            <RenderedFiles film={film} />
+          </div>
+        </>
       )}
       {sideSlot &&
         loaded &&
@@ -278,7 +320,6 @@ export function FilmStage({
           />,
           lineSlot,
         )}
-      <SamplesDialog film={film} />
     </div>
   );
 }

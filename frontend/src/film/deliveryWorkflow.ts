@@ -36,5 +36,6 @@ export function deliveryWorkflow(
     ? result("Ready to render final", "Render final draws the film with the intro/credits you approved, exactly as reviewed, then verifies the file.")
     : result("Finish the delivery gates", "Intro/credits are already approved. Complete the remaining gates below before rendering the final; no second titles approval is needed.");
   if (graphics?.available && graphics.current === true && graphics.samples?.length) return result("Your intro/credits review", "Inspect every sample of the film with its titles, then explicitly approve intro/credits. Rendering final remains a separate action.");
-  return result(graphics?.available ? "Check the titles again" : "Check the titles", "Check titles renders stills of the real film with its titles. Then: your intro/credits review → final render → verification → ready for delivery.");
+  const cutChanged = !!graphics?.available && graphics.current === false && /the cut/.test(graphics.reason ?? "");
+  return result(cutChanged ? "The cut changed. Check the titles again" : graphics?.available ? "Check the titles again" : "Check the titles", "Check titles renders stills of the real film with its titles. Then: your intro/credits review → final render → verification → ready for delivery.");
 }

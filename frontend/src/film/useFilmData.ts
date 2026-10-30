@@ -301,12 +301,30 @@ export function useFilmData(slug: string) {
   const titlesLine = line("titles");
   const stillsDone = line("stills")?.state === "done";
   const samples = graphics?.samples || [];
+  // The titles can't be approved until every sample has been opened (D4).
+  const [seenSamples, setSeenSamples] = useState<ReadonlySet<string>>(new Set());
+  const samplesKey = samples.map((sample) => sample.sha256).join();
+  useEffect(() => {
+    setSeenSamples(new Set());
+    setInspected(false);
+    setSamplesOpen(false);
+  }, [samplesKey]);
+  const openSample = (index: number) => {
+    const sample = samples[index];
+    if (!sample) return;
+    setSampleIndex(index);
+    setSamplesOpen(true);
+    setSeenSamples((current) => new Set(current).add(sample.name));
+  };
+  const allSamplesSeen =
+    samples.length > 0 && samples.every((sample) => seenSamples.has(sample.name));
   const canApproveTitles =
     !!titlesLine &&
     titlesLine.state !== "done" &&
     titlesLine.state !== "optional" &&
     !!titlesLine.expected_hash &&
     graphics?.current !== false &&
+    allSamplesSeen &&
     inspected;
   const finalHint = checklist
     ? checklist.can_final
@@ -348,7 +366,6 @@ export function useFilmData(slug: string) {
     samplesOpen,
     setSamplesOpen,
     sampleIndex,
-    setSampleIndex,
     showEditFile,
     rendering,
     boardById,
@@ -358,6 +375,9 @@ export function useFilmData(slug: string) {
     stillsDone,
     samples,
     canApproveTitles,
+    seenSamples,
+    allSamplesSeen,
+    openSample,
     finalHint,
     workflow,
     load,

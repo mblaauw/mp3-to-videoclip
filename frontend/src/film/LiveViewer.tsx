@@ -1,5 +1,14 @@
-import { Suspense, lazy, useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { usePlayerControls, usePlayerTime } from "../spine/player";
+import { sampleTitle } from "./titleSamples";
 import type { FilmData } from "./useFilmData";
 
 const LivePlayer = lazy(() => import("../LivePlayer"));
@@ -12,17 +21,23 @@ export function LiveViewer({
   film,
   full,
   onFull,
+  tabs,
+  status,
 }: {
   film: FilmData;
   full: boolean;
   onFull: (next: boolean) => void;
+  /** The view switcher and the last change, sharing this row to keep the picture tall. */
+  tabs: ReactNode;
+  status: ReactNode;
 }) {
   const player = usePlayerControls();
   // A tenth of a second is enough for the "now playing" label; the synced
   // preview reads the exact clock itself.
   const playerTime = usePlayerTime(0.1);
   const [showTitles, setShowTitles] = useState(true);
-  const { board, cut, live, liveError, boardById, imageById } = film;
+  const { board, cut, live, liveError, boardById, imageById, samples, samplesOpen, sampleIndex } = film;
+  const sample = samplesOpen ? samples[sampleIndex] : undefined;
   const fps = board?.fps || 24;
   const currentCutShot = cut?.shots.find(
     (shot) =>
@@ -67,7 +82,7 @@ export function LiveViewer({
         {live ? (
           <div
             className="film-picture"
-            style={{ "--film-ratio": `${live.width} / ${live.height}`, "--film-w": live.width / live.height } as React.CSSProperties}
+            style={{ "--film-ratio": `${live.width} / ${live.height}`, "--film-w": live.width / live.height } as CSSProperties}
           >
             <Suspense fallback={<p className="empty">Loading the player…</p>}>
               <LivePlayer
@@ -81,6 +96,30 @@ export function LiveViewer({
                 playing={player.playing}
               />
             </Suspense>
+            {sample && (
+              <figure className="film-sample">
+                <img src={sample.url} alt={sampleTitle(sample, live.titles?.windows ?? [])} />
+                <figcaption>
+                  <b>{sampleTitle(sample, live.titles?.windows ?? [])}</b>
+                  <span>
+                    {sampleIndex + 1} of {samples.length}
+                  </span>
+                  <button type="button" disabled={sampleIndex === 0} onClick={() => film.openSample(sampleIndex - 1)}>
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={sampleIndex === samples.length - 1}
+                    onClick={() => film.openSample(sampleIndex + 1)}
+                  >
+                    Next
+                  </button>
+                  <button type="button" onClick={() => film.setSamplesOpen(false)}>
+                    Back to the film
+                  </button>
+                </figcaption>
+              </figure>
+            )}
           </div>
         ) : (
           <p className="empty">{liveError ?? "No storyboard yet."}</p>
@@ -103,21 +142,22 @@ export function LiveViewer({
           <i style={{ width: `${(playerTime / (player.duration || 1)) * 100}%` }} />
         </div>
       ) : (
-        live && (
-          <div className="film-viewer-bar">
-            {currentBoardShot && (
+        <div className="film-viewer-bar">
+          {tabs}
+          {live && currentBoardShot && (
               <p className="film-now">
                 <b>{currentBoardShot.id}</b> {currentBoardShot.message || currentBoardShot.purpose}
                 {currentPicture?.stale && <em> Older prompt</em>}
               </p>
             )}
-            {live.stale > 0 && (
+            {status}
+            {live && live.stale > 0 && (
               <span className="hint">
                 {live.stale} selected still{live.stale === 1 ? " is" : "s are"} older than the
                 storyboard
               </span>
             )}
-            {live.titles ? (
+            {live?.titles ? (
               <label className="live-titles">
                 <input
                   type="checkbox"
@@ -127,13 +167,12 @@ export function LiveViewer({
                 Show titles
               </label>
             ) : (
-              live.titlesNote && <span className="hint">{live.titlesNote}</span>
+              live?.titlesNote && <span className="hint">{live.titlesNote}</span>
             )}
             <button type="button" className="film-full-btn" onClick={() => onFull(true)} title="Full view (F)">
               Full view
             </button>
           </div>
-        )
       )}
     </section>
   );

@@ -96,6 +96,7 @@ function imageFacts(shots: ImageShot[], reserve: string, proofIds: string[]): Im
     total: paid.length,
     selected: paid.filter((shot) => shot.selected !== null).length,
     kept: paid.filter((shot) => shot.review?.verdict === "accept").length,
+    stale: paid.filter((shot) => shot.selected !== null && shot.stale).length,
     missing: missing.length,
     missing_ids: missing.map((shot) => shot.id),
     reserve_usd: reserve,
@@ -117,6 +118,7 @@ function approvalWord(value: ApprovalFacts | undefined): StageState {
 function derivedStates(
   project: ProjectSummary,
   approvals: ApprovalMap,
+  images: ImageFacts,
 ): Partial<Record<Stage, StageState>> {
   const base = { ...(project.stage_states || {}) } as Partial<Record<Stage, StageState>>;
   base.story = approvalWord(approvals.brief);
@@ -125,6 +127,14 @@ function derivedStates(
   if (base.storyboard !== "done") {
     base.images = "not_ready";
   } else if (approvals.stills?.state === "approved") {
+    base.images = "done";
+  } else if (
+    approvals.stills?.state === "stale" &&
+    images.total > 0 &&
+    images.kept === images.total &&
+    !images.stale
+  ) {
+    // Every picture is still kept; only the cut moved, and Film asks for that sign-off.
     base.images = "done";
   } else if (approvals.stills?.state === "stale" || approvals.proof?.state === "stale") {
     base.images = "changed";
@@ -173,6 +183,8 @@ function StageView({
   filmFull,
   onFilmFull,
   onShowFilmPanel,
+  deliveryAsk,
+  onTitlesReady,
   music,
   slug,
   stage,
@@ -192,6 +204,8 @@ function StageView({
   filmFull: boolean;
   onFilmFull: (next: boolean) => void;
   onShowFilmPanel: () => void;
+  deliveryAsk: number;
+  onTitlesReady: (ready: boolean) => void;
   music: Music | null;
   slug: string;
   stage: Stage;
@@ -239,6 +253,8 @@ function StageView({
       full={filmFull}
       onFull={onFilmFull}
       onShowPanel={onShowFilmPanel}
+      deliveryAsk={deliveryAsk}
+      onTitlesReady={onTitlesReady}
     />
   );
 }
@@ -309,6 +325,8 @@ function FilmShellContent({
   const [filmSide, setFilmSide] = useState<HTMLElement | null>(null);
   const [filmLine, setFilmLine] = useState<HTMLElement | null>(null);
   const [filmFull, setFilmFull] = useState(false);
+  const [deliveryAsk, setDeliveryAsk] = useState(0);
+  const [titlesReady, setTitlesReady] = useState(false);
   const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
 
   const loadEpoch = useRef(0);
@@ -376,7 +394,10 @@ function FilmShellContent({
 
   useEffect(() => {
     if (stage !== "storyboard") setInspectorShot(null);
-    if (stage !== "film") setFilmFull(false);
+    if (stage !== "film") {
+      setFilmFull(false);
+      setDeliveryAsk(0);
+    }
     // Each stage reopens as you left it, but a reply being written is never cut off.
     if (!directorBusy.current) setDirectorOpenState(directorDefault(stage));
   }, [stage]);
@@ -419,7 +440,7 @@ function FilmShellContent({
   };
   const authoritative = approvalsLoaded && Object.keys(approvals).length > 0;
   const states = authoritative
-    ? derivedStates(project, approvals)
+    ? derivedStates(project, approvals, facts)
     : (project.stage_states as Partial<Record<Stage, StageState>> | undefined);
   const analysisRunning = jobs.some(
     (job) =>
@@ -435,6 +456,7 @@ function FilmShellContent({
   const projectFacts: ProjectFacts = {
     ...project,
     stage_states: shellStates,
+    titles_review_ready: titlesReady,
     prompt_version: intake?.prompt_version ?? null,
     profile_version: intake?.brief?.creative?.profile_version ?? 0,
     has_message: intake ? Boolean(intake.intent?.message?.trim()) : undefined,
@@ -521,14 +543,9 @@ function FilmShellContent({
       scrollTo(".signoff");
       return;
     }
-    if (action.target === "preview") {
+    if (action.target === "preview" || action.target === "render") {
       if (stage !== "film") onNavigate("film");
-      scrollTo(".live-preview");
-      return;
-    }
-    if (action.target === "render") {
-      if (stage !== "film") onNavigate("film");
-      scrollTo(".delivery-card");
+      setDeliveryAsk(Date.now());
       return;
     }
     if (action.target === "make-missing") {
@@ -556,6 +573,11 @@ function FilmShellContent({
           stage={stage}
           budget={budget}
           stageStates={shellStates}
+          next={
+            stage === "film" ? (
+              <NextStepBar compact step={step} ready={approvalsLoaded} onAction={act} />
+            ) : null
+          }
           onNavigate={onNavigate}
           onSettings={onSettings}
           onBudgetChanged={() => {
@@ -575,12 +597,14 @@ function FilmShellContent({
         />
         <main className="shell-main">
           {loadError && <p role="alert">Could not refresh film data: {loadError}</p>}
-          <NextStepBar
-            step={step}
-            ready={approvalsLoaded}
-            onAction={act}
-            back={previousStage ? { label: previousStage.label, onClick: () => onNavigate(previousStage.id) } : null}
-          />
+          {stage !== "film" && (
+            <NextStepBar
+              step={step}
+              ready={approvalsLoaded}
+              onAction={act}
+              back={previousStage ? { label: previousStage.label, onClick: () => onNavigate(previousStage.id) } : null}
+            />
+          )}
           <div className="stage-pad">
             <div className={stage === "images" ? "images-body" : undefined}>
               <StageView
@@ -591,6 +615,8 @@ function FilmShellContent({
                 filmFull={filmFull}
                 onFilmFull={setFilmFull}
                 onShowFilmPanel={() => setDirectorOpen(false)}
+                deliveryAsk={deliveryAsk}
+                onTitlesReady={setTitlesReady}
                 slug={slug}
                 stage={stage}
                 intake={intake}
