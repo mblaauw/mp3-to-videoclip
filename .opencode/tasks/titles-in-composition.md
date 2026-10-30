@@ -173,3 +173,34 @@ policy, and deleting the FFmpeg/Pillow paths (assessment phase 2).
   - Against the old composite samples of the same frames: 44.8–47.7 dB PSNR,
     99.9th percentile ≤ 7 levels, no pixel more than 64 levels off. No layout
     difference, only H.264 noise.
+- **T6 done.** For a `composition-v1` approval, `render_final` draws the pictures
+  and the reviewed titles in one Remotion pass. It refuses titles that no
+  longer hash to the reviewed ones and renders outside the read snapshot.
+  Composite-method reviews still composite onto their base.
+  - Scratch Tree of Love (with a scratch-only test approval): the final took
+    **809.7 s**. It has 5,749 frames, H.264/yuv420p 1920×1080 24 fps, AAC
+    48 kHz stereo, and classifies as a verified, current, delivery-ready final.
+  - Its decoded audio is bit-identical to the real base v002 render.
+  - At all 17 reviewed frames it matches the review stills at 41.3–46.3 dB
+    PSNR, with no pixel more than 64 levels off.
+- **T7 done.** Nothing new writes `work/graphics/**` ProRes clips: only a final
+  from a composite-method review still runs the compositor. Existing caches are
+  left in place (12 GB Tree of Love, 7.5 GB Stof en Stilte, 423 MB Forward Ever).
+  `docs/RENDERER.md`, `docs/ARCHITECTURE.md` and the README describe the new
+  route.
+
+## Acceptance result
+
+- Checks: `pytest` 1323 passed / 1 skipped, `ruff check` and `ruff format`
+  clean, frontend `tsc`, tests (74) and build, renderer tests (54).
+- Time, measured on this Mac:
+  - Old route: a base render before the titles could be reviewed (v002:
+    about 14 min 20 s), then a separate composite pass, never timed for this
+    film.
+  - New route: the titles review in 14.1 s, then a final in 809.7 s, about the
+    same as a base, so drawing the titles adds little.
+- Your Tree of Love production was only read. The scratch approval and renders
+  live in the session scratch directory. No provider spend.
+- Open: Zero Bars' caption conflict (creative); `index.html` caching
+  (follow-up); deleting the composite route waits for the legacy-retirement
+  phase (D3).

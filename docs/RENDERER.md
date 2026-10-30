@@ -60,11 +60,15 @@ for a different organisation. No licence key or font file belongs in git.
 - Graphics spec sets `renderer: "remotion"`, `design: "joint-v1"`; brand is the
   selected `filmstrip`, `plate: false`, so opening/credits render one identity.
   Legacy Pillow specs and earlier logo releases remain available, not rewritten.
-- Remotion creates silent base visuals and transparent ProRes graphics. FFmpeg
-  muxes the original audio once, assembles existing sparse alpha windows and copies
-  base AAC packets verbatim into the final. Output is H264/yuv420p/AAC/faststart.
-- Preflight decodes the actual cached Remotion overlay, not a Pillow approximation.
-  Renderer source, locked dependencies, font bytes, props, selected images and the
+- Titles are drawn inside the film. `titles.plan_titles` lays the opening,
+  captions, credit cards and lockup out as integer-frame windows (shot-bound
+  captions follow the edit's timing), and `Film.jsx` draws them with
+  `Titles.jsx` over `BaseFilm`. FFmpeg muxes the original audio once. Output is
+  H264/yuv420p/AAC/faststart.
+- The titles review renders stills of that same composition (`stills` request
+  kind, Remotion `renderStill`) at every opening phase and the middle of every
+  other window. It needs no base movie. Renderer source, locked dependencies,
+  font bytes, props, selected images, the planned titles, the cut and the
   resolved identity are content-bound. The browser binary is deliberately not
   hashed: a Chrome security update must not revoke a reviewed preview, and the
   renderer still refuses to start without a local executable. Corrupt cache is an
@@ -76,12 +80,15 @@ for a different organisation. No licence key or font file belongs in git.
 
 ## Live Player and preview approval
 
-`renderers/remotion/src/BaseFilm.jsx` is the one still-film composition. The
-renderer imports it from `index.jsx`; the Studio imports the same file through
+`renderers/remotion/src/Film.jsx` is the one film composition: `BaseFilm.jsx`
+with the planned titles from `Titles.jsx` drawn over it. The renderer registers
+it in `index.jsx`; the Studio imports the same files through
 `frontend/src/baseFilm.ts` and Vite dedupes React and Remotion to one copy. The
+Player shows the titles at their planned frames, with a "Show titles" toggle. The
 Player gets `GET /api/projects/<slug>/preview`: the effective renderer shot
 fields, the matching edit decision and grade, selected-still URLs, native split
-pane sources and the source audio. A missing still keeps its span and is marked
+pane sources, the planned titles (or a note saying why there are none yet) and
+the source audio. A missing still keeps its span and is marked
 as a placeholder, never dropped. `tests/test_timing_parity.py` loads `timing.mjs`
 with Node and compares its constants, enums, bounds, allocation acceptance and
 legacy camera endpoints with the Python models and renderer;
@@ -90,11 +97,14 @@ the flash refusal.
 
 A Studio preview job writes `work/preview-review.json` itself, binding the movie
 bytes to the current storyboard, proof set, brand and renderer revision, so the
-preview approval is available as soon as the render finishes. Delivery is two
-steps in both the Studio and the CLI: a **base** render carries the stills edit
-but no graphics and prepares the preflight samples; after the graphics approval,
-a **final** render composites the reviewed graphics onto that exact base. The
-final therefore needs the `stills` and `graphics` approvals. Schema 3 selects
+preview approval is available as soon as the render finishes. Delivery for a
+film with intro and credits is two steps: **Check titles** renders the review
+stills (seconds, not a film), and after the titles approval a **final** render
+draws the pictures and the reviewed titles in one pass. The final therefore needs
+the `stills` and `graphics` approvals, and refuses titles that no longer hash to
+the reviewed ones. A titles review recorded before this change
+(`method` absent, a base plus composited samples) still validates, and its final
+still composites onto that base with `graphics.compose`. Schema 3 selects
 Remotion even when a migrated document no longer carries the legacy
 `renderer_backend` field; an explicit backend wins for older schema-1 projects.
 

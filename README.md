@@ -30,8 +30,11 @@ references.
   and an unknown cost keeps its reservation until the provider reports it.
 - Remotion for stills-film previews, the final cut and the live Studio Player;
   FFmpeg for probe, mux and verification (`remotion.py`, `render.py`). The Player
-  runs the renderer's own `BaseFilm` and `timing.mjs`, so the live picture uses
-  the same spans, camera, grade and transitions as the MP4.
+  runs the renderer's own `Film` composition and `timing.mjs`, so the live
+  picture uses the same spans, camera, grade, transitions and titles as the MP4.
+- Intro, captions and credits are drawn in the film itself on integer-frame
+  windows (`titles.py`). **Check titles** renders review stills of the real film
+  in seconds; the final is one render pass with the reviewed titles.
 - Three production kinds (music video, promo, advert) with a kind-specific
   intake, `brief.intent`, selectable style presets and a kind-based signature
   package (`music_video` keeps the 25/40 opening and credits).
