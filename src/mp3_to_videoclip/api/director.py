@@ -177,8 +177,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
     if len(message) > MAX_CHAT_MESSAGE:
         raise ApiError(
             400,
-            "That message is too long. Paste the treatment into Story under "
-            "\u201cI already have a concept\u201d, then ask the Writer to improve it.",
+            "That message is too long. Paste your idea into Story under Start instead.",
             "message_too_long",
         )
     settings = effective_settings()
@@ -186,12 +185,17 @@ async def post_chat(slug: str, request: Request, payload: dict):
     role = _role(payload, stage)
     context = _context(payload)
     project = P.load_project(root, verify_source=False)
+    # A button that means one job names it; a typed message is routed by the artifacts.
+    task = payload.get("task")
+    if task is not None and task not in prompt_suite.TASKS[role]:
+        raise HTTPException(status_code=400, detail=f"unknown {role} task")
     bundle = prompt_suite.assemble(
         root,
         stage,
         role=role,
         kind=project.kind,
         style_preset=project.style_preset,
+        task=task,
     )
     promptlog.remember(root, bundle.meta)
     system = (

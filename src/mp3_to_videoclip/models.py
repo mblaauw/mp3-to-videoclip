@@ -418,6 +418,34 @@ class Concept(Model):
         return value
 
 
+class StoryPassage(Model):
+    """A run of the treatment's own words and the part of the song it plays over."""
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    text: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def ordered(self):
+        if self.end <= self.start:
+            raise ValueError("a passage must end after it starts")
+        return self
+
+
+class StoryPlacement(Model):
+    """Where the treatment falls on the song. Holds no words of its own authority."""
+
+    schema_version: Literal[1] = 1
+    passages: list[StoryPassage] = Field(min_length=1, max_length=40)
+
+    @model_validator(mode="after")
+    def in_order(self):
+        for before, after in zip(self.passages, self.passages[1:], strict=False):
+            if after.start < before.end:
+                raise ValueError("passages must run in order without overlapping")
+        return self
+
+
 class Treatments(Model):
     """One to three structurally distinct routes; one may be marked chosen."""
 

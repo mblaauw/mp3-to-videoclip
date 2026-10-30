@@ -30,7 +30,9 @@ STAGE_ROLE: dict[str, Role] = {
 TASKS: dict[Role, dict[str, str]] = {
     "writer": {
         "brief": "writer/brief.md",
+        "import": "writer/import.md",
         "concepts": "writer/concepts.md",
+        "place": "writer/place.md",
         "script_mv": "writer/script_mv.md",
         "script_ad": "writer/script_ad.md",
         "profile": "writer/profile.md",

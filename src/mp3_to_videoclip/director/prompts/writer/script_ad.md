@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 task: script_ad
 role: writer
 ---
@@ -34,6 +34,16 @@ Patch the brief through `update_brief`:
 
 Use `time_range` values that fit the excerpt. If the user supplied a legal line,
 give it its own row and keep it verbatim.
+
+## When the story is the user's own
+
+If no concept is chosen and `brief.treatment` holds the user's own words, keep them
+exactly: write only `script`, and tell them about any gap instead of filling it.
+
+## Then put it on the song
+
+After saving, call `place_story` with the whole treatment split into passages, each
+with the seconds it plays over. Use the same words, in order, unchanged.
 
 ## Self-check before saving
 

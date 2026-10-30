@@ -130,6 +130,50 @@ TOOLS: list[dict] = [
         ["slug", "concepts"],
     ),
     _tool(
+        "get_idea",
+        "Read the user's newest pasted idea, exactly as written, and how it is sorted.",
+        {"slug": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
+        "sort_idea",
+        "Say which of the user's own sentences are story, style, rules or things to avoid. "
+        "Copy them word for word: anything not in the paste, used twice or left out is "
+        "refused. Saves them to the brief and returns the saved idea.",
+        {
+            "slug": {"type": "string"},
+            "story": {"type": "array", "items": {"type": "string"}},
+            "style": {"type": "array", "items": {"type": "string"}},
+            "rules": {"type": "array", "items": {"type": "string"}},
+            "avoid": {"type": "array", "items": {"type": "string"}},
+        },
+        ["slug", "story", "style", "rules", "avoid"],
+    ),
+    _tool(
+        "place_story",
+        "Say when each passage of brief.treatment plays. Together the passages must hold "
+        "every word of the treatment, unchanged and in order; times are seconds from the "
+        "film's first frame. Does not change the story or its approval.",
+        {
+            "slug": {"type": "string"},
+            "passages": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 40,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "start": {"type": "number"},
+                        "end": {"type": "number"},
+                        "text": {"type": "string"},
+                    },
+                    "required": ["start", "end", "text"],
+                },
+            },
+        },
+        ["slug", "passages"],
+    ),
+    _tool(
         "get_images",
         "Inspect up to eight selected stills as thumbnails. Use this before reviewing images.",
         {
@@ -365,6 +409,23 @@ def _dispatch(
         return P.update_treatments(
             root, {key: value for key, value in arguments.items() if key != "slug"}
         ).model_dump()
+
+    if name == "get_idea":
+        from mp3_to_videoclip import idea
+
+        return idea.latest(root) or {"available": False}
+
+    if name == "sort_idea":
+        from mp3_to_videoclip import idea
+
+        parts = {key: arguments.get(key) or [] for key in idea.PARTS}
+        return idea.apply_sort(root, parts, by="writer")
+
+    if name == "place_story":
+        from mp3_to_videoclip import story_beats
+
+        placement = story_beats.place_story(root, {"passages": arguments.get("passages")})
+        return {"placed": len(placement.passages)}
 
     if name == "get_images":
         return _get_images(root, arguments.get("shot_ids") or [])

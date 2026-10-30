@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from mp3_to_videoclip import idea, story_beats
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.storage import RevisionConflict, digest
@@ -75,6 +76,35 @@ async def put_treatments(slug: str, request: Request, payload: dict):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return treatments.model_dump()
+
+
+@router.get("/idea")
+async def get_idea(slug: str, request: Request):
+    return {"idea": idea.latest(project_root(request, slug))}
+
+
+@router.post("/idea")
+async def post_idea(slug: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    try:
+        return {"idea": idea.keep_paste(root, payload.get("text"))}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/idea/sorted")
+async def put_idea_sorted(slug: str, request: Request, payload: dict):
+    """Moving a sentence between parts: the same rule that binds the Writer binds this."""
+    root = project_root(request, slug)
+    try:
+        return {"idea": idea.apply_sort(root, payload, by="owner")}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/story-passages")
+async def get_story_passages(slug: str, request: Request):
+    return {"passages": story_beats.passages(project_root(request, slug))}
 
 
 def _intake_payload(root: Path, *, analysis_needed: bool = False) -> dict:
