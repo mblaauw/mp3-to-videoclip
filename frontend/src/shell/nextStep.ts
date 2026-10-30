@@ -453,9 +453,9 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
   if (stateOf(project, "film") === "done") {
     return {
       tone: "done",
-      title: "Delivered.",
-      detail: "The final film and its stills are in this production.",
-      actions: [{ label: "Open Film", to: "film", kind: "quiet" }],
+      title: "Final ready.",
+      detail: "A verified final of the current cut is under Rendered files.",
+      actions: [],
     };
   }
   if (!(stateOf(project, "images") === "done" || approved(approvals, "stills"))) {
