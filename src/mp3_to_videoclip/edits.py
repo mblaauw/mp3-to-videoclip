@@ -124,6 +124,11 @@ ENERGY_WORDS = {
 }
 
 
+SAME_TRAVEL_RUN = 4
+LONG_STATIC_SECONDS = 12.0
+UNREVIEWED_FEELS = ("unreviewed", "section", "")
+
+
 def edit_path(root: Path) -> Path:
     return root / EDIT
 
@@ -595,6 +600,45 @@ def report(
                     "message": f"three {shot.motion.type} moves in a row",
                 }
             )
+    # The same travel over and over reads as a machine, even between different shots.
+    run = 0
+    previous_travel = None
+    for shot in edit.shots:
+        if shot.motion.type == "hold":
+            continue
+        travel = (shot.motion.type, shot.motion.from_scale, shot.motion.to_scale)
+        run = run + 1 if travel == previous_travel else 1
+        previous_travel = travel
+        if run == SAME_TRAVEL_RUN:
+            warnings.append(
+                {
+                    "code": "travel_repetition",
+                    "shot_id": shot.shot_id,
+                    "message": (
+                        f"{SAME_TRAVEL_RUN} {shot.motion.type} moves in a row with the same "
+                        f"travel, {shot.motion.from_scale:.2f} to {shot.motion.to_scale:.2f}"
+                    ),
+                }
+            )
+    for shot in edit.shots:
+        seconds = shot.duration_frames / fps
+        if shot.motion.type == "hold" and seconds > LONG_STATIC_SECONDS and not shot.accents:
+            warnings.append(
+                {
+                    "code": "long_static_shot",
+                    "shot_id": shot.shot_id,
+                    "message": f"{shot.shot_id} stays still for {seconds:.1f}s",
+                }
+            )
+    for section, _start, _end in windows:
+        if section.feel.strip().lower() in UNREVIEWED_FEELS:
+            warnings.append(
+                {
+                    "code": "section_no_feel",
+                    "section": section.id,
+                    "message": f"section {section.id} has no written feel",
+                }
+            )
     # Hard cut is the default and is not repetition; only named transitions are.
     joins = [shot.transition_in.type for shot in edit.shots[1:] if shot.transition_in.type != "cut"]
     for name in sorted(set(joins)):
@@ -795,6 +839,53 @@ def _seed_motion(shot) -> EditMotion:
     if shot.camera == "pan_left":
         return EditMotion(type="pan_left", **{"from": 1.08, "to": 1.08}, reason=reason)
     return EditMotion(type="pan_right", **{"from": 1.08, "to": 1.08}, reason=reason)
+
+
+def cut_material(root: Path) -> dict:
+    """What the music and the words offer to cut on, in film frames. Evidence, not orders."""
+    from . import production as P
+    from .domain import lyric_timing, section_map
+
+    project = P.load_project(root)
+    fps = project.fps
+    frame = lambda seconds: round(float(seconds) * fps)  # noqa: E731
+    music = section_map.apply(root, read_optional(root / "work" / "music.json")) or {}
+    sections = [
+        {
+            "name": item.get("name") or f"Section {index + 1}",
+            "start_frame": frame(item["start"]),
+            "end_frame": frame(item["end"]),
+            "energy": round(float(item.get("energy") or 0), 2),
+        }
+        for index, item in enumerate(music.get("sections") or [])
+        if isinstance(item, dict)
+    ]
+    lines = [
+        {"frame": frame(line["start"]), "text": line["text"], "source": line["source"]}
+        for line in lyric_timing.view(root)["lines"]
+        if line["start"] is not None and not line["tag"]
+    ]
+    changes = [
+        {"frame": frame(item["time"]), "strength": item.get("spectral_change")}
+        for item in music.get("candidate_changes") or []
+        if isinstance(item, dict) and "time" in item
+    ]
+    beats = [
+        frame(item["time"] if isinstance(item, dict) else item) for item in music.get("beats") or []
+    ]
+    board = effective_board(root) if (root / P.STAGE_FILES["storyboard"]).is_file() else None
+    return {
+        "fps": fps,
+        "total_frames": board.total_frames if board else round(project.duration * fps),
+        "sections": sections,
+        "lines": lines,
+        "changes": changes,
+        "beats": beats,
+        "notes": (
+            "All of this is estimated unless a line's source is tapped. Beats may be half or "
+            "double the felt pulse. Prefer sections, sung lines and strong changes."
+        ),
+    }
 
 
 @state_mutation

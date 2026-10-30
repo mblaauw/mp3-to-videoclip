@@ -466,3 +466,76 @@ def test_a_density_warning_needs_a_pace_target_to_compare_against(tmp_path):
     assert not density(edit.model_copy(update={"sections": sections}))
     far = [section.model_copy(update={"density_per_10s": 99}) for section in edit.sections]
     assert density(edit.model_copy(update={"sections": far}))
+
+
+def _codes(root, edit):
+    return {item["code"] for item in edits.report(root, edit=edit)["warnings"]}
+
+
+def test_report_flags_a_long_still_shot_and_a_section_with_no_feel(tmp_path):
+    root = _energetic_root(tmp_path)
+    edit = edits.seed_edit(root)
+    shots = [shot.model_copy(update={"motion": EditMotion(type="hold")}) for shot in edit.shots]
+    long_shot = shots[:1] + []
+    long_shot[0] = long_shot[0].model_copy(update={"duration_frames": 360})
+    board = P.load_board(root)
+    board = board.model_copy(
+        update={
+            "total_frames": 360,
+            "shots": [board.shots[0].model_copy(update={"duration_frames": 360})],
+        }
+    )
+    still = EditDecisionList(
+        sections=[EditSection(id="a", start_frame=0, feel="unreviewed")],
+        shots=long_shot,
+    )
+    assert {"long_static_shot", "section_no_feel"} <= {
+        item["code"] for item in edits.report(root, edit=still, board=board)["warnings"]
+    }
+
+
+def test_report_flags_the_same_travel_again_and_again_but_not_varied_travel(tmp_path):
+    root = _energetic_root(tmp_path)
+    edit = edits.seed_edit(root)
+
+    def pushed(to):
+        return EditMotion(type="push_in", **{"from": 1.0, "to": to})
+
+    same = edit.model_copy(
+        update={"shots": [s.model_copy(update={"motion": pushed(1.08)}) for s in edit.shots]}
+    )
+    assert "travel_repetition" in _codes(root, same)
+    varied = edit.model_copy(
+        update={
+            "shots": [
+                s.model_copy(update={"motion": pushed(1.03 + index * 0.01)})
+                for index, s in enumerate(edit.shots)
+            ]
+        }
+    )
+    assert "travel_repetition" not in _codes(root, varied)
+
+
+def test_cut_material_offers_sections_lines_and_changes_in_frames(tmp_path):
+    from mp3_to_videoclip.domain import lyric_timing
+
+    root = _energetic_root(tmp_path)
+    write_json(
+        root / "work/music.json",
+        {
+            "duration": 10.0,
+            "sections": [{"start": 0.0, "end": 10.0, "energy": 0.5, "label": "unreviewed"}],
+            "candidate_changes": [{"time": 4.0, "spectral_change": 0.7}],
+            "beats": [0.5, 1.0],
+        },
+    )
+    write_json(
+        root / "work/lyrics.json",
+        {"provider": "manual", "model": "text", "segments": [], "lines": ["[Hook]", "one"]},
+    )
+    lyric_timing.save(root, {"lines": [{"index": 1, "start": 2.0, "source": "auto"}]}, 10.0)
+    material = edits.cut_material(root)
+    assert material["sections"][0]["end_frame"] == 240
+    assert material["lines"] == [{"frame": 48, "text": "one", "source": "auto"}]
+    assert material["changes"][0]["frame"] == 96
+    assert material["beats"] == [12, 24]

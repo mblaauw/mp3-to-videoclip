@@ -66,6 +66,13 @@ TOOLS: list[dict] = [
         ["slug", "edit"],
     ),
     _tool(
+        "get_cut_material",
+        "Read what the music and words offer to cut on, in film frames: named sections, sung "
+        "line starts, strong changes and beat estimates.",
+        {"slug": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
         "get_music_summary",
         "Read the measured music summary.",
         {"slug": {"type": "string"}},
@@ -383,6 +390,11 @@ def _dispatch(
         from mp3_to_videoclip import edits
 
         return edits.summary(root)
+
+    if name == "get_cut_material":
+        from mp3_to_videoclip import edits
+
+        return edits.cut_material(root)
 
     if name == "update_edit":
         from mp3_to_videoclip import edits
