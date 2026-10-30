@@ -542,6 +542,11 @@ function FilmShellContent({
       }
       return;
     }
+    if (action.target === "lyrics") {
+      scrollTo("#track-lyrics");
+      document.querySelector<HTMLElement>("#track-lyrics")?.focus({ preventScroll: true });
+      return;
+    }
     if (action.target === "changes") {
       if (stage !== "story") onNavigate("story");
       scrollTo("#story-changes", 180);

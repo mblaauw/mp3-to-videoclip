@@ -76,16 +76,27 @@ test("track reports a running analysis without inventing progress", () => {
   assert.equal(step.actions.length, 0);
 });
 
-test("track asks for lyrics on a vocal song without them", () => {
+test("track asks for lyrics on a measured vocal song without them", () => {
   const step = nextStep(
     "track",
-    project({ has_lyrics: false }),
+    project({ has_analysis: true, has_lyrics: false, stage_states: states({ track: "you" }) }),
     approvals(),
     images(),
     budget,
   );
   assert.match(step.title, /Add the lyrics/);
-  assert.equal(step.actions[0].to, "track");
+  assert.deepEqual(step.actions[0], { label: "Add lyrics", target: "lyrics", kind: "primary" });
+});
+
+test("track still asks to measure when neither analysis nor lyrics exist", () => {
+  const step = nextStep(
+    "track",
+    project({ has_analysis: false, has_lyrics: false, stage_states: states({ track: "you" }) }),
+    approvals(),
+    images(),
+    budget,
+  );
+  assert.match(step.title, /Measure the song/);
 });
 
 test("a vocal advert does not demand lyrics", () => {

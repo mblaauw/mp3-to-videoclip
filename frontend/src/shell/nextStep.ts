@@ -5,6 +5,7 @@ export type StageState = "done" | "you" | "changed" | "not_ready" | "running";
 export type NextTone = "done" | "you" | "changed" | "error";
 export type NextTarget =
   | "analysis"
+  | "lyrics"
   | "approval"
   | "changes"
   | "brief"
@@ -104,12 +105,8 @@ function stateOf(project: ProjectFacts, stage: Stage): StageState | undefined {
   return project.stage_states?.[stage];
 }
 
-function trackIsReady(project: ProjectFacts): boolean {
-  if (stateOf(project, "track") === "done") return true;
-  if (project.has_analysis === true) {
-    return !needsLyrics(project) || project.has_lyrics === true;
-  }
-  return false;
+function trackIsMeasured(project: ProjectFacts): boolean {
+  return stateOf(project, "track") === "done" || project.has_analysis === true;
 }
 
 function needsLyrics(project: ProjectFacts): boolean {
@@ -144,7 +141,7 @@ function trackStep(project: ProjectFacts): NextStep {
       actions: [],
     };
   }
-  if (!trackIsReady(project)) {
+  if (!trackIsMeasured(project)) {
     return {
       tone: "you",
       title: "Measure the song first.",
@@ -157,7 +154,7 @@ function trackStep(project: ProjectFacts): NextStep {
       tone: "you",
       title: "Add the lyrics before approving the story.",
       detail: "The story is checked against the words.",
-      actions: [{ label: "Add lyrics", to: "track", kind: "primary" }],
+      actions: [{ label: "Add lyrics", target: "lyrics", kind: "primary" }],
     };
   }
   return {

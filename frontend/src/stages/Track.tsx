@@ -369,6 +369,7 @@ export function TrackStage({ slug }: { slug: string }) {
             ) : (
               <>
                 <textarea
+                  id="track-lyrics"
                   className="lyrics-input"
                   rows={10}
                   value={draft}
