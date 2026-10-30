@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, type EditPayload, type Music } from "../api";
-import { CutEditor } from "../film/cutEditor";
+import { CutEditor, type ApplyResult } from "../film/cutEditor";
 import { CutList } from "../film/CutList";
 import { applyEditBoard } from "../film/editTimeline";
 import { FilmPanel } from "../film/FilmPanel";
@@ -88,10 +88,19 @@ export function FilmStage({
     nudge: (frames) => player.seek(player.current() + frames / fps),
     zoomBy: (by) => setZoom((value) => Math.max(1, Math.min(8, value + by))),
   };
+  const undoKey = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
+        if (target?.closest("input[type='text'], textarea, [contenteditable='true'], [role='dialog']")) {
+          return;
+        }
+        event.preventDefault();
+        void undoKey.current();
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='slider']")) {
         return;
       }
@@ -113,10 +122,9 @@ export function FilmStage({
     return () => window.removeEventListener("keydown", onKey);
   }, [fps]);
 
-  /** Apply a change now, save it in order, then bring the Player up to date. */
-  const change = useCallback(
-    async (next: EditPayload, label: string): Promise<boolean> => {
-      const result = await editor.current!.apply(next);
+  /** After a save: say what happened and bring the Player up to date. */
+  const settle = useCallback(
+    async (result: ApplyResult, label: string): Promise<boolean> => {
       if (result === "saved") {
         film.setNotice(label);
         notifyProjectChanged();
@@ -124,7 +132,7 @@ export function FilmStage({
         return true;
       }
       if (result === "conflict") {
-        toast("This cut changed somewhere else, so your last change was not saved. The latest cut is loaded.");
+        toast("This cut changed somewhere else, so your last change was not saved. The latest cut is loaded and undo starts again.");
         await film.load();
       } else if (result === "failed") {
         toast(`Could not save the cut: ${label}.`);
@@ -133,6 +141,24 @@ export function FilmStage({
     },
     [film],
   );
+
+  /** Apply a change now and save it in order. */
+  const change = useCallback(
+    async (next: EditPayload, label: string): Promise<boolean> => {
+      return settle(await editor.current!.apply(next, label), label);
+    },
+    [settle],
+  );
+
+  const undo = useCallback(async () => {
+    const step = editor.current!.undo();
+    if (!step) {
+      toast("Nothing to undo.", "info");
+      return;
+    }
+    await settle(await step.result, `Undid: ${step.label}`);
+  }, [settle]);
+  undoKey.current = undo;
 
   const watchStop = useRef<(() => void) | null>(null);
   const { clock: playerClock, playing } = player;
@@ -181,6 +207,11 @@ export function FilmStage({
           ))}
         </div>
         {notice && <p className="film-notice">{notice}</p>}
+        {!!editor.current.history.length && (
+          <Button size="small" variant="quiet" onClick={() => void undo()} title="Undo (⌘Z)">
+            Undo
+          </Button>
+        )}
       </div>
       {error && (
         <ErrorState what="working on the film" error={error} compact onRetry={() => void load()} />

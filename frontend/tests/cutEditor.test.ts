@@ -81,3 +81,43 @@ test("a reload never overwrites a change on its way", async () => {
   editor.sync(fresh);
   assert.equal(editor.current, fresh);
 });
+
+test("undo walks back several steps, saving each earlier cut", async () => {
+  const saved: EditPayload[] = [];
+  const editor = new CutEditor(async (next) => {
+    saved.push(next);
+    return next;
+  }, () => {});
+  const first = cut("first");
+  editor.sync(first);
+  const a = cut("a");
+  const b = cut("b");
+  await editor.apply(a, "to a");
+  await editor.apply(b, "to b");
+  const one = editor.undo();
+  assert.equal(one?.label, "to b");
+  assert.equal(await one?.result, "saved");
+  assert.equal(editor.current, a);
+  const two = editor.undo();
+  assert.equal(two?.label, "to a");
+  await two?.result;
+  assert.equal(editor.current, first);
+  assert.equal(editor.undo(), null);
+  assert.deepEqual(saved, [a, b, a, first]);
+});
+
+test("a conflict clears undo; a plain failure keeps the steps before it", async () => {
+  let fail: unknown = null;
+  const editor = new CutEditor(async (next) => {
+    if (fail) throw fail;
+    return next;
+  }, () => {});
+  editor.sync(cut("first"));
+  await editor.apply(cut("a"), "to a");
+  fail = new Error("boom");
+  assert.equal(await editor.apply(cut("b"), "to b"), "failed");
+  assert.deepEqual(editor.history.map((step) => step.label), ["to a"]);
+  fail = Object.assign(new Error("stale"), { status: 409 });
+  assert.equal(await editor.apply(cut("c"), "to c"), "conflict");
+  assert.deepEqual(editor.history, []);
+});

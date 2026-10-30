@@ -15,6 +15,8 @@ export class CutEditor {
   current: EditPayload | null = null;
   /** Bumps on every local change, so a slower reload can't overwrite it. */
   version = 0;
+  /** Earlier cuts of this session, newest last. Lost on reload by design. */
+  history: { cut: EditPayload; label: string }[] = [];
   private confirmed: EditPayload | null = null;
   private tail: Promise<unknown> = Promise.resolve();
   private generation = 0;
@@ -40,7 +42,20 @@ export class CutEditor {
     this.changed();
   }
 
-  apply(next: EditPayload): Promise<ApplyResult> {
+  apply(next: EditPayload, label = ""): Promise<ApplyResult> {
+    if (this.current) this.history.push({ cut: this.current, label });
+    const depth = this.history.length - 1;
+    return this.run(next, depth);
+  }
+
+  /** Save the previous cut back; returns what was undone, or null if nothing can be. */
+  undo(): { label: string; result: Promise<ApplyResult> } | null {
+    const last = this.history.pop();
+    if (!last) return null;
+    return { label: last.label, result: this.run(last.cut, this.history.length) };
+  }
+
+  private run(next: EditPayload, depth: number): Promise<ApplyResult> {
     const generation = this.generation;
     this.current = next;
     this.version += 1;
@@ -58,6 +73,8 @@ export class CutEditor {
         this.current = this.confirmed;
         const conflict =
           !!error && typeof error === "object" && "status" in error && error.status === 409;
+        // After a conflict the older cuts belong to a version that no longer exists.
+        this.history = conflict ? [] : this.history.slice(0, depth);
         return conflict ? "conflict" : "failed";
       } finally {
         this.pending -= 1;
