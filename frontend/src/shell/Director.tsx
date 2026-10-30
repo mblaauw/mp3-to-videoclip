@@ -47,6 +47,8 @@ const TOOL_LABEL: Record<string, string> = {
   get_storyboard: "Read the storyboard",
   get_edit: "Read the cut",
   update_edit: "Rewrote the cut",
+  update_edit_shots: "Changed shots in the cut",
+  get_cut_material: "Read what to cut on",
   get_music_summary: "Read the music",
   get_lyrics: "Read the lyrics",
   get_treatments: "Read the concepts",
@@ -69,6 +71,7 @@ const UNDO_ARTIFACT: Record<string, string> = {
   update_brief: "brief",
   update_shots: "storyboard",
   update_edit: "edit",
+  update_edit_shots: "edit",
   update_treatments: "treatments",
   sort_idea: "brief",
 };

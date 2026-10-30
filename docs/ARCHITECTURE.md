@@ -218,6 +218,12 @@ window, independently of the Python report. `docs/EDITING.md` owns the schema,
 report rules and sample gallery; `tests/test_edits.py` and
 `renderers/remotion/tests/edit-primitives.test.mjs` pin the contracts.
 
+`first_cut.py` suggests a cut with no model: it snaps joins to sections and sung lines
+through `pacing.snap_joins`, varies moves with the song's own loudness, and writes each
+section's feel. It writes nothing, and Film saves a suggestion like any other cut.
+`seed_edit` stays faithful to an approved cut. `edits.cut_material` gives the Editor the
+same evidence through `get_cut_material`.
+
 ## Money and evidence
 
 The journal is the only thing that protects real money, so it stays strict: a

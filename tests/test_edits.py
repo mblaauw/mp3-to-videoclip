@@ -582,3 +582,39 @@ def test_a_film_look_is_bounded_and_absent_when_unset():
     assert Grade(look=FilmLook(grain=0.4)).model_dump()["look"]["grain"] == 0.4
     with pytest.raises(ValueError):
         FilmLook(grain=1.5)
+
+
+def test_the_editors_tool_reads_a_cut_in_pages(tmp_path):
+    root = _energetic_root(tmp_path)
+    edits.seed_edit(root)
+    first = edits.tool_page(root, 0, 4)
+    assert [shot["shot_id"] for shot in first["shots"]] == ["s001", "s002", "s003", "s004"]
+    assert first["next_first"] == 4 and "report" in first and first["shot_total"] == 10
+    rest = edits.tool_page(root, 8, 4)
+    assert len(rest["shots"]) == 2 and "next_first" not in rest and "report" not in rest
+
+
+def test_patching_shots_changes_only_what_it_names_and_cant_retime(tmp_path):
+    root = _energetic_root(tmp_path)
+    before = edits.seed_edit(root)
+    result = edits.patch_shots(
+        root,
+        [
+            {
+                "shot_id": "s002",
+                "motion": {"type": "push_in", "from": 1.0, "to": 1.04, "anchor": [0.2, 0.7]},
+                "crops": [{"frame": before.shots[1].start_frame + 6, "zoom": 1.2}],
+            }
+        ],
+    )
+    assert result["saved"] == 1
+    after = edits.load_edit(root)
+    assert after.shots[1].motion.anchor == [0.2, 0.7] and len(after.shots[1].crops) == 1
+    assert after.shots[0] == before.shots[0]
+    with pytest.raises(ValueError, match="can't be changed"):
+        edits.patch_shots(root, [{"shot_id": "s002", "start_frame": 3}])
+    with pytest.raises(ValueError, match="no shot"):
+        edits.patch_shots(root, [{"shot_id": "nope", "crops": []}])
+    with pytest.raises(ValueError):
+        edits.patch_shots(root, [{"shot_id": "s002", "crops": [{"frame": 9999, "zoom": 1.2}]}])
+    assert edits.load_edit(root).shots[1].motion.anchor == [0.2, 0.7]

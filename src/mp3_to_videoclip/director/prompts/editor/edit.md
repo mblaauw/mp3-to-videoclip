@@ -48,9 +48,11 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    four slider overrides only when a preset is close but not enough. Add `look` for
    texture, each amount 0–1: `grain`, `weave` and `drift`. Drift lets a held still
    breathe. A light touch is usually about 0.3–0.5; text stays crisp above it.
-8. **Self-review.** Call `get_edit` if an edit exists, or read the report returned
-   by `update_edit`. Fix every hard finding and the warnings that matter, then
-   save again.
+8. **Self-review.** Read the report returned by `update_edit`. Fix every hard
+   finding and the warnings that matter, then save again. `get_edit` reads a cut 30
+   shots at a time; change a few shots with `update_edit_shots` rather than resending
+   the whole cut. If you can't see the pictures `get_images` returns, say so: don't
+   claim to have looked, and leave anchors and crops at what the storyboard supports.
 
 ## Edit decision list
 

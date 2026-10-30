@@ -125,6 +125,7 @@ ENERGY_WORDS = {
 }
 
 
+TOOL_PAGE_SHOTS = 30
 SAME_TRAVEL_RUN = 4
 SOFT_CROP_ZOOM = 1.4
 LONG_STATIC_SECONDS = 12.0
@@ -990,6 +991,71 @@ def summary(root: Path, edit: EditDecisionList | None = None) -> dict:
         "edit": edit.model_dump(by_alias=True),
         "report": value,
     }
+
+
+def tool_page(root: Path, first: int = 0, count: int = TOOL_PAGE_SHOTS) -> dict:
+    """The cut for a model, a page of shots at a time.
+
+    A whole cut with its report outgrows what a tool result can carry on a longer
+    film, and a gateway may truncate it to something the model can't read.
+    """
+    edit = load_edit(root)
+    if edit is None:
+        return {"available": False, "present": False, "report": _tool_report(report(root))}
+    first = max(0, int(first))
+    count = max(1, min(TOOL_PAGE_SHOTS, int(count)))
+    shots = edit.shots[first : first + count]
+    value = {
+        "available": True,
+        "present": True,
+        "shot_total": len(edit.shots),
+        "first": first,
+        "shots": [shot.model_dump(by_alias=True) for shot in shots],
+    }
+    if first + count < len(edit.shots):
+        value["next_first"] = first + count
+    if first == 0:
+        value["sections"] = [section.model_dump() for section in edit.sections]
+        value["grade"] = edit.grade.model_dump()
+        value["notes"] = edit.notes
+        value["report"] = _tool_report(report(root, edit=edit))
+    return value
+
+
+def _tool_report(value: dict) -> dict:
+    return {
+        "ok": value.get("ok"),
+        "hard": value.get("hard"),
+        "warnings": value.get("warnings"),
+        "counts": value.get("counts"),
+    }
+
+
+EDITABLE_SHOT_FIELDS = {"motion", "crops", "accents", "text", "transition_in", "split_layout"}
+
+
+def patch_shots(root: Path, changes: list[dict]) -> dict:
+    """Change named fields of named shots, without resending or retiming the whole cut."""
+    if not isinstance(changes, list) or not changes:
+        raise ValueError("name at least one shot to change")
+    edit = load_edit(root)
+    if edit is None:
+        raise ValueError("there is no cut yet")
+    values = edit.model_dump(by_alias=True)
+    by_id = {shot["shot_id"]: shot for shot in values["shots"]}
+    for change in changes:
+        if not isinstance(change, dict) or change.get("shot_id") not in by_id:
+            raise ValueError(
+                f"no shot {change.get('shot_id') if isinstance(change, dict) else change}"
+            )
+        extra = set(change) - EDITABLE_SHOT_FIELDS - {"shot_id"}
+        if extra:
+            raise ValueError(f"these can't be changed here: {sorted(extra)}")
+        by_id[change["shot_id"]].update(
+            {key: value for key, value in change.items() if key != "shot_id"}
+        )
+    saved = save_edit(root, values)
+    return {"saved": len(changes), "report": _tool_report(report(root, edit=saved))}
 
 
 def _against_seed(root: Path, edit: EditDecisionList) -> dict | None:
