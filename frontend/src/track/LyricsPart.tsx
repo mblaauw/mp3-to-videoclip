@@ -139,6 +139,9 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
   const [askSetup, setAskSetup] = useState(false);
   const timingJobs = useProjectJobs(slug, "lyric_timing");
   const setupJobs = useProjectJobs(slug, "lyric_tools");
+  const draftJobs = useProjectJobs(slug, "lyric_draft");
+  const draftBusy = draftJobs.some(isActive);
+  const [drafted, setDrafted] = useState(false);
   const timingBusy = timingJobs.some(isActive);
   const setupBusy = setupJobs.some(isActive);
 
@@ -154,6 +157,28 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
       live = false;
     };
   }, [setupBusy, slug]);
+
+  // The draft lands in the box, for reading. Only saving makes it the lyrics.
+  useEffect(() => {
+    if (hasLyrics || draftBusy || !data) return;
+    let live = true;
+    api.lyricDraft(slug).then(
+      (value) => {
+        if (!live || !value.lines.length) return;
+        setDrafted(true);
+        setDraft((current) => current || value.lines.join("\n"));
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [data, draftBusy, hasLyrics, slug]);
+
+  const draftFromSong = async () => {
+    if (tools?.ready) await api.runLyricDraft(slug);
+    else setAskSetup(true);
+  };
 
   const timeAutomatically = async () => {
     await flush();
@@ -186,6 +211,7 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
     if (await saveLyrics(draft)) {
       setEditing(false);
       setDraft("");
+      setDrafted(false);
     }
   };
 
@@ -301,19 +327,7 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
           </div>
         )}
       </div>
-      {!musicVideo ? (
-        <p className="hint">
-          {data?.kind === "advert" ? "An advert" : data?.kind === "promo" ? "A promo" : "A film"} is
-          built from its message and ending, not lyrics. The words stay out of the story check.
-        </p>
-      ) : instrumental ? (
-        <p className="hint">
-          This track is instrumental. The story works from the music itself; there are no words to
-          check.
-        </p>
-      ) : hasLyrics && !editing ? (
-        <>
-          {askSetup && tools && (
+      {askSetup && musicVideo && !instrumental && tools && (
             <div className="track-setup" role="group" aria-label="Set up the lyric tools">
               <p>
                 Putting the words on the song uses free tools on this computer. Setting them up
@@ -337,6 +351,18 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
               </div>
             </div>
           )}
+      {!musicVideo ? (
+        <p className="hint">
+          {data?.kind === "advert" ? "An advert" : data?.kind === "promo" ? "A promo" : "A film"} is
+          built from its message and ending, not lyrics. The words stay out of the story check.
+        </p>
+      ) : instrumental ? (
+        <p className="hint">
+          This track is instrumental. The story works from the music itself; there are no words to
+          check.
+        </p>
+      ) : hasLyrics && !editing ? (
+        <>
           {!!timed && !tapping && lines.some((line) => line.source === "auto") && (
             <p className="hint">
               Estimated from the song: click a line to hear it, and nudge it if
@@ -394,6 +420,12 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
         </>
       ) : (
         <>
+          {drafted && !editing && (
+            <p className="hint track-drafted">
+              Drafted from what the tools heard, not your lyrics. Mistakes are likely, so read it
+              against the song before saving.
+            </p>
+          )}
           <textarea
             id="track-lyrics"
             className="lyrics-input"
@@ -422,6 +454,16 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
                 }}
               >
                 Cancel
+              </button>
+            )}
+            {!editing && !draft.trim() && tools?.supported && (
+              <button
+                type="button"
+                className="ui-btn ui-btn--small"
+                onClick={() => void draftFromSong()}
+                disabled={draftBusy || setupBusy}
+              >
+                {draftBusy ? "Drafting…" : setupBusy ? "Setting up…" : "Draft them from the song"}
               </button>
             )}
           </div>

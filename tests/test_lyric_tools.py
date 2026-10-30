@@ -139,6 +139,23 @@ def test_timing_without_tools_or_a_cache_asks_for_setup(film):
     assert not (film / lyric_timing.FILE).exists()
 
 
+def test_a_draft_breaks_at_pauses_and_never_becomes_the_lyrics(film):
+    before = read_json(film / "work/lyrics.json")
+    assert lyric_tools.draft_words(film) == {"lines": 3}
+    assert read_json(film / "work/lyrics.json") == before
+    assert lyric_tools.read_draft(film)["lines"][:2] == ["one two", "three four"]
+
+
+def test_draft_lines_split_on_a_long_pause():
+    tokens = [
+        {"text": " Hel", "start": 0.0, "end": 0.2},
+        {"text": "lo", "start": 0.2, "end": 0.4},
+        {"text": " you", "start": 0.5, "end": 0.7},
+        {"text": " there", "start": 3.0, "end": 3.2},
+    ]
+    assert lyric_tools.draft_lines(tokens) == ["Hello you", "there"]
+
+
 def test_status_needs_a_marker_matching_this_lock(tmp_path, monkeypatch):
     monkeypatch.setenv("STUDIO_LYRIC_TOOLS", str(tmp_path))
     monkeypatch.setattr(lyric_tools.sys, "platform", "darwin")

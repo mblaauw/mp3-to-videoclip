@@ -112,6 +112,19 @@ async def setup_lyric_tools(slug: str, request: Request):
     return _submit_lyric_job(request, "lyric_tools", slug, lyric_tools.install)
 
 
+@router.get("/lyric-draft")
+async def get_lyric_draft(slug: str, request: Request):
+    return lyric_tools.read_draft(project_root(request, slug))
+
+
+@router.post("/lyric-draft/run")
+async def run_lyric_draft(slug: str, request: Request):
+    root = project_root(request, slug)
+    if not lyric_tools.status()["ready"]:
+        raise HTTPException(status_code=409, detail="set up the lyric tools first")
+    return _submit_lyric_job(request, "lyric_draft", slug, lambda: lyric_tools.draft_words(root))
+
+
 @router.post("/lyric-timing/run")
 async def run_lyric_timing(slug: str, request: Request):
     root = project_root(request, slug)

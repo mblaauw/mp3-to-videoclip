@@ -11,6 +11,7 @@ const TITLE: Record<string, string> = {
   transcription: "Transcribing the lyrics",
   lyric_tools: "Setting up the lyric tools",
   lyric_timing: "Putting the words on the song",
+  lyric_draft: "Drafting the words",
 };
 
 /** Engine phases in plain words; unknown phases are shown as they come. */

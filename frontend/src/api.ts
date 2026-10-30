@@ -943,6 +943,9 @@ export const api = {
     request<{ job_id: string }>(`/api/projects/${slug}/lyric-tools/setup`, { method: "POST" }),
   runLyricTiming: (slug: string) =>
     request<{ job_id: string }>(`/api/projects/${slug}/lyric-timing/run`, { method: "POST" }),
+  lyricDraft: (slug: string) => request<{ lines: string[] }>(`/api/projects/${slug}/lyric-draft`),
+  runLyricDraft: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/lyric-draft/run`, { method: "POST" }),
   lyricTiming: (slug: string) => request<LyricTiming>(`/api/projects/${slug}/lyric-timing`),
   saveLyricTiming: (slug: string, lines: LyricTimingSave[]) =>
     request<LyricTiming>(`/api/projects/${slug}/lyric-timing`, {

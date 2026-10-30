@@ -35,6 +35,9 @@ DOWNLOAD_GB = 3
 LOCK = Path(__file__).with_name("lyric_tools.lock.txt")
 WORKER = Path(__file__).with_name("lyric_tools_worker.py")
 HEARD_DIR = "work/heard"
+DRAFT_FILE = "work/lyric-draft.json"
+DRAFT_PAUSE = 0.7
+DRAFT_MAX_WORDS = 10
 # A line needs this share of its words heard before it gets a time.
 MIN_LINE_MATCH = 0.5
 FUZZY_MATCH = 0.7
@@ -244,6 +247,46 @@ def hear(root: Path, audio: Path) -> dict:
         heard = read_json(out)
     write_json(path, heard)
     return heard
+
+
+def draft_lines(tokens: list[dict]) -> list[str]:
+    """Words as heard, broken into lines where the singer pauses."""
+    lines: list[str] = []
+    current = ""
+    words = 0
+    last_end = 0.0
+    for token in tokens:
+        text = str(token["text"])
+        opens_word = text[:1].isspace() or not current
+        if (
+            opens_word
+            and current
+            and (float(token["start"]) - last_end >= DRAFT_PAUSE or words >= DRAFT_MAX_WORDS)
+        ):
+            lines.append(current.strip())
+            current, words = "", 0
+        current += text
+        words += 1 if opens_word else 0
+        last_end = float(token["end"])
+    if current.strip():
+        lines.append(current.strip())
+    return lines
+
+
+def draft_words(root: Path) -> dict[str, Any]:
+    """A draft of the words for the owner to read. It never becomes the lyrics by itself."""
+    from . import production as P
+
+    heard = hear(root, P.render_audio(root, P.load_project(root)))
+    draft = {"lines": draft_lines(heard["tokens"])}
+    write_json(root / DRAFT_FILE, draft)
+    return {"lines": len(draft["lines"])}
+
+
+def read_draft(root: Path) -> dict[str, Any]:
+    value = read_optional(root / DRAFT_FILE)
+    lines = value.get("lines") if isinstance(value, dict) else None
+    return {"lines": [str(line) for line in lines or []]}
 
 
 def time_lyrics(root: Path) -> dict[str, Any]:
