@@ -8,6 +8,7 @@ import {
   type DeliveryChecklist,
   type DeliveryLine,
   type GraphicsReview,
+  type GraphicsSample,
   type ImageShot,
   type Storyboard,
   type FilmFile,
@@ -40,7 +41,16 @@ type LiveState = {
   width: number;
   height: number;
   stale: number;
+  titles: BaseFilmInput["titles"];
+  titlesNote: string | null;
 };
+
+/** "card-02 at 3:28 · frame 4992" for a composition sample; the file name otherwise. */
+function sampleLabel(sample: GraphicsSample | undefined): string {
+  if (!sample) return "Sample";
+  if (sample.frame == null || sample.seconds == null) return sample.name;
+  return `${sample.window ?? "film"} at ${clock(sample.seconds)} · frame ${sample.frame}`;
+}
 
 function clock(seconds: number): string {
   const value = Math.max(0, Math.floor(seconds));
@@ -170,6 +180,7 @@ export function FilmStage({
   const [signatureRequired, setSignatureRequired] = useState<boolean | undefined>();
   const [selected, setSelected] = useState<FilmFile | null>(null);
   const [live, setLive] = useState<LiveState | null>(null);
+  const [showTitles, setShowTitles] = useState(true);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [graphics, setGraphics] = useState<GraphicsReview | null>(null);
   const [rendererReady, setRendererReady] = useState<boolean | null>(null);
@@ -286,6 +297,8 @@ export function FilmStage({
           width: Math.round(payload.width * scale),
           height: Math.round(payload.height * scale),
           stale: payload.stale_shots.length,
+          titles: payload.titles ?? null,
+          titlesNote: payload.titles_note ?? null,
         });
         setLiveError(null);
       })
@@ -351,12 +364,18 @@ export function FilmStage({
     }
   };
 
-  const render = async (kind: "preview" | "base" | "final") => {
+  const render = async (kind: "preview" | "titles" | "base" | "final") => {
     setBusy(kind);
     setError(null);
     setNotice(
       `${
-        kind === "final" ? "Final render" : kind === "base" ? "Titles check" : "Preview"
+        kind === "final"
+          ? "Final render"
+          : kind === "titles"
+            ? "Titles check"
+            : kind === "base"
+              ? "Base render"
+              : "Preview"
       } queued. Progress shows below; the file appears in Rendered files when it is done.`,
     );
     try {
@@ -538,7 +557,8 @@ export function FilmStage({
                 <div>
                   <h3>Live preview</h3>
                   <p className="hint">
-                    Free, marked and local. Same timing, camera and transitions as the render.
+                    Free, marked and local. Same timing, camera, transitions and titles as the
+                    render.
                   </p>
                 </div>
                 {currentBoardShot && (
@@ -553,7 +573,7 @@ export function FilmStage({
                 <>
                   <Suspense fallback={<p className="empty">Loading the player…</p>}>
                     <LivePlayer
-                      input={live.input}
+                      input={{ ...live.input, titles: showTitles ? live.titles : null }}
                       audio={null}
                       durationInFrames={live.durationInFrames}
                       fps={live.fps}
@@ -572,6 +592,22 @@ export function FilmStage({
                         } older than the storyboard`
                       : ""}
                   </p>
+                  {live.titles ? (
+                    <label className="live-titles">
+                      <input
+                        type="checkbox"
+                        checked={showTitles}
+                        onChange={(event) => setShowTitles(event.target.checked)}
+                      />
+                      Show titles ({live.titles.windows.length} planned: opening, credits
+                      {live.titles.windows.some((window) => window.kind === "caption")
+                        ? ", captions"
+                        : ""}
+                      )
+                    </label>
+                  ) : (
+                    live.titlesNote && <p className="hint">{live.titlesNote}</p>
+                  )}
                 </>
               ) : (
                 <p className="empty">{liveError ?? "No storyboard yet."}</p>
@@ -681,14 +717,18 @@ export function FilmStage({
                             disabled={!stillsDone || busy !== null || rendering}
                             title={
                               stillsDone
-                                ? "Render a base and read the real title frames"
+                                ? "Render stills of the real film with its titles"
                                 : "Approve every still first."
                             }
-                            onClick={() => void render("base")}
+                            onClick={() => void render("titles")}
                           >
-                            {busy === "base" ? "Queueing…" : "Check titles"}
+                            {busy === "titles" ? "Queueing…" : "Check titles"}
                           </Button>
-                          <span className="hint">Check titles renders a base first, then prepares real graphics samples. Your intro/credits approval is manual; this does not render a final.</span>
+                          <span className="hint">
+                            Check titles renders stills of the real film with its titles; no base
+                            is needed. Your intro/credits approval is manual; this does not render a
+                            final.
+                          </span>
                         </span>
                       )}
                     </div>
@@ -1035,7 +1075,7 @@ export function FilmStage({
           ref={samplesRef}
         >
           <header>
-            <b>{samples[sampleIndex]?.name || "Sample"}</b>
+            <b>{sampleLabel(samples[sampleIndex])}</b>
             <span>
               {sampleIndex + 1} of {samples.length}
             </span>

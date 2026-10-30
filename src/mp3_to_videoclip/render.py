@@ -606,6 +606,7 @@ def render(
     preview_banner: bool = False,
     preview_placeholders: tuple[str, ...] = (),
     brand: BrandPackage | None = None,
+    titles: dict | None = None,
 ) -> dict:
     """Render an approved still set to an MP4 on the project's exact timeline.
 
@@ -617,7 +618,8 @@ def render(
     the report are byte-identical to the brandless renderer. With it, the
     package's opening plate is composited over the first ``duration_seconds``
     of video only — the source music, the timeline and every shot allocation
-    stay exactly the same.
+    stay exactly the same. ``titles`` (Remotion only) draws the planned titles
+    in the same pass.
     """
     output = Path(output)
     audio = Path(audio)
@@ -635,7 +637,10 @@ def render(
             preview_banner=preview_banner,
             preview_placeholders=preview_placeholders,
             brand=brand,
+            titles=titles,
         )
+    if titles is not None:
+        raise ValueError("titles in the film require the Remotion backend")
     if any(rs.shot.camera_keyframes or rs.shot.post_effects or rs.shot.transition for rs in shots):
         raise ValueError("keyframes, effects and transition types require the Remotion backend")
     _validate_shots(project, shots)

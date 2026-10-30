@@ -336,6 +336,11 @@ export type GraphicsSample = {
   name: string;
   url: string;
   sha256: string;
+  /** Composition reviews: the film frame, its time and the title window shown. */
+  frame?: number | null;
+  seconds?: number | null;
+  window?: string | null;
+  phase?: string | null;
 };
 
 export type GraphicsReview = {
@@ -343,6 +348,7 @@ export type GraphicsReview = {
   current?: boolean;
   reason?: string | null;
   warning?: string;
+  method?: "composite" | "composition-v1";
   base?: string;
   samples?: GraphicsSample[];
 };
@@ -400,6 +406,9 @@ export type PreviewInput = {
   brand_plate?: string | null;
   brand_duration_frames?: number;
   grade?: import("./baseFilm").Grade | null;
+  /** Planned titles, or null with a note when this film has none to show yet. */
+  titles?: import("./baseFilm").TitlesInput | null;
+  titles_note?: string | null;
 };
 
 export type EditFinding = {
@@ -950,7 +959,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  render: (slug: string, kind: "preview" | "base" | "final") =>
+  render: (slug: string, kind: "preview" | "titles" | "base" | "final") =>
     request<unknown>(`/api/projects/${slug}/render`, {
       method: "POST",
       body: JSON.stringify({ kind }),

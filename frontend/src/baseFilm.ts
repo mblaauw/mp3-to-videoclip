@@ -5,6 +5,8 @@ import type { ComponentType } from "react";
 // surface below because the renderer is not part of the frontend's src root.
 // @ts-ignore - shared renderer source, not a frontend module with a .d.ts
 import { BaseFilm as RendererBaseFilm } from "../../renderers/remotion/src/BaseFilm.jsx";
+// @ts-ignore - shared renderer source, not a frontend module with a .d.ts
+import { Film as RendererFilm } from "../../renderers/remotion/src/Film.jsx";
 
 export type CameraFraming = {
   zoom: number;
@@ -108,14 +110,33 @@ export type PreviewShot = {
   split_panes?: SplitPane[] | null;
 };
 
+/** One planned title window: whole frames on the film's timeline. */
+export type TitleWindow = {
+  kind: "intro" | "identity" | "card" | "lockup" | "caption";
+  id: string;
+  start_frame: number;
+  frames: number;
+};
+
+/** The engine's planned titles plus the local assets they are drawn from. */
+export type TitlesInput = {
+  windows: TitleWindow[];
+  spec: Record<string, unknown>;
+  logo: string;
+  font: string | null;
+};
+
 export type BaseFilmInput = {
   shots: PreviewShot[];
   preview_banner?: boolean;
   preview_placeholders?: string[];
   brand_plate?: string | null;
   brand_duration_frames?: number;
+  titles?: TitlesInput | null;
 };
 
 export type BaseFilmProps = { input: BaseFilmInput };
 
 export const BaseFilm = RendererBaseFilm as ComponentType<BaseFilmProps>;
+/** BaseFilm with the planned titles over it: the renderer's own Film composition. */
+export const Film = RendererFilm as ComponentType<BaseFilmProps>;

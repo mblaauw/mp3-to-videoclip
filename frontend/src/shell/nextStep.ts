@@ -486,7 +486,7 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
         graphics?.state === "stale"
           ? "The titles changed. Check them again."
           : "Check the titles on real frames.",
-      detail: "Check titles renders a base first and prepares graphics samples. Inspect them and explicitly approve intro/credits before the final composite.",
+      detail: "Check titles renders stills of the real film with its titles. Inspect them and explicitly approve intro/credits before the final.",
       actions: [{ label: "Check titles", target: "render", kind: "primary" }],
     };
   }
@@ -494,7 +494,7 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
     tone: "done",
     title: "Ready to render final.",
     detail: project.signature_required !== false
-      ? "Every gate is approved. Final reuses the reviewed base, adds approved intro/credits, then verifies delivery."
+      ? "Every gate is approved. Render final draws the film with the intro/credits you approved, then verifies delivery."
       : "Every gate is approved. Render the final locally, then verify the file before delivery.",
     actions: [{ label: "Render final", target: "render", kind: "primary" }],
   };

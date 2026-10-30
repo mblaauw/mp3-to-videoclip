@@ -63,6 +63,11 @@ export default function LivePlayer({
       controls={!synced}
       doubleClickToFullscreen
       acknowledgeRemotionLicense
+      errorFallback={({ error }: { error: Error }) => (
+        <div className="live-error" role="alert">
+          The preview stopped on this frame: {error.message}
+        </div>
+      )}
       style={{ width: "100%" }}
     />
   );

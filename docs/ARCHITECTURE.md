@@ -14,7 +14,8 @@ in the app is a second state store.
 | `analysis.py`, `deep_analysis.py` | Local measurement only. Every estimate is labelled; nothing invents meter, sections or lyrics. |
 | `generation.py`, `providers.py` | Runware client with pre-submit journaling: reservation and task UUID are durable before the request; recovery is by UUID and never resubmits; changed bytes are quarantined. |
 | `budget.py` | Cap, committed cost, unresolved reservations, admission. |
-| `remotion.py`, `render.py`, `graphics.py` | Remotion render entry plus FFmpeg probe/mux/verify and the graphics spec. |
+| `remotion.py`, `render.py` | Remotion render entry (film, titles review stills) plus FFmpeg probe/mux/verify. |
+| `titles.py`, `graphics.py` | Integer-frame title windows; the graphics spec and the older composite route kept for reviews recorded before titles moved into the film. |
 | `domain/archive.py` | Read-only view of frozen productions (title, duration, newest final render, selected stills). |
 
 ## Production folder
@@ -34,7 +35,7 @@ projects/<slug>/
   work/prompt-current.json / prompt-artifacts.jsonl
                         assembled prompt hash and file versions per turn/write
   renders/, previews/   versioned outputs plus a report JSON
-  work/reviews/         graphics review material (not the verdict record)
+  work/reviews/         titles review stills (not the verdict record)
 ```
 
 `projects/`, `backups/` and `archive/` are never deleted and never rewritten in
@@ -50,7 +51,7 @@ signature is required; the prose block the Writer reads is
 `director/prompts/kinds/<kind>.md`. Music videos keep the 25 s opening and 40 s
 credits. Promo and advert are created with `signature_required=false`, no
 `brand.json` and no `graphics-spec.json`; their final render is the film itself,
-without a credits composite.
+without intro or credits.
 
 The Story intake is one card over `GET/PUT /api/projects/<slug>/intake`. It
 writes `brief.intent` (objective, audience, message, reasons, tone,
@@ -304,8 +305,9 @@ director/         direct adapter, OpenCode gateway, MCP bridge, tools, context, 
 edits.py          edit decision list, effective board, report and flash rule
 jobs/             asyncio runner, per-project serialisation, SSE events
 frontend/         Vite + React + TypeScript, @remotion/player for the real composition
-renderers/remotion/src/BaseFilm.jsx + timing.mjs
-                  one composition and one frame model shared by MP4 and Player
+renderers/remotion/src/Film.jsx (BaseFilm + Titles) + timing.mjs
+                  one composition and one frame model shared by MP4, review
+                  stills and Player
 ```
 
 Every artifact has a cheap fingerprint. A changed fingerprint makes its approval

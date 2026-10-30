@@ -551,3 +551,24 @@ def test_schema_three_uses_remotion_without_a_legacy_backend_flag(tmp_path, monk
     )
     result = R.render(project, [], tmp_path / "audio.mp3", tmp_path / "out.mp4", tmp_path)
     assert result == {"sentinel": True}
+
+
+def test_titles_join_the_base_pass_and_its_cache_key_only_when_given(base_cache):
+    _project, _shots, calls, run = base_cache
+    plain = run()
+    assert "titles" not in calls[-1][-1]
+    assert plain["titles"] == []
+
+    titles = {
+        "spec": {"intro": {"names": "A", "title": "Cache"}},
+        "intro": {"names": "A", "title": "Cache"},
+        "palette": {"accent": "#ffffff"},
+        "logo": "data:image/svg+xml;base64,PHN2Zy8+",
+        "font": None,
+        "windows": [{"kind": "intro", "id": "intro", "start_frame": 0, "frames": 24}],
+    }
+    titled = run(titles=titles)
+    assert calls[-1][-1]["titles"] == titles
+    assert titled["titles"] == ["intro"]
+    assert titled["input_hash"] != plain["input_hash"]
+    assert len(calls) == 2, "a titled pass never reuses the untitled visual cache"

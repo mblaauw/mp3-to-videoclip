@@ -10,6 +10,7 @@ from .storage import (
     project_lock,
     read_json,
     read_optional,
+    read_snapshot,
     state_lock,
     write_json,
 )
@@ -19,6 +20,8 @@ FILMSTRIP_NAMES = "MAHA KALA  ◆  VJDJ69"
 PRODUCTION_LINE = "A JOINT MAHA KALA & VJDJ69 PRODUCTION"
 SPEC = "work/graphics-spec.json"
 REVIEW = "work/graphics-review.json"
+#: A titles review drawn from stills of the film composition itself (no base movie).
+COMPOSITION_METHOD = "composition-v1"
 
 
 def draft_spec(title: str) -> dict:
@@ -201,6 +204,163 @@ def prepare_review(root: Path, base: Path, project) -> dict:
     return value
 
 
+def _titles_facts(root: Path, project, *, for_render: bool = False) -> dict:
+    """Everything a composition titles review binds, read from one snapshot.
+
+    ``for_render`` also resolves the pictures and brand the stills are drawn on.
+    """
+    from . import production as P
+    from . import titles
+    from .domain.exports import input_metadata_hash
+    from .graphics import resolve_palette
+    from .remotion import implementation_hash, titles_input
+
+    with read_snapshot(root):
+        resolved_spec = validate_spec(root, project)
+        spec, windows = titles.plan_for(root)
+        payload = titles_input(spec, resolve_palette(spec), windows)
+        facts = {
+            "spec_hash": digest(read_json(root / SPEC)),
+            "resolved_spec_hash": digest(resolved_spec),
+            "titles_hash": digest(payload),
+            "input_hash": current_input_hash(root),
+            "input_metadata_hash": input_metadata_hash(root),
+            "renderer_revision": implementation_hash(),
+            "spec": spec,
+            "windows": windows,
+            "titles": payload,
+        }
+        if for_render:
+            facts["shots"] = P.resolved_assets(root)
+            facts["brand"] = P.load_brand(root)
+        return facts
+
+
+BOUND = (
+    "spec_hash",
+    "resolved_spec_hash",
+    "titles_hash",
+    "input_hash",
+    "input_metadata_hash",
+    "renderer_revision",
+)
+
+
+@operations.progress_scope(stage="graphics-review")
+def prepare_titles_review(root: Path, project) -> dict:
+    """Render review stills from the film composition and record what they show.
+
+    The samples are the frames the final will draw at one moment of every
+    opening phase and the middle of every other title window, rendered with the
+    same composition, pictures and titles. No base movie is needed.
+    """
+    from . import timeline
+    from .graphics import _preflight_samples, intro_phase_samples, resolve_design
+    from .remotion import render_stills
+
+    facts = _titles_facts(root, project, for_render=True)
+    fps, total = project.fps, project.total_frames
+    parts = [{**window, "start": window["start_frame"] / fps} for window in facts["windows"]]
+    picks = _preflight_samples(facts["spec"], parts, fps, total, None)
+    key = digest([facts[name] for name in BOUND])[:16]
+    directory = root / "work/reviews" / f"titles-{key}"
+    sidecar = directory / "samples.json"
+    if not sidecar.is_file():
+        operations.phase("sampling-graphics")
+        rendered = render_stills(
+            project,
+            facts["shots"],
+            [pick["frame"] for pick in picks],
+            directory,
+            root / "work",
+            brand=facts["brand"],
+            titles=facts["titles"],
+        )
+        files = {still["frame"]: still for still in rendered["stills"]}
+        phases = {
+            timeline.frame_number(phase["sample_seconds"], fps): phase["phase"]
+            for phase in intro_phase_samples(
+                float(facts["spec"]["intro_seconds"]), resolve_design(facts["spec"])
+            )
+        }
+        samples = []
+        for pick in sorted(picks, key=lambda item: item["frame"]):
+            frame = pick["frame"]
+            window = next(
+                (
+                    w
+                    for w in facts["windows"]
+                    if w["start_frame"] <= frame < w["start_frame"] + w["frames"]
+                ),
+                None,
+            )
+            samples.append(
+                {
+                    "frame": frame,
+                    "seconds": frame / fps,
+                    "phase": phases.get(frame),
+                    "window": window["id"] if window else None,
+                    "kind": window["kind"] if window else None,
+                    "image": str((directory / files[frame]["file"]).relative_to(root)),
+                    "sha256": files[frame]["sha256"],
+                }
+            )
+        write_json(
+            sidecar,
+            {
+                "method": COMPOSITION_METHOD,
+                **{name: facts[name] for name in BOUND},
+                "windows": facts["windows"],
+                "frames": samples,
+            },
+        )
+    recorded = read_json(sidecar)
+    value = {
+        "method": COMPOSITION_METHOD,
+        **{name: facts[name] for name in BOUND},
+        "preflight": str(sidecar.relative_to(root)),
+        "preflight_sha256": file_hash(sidecar),
+        "samples": {
+            sample["image"]: file_hash(inside(root, sample["image"]))
+            for sample in recorded["frames"]
+        },
+        "warning": "Inspect every sample in Studio: each is a frame of the real film with its "
+        "titles. Then approve intro/credits with the inspected attestation; nothing is final yet.",
+    }
+    write_json(root / REVIEW, value)
+    operations.phase("awaiting-owner-review")
+    return value
+
+
+def validate_titles_review(root: Path, project, value: dict) -> dict:
+    """A composition review is current only while every bound input and sample is."""
+    facts = _titles_facts(root, project)
+    reasons = {
+        "spec_hash": "graphics spec changed",
+        "resolved_spec_hash": "graphics identity changed",
+        "titles_hash": "the planned titles changed",
+        "input_hash": "the storyboard or stills changed",
+        "input_metadata_hash": "the cut or a production input changed",
+        "renderer_revision": "the renderer changed",
+    }
+    for name, reason in reasons.items():
+        if value.get(name) != facts[name]:
+            raise ValueError(f"{reason}; check the titles again and renew the review")
+    preflight = inside(root, value["preflight"])
+    if value["preflight_sha256"] != file_hash(preflight):
+        raise ValueError("titles review samples record changed; check the titles again")
+    recorded = read_json(preflight)
+    if any(recorded.get(name) != value[name] for name in BOUND):
+        raise ValueError("titles review samples belong to other inputs; check the titles again")
+    frames = recorded.get("frames") or []
+    if not frames or len(value.get("samples", {})) != len(frames):
+        raise ValueError("graphics review must bind every sampled image")
+    for relative, expected in value["samples"].items():
+        if file_hash(inside(root, relative)) != expected:
+            raise ValueError("graphics review sample changed; renew inspection")
+    return value
+
+
 def current_input_hash(root: Path) -> str:
     from . import production as P
     from .remotion import renderer_binding
@@ -217,8 +377,10 @@ def current_input_hash(root: Path) -> str:
 def validate_review(root: Path, project) -> dict:
     from .graphics import implementation_revision
 
-    resolved_spec = validate_spec(root, project)
     value = read_json(root / REVIEW)
+    if value.get("method") == COMPOSITION_METHOD:
+        return validate_titles_review(root, project, value)
+    resolved_spec = validate_spec(root, project)
     if value["spec_hash"] != digest(read_json(root / SPEC)):
         raise ValueError("graphics spec changed; recreate preflight and renew graphics review")
     if value["base_sha256"] != file_hash(inside(root, value["base"])):

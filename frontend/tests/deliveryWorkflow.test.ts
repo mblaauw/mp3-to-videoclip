@@ -16,10 +16,11 @@ test("base success is not delivery; next review persists without banner", () => 
   assert.equal(state.title, "Your intro/credits review");
   assert.equal(state.ready, false);
 });
-test("stale samples do not authorize review; final reuses reviewed base", () => {
-  assert.equal(deliveryWorkflow([base], checklist, { available: true, current: false }, []).title, "Prepare current graphics review");
+test("stale samples do not authorize review; final draws the reviewed titles", () => {
+  assert.equal(deliveryWorkflow([base], checklist, { available: true, current: false }, []).title, "Check the titles again");
+  assert.equal(deliveryWorkflow([], checklist, null, []).title, "Check the titles");
   const state = deliveryWorkflow([base], { ...checklist, can_final: true, lines: [{ ...checklist.lines[0], state: "done" }] }, null, []);
-  assert.match(state.detail, /reuses the reviewed base/);
+  assert.match(state.detail, /intro\/credits you approved, exactly as reviewed/);
   assert.equal(state.ready, false);
 });
 test("only actual current verified final is delivery, never a successful job", () => {

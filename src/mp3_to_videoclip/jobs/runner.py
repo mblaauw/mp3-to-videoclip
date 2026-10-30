@@ -38,6 +38,8 @@ LIVE_ARTIFACT_KINDS = {"images": "images"}
 ACTIVE = {"queued", "running", "stopping", "needs_budget"}
 STATUSES = ACTIVE | {"succeeded", "failed", "cancelled", "interrupted"}
 RECEIPTS = "work/jobs"
+#: Render job kinds; ``titles`` renders the titles review stills.
+RENDER_KINDS = (None, "preview", "titles", "base", "final")
 logger = logging.getLogger(__name__)
 
 
@@ -127,7 +129,7 @@ class JobRunner:
                     or job.status not in STATUSES
                     or not isinstance(job.blocking, bool)
                     or not isinstance(job.kind, str)
-                    or job.render_kind not in (None, "preview", "base", "final")
+                    or job.render_kind not in RENDER_KINDS
                     or not isinstance(job.progress, dict)
                     or any(
                         not isinstance(value, (int, float)) or not math.isfinite(value)
@@ -193,7 +195,7 @@ class JobRunner:
             raise RuntimeError("job runner is stopping")
         if not isinstance(blocking, bool):
             raise TypeError("blocking must be a bool")
-        if render_kind not in (None, "preview", "base", "final"):
+        if render_kind not in RENDER_KINDS:
             raise ValueError("invalid render kind")
         self._project_root(project)
         job_id = uuid.uuid4().hex[:12]

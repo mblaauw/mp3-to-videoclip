@@ -2,6 +2,8 @@
 
 import asyncio
 
+import pytest
+
 from mp3_to_videoclip import operations
 from mp3_to_videoclip.jobs.runner import Job, JobRunner
 from mp3_to_videoclip.storage import write_json
@@ -100,3 +102,17 @@ def test_render_purpose_is_persisted_and_restored_without_resume(tmp_path):
     restored = JobRunner(projects_dir=tmp_path).get(identity)
     assert restored.render_kind == "base"
     assert restored.status == "interrupted"
+
+
+def test_a_titles_check_is_a_render_job_that_survives_a_restart(tmp_path):
+    root = tmp_path / "film"
+    write_json(root / "project.json", {"schema_version": 3})
+    runner = JobRunner(projects_dir=tmp_path)
+
+    async def unused():
+        raise AssertionError("must not resume")
+
+    identity = runner.submit("render", "film", unused, blocking=True, render_kind="titles")
+    assert JobRunner(projects_dir=tmp_path).get(identity).render_kind == "titles"
+    with pytest.raises(ValueError, match="invalid render kind"):
+        runner.submit("render", "film", unused, blocking=True, render_kind="trailer")

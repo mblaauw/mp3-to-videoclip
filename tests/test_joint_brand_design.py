@@ -249,12 +249,14 @@ def test_joint_closing_opens_with_an_identity_beat_and_still_fits():
 
     tail_start = DURATION - spec["credits_tail_seconds"]
     package = [p for p in parts if p["kind"] in ("identity", "card", "lockup")]
-    assert abs(package[0]["start"] - tail_start) < 1e-9
-    last = package[-1]
-    assert abs(last["start"] + last["frames"] / FPS - DURATION) <= 1 / FPS + 1e-9
+    # Windows are whole frames; the package opens on the frame the tail starts in.
+    frame = [round(p["start"] * FPS) for p in package]
+    assert frame[0] == round(tail_start * FPS)
+    assert frame[-1] + package[-1]["frames"] == total
     # Contiguous: no gap and no overlap anywhere in the package.
-    for earlier, later in zip(package, package[1:], strict=False):
-        assert abs(earlier["start"] + earlier["frames"] / FPS - later["start"]) < 1e-9
+    for index, (earlier, later) in enumerate(zip(package, package[1:], strict=False)):
+        assert frame[index] + earlier["frames"] == frame[index + 1]
+        assert later["start"] == frame[index + 1] / FPS
     assert total == round(DURATION * FPS) or total == 5348
 
 

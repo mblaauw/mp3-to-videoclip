@@ -185,7 +185,7 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
     progress_path.unlink(missing_ok=True)
     if stdout is None:
         raise ValueError("Local Remotion render failed: " + stderr[-4000:])
-    if not output.is_file():
+    if not (output.is_dir() if kind == "stills" else output.is_file()):
         raise ValueError("Remotion returned without an output")
     sidecar = Path(f"{output}.render.json")
     return {
@@ -327,6 +327,78 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
     return compiled
 
 
+def _brand_inputs(project: Project, brand, assets: Path) -> dict:
+    """The rasterised opening brand plate, when the production has one."""
+    from .branding import pack_hash, render_brand_plate
+
+    if brand is None or not brand.plate:
+        return {}
+    plate = assets / f"brand-{pack_hash(brand)}-{project.width}x{project.height}.png"
+    if not plate.exists():
+        if brand.mark == "filmstrip":
+            raise ValueError(
+                "filmstrip identity belongs in Remotion graphics; set brand.plate=false"
+            )
+        render_brand_plate(brand, project, plate)
+    return {
+        "brand_plate": data_url(plate, "image/png"),
+        "brand_duration_frames": round(brand.duration_seconds * project.fps),
+    }
+
+
+def render_stills(
+    project: Project,
+    shots: list[RenderShot],
+    frames: list[int],
+    output: Path,
+    workdir: Path,
+    *,
+    brand=None,
+    titles: dict | None = None,
+) -> dict:
+    """PNG frames of the exact film composition (pictures, brand plate, titles).
+
+    ``output`` is a new directory; the renderer publishes it whole or not at all.
+    Returns the renderer's report, whose ``stills`` list each frame's file and
+    SHA-256. Nothing is encoded and no audio is read.
+    """
+    from . import render as R
+
+    R._validate_shots(project, shots)
+    output = Path(output).resolve()
+    if output.exists():
+        raise FileExistsError(output)
+    assets = Path(workdir).resolve() / "remotion-assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    compiled = compile_shots(shots, workdir, assets)
+    inputs = {
+        "shots": compiled,
+        "preview_banner": False,
+        "preview_placeholders": [],
+        "still_frames": sorted(set(frames)),
+        **_brand_inputs(project, brand, assets),
+    }
+    if titles is not None:
+        inputs["titles"] = titles
+    result = invoke(
+        "stills",
+        output,
+        selected_asset_root(compiled, assets),
+        (project.width, project.height),
+        project.fps,
+        project.total_frames,
+        inputs,
+    )
+    report = result.get("renderer_report") or {}
+    stills = report.get("stills") or []
+    if [still.get("frame") for still in stills] != inputs["still_frames"]:
+        raise ValueError("Remotion returned a different set of stills than requested")
+    for still in stills:
+        if file_hash(output / still["file"]) != still["sha256"]:
+            raise ValueError(f"still {still['file']} changed after rendering")
+    return {**result, "stills": stills}
+
+
 def render_base(
     project: Project,
     shots: list[RenderShot],
@@ -337,10 +409,14 @@ def render_base(
     preview_banner=False,
     preview_placeholders=(),
     brand=None,
+    titles: dict | None = None,
 ) -> dict:
-    """Remotion visuals + existing atomic FFmpeg/audio/verification contracts."""
+    """Remotion visuals + existing atomic FFmpeg/audio/verification contracts.
+
+    ``titles`` (see :func:`titles_input`) draws the planned titles in the same
+    pass; without it the request and the visual cache key are unchanged.
+    """
     from . import render as R
-    from .branding import pack_hash, render_brand_plate
 
     R._validate_shots(project, shots)
     output = Path(output).resolve()
@@ -355,16 +431,9 @@ def render_base(
         "preview_banner": preview_banner,
         "preview_placeholders": list(preview_placeholders),
     }
-    if brand is not None and brand.plate:
-        plate = assets / f"brand-{pack_hash(brand)}-{project.width}x{project.height}.png"
-        if not plate.exists():
-            if brand.mark == "filmstrip":
-                raise ValueError(
-                    "filmstrip identity belongs in Remotion graphics; set brand.plate=false"
-                )
-            render_brand_plate(brand, project, plate)
-        inputs["brand_plate"] = data_url(plate, "image/png")
-        inputs["brand_duration_frames"] = round(brand.duration_seconds * project.fps)
+    if titles is not None:
+        inputs["titles"] = titles
+    inputs.update(_brand_inputs(project, brand, assets))
     revision = implementation_hash()
     selected = selected_asset_root(compiled, assets)
     key = visual_identity(project, inputs, revision)
@@ -464,6 +533,7 @@ def render_base(
         "source_sha256": file_hash(audio),
         "preview": preview_banner,
         "rendered_shots": len(shots),
+        "titles": [window["id"] for window in titles["windows"]] if titles else [],
         "dissolves": sum(s.shot.dissolve_frames > 0 for s in shots),
         "preview_placeholders": list(preview_placeholders),
         "verification": "Measured exact frames/dimensions/fps/audio/duration/faststart; not artistic acceptance",
@@ -472,8 +542,8 @@ def render_base(
     return report
 
 
-def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
-    """Render one alpha element; existing compositor retains audio packet copying."""
+def title_assets(spec: dict, palette: dict) -> dict:
+    """The spec, palette, logo and font every title element is drawn from."""
     from .branding import filmstrip_svg
 
     if spec.get("intro", {}).get("mark", {}).get("kind") != "filmstrip":
@@ -483,8 +553,7 @@ def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
         "data:image/svg+xml;base64,"
         + base64.b64encode(filmstrip_svg(colours["accent"]).encode()).decode()
     )
-    inputs = {
-        "part": part,
+    return {
         "spec": spec,
         "intro": spec["intro"],
         "palette": colours,
@@ -493,6 +562,16 @@ def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
         # not a portable webfont. Its source bytes are still in the fingerprint.
         "font": None,
     }
+
+
+def titles_input(spec: dict, palette: dict, windows: list[dict]) -> dict:
+    """``input.titles`` for the Film composition: assets plus the planned windows."""
+    return {**title_assets(spec, palette), "windows": windows}
+
+
+def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
+    """Render one alpha element; existing compositor retains audio packet copying."""
+    inputs = {"part": part, **title_assets(spec, palette)}
     invoke(
         "graphics", output, output.parent / "remotion-assets", canvas, fps, part["frames"], inputs
     )

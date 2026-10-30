@@ -159,5 +159,148 @@
         }
       ]
     }
+  },
+  "remotion_titled_request": {
+    "kind": "base",
+    "output": "<output>",
+    "assetRoot": "<assets>",
+    "width": 1920,
+    "height": 1080,
+    "fps": 24,
+    "frames": 2160,
+    "chrome": "<chrome>",
+    "input": {
+      "shots": [
+        {
+          "id": "s001",
+          "frames": 720
+        },
+        {
+          "id": "s002",
+          "frames": 960
+        },
+        {
+          "id": "s003",
+          "frames": 480
+        }
+      ],
+      "titles": {
+        "spec": {
+          "version": 1,
+          "renderer": "remotion",
+          "design": "joint-v1",
+          "intro_seconds": 25.0,
+          "credits_tail_seconds": 40.0,
+          "lockup_seconds": 4.0,
+          "intro": {
+            "names": "A  \u25c6  B",
+            "title": "Contract fixture",
+            "tagline": "A JOINT A & B PRODUCTION",
+            "mark": {
+              "kind": "filmstrip"
+            }
+          },
+          "captions": [
+            {
+              "id": "street-line",
+              "style": "caption",
+              "text": "WET STREET",
+              "shot_id": "s002",
+              "offset_frames": 24,
+              "duration_frames": 48
+            }
+          ],
+          "credits": {
+            "cards": [
+              [
+                "MUSIC",
+                "A"
+              ],
+              [
+                "FILM",
+                "B"
+              ]
+            ],
+            "lockup": "A JOINT A & B PRODUCTION"
+          }
+        },
+        "intro": {
+          "names": "A  \u25c6  B",
+          "title": "Contract fixture",
+          "tagline": "A JOINT A & B PRODUCTION",
+          "mark": {
+            "kind": "filmstrip"
+          }
+        },
+        "palette": {
+          "night": "#0a0c10",
+          "ink": "#f4f1e8",
+          "accent": "#d8ff3e",
+          "secondary": "#7b4dff"
+        },
+        "logo": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNTYgOTAiPjxkZWZzPjxtYXNrIGlkPSJjdXQiIG1hc2tVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxNTYiIGhlaWdodD0iOTAiPjxyZWN0IHdpZHRoPSIxNTYiIGhlaWdodD0iOTAiIGZpbGw9IndoaXRlIi8+PHJlY3QgeD0iMTYiIHk9IjEwIiB3aWR0aD0iOSIgaGVpZ2h0PSI4IiByeD0iMSIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNSIgeT0iMTAiIHdpZHRoPSI5IiBoZWlnaHQ9IjgiIHJ4PSIxIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjU0IiB5PSIxMCIgd2lkdGg9IjkiIGhlaWdodD0iOCIgcng9IjEiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzMiIHk9IjEwIiB3aWR0aD0iOSIgaGVpZ2h0PSI4IiByeD0iMSIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5MiIgeT0iMTAiIHdpZHRoPSI5IiBoZWlnaHQ9IjgiIHJ4PSIxIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjExMSIgeT0iMTAiIHdpZHRoPSI5IiBoZWlnaHQ9IjgiIHJ4PSIxIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMCIgeT0iMTAiIHdpZHRoPSI5IiBoZWlnaHQ9IjgiIHJ4PSIxIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE2IiB5PSI3MiIgd2lkdGg9IjkiIGhlaWdodD0iOCIgcng9IjEiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzUiIHk9IjcyIiB3aWR0aD0iOSIgaGVpZ2h0PSI4IiByeD0iMSIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1NCIgeT0iNzIiIHdpZHRoPSI5IiBoZWlnaHQ9IjgiIHJ4PSIxIiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjczIiB5PSI3MiIgd2lkdGg9IjkiIGhlaWdodD0iOCIgcng9IjEiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTIiIHk9IjcyIiB3aWR0aD0iOSIgaGVpZ2h0PSI4IiByeD0iMSIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTEiIHk9IjcyIiB3aWR0aD0iOSIgaGVpZ2h0PSI4IiByeD0iMSIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzAiIHk9IjcyIiB3aWR0aD0iOSIgaGVpZ2h0PSI4IiByeD0iMSIgZmlsbD0iYmxhY2siLz48cGF0aCBkPSJNMjkgNjVWMjVINDRMNzggNTFMMTEyIDI1SDEyN1Y2NUgxMTJWNDRMNzggNjlMNDQgNDRWNjVaIiBmaWxsPSJibGFjayIvPjwvbWFzaz48L2RlZnM+PHJlY3QgeD0iNCIgeT0iMyIgd2lkdGg9IjE0OCIgaGVpZ2h0PSI4NCIgcng9IjYiIGZpbGw9IiNkOGZmM2UiIG1hc2s9InVybCgjY3V0KSIvPjwvc3ZnPg==",
+        "font": null,
+        "windows": [
+          {
+            "kind": "intro",
+            "id": "intro",
+            "start_frame": 0,
+            "frames": 600
+          },
+          {
+            "kind": "caption",
+            "id": "street-line",
+            "start_frame": 744,
+            "frames": 48,
+            "caption": {
+              "id": "street-line",
+              "style": "caption",
+              "text": "WET STREET",
+              "shot_id": "s002",
+              "offset_frames": 24,
+              "duration_frames": 48,
+              "start_frame": 744,
+              "end_frame": 792,
+              "start": 31.0,
+              "end": 33.0
+            }
+          },
+          {
+            "kind": "identity",
+            "id": "identity",
+            "start_frame": 1200,
+            "frames": 144
+          },
+          {
+            "kind": "card",
+            "id": "card-01",
+            "start_frame": 1344,
+            "frames": 360,
+            "index": 0,
+            "card": [
+              "MUSIC",
+              "A"
+            ]
+          },
+          {
+            "kind": "card",
+            "id": "card-02",
+            "start_frame": 1704,
+            "frames": 360,
+            "index": 1,
+            "card": [
+              "FILM",
+              "B"
+            ]
+          },
+          {
+            "kind": "lockup",
+            "id": "lockup",
+            "start_frame": 2064,
+            "frames": 96
+          }
+        ]
+      }
+    }
   }
 }
