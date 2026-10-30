@@ -405,9 +405,47 @@ def _merge_patch(target, patch):
     return result
 
 
+def _keep_stored_permissions(previous: Brief, brief: Brief) -> Brief:
+    """Only the owner sets the permission gate: keep what is stored, new entries start false."""
+    characters = {value.id: value.permission_confirmed for value in previous.characters}
+    update: dict = {
+        "characters": [
+            value.model_copy(update={"permission_confirmed": characters.get(value.id, False)})
+            for value in brief.characters
+        ]
+    }
+    if brief.creative is not None:
+        stored = previous.creative.references if previous.creative else []
+        references = {value.id: value.permission_confirmed for value in stored}
+        update["creative"] = brief.creative.model_copy(
+            update={
+                "references": [
+                    value.model_copy(
+                        update={"permission_confirmed": references.get(value.id, False)}
+                    )
+                    for value in brief.creative.references
+                ]
+            }
+        )
+    return brief.model_copy(update=update)
+
+
+def unconfirmed_permissions(brief: Brief) -> list[str]:
+    """Character and reference IDs still waiting for the owner's permission."""
+    references = brief.creative.references if brief.creative else []
+    return [
+        value.id for value in [*brief.characters, *references] if not value.permission_confirmed
+    ]
+
+
 @state_mutation
-def update_brief(root: Path, patch: dict, *, expected_hash: str | None = None) -> Brief:
-    """Apply one validated merge patch and keep the previous brief in history."""
+def update_brief(
+    root: Path, patch: dict, *, expected_hash: str | None = None, owner: bool = False
+) -> Brief:
+    """Apply one validated merge patch and keep the previous brief in history.
+
+    Only ``owner=True``, the Studio's own route, may change the permission gate.
+    """
     if not isinstance(patch, dict):
         raise ValueError("brief patch must be a JSON object")
     previous = load_brief(root)
@@ -418,6 +456,8 @@ def update_brief(root: Path, patch: dict, *, expected_hash: str | None = None) -
         brief = Brief.model_validate(merged)
     except ValueError as exc:
         raise ValueError(f"brief patch is invalid: {exc}") from exc
+    if not owner:
+        brief = _keep_stored_permissions(previous, brief)
     if brief.model_dump() == previous_value:
         return previous
     history = root / f"work/brief-history/{digest(previous_value)}.json"
@@ -451,6 +491,7 @@ def set_creative_profile(
     The Writer calls this once after the treatment. It is deliberately separate
     from the generic brief patch: the cast, places and rendering rules have one
     validated home, so they cannot drift back into ``direction`` or every shot.
+    A rewrite keeps the owner's permission gate as stored.
     """
     if not all(isinstance(value, list) for value in (characters, scenes, arc)):
         raise ValueError("characters, scenes and arc must be lists")
@@ -527,6 +568,7 @@ def set_creative_profile(
         updated = Brief.model_validate(updated.model_dump())
     except ValueError as exc:
         raise ValueError(f"creative profile is invalid: {exc}") from exc
+    updated = _keep_stored_permissions(brief, updated)
 
     previous_value = brief.model_dump()
     value = updated.model_dump()
@@ -870,12 +912,23 @@ def _reference_cap(project: Project) -> int:
     return 14 if project.image_model is not None else 4
 
 
+def _permission_refusal(subject: str, *, where: str = "") -> ValueError:
+    return ValueError(
+        f"permission to upload/depict {subject} is not confirmed. Only the owner can confirm "
+        f"it{where}: ask them and wait; retrying or rewriting the profile will not change it."
+    )
+
+
+def _character_refusal(subject: str) -> ValueError:
+    return _permission_refusal(subject, where=" on Story's Characters card")
+
+
 def character_refs(root: Path, brief: Brief, character_ids: list[str], states=None) -> list[dict]:
     refs = []
     for character in brief.characters:
         if character.id in character_ids:
             if not character.permission_confirmed:
-                raise ValueError(f"permission to upload/depict {character.id} is not confirmed")
+                raise _character_refusal(character.id)
             state_id = (states or {}).get(character.id, character.default_state)
             state = character.states.get(state_id) if state_id else None
             paths = [*character.references, *(state.references if state else [])]
@@ -898,7 +951,7 @@ def reference_refs(root: Path, brief: Brief, reference_ids: list[str]) -> list[d
         if reference is None:
             raise ValueError(f"unknown visual reference {ref_id}")
         if not reference.permission_confirmed:
-            raise ValueError(f"permission to upload/depict {ref_id} is not confirmed")
+            raise _permission_refusal(ref_id)
         path = inside(root, reference.path)
         with Image.open(path) as image:
             image.verify()
@@ -1522,10 +1575,10 @@ def require_approval(root: Path, stage: str):
 def _require_reference_permissions(brief: Brief):
     for character in brief.characters:
         if not character.permission_confirmed:
-            raise ValueError(f"permission to upload/depict {character.id} is not confirmed")
+            raise _character_refusal(character.id)
     for reference in brief.creative.references if brief.creative else []:
         if not reference.permission_confirmed:
-            raise ValueError(f"permission to upload/depict {reference.id} is not confirmed")
+            raise _permission_refusal(reference.id)
 
 
 @state_mutation

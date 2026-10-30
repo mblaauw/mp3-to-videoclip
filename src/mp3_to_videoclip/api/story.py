@@ -27,7 +27,9 @@ async def get_brief(slug: str, request: Request, response: Response):
 async def update_brief(slug: str, request: Request, payload: dict, response: Response):
     root = project_root(request, slug)
     try:
-        brief = P.update_brief(root, payload, expected_hash=request.headers.get("if-match"))
+        brief = P.update_brief(
+            root, payload, expected_hash=request.headers.get("if-match"), owner=True
+        )
     except RevisionConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:

@@ -198,7 +198,8 @@ TOOLS: list[dict] = [
         "Create or replace the film's cast, places, arc, global image rules, avoid list "
         "and compact rendering look. Call once after the treatment, before the storyboard. "
         "Characters carry identity and changeable states; never repeat identity or wardrobe "
-        "in shot prompts.",
+        "in shot prompts. Only the owner can confirm permission to depict someone: the result "
+        "lists anyone still waiting in owner_must_confirm, so ask the owner about them.",
         {
             "slug": {"type": "string"},
             "characters": {
@@ -232,7 +233,6 @@ TOOLS: list[dict] = [
                         },
                         "default_state": {"type": "string"},
                         "references": {"type": "array", "items": {"type": "string"}},
-                        "permission_confirmed": {"type": "boolean"},
                     },
                     "required": ["id", "identity"],
                 },
@@ -447,18 +447,20 @@ def _dispatch(
         for field in ("direction", "style", "treatment"):
             if field in patch and (not isinstance(patch[field], str) or not patch[field].strip()):
                 raise ValueError(f"brief {field} cannot be blank; omit it to keep the current text")
-        return P.update_brief(root, patch).model_dump()
+        return _brief_result(P.update_brief(root, patch))
 
     if name == "set_creative_profile":
-        return P.set_creative_profile(
-            root,
-            characters=arguments.get("characters") or [],
-            scenes=arguments.get("scenes") or [],
-            arc=arguments.get("arc") or [],
-            image_rules=arguments.get("image_rules") or [],
-            avoid=arguments.get("avoid") or [],
-            look=arguments.get("look") or "",
-        ).model_dump()
+        return _brief_result(
+            P.set_creative_profile(
+                root,
+                characters=arguments.get("characters") or [],
+                scenes=arguments.get("scenes") or [],
+                arc=arguments.get("arc") or [],
+                image_rules=arguments.get("image_rules") or [],
+                avoid=arguments.get("avoid") or [],
+                look=arguments.get("look") or "",
+            )
+        )
 
     if name == "update_shots":
         board, changed = P.update_shots(root, arguments.get("changes") or [])
@@ -497,6 +499,16 @@ def _dispatch(
         return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}
 
     raise ValueError(f"unknown tool: {name}")
+
+
+def _brief_result(brief) -> dict:
+    from mp3_to_videoclip import production as P
+
+    value = brief.model_dump()
+    waiting = P.unconfirmed_permissions(brief)
+    if waiting:
+        value["owner_must_confirm"] = waiting
+    return value
 
 
 def _thumbnail(path: Path) -> tuple[str, int, int]:

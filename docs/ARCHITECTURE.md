@@ -106,6 +106,12 @@ tool writes the brief, treatments, proof shots or storyboard. Chat history keeps
 the metadata on the user turn. A bad output can therefore be traced to the exact
 prompt revision without changing any artifact schema or approval hash.
 
+`permission_confirmed` is an owner-only gate. `production.update_brief` and
+`set_creative_profile` keep the stored value on every write and start new entries
+at false; only `PATCH /brief`, the Characters card's route, passes `owner=True`.
+A Writer learns who is waiting from `owner_must_confirm` in those tools' results,
+the project snapshot and the refusal itself, and asks the owner.
+
 ## Evaluation and ratings
 
 Three frozen fixtures and their automatic checks live in `tests/evals/`. The
