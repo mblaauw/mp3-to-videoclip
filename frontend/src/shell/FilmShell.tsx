@@ -146,7 +146,31 @@ function scrollTo(selector: string, delay = 60) {
 
 type PaidRequest = NonNullable<NextAction["paid"]>;
 
+const DIRECTOR_OPEN = "studio.director.";
+
+/** Film gives the picture its room; other stages keep the Director beside the work. */
+function directorDefault(stage: Stage): boolean {
+  try {
+    const saved = window.localStorage.getItem(DIRECTOR_OPEN + stage);
+    if (saved !== null) return saved === "1";
+  } catch {
+    // Storage can be blocked; the default still works.
+  }
+  return stage !== "film" && window.innerWidth > 1180;
+}
+
+function rememberDirector(stage: Stage, open: boolean) {
+  try {
+    window.localStorage.setItem(DIRECTOR_OPEN + stage, open ? "1" : "0");
+  } catch {
+    // Storage can be blocked; the choice just lasts this visit.
+  }
+}
+
 function StageView({
+  filmSide,
+  filmFull,
+  onFilmFull,
   slug,
   stage,
   intake,
@@ -160,6 +184,9 @@ function StageView({
   onNavigate,
   images,
 }: {
+  filmSide: HTMLElement | null;
+  filmFull: boolean;
+  onFilmFull: (next: boolean) => void;
   slug: string;
   stage: Stage;
   intake: IntakePayload | null;
@@ -196,7 +223,15 @@ function StageView({
         onNavigate={onNavigate}
       />
     );
-  return <FilmStage slug={slug} onNavigate={onNavigate} />;
+  return (
+    <FilmStage
+      slug={slug}
+      onNavigate={onNavigate}
+      sideSlot={filmSide}
+      full={filmFull}
+      onFull={onFilmFull}
+    />
+  );
 }
 
 export function FilmShell({
@@ -256,7 +291,14 @@ function FilmShellContent({
   const [inspectorShot, setInspectorShot] = useState<string | null>(null);
   const [directorShots, setDirectorShots] = useState<string[]>([]);
   const [pendingPaid, setPendingPaid] = useState<PaidRequest | null>(null);
-  const [directorOpen, setDirectorOpen] = useState(() => window.innerWidth > 1180);
+  const [directorOpen, setDirectorOpenState] = useState(() => directorDefault(stage));
+  const directorBusy = useRef(false);
+  const setDirectorOpen = (open: boolean) => {
+    setDirectorOpenState(open);
+    rememberDirector(stage, open);
+  };
+  const [filmSide, setFilmSide] = useState<HTMLElement | null>(null);
+  const [filmFull, setFilmFull] = useState(false);
   const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
 
   const loadEpoch = useRef(0);
@@ -324,6 +366,9 @@ function FilmShellContent({
 
   useEffect(() => {
     if (stage !== "storyboard") setInspectorShot(null);
+    if (stage !== "film") setFilmFull(false);
+    // Each stage reopens as you left it, but a reply being written is never cut off.
+    if (!directorBusy.current) setDirectorOpenState(directorDefault(stage));
   }, [stage]);
 
   useEffect(() => {
@@ -509,7 +554,7 @@ function FilmShellContent({
   return (
     <ApprovalsProvider value={{ states: approvalStates, loaded: approvalsLoaded }}>
     <PlayerProvider src={playerSrc} fallbackDuration={intake?.duration || project.duration || 0}>
-      <div className="shell">
+      <div className={`shell ${stage === "film" ? "on-film" : ""} ${filmFull ? "film-full" : ""}`}>
         <TopBar
           project={project}
           stage={stage}
@@ -529,7 +574,7 @@ function FilmShellContent({
               setDirectorOpen(true);
               return;
             }
-            setDirectorOpen((open) => !open);
+            setDirectorOpen(!directorOpen);
           }}
         />
         <main className="shell-main">
@@ -544,6 +589,9 @@ function FilmShellContent({
             <div className={stage === "images" ? "images-body" : undefined}>
               <StageView
                 key={slug}
+                filmSide={filmSide}
+                filmFull={filmFull}
+                onFilmFull={setFilmFull}
                 slug={slug}
                 stage={stage}
                 intake={intake}
@@ -581,6 +629,9 @@ function FilmShellContent({
             slug={slug}
             stage={stage}
             open
+            onBusyChange={(busy) => {
+              directorBusy.current = busy;
+            }}
             prefill={directorPrompt}
             selectedShots={
               stage === "storyboard" ? (inspectorShot ? [inspectorShot] : directorShots) : []
@@ -588,6 +639,8 @@ function FilmShellContent({
             onClose={() => setDirectorOpen(false)}
             onSettings={onSettings}
           />
+        ) : stage === "film" ? (
+          <aside className="film-side" aria-label="Film panel" ref={setFilmSide} />
         ) : null}
         <Spine
           slug={slug}

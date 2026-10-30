@@ -670,3 +670,162 @@
     padding-right: var(--s-3);
   }
 }
+
+/* ------------------------------------------------------------- Film workspace */
+.shell.on-film .shell-main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.shell.on-film .stage-pad {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.shell.on-film .stage-pad > div {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.film-work {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.film-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line-soft);
+}
+.film-notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-13);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.film-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--s-5) var(--s-6) var(--s-7);
+}
+.film-viewer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--well);
+}
+.film-frame {
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  padding: var(--s-2);
+}
+.film-picture {
+  width: min(100cqw, calc(100cqh * var(--film-w)));
+  aspect-ratio: var(--film-ratio);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.film-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-1) var(--s-3);
+  border-top: 1px solid var(--line-soft);
+  background: var(--panel);
+  font-size: var(--t-13);
+}
+.film-now {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.film-now b {
+  color: var(--ink);
+}
+.film-now em {
+  color: var(--violet);
+  font-style: normal;
+}
+.film-full-btn {
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--ink-2);
+  padding: 3px 9px;
+  font-size: var(--t-13);
+  white-space: nowrap;
+}
+.film-full-btn:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+.film-side {
+  grid-area: side;
+  width: var(--inspector-w);
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+}
+.film-side > .delivery-card,
+.film-side > .credits-card {
+  margin: var(--s-3);
+}
+/* Full view: only the picture and a thin scrub line. */
+.shell.film-full {
+  grid-template: "main" minmax(0, 1fr) / minmax(0, 1fr);
+}
+.shell.film-full .topbar,
+.shell.film-full .film-side,
+.shell.film-full .spine,
+.shell.film-full .film-line,
+.shell.film-full .director,
+.shell.film-full .next-bar,
+.shell.film-full .film-bar {
+  display: none;
+}
+.shell.film-full .film-frame {
+  padding: 0;
+}
+.film-fullbar {
+  height: 8px;
+  flex: none;
+  background: rgba(255, 255, 255, 0.14);
+  cursor: ew-resize;
+}
+.film-fullbar i {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+}
+@media (max-width: 1180px) {
+  .film-side {
+    grid-area: auto;
+    width: auto;
+    max-height: 34dvh;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    grid-row: 4;
+  }
+  .shell.on-film {
+    grid-template-rows: var(--topbar-h) minmax(160px, 1fr) var(--spine-h) auto;
+  }
+}
