@@ -998,3 +998,15 @@ export function validateGraphicsPart(part, requestFrames) {
 export function partIsVisible(kind, localSeconds, seconds) {
   return graphicsAlpha(kind, localSeconds, seconds) > 0;
 }
+
+/**
+ * The planned title window covering `frame` (start inclusive, end exclusive),
+ * or null. Windows come from the engine's integer-frame title plan and never
+ * overlap, so at most one matches.
+ */
+export function titleWindowAt(windows, frame) {
+  for (const window of windows) {
+    if (frame >= window.start_frame && frame < window.start_frame + window.frames) return window;
+  }
+  return null;
+}

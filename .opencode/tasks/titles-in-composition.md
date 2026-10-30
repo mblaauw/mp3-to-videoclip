@@ -132,3 +132,10 @@ policy, and deleting the FFmpeg/Pillow paths (assessment phase 2).
   - `titles.py` joins the graphics implementation revision, so the existing
     titles reviews need renewing. Tree of Love's is unapproved and superseded
     anyway (D4).
+- **T2 done.** The title parts moved from `index.jsx` to `src/Titles.jsx`, which
+  exports `GraphicsFrame` (one element, as before) and `TitleLayer` (every
+  planned window, each in a `Sequence` on its own local clock).
+  `timing.titleWindowAt` picks the window and has Node tests. A Forward Ever
+  intro and card rendered through the moved code are frame-for-frame identical
+  (framemd5) to the previous code. Any renderer source change moves the
+  renderer revision, and with it the current-input check for existing bases.
