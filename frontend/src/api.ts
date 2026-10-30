@@ -852,7 +852,10 @@ export const api = {
       "/api/setup/renderer",
       { method: "POST", body: JSON.stringify({}) },
     ),
-  chat: (slug: string) => request<{ messages: unknown[] }>(`/api/projects/${slug}/chat`),
+  chat: (slug: string, role?: "writer" | "editor") =>
+    request<{ messages: unknown[] }>(
+      `/api/projects/${slug}/chat${role ? `?role=${role}` : ""}`,
+    ),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
   saveLyrics: (slug: string, text: string) =>

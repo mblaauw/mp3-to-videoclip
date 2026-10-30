@@ -159,11 +159,13 @@ def _context(payload: dict) -> dict | None:
 
 
 @router.get("/chat")
-async def get_chat(slug: str, request: Request):
-    from mp3_to_videoclip.director.conversation import load_messages
+async def get_chat(slug: str, request: Request, role: str | None = None):
+    from mp3_to_videoclip.director.conversation import ROLES, load_messages
 
+    if role is not None and role not in ROLES:
+        raise HTTPException(status_code=400, detail="role must be writer or editor")
     root = project_root(request, slug)
-    return {"messages": load_messages(root)}
+    return {"messages": load_messages(root, role)}
 
 
 @router.post("/chat")
@@ -258,7 +260,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         model=settings.llm_model,
-        session_id=f"studio-{slug}",
+        session_id=f"studio-{slug}-{role}",
     )
 
     async def stream():
@@ -272,6 +274,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
             runner=runner,
             projects_dir=root.parent,
             prompt_meta=bundle.meta,
+            role=role,
         ):
             _announce_tool(request, slug, event)
             yield _line(event)

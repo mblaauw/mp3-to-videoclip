@@ -347,11 +347,14 @@ export function Director({
   const listRef = useRef<HTMLDivElement>(null);
   const roleRef = useRef(role);
   roleRef.current = role;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
 
   useEffect(() => {
-    setRole(defaultRole);
+    // Switching threads mid-reply would drop the streaming answer.
+    if (!busyRef.current) setRole(defaultRole);
     setError(null);
-    // A stage change changes who answers; the conversation stays.
+    // A stage change changes who answers; each role keeps its own thread.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
@@ -379,9 +382,11 @@ export function Director({
   }, [prefill?.at, prefill?.text]);
 
   useEffect(() => {
+    let live = true;
     api
-      .chat(slug)
+      .chat(slug, role)
       .then((data) => {
+        if (!live) return;
         const restored: ChatItem[] = [];
         for (const raw of data.messages as {
           role: string;
@@ -410,8 +415,13 @@ export function Director({
         }
         setItems(restored);
       })
-      .catch(() => setItems([]));
-  }, [slug]);
+      .catch(() => {
+        if (live) setItems([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [slug, role]);
 
   const scrollToEnd = useCallback((smooth = false) => {
     const element = listRef.current;
@@ -662,6 +672,7 @@ export function Director({
           type="button"
           className={role === "writer" ? "on" : ""}
           aria-pressed={role === "writer"}
+          disabled={busy && role !== "writer"}
           onClick={() => setRole("writer")}
           title="Story, storyboard and picture prompts"
         >
@@ -671,6 +682,7 @@ export function Director({
           type="button"
           className={role === "editor" ? "on" : ""}
           aria-pressed={role === "editor"}
+          disabled={busy && role !== "editor"}
           onClick={() => setRole("editor")}
           title="Timing, cut, motion and transitions"
         >

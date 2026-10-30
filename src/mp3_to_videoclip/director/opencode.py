@@ -527,7 +527,7 @@ async def run_gateway_turn(
     entry = {"role": "user", "content": message}
     if prompt_meta is not None:
         entry["prompt"] = prompt_meta
-    append_message(root, entry)
+    append_message(root, entry, agent=role)
     prompt_text = f"{context.strip()}\n\n---\n\n{message.strip()}" if context.strip() else message
     events = client.events()
     done = False
@@ -565,7 +565,11 @@ async def run_gateway_turn(
                 elif kind == "session.tool.success":
                     name = _tool_name(names, data)
                     result = _text_content(data.get("content"))
-                    append_message(root, {"role": "tool", "name": name, "content": result[:4000]})
+                    append_message(
+                        root,
+                        {"role": "tool", "name": name, "content": result[:4000]},
+                        agent=role,
+                    )
                     yield TurnEvent(kind="tool", tool=name, result=result)
                 elif kind == "session.tool.error":
                     name = _tool_name(names, data)
@@ -575,7 +579,9 @@ async def run_gateway_turn(
                     yield TurnEvent(kind="permission", payload=data)
                 elif kind == "session.execution.succeeded":
                     append_message(
-                        root, {"role": "assistant", "content": assistant_text, "name": role}
+                        root,
+                        {"role": "assistant", "content": assistant_text, "name": role},
+                        agent=role,
                     )
                     done = True
                     yield TurnEvent(kind="done", text=assistant_text)
@@ -589,6 +595,7 @@ async def run_gateway_turn(
                             "name": role,
                             "interrupted": True,
                         },
+                        agent=role,
                     )
                     done = True
                     yield TurnEvent(kind="done", text=assistant_text, payload={"interrupted": True})

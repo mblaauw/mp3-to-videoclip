@@ -225,3 +225,55 @@ def test_closing_the_stream_stops_within_one_second(tmp_path, monkeypatch):
         return time.perf_counter() - started
 
     assert asyncio.run(first_and_close()) < 1.0
+
+
+def test_each_role_sees_and_writes_only_its_own_thread(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    path = root / "work" / "chat.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    writer_prompt = {"hash": "w", "files": [{"path": "writer/system.md", "version": 1}]}
+    history = [
+        {"role": "user", "content": "before the split"},
+        {"role": "assistant", "content": "shared answer"},
+        {"role": "user", "content": "rewrite the brief", "prompt": writer_prompt},
+        {"role": "tool", "name": "update_brief", "content": "ok"},
+        {"role": "assistant", "content": "brief rewritten"},
+        {"role": "user", "content": "tighten the cut", "agent": "editor"},
+        {"role": "assistant", "content": "cut tightened", "agent": "editor"},
+    ]
+    path.write_text("\n".join(json.dumps(message) for message in history) + "\n")
+
+    llm = FakeLLM()
+
+    async def editor_turn():
+        return [
+            event async for event in run_turn(llm, root, "demo", "next?", "system", role="editor")
+        ]
+
+    asyncio.run(editor_turn())
+
+    sent = [message.get("content") for message in llm.calls[0]]
+    assert sent == [
+        "before the split",
+        "shared answer",
+        "tighten the cut",
+        "cut tightened",
+        "next?",
+    ]
+    assert all("agent" not in message for message in llm.calls[0])
+    stored = [json.loads(line) for line in path.read_text().splitlines()]
+    assert stored[: len(history)] == history
+    assert {message.get("agent") for message in stored[len(history) :]} == {"editor"}
+
+    from mp3_to_videoclip.director.conversation import load_messages
+
+    writer = [message["content"] for message in load_messages(root, "writer")]
+    assert writer == [
+        "before the split",
+        "shared answer",
+        "rewrite the brief",
+        "ok",
+        "brief rewritten",
+    ]
+    assert len(load_messages(root)) == len(stored)

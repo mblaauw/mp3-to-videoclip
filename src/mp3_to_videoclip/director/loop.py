@@ -40,8 +40,13 @@ async def run_turn(
     runner=None,
     projects_dir=None,
     prompt_meta: dict | None = None,
+    role: str | None = None,
 ) -> AsyncIterator[TurnEvent]:
-    messages = load_messages(root)
+    # Each role keeps its own thread; the tag is bookkeeping, not model input.
+    messages = [
+        {key: value for key, value in message.items() if key != "agent"}
+        for message in load_messages(root, role)
+    ]
     messages, summary = compact_messages(messages)
     if summary:
         system = (system + "\n\n" + summary).strip()
@@ -49,7 +54,7 @@ async def run_turn(
     entry = {"role": "user", "content": user_message}
     if prompt_meta is not None:
         entry["prompt"] = prompt_meta
-    append_message(root, entry)
+    append_message(root, entry, agent=role)
 
     tool_calls = 0
     while tool_calls < max_tool_calls:
@@ -70,7 +75,7 @@ async def run_turn(
 
         if not pending:
             messages.append({"role": "assistant", "content": assistant_text})
-            append_message(root, {"role": "assistant", "content": assistant_text})
+            append_message(root, {"role": "assistant", "content": assistant_text}, agent=role)
             yield TurnEvent(kind="done", text=assistant_text)
             return
 
@@ -99,7 +104,9 @@ async def run_turn(
                 args = {}
             if tc.name == "ask_user":
                 yield TurnEvent(kind="ask", payload=args)
-                append_message(root, {"role": "assistant", "content": args.get("question", "")})
+                append_message(
+                    root, {"role": "assistant", "content": args.get("question", "")}, agent=role
+                )
                 return
             tool_result = await dispatch(tc.name, args, runner, projects_dir)
             if isinstance(tool_result, ToolResult):
@@ -113,6 +120,7 @@ async def run_turn(
             append_message(
                 root,
                 {"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": result_text},
+                agent=role,
             )
             if images:
                 pending_images.extend(images)
