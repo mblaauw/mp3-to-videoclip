@@ -192,6 +192,20 @@ export function useFilmData(slug: string) {
     }
   };
 
+  /** Save a whole cut made elsewhere (a moved boundary). */
+  const saveCut = async (next: EditPayload): Promise<boolean> => {
+    setError(null);
+    try {
+      await api.saveEdit(slug, next, cut?.edit ?? undefined);
+      setCut(await api.editSummary(slug));
+      notifyProjectChanged();
+      return true;
+    } catch (caught) {
+      setError(draftError(caught));
+      return false;
+    }
+  };
+
   const saveTransition = async (shotId: string, change: Partial<EditTransition>, base: EditPayload): Promise<boolean> => {
     setBusy(`join:${shotId}`);
     setError(null);
@@ -380,6 +394,7 @@ export function useFilmData(slug: string) {
     workflow,
     load,
     seedCut,
+    saveCut,
     saveTransition,
     render,
     approvePreview,

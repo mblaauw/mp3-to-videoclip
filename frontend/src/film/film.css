@@ -789,6 +789,225 @@
 .film-side > .credits-card {
   margin: var(--s-3);
 }
+/* The timeline is the film. */
+.shell.on-film {
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto;
+}
+.film-line {
+  grid-area: spine;
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.film-line-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: 4px var(--s-3);
+}
+.film-line-head .spine-transport {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0;
+  border: 0;
+}
+.film-line-hint {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--t-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.film-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.film-zoom input {
+  width: 96px;
+  accent-color: var(--gold);
+}
+.film-scroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 var(--s-3) var(--s-2);
+  scrollbar-color: var(--line) transparent;
+}
+.film-lanes {
+  position: relative;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.film-ruler {
+  position: relative;
+  height: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+}
+.film-ruler span {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  padding-left: 3px;
+  border-left: 1px solid var(--line);
+}
+.film-sections {
+  position: relative;
+  height: 16px;
+}
+.film-sections button {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  padding: 0 4px;
+  border: 0;
+  border-right: 1px solid var(--panel);
+  border-radius: 2px;
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.72;
+}
+.film-sections button:hover {
+  opacity: 1;
+}
+.film-wave {
+  height: 30px;
+  background: var(--well);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.film-wave .spine-wave {
+  height: 100%;
+}
+.film-strip {
+  position: relative;
+  height: 72px;
+}
+.film-tile {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background-color: var(--raised);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+.film-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.film-tile:hover::after {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.film-tile.selected::after {
+  border-color: var(--gold);
+}
+.film-seam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 10px;
+  margin-left: -5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  display: grid;
+  place-items: center;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.film-seam::before {
+  content: "";
+  width: 2px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.65);
+}
+.film-seam::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 1px;
+  background: var(--ink);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transform: rotate(45deg);
+  transition: opacity var(--dur) var(--ease);
+}
+.film-strip:hover .film-seam::after,
+.film-seam:focus-visible::after {
+  opacity: 0.55;
+}
+.film-seam:hover::after {
+  opacity: 1;
+}
+.film-seam.styled::after {
+  background: var(--sage);
+  opacity: 1;
+}
+.film-seam.selected::before {
+  background: var(--gold);
+}
+.film-seam.selected::after {
+  background: var(--gold);
+  opacity: 1;
+}
+.film-titles-lane {
+  position: relative;
+  height: 16px;
+}
+.film-titles-lane button {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--raised);
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 14px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.film-titles-lane button:hover {
+  border-color: var(--muted);
+  color: var(--ink);
+}
+.film-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--gold);
+  pointer-events: none;
+}
 /* Full view: only the picture and a thin scrub line. */
 .shell.film-full {
   grid-template: "main" minmax(0, 1fr) / minmax(0, 1fr);
@@ -826,6 +1045,6 @@
     grid-row: 4;
   }
   .shell.on-film {
-    grid-template-rows: var(--topbar-h) minmax(160px, 1fr) var(--spine-h) auto;
+    grid-template-rows: var(--topbar-h) minmax(160px, 1fr) auto auto;
   }
 }

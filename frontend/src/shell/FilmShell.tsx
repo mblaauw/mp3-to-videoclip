@@ -169,8 +169,10 @@ function rememberDirector(stage: Stage, open: boolean) {
 
 function StageView({
   filmSide,
+  filmLine,
   filmFull,
   onFilmFull,
+  music,
   slug,
   stage,
   intake,
@@ -185,8 +187,10 @@ function StageView({
   images,
 }: {
   filmSide: HTMLElement | null;
+  filmLine: HTMLElement | null;
   filmFull: boolean;
   onFilmFull: (next: boolean) => void;
+  music: Music | null;
   slug: string;
   stage: Stage;
   intake: IntakePayload | null;
@@ -228,6 +232,8 @@ function StageView({
       slug={slug}
       onNavigate={onNavigate}
       sideSlot={filmSide}
+      lineSlot={filmLine}
+      music={music}
       full={filmFull}
       onFull={onFilmFull}
     />
@@ -298,6 +304,7 @@ function FilmShellContent({
     rememberDirector(stage, open);
   };
   const [filmSide, setFilmSide] = useState<HTMLElement | null>(null);
+  const [filmLine, setFilmLine] = useState<HTMLElement | null>(null);
   const [filmFull, setFilmFull] = useState(false);
   const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
 
@@ -441,20 +448,6 @@ function FilmShellContent({
       : baseAudio;
   const spineBoard = board && editPayload ? applyEditBoard(board, editPayload) : board;
 
-  const saveCutBoundary = async (next: EditPayload): Promise<boolean> => {
-    try {
-      const saved = await api.saveEdit(slug, next, editPayload);
-      setEditPayload(saved.present ? saved.edit ?? next : null);
-      setEditOwnsTiming(saved.present);
-      notifyProjectChanged();
-      onProjectsChanged();
-      return true;
-    } catch (error) {
-      toast(`Could not save the cut: ${String(error)}`);
-      return false;
-    }
-  };
-
   const commitAudioWindow = async (window: AudioWindow): Promise<boolean> => {
     const previous = intake?.audio_window || null;
     setWindowBusy(true);
@@ -590,6 +583,8 @@ function FilmShellContent({
               <StageView
                 key={slug}
                 filmSide={filmSide}
+                filmLine={filmLine}
+                music={music}
                 filmFull={filmFull}
                 onFilmFull={setFilmFull}
                 slug={slug}
@@ -642,6 +637,9 @@ function FilmShellContent({
         ) : stage === "film" ? (
           <aside className="film-side" aria-label="Film panel" ref={setFilmSide} />
         ) : null}
+        {stage === "film" ? (
+          <div className="film-line" ref={setFilmLine} />
+        ) : (
         <Spine
           slug={slug}
           stage={stage}
@@ -656,10 +654,9 @@ function FilmShellContent({
           onAudioWindow={setAudioWindow}
           onAudioWindowCommit={commitAudioWindow}
           onBoardChange={setBoard}
-          edit={stage === "film" ? editPayload : null}
-          onEditChange={stage === "film" ? saveCutBoundary : undefined}
           readOnly={stage === "storyboard" && editOwnsTiming}
         />
+        )}
       </div>
     </PlayerProvider>
     </ApprovalsProvider>
