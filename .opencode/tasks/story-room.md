@@ -1,4 +1,4 @@
-# Story room — plan
+# Story room
 
 **Approved by the owner, 30 Oct 2026,** with the recommended D1–D6 and D7 authorized: a
 capped live Writer test on a scratch copy only. No image generation.
@@ -107,3 +107,35 @@ concepts still read.
 
 The picture-based world bible, cost-before-change warnings, Writer rewrites in place, lyric-to-
 section links, and redesigning the promo/advert brief card.
+
+## Acceptance record, 30 Oct 2026
+
+Run on scratch copies; `projects/` was only read. No images were made.
+
+**Live Writer turns (cap of 8, direct API, `deepseek-v4.1-flash`).** Spend was not measured:
+the direct gateway reports no cost.
+
+1. Mixed paste: sorted with every word intact, story placed on the song.
+2. Style-only paste: sorted, no story invented.
+3. Two concepts within it: different structures, beats on measured sections, style and rules
+   kept. First save failed on an empty `chosen_id`; fixed.
+4. Ask for another: first two concepts byte-identical, third a new structure.
+5. Build on this: 341 words, seven placed passages, style and rules unchanged.
+6. Profile: the sorted "avoid" line kept word for word.
+7. Storyboard: **failed**, stopped by hand after 18 failed tool calls. The Writer locked the
+   board to one shot through an older trap in `create_storyboard`; now refused, with a test.
+   The fix has not been retried live.
+8. One concept from the music on a promo: **stalled**, stopped by hand after about 9 minutes
+   with no new step. Cause not established. The client has no timeout of its own, so a stalled
+   call shows as working until you press Stop.
+
+**Without a model.** Moving a sentence, editing a passage (it alone loses its time), Tree of
+Love still approved with its older concepts drawn as 18 beats, Zero Bars reading by paragraph,
+promo brief card, excerpt and handles above the choice, a one-concept room, a beat past the end
+of a 30 s film refused, the Director drawer below 1180 px, no sideways scroll at 375 px, Space
+after a mouse click. The Studio's skeleton route gave 48 shots from the approved story with the
+approval unchanged.
+
+**Not proven live.** The Writer filling a storyboard from a placed story, and one concept from
+the music. Sorting varied a little between runs ("No lip-sync." went to avoid once and rules
+once), which moving a sentence covers.
