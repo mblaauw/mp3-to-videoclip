@@ -1,0 +1,146 @@
+/* Track: a quiet facts line, then sections beside the words. */
+.track-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-bottom: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.track-facts h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 660;
+}
+
+.track-room {
+  display: grid;
+  grid-template-columns: minmax(300px, 5fr) minmax(0, 6fr);
+  gap: 34px;
+  align-items: start;
+  max-width: 1280px;
+}
+
+.track-sections {
+  position: sticky;
+  top: 12px;
+}
+
+.track-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+  min-height: 28px;
+}
+
+.track-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 640;
+}
+
+.track-head small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.track-sec {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 72px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px 3px 4px;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+}
+
+.track-sec input {
+  width: 100%;
+  padding: 3px 6px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: inherit;
+  font: inherit;
+}
+
+.track-sec input:hover {
+  border-color: var(--line);
+}
+
+.track-sec input:focus {
+  background: var(--well);
+  border-color: var(--line);
+  outline: none;
+}
+
+.track-sec .t {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.track-shape {
+  display: block;
+  width: 72px;
+  height: 22px;
+  color: var(--muted);
+}
+
+.track-words {
+  max-width: 62ch;
+  font-family: var(--read, Baskerville, "Baskerville Old Face", Georgia, serif);
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.track-line {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: baseline;
+  padding: 1px 6px 1px 0;
+  border-radius: 3px;
+  white-space: pre-line;
+}
+
+.track-line time {
+  color: var(--muted);
+  font: 420 12px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.track-words.untimed .track-line {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.track-words.untimed .track-line time {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .track-room {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 26px;
+  }
+
+  .track-sections {
+    position: static;
+  }
+
+  .track-sec {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .track-shape {
+    display: none;
+  }
+}
