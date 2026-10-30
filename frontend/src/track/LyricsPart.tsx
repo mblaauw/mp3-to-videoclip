@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LyricLine } from "../api";
 import { api, type LyricTools } from "../api";
+import { useApprovals } from "../ApprovalBar";
 import { isActive, useProjectJobs } from "../jobs/store";
 import { usePlayerControls, usePlayerTime } from "../spine/player";
 import { clock } from "../spine/wave";
@@ -135,6 +136,7 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
   const sung = sungCount(lines);
   const timed = timedCount(lines);
   const nextLine = nextToTap(lines);
+  const storyApproved = useApprovals().states.brief?.state === "approved";
   const [tools, setTools] = useState<LyricTools | null>(null);
   const [askSetup, setAskSetup] = useState(false);
   const timingJobs = useProjectJobs(slug, "lyric_timing");
@@ -142,6 +144,7 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
   const draftJobs = useProjectJobs(slug, "lyric_draft");
   const draftBusy = draftJobs.some(isActive);
   const [drafted, setDrafted] = useState(false);
+  const [embedded, setEmbedded] = useState<string | null>(null);
   const timingBusy = timingJobs.some(isActive);
   const setupBusy = setupJobs.some(isActive);
 
@@ -157,6 +160,20 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
       live = false;
     };
   }, [setupBusy, slug]);
+
+  useEffect(() => {
+    if (hasLyrics || !data || !musicVideo) return;
+    let live = true;
+    api.embeddedLyrics(slug).then(
+      (value) => {
+        if (live) setEmbedded(value.text);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [data, hasLyrics, musicVideo, slug]);
 
   // The draft lands in the box, for reading. Only saving makes it the lyrics.
   useEffect(() => {
@@ -435,6 +452,12 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
             placeholder={"Paste the words, one line at a time.\n[Verse] and [Hook] style names become headings, and LRC timestamps are welcome."}
             aria-label="Paste lyrics or LRC"
           />
+          {storyApproved && (
+            <p className="hint">
+              The story is checked against the words, so saving asks you to approve the story,
+              storyboard and what follows again. Their text and every picture stay as they are.
+            </p>
+          )}
           <div className="row-actions">
             <button
               type="button"
@@ -442,7 +465,13 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
               onClick={() => void save()}
               disabled={!draft.trim() || lyricsSaving}
             >
-              {lyricsSaving ? "Saving…" : editing ? "Save lyrics" : "Add lyrics"}
+              {lyricsSaving
+                ? "Saving…"
+                : storyApproved
+                  ? "Save, and approve the story again"
+                  : editing
+                    ? "Save lyrics"
+                    : "Add lyrics"}
             </button>
             {editing && (
               <button
@@ -456,7 +485,16 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
                 Cancel
               </button>
             )}
-            {!editing && !draft.trim() && tools?.supported && (
+            {!editing && !draft.trim() && embedded && (
+              <button
+                type="button"
+                className="ui-btn ui-btn--small ui-btn--primary"
+                onClick={() => setDraft(embedded)}
+              >
+                Use the words in this MP3
+              </button>
+            )}
+            {!editing && !draft.trim() && !embedded && tools?.supported && (
               <button
                 type="button"
                 className="ui-btn ui-btn--small"

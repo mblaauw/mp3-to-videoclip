@@ -87,6 +87,19 @@ async def put_music_notes(slug: str, request: Request, payload: dict):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/embedded-lyrics")
+async def get_embedded_lyrics(slug: str, request: Request):
+    from mp3_to_videoclip.domain.lyrics import embedded_lyrics
+
+    root = project_root(request, slug)
+    project = P.load_project(root)
+    try:
+        audio = inside(root, project.source)
+    except ValueError:
+        return {"text": None}
+    return {"text": await asyncio.to_thread(embedded_lyrics, audio)}
+
+
 @router.get("/lyric-tools")
 async def get_lyric_tools(slug: str, request: Request):
     project_root(request, slug)

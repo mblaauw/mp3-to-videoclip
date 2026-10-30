@@ -22,9 +22,15 @@ _LRC = "lrc"
 
 
 def tag_of(text: str) -> str | None:
-    """The name inside a `[Spoken Hook]` line: a heading of the song, not a sung line."""
+    """The name in a `[Spoken Hook]` line: a heading of the song, not a sung line.
+
+    Suno tags often carry production notes, as in `[Intro: spoken low, vinyl crackle]`,
+    so only the part before the first colon or comma is the name.
+    """
     match = _TAG.match(text.strip())
-    return match.group(1).strip() if match else None
+    if not match:
+        return None
+    return re.split(r"[:,]", match.group(1), maxsplit=1)[0].strip() or None
 
 
 def word_lines(lyrics: dict | None) -> list[dict[str, Any]]:

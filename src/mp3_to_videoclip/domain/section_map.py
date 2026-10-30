@@ -144,6 +144,10 @@ def propose(root: Path, duration: float) -> list[dict[str, Any]]:
             if item["start"] is not None
         ]
         sung_until = earlier[-1] if earlier else 0.0
+        # A tag before any sung line opens the song.
+        if not any(not item["tag"] for item in rows[:position]):
+            proposed.append({"start": 0.0, "name": row["tag"]})
+            continue
         if start is None:
             start = earlier[-1] if earlier else None
         if start is None:
@@ -160,7 +164,9 @@ def propose(root: Path, duration: float) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
     for item in proposed:
         last = sections[-1]["start"] if sections else None
-        if item["start"] <= (last if last is not None else -1) + MIN_SECTION_SECONDS:
+        if last is not None and item["start"] - last < MIN_SECTION_SECONDS:
+            # Tags with nothing between them: the later one names that moment.
+            sections[-1]["name"] = item["name"]
             continue
         if duration - item["start"] < MIN_SECTION_SECONDS:
             continue

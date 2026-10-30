@@ -7,7 +7,10 @@ truthful coarse map, not a per-word alignment.
 
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 from mp3_to_videoclip.models import Lyrics, Segment
@@ -29,6 +32,28 @@ def save_lyrics(root: Path, lyrics: Lyrics) -> None:
         if not archive.exists():
             write_json(archive, value)
     write_json(previous, lyrics.model_dump())
+
+
+def embedded_lyrics(audio: Path) -> str | None:
+    """The words a file carries in its own tags, as Suno's MP3s do. Only ever read."""
+    probe = shutil.which("ffprobe")
+    if probe is None:
+        return None
+    try:
+        result = subprocess.run(
+            [probe, "-v", "error", "-show_entries", "format_tags", "-of", "json", str(audio)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        tags = json.loads(result.stdout).get("format", {}).get("tags", {})
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    for key, value in tags.items():
+        if key.lower().startswith(("lyrics", "unsyncedlyrics")) and str(value).strip():
+            return str(value).strip()
+    return None
 
 
 def parse_text(text: str) -> Lyrics:

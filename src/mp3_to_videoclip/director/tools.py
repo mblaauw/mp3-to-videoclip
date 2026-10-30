@@ -404,8 +404,24 @@ def _dispatch(
         }
 
     if name == "get_lyrics":
+        from mp3_to_videoclip.domain import lyric_timing
+
         path = root / "work" / "lyrics.json"
-        return read_json(path) if path.is_file() else {"available": False}
+        if not path.is_file():
+            return {"available": False}
+        lines = lyric_timing.view(root)["lines"]
+        timed = [
+            {"text": line["text"], "start": line["start"], "source": line["source"]}
+            for line in lines
+            if line["start"] is not None
+        ]
+        if not timed:
+            return read_json(path)
+        return {
+            **read_json(path),
+            "line_times": timed,
+            "line_times_note": "Automatic times are estimates; tapped times are the owner's.",
+        }
 
     if name == "get_treatments":
         treatments = P.load_treatments(root)

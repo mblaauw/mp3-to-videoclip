@@ -36,6 +36,11 @@ def test_tags_are_headings_with_no_time(tmp_path):
         )
 
 
+def test_production_notes_in_a_tag_stay_out_of_its_name(tmp_path):
+    root = _song(tmp_path, ["[Intro: spoken low, vinyl crackle]", "[Verse 1, 40% energy]", "one"])
+    assert [row["tag"] for row in lyric_timing.view(root)["lines"]] == ["Intro", "Verse 1", None]
+
+
 def test_times_survive_a_reload_and_leave_the_words_alone(tmp_path):
     root = _song(tmp_path, LINES)
     before = read_json(root / "work/lyrics.json")
@@ -116,3 +121,23 @@ def test_a_multi_line_segment_gives_no_line_a_time(tmp_path):
         },
     )
     assert [row["start"] for row in lyric_timing.view(tmp_path)["lines"]] == [None, None]
+
+
+def test_embedded_lyrics_are_read_from_the_files_tags(tmp_path, monkeypatch):
+    from mp3_to_videoclip.domain import lyrics
+
+    monkeypatch.setattr(lyrics.shutil, "which", lambda _name: "/usr/bin/ffprobe")
+
+    class Done:
+        stdout = '{"format": {"tags": {"title": "x", "lyrics-eng": "[Verse]\\nHello"}}}'
+
+    monkeypatch.setattr(lyrics.subprocess, "run", lambda *_a, **_k: Done())
+    assert lyrics.embedded_lyrics(tmp_path / "song.mp3") == "[Verse]\nHello"
+
+    class Empty:
+        stdout = '{"format": {"tags": {"title": "x"}}}'
+
+    monkeypatch.setattr(lyrics.subprocess, "run", lambda *_a, **_k: Empty())
+    assert lyrics.embedded_lyrics(tmp_path / "song.mp3") is None
+    monkeypatch.setattr(lyrics.shutil, "which", lambda _name: None)
+    assert lyrics.embedded_lyrics(tmp_path / "song.mp3") is None

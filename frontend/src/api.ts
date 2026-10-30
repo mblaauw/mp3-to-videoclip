@@ -957,6 +957,8 @@ export const api = {
     request<{ job_id: string }>(`/api/projects/${slug}/lyric-tools/setup`, { method: "POST" }),
   runLyricTiming: (slug: string) =>
     request<{ job_id: string }>(`/api/projects/${slug}/lyric-timing/run`, { method: "POST" }),
+  embeddedLyrics: (slug: string) =>
+    request<{ text: string | null }>(`/api/projects/${slug}/embedded-lyrics`),
   lyricDraft: (slug: string) => request<{ lines: string[] }>(`/api/projects/${slug}/lyric-draft`),
   runLyricDraft: (slug: string) =>
     request<{ job_id: string }>(`/api/projects/${slug}/lyric-draft/run`, { method: "POST" }),

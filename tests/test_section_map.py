@@ -129,22 +129,48 @@ def test_a_proposal_uses_first_words_last_words_and_nearby_edges(root):
 
 def test_a_finer_detected_edge_can_be_used(root):
     write_json(root / "work/music-deep.json", {"sections": [{"time": 48.0}, 49.5]})
-    _lyrics(root, ["[Hook]", "one"])
-    lyric_timing.save(
-        root, {"lines": [{"index": 1, "start": 52.0, "source": "auto"}]}, duration=100
-    )
-    assert section_map.propose(root, 100)[1] == {"start": 49.5, "name": "Hook"}
-
-
-def test_an_edge_never_pulls_a_section_back_across_a_sung_word(root):
-    write_json(root / "work/music-deep.json", {"sections": [{"time": 43.0}, {"time": 74.0}]})
-    _lyrics(root, ["[Hook]", "one", "[Break]", "[Verse]", "two"])
+    _lyrics(root, ["first", "[Hook]", "one"])
     lyric_timing.save(
         root,
         {
             "lines": [
-                {"index": 1, "start": 40.0, "end": 46.0, "source": "auto"},
-                {"index": 4, "start": 76.0, "end": 80.0, "source": "auto"},
+                {"index": 0, "start": 5.0, "end": 8.0, "source": "auto"},
+                {"index": 2, "start": 52.0, "source": "auto"},
+            ]
+        },
+        duration=100,
+    )
+    assert section_map.propose(root, 100)[1] == {"start": 49.5, "name": "Hook"}
+
+
+def test_a_tag_before_any_sung_line_opens_the_song(root):
+    _lyrics(root, ["[Intro]", "one", "[Verse]", "two"])
+    lyric_timing.save(
+        root,
+        {
+            "lines": [
+                {"index": 1, "start": 6.0, "end": 8.0, "source": "auto"},
+                {"index": 3, "start": 20.0, "source": "auto"},
+            ]
+        },
+        duration=100,
+    )
+    assert [(item["start"], item["name"]) for item in section_map.propose(root, 100)] == [
+        (0.0, "Intro"),
+        (20.0, "Verse"),
+    ]
+
+
+def test_an_edge_never_pulls_a_section_back_across_a_sung_word(root):
+    write_json(root / "work/music-deep.json", {"sections": [{"time": 43.0}, {"time": 74.0}]})
+    _lyrics(root, ["first", "[Hook]", "one", "[Break]", "[Verse]", "two"])
+    lyric_timing.save(
+        root,
+        {
+            "lines": [
+                {"index": 0, "start": 5.0, "end": 8.0, "source": "auto"},
+                {"index": 2, "start": 40.0, "end": 46.0, "source": "auto"},
+                {"index": 5, "start": 76.0, "end": 80.0, "source": "auto"},
             ]
         },
         duration=100,

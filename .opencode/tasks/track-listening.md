@@ -94,6 +94,10 @@ section starts by ear.
    line times and the map, marked as estimates unless tapped. New cuts seed from the map.
    Docs, then the acceptance run.
 
+9. **Added during the build, the words in the MP3.** All four Suno MP3s here carry their
+   lyrics and tags in the file. When a film has no words, Track offers them with one click, to
+   read and save. Tag names drop production notes such as `[Intro: spoken low, ...]`.
+
 ## Not changing
 
 Money, rendering, image prompts and the meaning of approval hashes. The bytes of
@@ -140,3 +144,48 @@ No provider call is added; the tools run on this computer and the song isn't upl
 Suno's unofficial timing data, SongFormer and other automatic labelling, making tempo steer
 pacing, word-level highlighting, re-timing existing cuts to corrected sections, and replacing
 the paid transcription path.
+
+## Acceptance record, 30 Oct 2026
+
+Run on scratch copies; `projects/` was only read. Local tools only: no provider call, no
+upload, no spend. Tools were installed by the Studio's own button into a throwaway folder.
+
+**Against the owner's nine Stof en Stilte starts by ear, through the shipped code.**
+
+| Measure | Within 5 s | Typical gap | Worst gap |
+| --- | ---: | ---: | ---: |
+| First sung word of each known section | 8 / 9 | 0.2 s | 5.1 s (0:00, before the singing) |
+| Sections proposed from the MP3's own tags | 9 / 9 | 0.2 s | 4.0 s |
+
+The tags gave exactly nine sections, against 15 from the deep analysis. 63 of 67 lines were
+placed; a line needs half its words heard, which is stricter than the earlier test's 65.
+Stof en Stilte is archived, so this ran on the engine, not the screen.
+
+**Tree of Love, through the screen.** 35 of 36 lines. Sections 0:00, 0:32, 0:48 Instrumental
+Break, 1:17 Spoken Verse, 1:50 Spoken Hook, 2:10 Breakdown, 2:25 Instrumental Build, 2:54 Spoken
+Hook, 3:12 Outro. Reset restored the detected ten. Approval hashes for analysis, lyrics, brief
+and storyboard, plus `music.json`, `lyrics.json` and `edit.json`, were unchanged with times and
+a map in place.
+
+**Zero Bars, the fresh song, through the screen.** With the MP3's words: 44 of 46 lines,
+in order, 89% of words matched and 88% exact, and 12 sections from its tags. The two missed
+lines are the short "Hold still—" and "Silence—". A draft from the song, with no lyrics given,
+was usable but wrong in places ("I might want help" for "One held breath"), and was not saved until told.
+
+**Also checked.** Setup after stating its download, 40 s with caches. A run took about 4m30 with
+the Studio running. Stop on a real run ended the worker within seconds, marked the job cancelled
+and left no partial file. Dragging an edge with the mouse, keyboard moves, join, Undo, Undo of a
+Reset, name offers, tap-along with Undo and 0.75×, nudging, and no sideways scroll at 375 px.
+
+**Found while testing, and fixed.** Deep edges pulled sections back across sung lines, so an edge
+now stops at the last sung word. A released edge compared with its dragged position, so a mouse
+drag saved nothing.
+
+**Saving words re-opens approvals, as it always has.** On a copy of Zero Bars, adding the words
+turned Story to Changed and later stages to Not ready, because `lyrics.json` is in the chain.
+Text and pictures don't change. Save now says so. Whether to do that to the real Zero Bars is the
+owner's call: its story was approved with no words.
+
+**Not proven.** Line timing on the Zero Bars and Stof en Stilte copies wasn't judged by ear.
+Instrumental starts have no reference. No live Writer turn has used line times or a section map.
+The promo, advert and instrumental views weren't re-tested on screen; their logic moved unchanged.
