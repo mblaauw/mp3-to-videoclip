@@ -93,3 +93,14 @@ stages' layout. Only `edits.py`'s noise rule changes on the backend, plus the op
 - **Many saves.** Each join writes a history snapshot. Bulk changes save once.
 - **Scope.** Director proposal cards, lyric-to-section links and a type-scale cleanup
   are separate work.
+
+## Progress
+
+- T1–T6 committed, one each. T7: the narrow layouts, focus release after mouse
+  clicks so Space plays, 55 unused CSS rules removed, docs updated.
+- Found while building: the stills approval hash includes the whole cut
+  (`production.py`), so every cut change un-approves the stills. Hashes were out of
+  scope, so Film now offers that sign-off in one click when every still is kept.
+- `docs/screenshots/film-cut-1440.webp` is removed, not replaced: this repo is
+  public and a current screenshot would show a large frame of an unreleased film.
+  The owner decides whether to publish one or use neutral stills.

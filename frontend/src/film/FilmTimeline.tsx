@@ -15,7 +15,7 @@ import { Waveform } from "../spine/Waveform";
 import { imageUrl } from "../storyboard/ShotThumb";
 import type { CutNote } from "./cutNotes";
 import { editBoundaryLimits, moveEditBoundary } from "./editTimeline";
-import { joinSelected, type FilmSelection } from "./selection";
+import { joinSelected, releaseMouseFocus, type FilmSelection } from "./selection";
 
 /** Past this many pixels a press on a seam is a retime, not a click. */
 const DRAG_THRESHOLD = 4;
@@ -145,6 +145,7 @@ export function FilmTimeline({
     const held = press.current;
     press.current = null;
     if (!held || held.index !== index) return;
+    event.currentTarget.blur();
     if (held.moved) {
       commitMove(index, frameAt(event.clientX, index));
       setDrag(null);
@@ -239,7 +240,10 @@ export function FilmTimeline({
                     width: `${((end - start) / duration) * 100}%`,
                     background: sectionColor(index),
                   }}
-                  onClick={() => player.seek(start)}
+                  onClick={(event) => {
+                    releaseMouseFocus(event);
+                    player.seek(start);
+                  }}
                 >
                   {sectionName(section, index)}
                 </button>
@@ -260,7 +264,8 @@ export function FilmTimeline({
                   style={{ left: `calc(${(note.frame / total) * 100}% + ${note.shotId ? 0 : 5}px)` }}
                   title={note.title}
                   aria-label={`Note: ${note.title}`}
-                  onClick={() => {
+                  onClick={(event) => {
+                    releaseMouseFocus(event);
                     onSelectNote(note.index);
                     player.seek(note.frame / fps);
                   }}
@@ -284,7 +289,8 @@ export function FilmTimeline({
                   }}
                   aria-label={`${shot.id}: ${shot.message || shot.purpose}`}
                   title={`${shot.id}, ${((end - start) / fps).toFixed(1)} s`}
-                  onClick={() => {
+                  onClick={(event) => {
+                    releaseMouseFocus(event);
                     onSelectShot(shot.id);
                     player.seek(start / fps);
                   }}
@@ -337,7 +343,10 @@ export function FilmTimeline({
                     width: `${(window.frames / total) * 100}%`,
                   }}
                   title={windowLabel(window)}
-                  onClick={() => player.seek((window.start_frame + window.frames / 2) / fps)}
+                  onClick={(event) => {
+                    releaseMouseFocus(event);
+                    player.seek((window.start_frame + window.frames / 2) / fps);
+                  }}
                 >
                   {windowLabel(window)}
                 </button>

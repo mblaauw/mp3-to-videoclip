@@ -6,6 +6,14 @@ export type FilmSelection =
   | { kind: "delivery" }
   | null;
 
+/**
+ * After a mouse click, leave focus free so Space plays the film. A keyboard
+ * activation reports no click count and keeps its place.
+ */
+export function releaseMouseFocus(event: { detail: number; currentTarget: { blur: () => void } }) {
+  if (event.detail > 0) event.currentTarget.blur();
+}
+
 /** A plain click picks one join; a modified click adds or removes it. */
 export function selectJoin(current: FilmSelection, id: string, additive: boolean): FilmSelection {
   if (!additive) return { kind: "join", ids: [id] };

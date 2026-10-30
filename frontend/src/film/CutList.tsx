@@ -1,6 +1,7 @@
 import { ArtifactRating } from "../ArtifactRating";
 import type { Stage } from "../shell/nextStep";
 import { ShotThumb } from "../storyboard/ShotThumb";
+import type { CutNote } from "./cutNotes";
 import { SeedCut } from "./SeedCut";
 import type { FilmData } from "./useFilmData";
 
@@ -15,9 +16,11 @@ function duration(seconds: number): string {
 
 export function CutList({
   film,
+  notes,
   onNavigate,
 }: {
   film: FilmData;
+  notes: CutNote[];
   onNavigate: (stage: Stage) => void;
 }) {
   const { slug, cut, board, groups, boardById, imageById, showEditFile } = film;
@@ -53,16 +56,13 @@ export function CutList({
                     ))}
                   </div>
                 )}
-                {cut.warnings.length > 0 && (
+                {notes.length > 0 && (
                   <details className="cut-findings warning-details">
                     <summary>
-                      {cut.warnings.length} warning{cut.warnings.length === 1 ? "" : "s"}
+                      {notes.length} {notes.length === 1 ? "note" : "notes"}
                     </summary>
-                    {cut.warnings.map((finding) => (
-                      <span key={`${finding.code}-${finding.shot_id || ""}-${finding.message}`}>
-                        {finding.shot_id ? `${finding.shot_id}: ` : ""}
-                        {finding.message}
-                      </span>
+                    {notes.map((note) => (
+                      <span key={note.index}>{note.title}</span>
                     ))}
                   </details>
                 )}

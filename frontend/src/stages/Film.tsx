@@ -270,7 +270,7 @@ export function FilmStage({
             {status}
           </div>
           <div className="film-scroll">
-            <CutList film={film} onNavigate={onNavigate} />
+            <CutList film={film} notes={notes} onNavigate={onNavigate} />
           </div>
         </>
       ) : (

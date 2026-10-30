@@ -18,7 +18,7 @@ import {
   TRANSITION_TYPES,
 } from "./editTimeline";
 import { SeedCut } from "./SeedCut";
-import type { FilmSelection } from "./selection";
+import { releaseMouseFocus, type FilmSelection } from "./selection";
 import type { FilmData } from "./useFilmData";
 
 const MOTIONS: { value: EditMotion["type"]; label: string }[] = [
@@ -289,7 +289,10 @@ function JoinPanel({
             key={option.value}
             aria-pressed={option.value === type}
             disabled={option.value !== "cut" && maxFrames < 1}
-            onClick={() => void pick(option.value)}
+            onClick={(event) => {
+              releaseMouseFocus(event);
+              void pick(option.value);
+            }}
           >
             {option.label}
           </button>
@@ -383,12 +386,13 @@ function ShotPanel({
                 type="button"
                 key={option.value}
                 aria-pressed={decision.motion.type === option.value}
-                onClick={() =>
+                onClick={(event) => {
+                  releaseMouseFocus(event);
                   void onChange(
                     setEditMotion(edit, id, option.value),
                     `${id} camera set to ${option.label}`,
-                  )
-                }
+                  );
+                }}
               >
                 {option.label}
               </button>
