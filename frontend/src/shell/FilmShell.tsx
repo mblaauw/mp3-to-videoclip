@@ -24,7 +24,7 @@ import { StoryStage } from "../stages/Story";
 import { StoryboardStage } from "../stages/Storyboard";
 import { TrackStage } from "../stages/Track";
 import { toast } from "../toast";
-import { Director } from "./Director";
+import { Director, type DirectorPrompt } from "./Director";
 import { ArchiveFilm } from "./ArchiveFilm";
 import { Library } from "./Library";
 import { NextStepBar } from "./NextStepBar";
@@ -198,7 +198,11 @@ function StageView({
   reserve,
   onNavigate,
   images,
+  board,
+  onStoryBands,
 }: {
+  board: Storyboard | null;
+  onStoryBands: (bands: { start: number; end: number }[]) => void;
   filmSide: HTMLElement | null;
   filmLine: HTMLElement | null;
   filmFull: boolean;
@@ -229,6 +233,10 @@ function StageView({
         audioWindow={audioWindow}
         windowLocked={windowLocked}
         onIntakeChange={onIntakeChange}
+        music={music}
+        board={board}
+        images={images}
+        onBands={onStoryBands}
       />
     );
   if (stage === "storyboard")
@@ -304,6 +312,7 @@ function FilmShellContent({
   const [images, setImages] = useState<ImageShot[]>([]);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [board, setBoard] = useState<Storyboard | null>(null);
+  const [storyBands, setStoryBands] = useState<{ start: number; end: number }[]>([]);
   const [music, setMusic] = useState<Music | null>(null);
   const [intake, setIntake] = useState<IntakePayload | null>(null);
   const [audioWindow, setAudioWindow] = useState<AudioWindow | null>(null);
@@ -327,7 +336,7 @@ function FilmShellContent({
   const [filmFull, setFilmFull] = useState(false);
   const [deliveryAsk, setDeliveryAsk] = useState(0);
   const [titlesReady, setTitlesReady] = useState(false);
-  const [directorPrompt, setDirectorPrompt] = useState<{ text: string; at: number } | null>(null);
+  const [directorPrompt, setDirectorPrompt] = useState<DirectorPrompt | null>(null);
 
   const loadEpoch = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -420,10 +429,15 @@ function FilmShellContent({
 
   useEffect(() => {
     const ask = (event: Event) => {
-      const detail = (event as CustomEvent<{ text?: string }>).detail;
+      const detail = (event as CustomEvent<{ text?: string; send?: boolean; task?: string }>).detail;
       setInspectorShot(null);
       setDirectorOpen(true);
-      setDirectorPrompt({ text: detail?.text || "", at: Date.now() });
+      setDirectorPrompt({
+        text: detail?.text || "",
+        at: Date.now(),
+        send: detail?.send,
+        task: detail?.task,
+      });
     };
     window.addEventListener("studio:ask-director", ask);
     return () => window.removeEventListener("studio:ask-director", ask);
@@ -535,6 +549,9 @@ function FilmShellContent({
     }
     if (action.target === "brief") {
       if (stage !== "story") onNavigate("story");
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("studio:story-part", { detail: "concept" }));
+      }, 0);
       scrollTo(".brief-card", 180);
       return;
     }
@@ -574,8 +591,8 @@ function FilmShellContent({
           budget={budget}
           stageStates={shellStates}
           next={
-            stage === "film" ? (
-              <NextStepBar compact step={step} ready={approvalsLoaded} onAction={act} />
+            stage === "film" || stage === "story" ? (
+              <NextStepBar compact allowNote={stage === "story"} step={step} ready={approvalsLoaded} onAction={act} />
             ) : null
           }
           onNavigate={onNavigate}
@@ -597,7 +614,7 @@ function FilmShellContent({
         />
         <main className="shell-main">
           {loadError && <p role="alert">Could not refresh film data: {loadError}</p>}
-          {stage !== "film" && (
+          {stage !== "film" && stage !== "story" && (
             <NextStepBar
               step={step}
               ready={approvalsLoaded}
@@ -629,6 +646,8 @@ function FilmShellContent({
                 reserve={reserve}
                 onNavigate={onNavigate}
                 images={images}
+                board={board}
+                onStoryBands={setStoryBands}
               />
             </div>
           </div>
@@ -676,6 +695,7 @@ function FilmShellContent({
           board={spineBoard}
           music={music}
           images={images}
+          bands={stage === "story" ? storyBands : []}
           audioWindow={audioWindow}
           sourcePeaks={intake?.peaks || []}
           sourceDuration={intake?.source_duration || project.duration || 0}

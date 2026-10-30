@@ -12,13 +12,14 @@ import io
 import json
 from pathlib import Path
 
+import pytest
 from api_support import add_assets, make_api_project
 from PIL import Image
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import services
 from mp3_to_videoclip.director import tools
-from mp3_to_videoclip.storage import digest, read_json
+from mp3_to_videoclip.storage import digest, read_json, write_json
 
 
 def _project(tmp_path: Path) -> Path:
@@ -474,7 +475,7 @@ def test_update_treatments_validates_and_writes_three_distinct_routes(tmp_path):
             )
         )
     )
-    assert "different structures" in failed["error"]
+    assert "different structure" in failed["error"]
 
 
 def test_concept_limits_accept_long_fields_and_advertise_the_same_bound(tmp_path):
@@ -533,3 +534,124 @@ def test_concept_limits_accept_long_fields_and_advertise_the_same_bound(tmp_path
         "risk": 800,
     }
     assert {name: properties[name]["maxLength"] for name in limits} == limits
+
+
+def _route(index, structure, **fields):
+    route = {
+        "id": f"c{index}",
+        "title": f"Route {index}",
+        "structure": structure,
+        "logline": "A line.",
+        "why": "It fits.",
+        "world": "A world.",
+        "beats": [
+            {"start": at * 10.0, "end": (at + 1) * 10.0, "label": f"Beat {at}", "text": "It moves."}
+            for at in range(4)
+        ],
+        "signature_moment": "One image.",
+        "risk": "A risk.",
+    }
+    return {**route, **fields}
+
+
+@pytest.mark.parametrize("count", [1, 2, 3])
+def test_a_film_holds_one_to_three_concepts(tmp_path, count):
+    root = tmp_path / "p"
+    root.mkdir()
+    structures = ("narrative", "performance", "symbolic")
+    routes = [_route(index, structures[index]) for index in range(count)]
+    saved = P.update_treatments(root, {"concepts": routes})
+    assert len(saved.concepts) == count
+    assert saved.concepts[0].beats[0].label == "Beat 0"
+    assert "shape" not in read_json(root / "work/treatments.json")["concepts"][0]
+
+
+def test_concept_counts_and_structures_are_still_refused(tmp_path):
+    root = tmp_path / "p"
+    root.mkdir()
+    with pytest.raises(ValueError, match="invalid"):
+        P.update_treatments(root, {"concepts": []})
+    four = [_route(index, f"structure {index}") for index in range(4)]
+    with pytest.raises(ValueError, match="invalid"):
+        P.update_treatments(root, {"concepts": four})
+    same = [_route(0, "narrative"), _route(1, "Narrative")]
+    with pytest.raises(ValueError, match="different structure"):
+        P.update_treatments(root, {"concepts": same})
+
+
+def test_concept_beats_must_be_ordered_and_inside_the_film(tmp_path):
+    root = tmp_path / "p"
+    root.mkdir()
+    write_json(root / "project.json", {"duration": 35.0})
+    with pytest.raises(ValueError, match="the film is 35.0 s"):
+        P.update_treatments(root, {"concepts": [_route(0, "narrative")]})
+    (root / "project.json").unlink()
+    crossing = _route(0, "narrative")
+    crossing["beats"][1]["start"] = 5.0
+    with pytest.raises(ValueError, match="without overlapping"):
+        P.update_treatments(root, {"concepts": [crossing]})
+    backwards = _route(0, "narrative")
+    backwards["beats"][0]["end"] = 0.0
+    with pytest.raises(ValueError):
+        P.update_treatments(root, {"concepts": [backwards]})
+
+
+def test_an_empty_chosen_id_from_the_writer_means_no_choice(tmp_path):
+    make_api_project(tmp_path)
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_treatments",
+                {
+                    "slug": "production",
+                    "concepts": [_route(0, "narrative", beats=[])],
+                    "chosen_id": "",
+                },
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "error" in result  # no beats and no shape is still refused
+    route = _route(0, "narrative", shape=["a", "b", "c", "d"], beats=[])
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_treatments",
+                {"slug": "production", "concepts": [route], "chosen_id": ""},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert result.get("chosen_id") is None and len(result["concepts"]) == 1
+
+
+def test_older_concepts_with_free_text_shape_still_read_and_keep_their_form(tmp_path):
+    root = tmp_path / "p"
+    root.mkdir()
+    old = [
+        {key: value for key, value in _route(index, name).items() if key != "beats"}
+        | {"shape": ["a", "b", "c", "d"]}
+        for index, name in enumerate(("narrative", "performance", "symbolic"))
+    ]
+    write_json(
+        root / "work/treatments.json", {"schema_version": 1, "concepts": old, "chosen_id": "c1"}
+    )
+    loaded = P.load_treatments(root)
+    assert loaded.chosen_id == "c1" and loaded.concepts[0].shape == ["a", "b", "c", "d"]
+    assert "beats" not in loaded.model_dump()["concepts"][0]
+
+
+def test_a_film_length_passed_as_shot_length_is_refused_before_it_locks_the_board(tmp_path):
+    root = make_api_project(tmp_path)
+    (root / P.STAGE_FILES["storyboard"]).unlink(missing_ok=True)
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "create_storyboard",
+                {"slug": "production", "seconds": 240},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "length of one shot" in result["error"]
+    assert not (root / P.STAGE_FILES["storyboard"]).exists()

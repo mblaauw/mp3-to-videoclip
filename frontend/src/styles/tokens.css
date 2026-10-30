@@ -50,6 +50,7 @@
   --t-34: 34px;   /* library title, film title on Film */
   --lh-tight: 1.2;
   --lh-ui: 1.45;
+  --read: Baskerville, "Baskerville Old Face", Georgia, serif; /* the story as text */
   --lh-read: 1.6; /* treatment and long text */
   --w-regular: 420;
   --w-medium: 540;

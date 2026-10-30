@@ -1,7 +1,7 @@
 """Offline checks for the frozen T3 eval inputs.
 
 The live Writer run is a separate, authorized step. These checks only validate
-what a run returns: three distinct concept structures, a complete board, the
+what a run returns: one to three distinct concept structures, a complete board, the
 advert's local kinds and claims that trace back to the intent.
 """
 
@@ -72,7 +72,7 @@ def concept_report(value: dict | Treatments) -> dict:
     return {
         "count": count,
         "distinct_structures": len(set(structures)),
-        "ok": count == 3 and len(set(structures)) == 3,
+        "ok": 1 <= count <= 3 and len(set(structures)) == count,
     }
 
 

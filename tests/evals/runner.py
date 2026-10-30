@@ -351,7 +351,11 @@ def _run_rows(runs: list[dict]) -> list[str]:
                 fixture=run["fixture"],
                 model=run["model"],
                 auto=_status(run["ok"]),
-                concepts=(f"{concepts.get('distinct_structures', 0)}/3" if writer else "—"),
+                concepts=(
+                    f"{concepts.get('distinct_structures', 0)}/{concepts.get('count', 0)}"
+                    if writer
+                    else "—"
+                ),
                 board=(f"{storyboard.get('shots', 0)} shots" if storyboard else "—"),
                 claims=("none" if claims.get("ok") else ", ".join(claims.get("invented", [])))
                 if claims

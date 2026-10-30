@@ -68,6 +68,24 @@ def test_a_protected_style_preset_states_the_core_rule(tmp_path):
     assert "This preset core is protected" not in ordinary
 
 
+def test_your_own_story_needs_no_concept_and_a_new_film_needs_one(tmp_path):
+    root = tmp_path / "p"
+    write_json(root / "project.json", {"kind": "music_video"})
+    write_json(root / "brief.json", {"intent": {"kind": "music_video", "objective": "x"}})
+    assert prompts.select_task(root, "story", "writer") == "concepts"
+    route = {"id": "c1", "structure": "narrative"}
+    write_json(root / "work/treatments.json", {"concepts": [route]})
+    assert prompts.select_task(root, "story", "writer") == "concepts"
+    write_json(root / "work/treatments.json", {"concepts": [route], "chosen_id": "c1"})
+    assert prompts.select_task(root, "story", "writer") == "script_mv"
+    (root / "work/treatments.json").unlink()
+    write_json(
+        root / "brief.json",
+        {"intent": {"kind": "music_video", "objective": "x"}, "treatment": "My own story."},
+    )
+    assert prompts.select_task(root, "story", "writer") == "script_mv"
+
+
 def test_every_writer_task_is_under_the_word_budget(tmp_path):
     root = make_api_project(tmp_path)
     for task in prompts.TASKS["writer"]:
@@ -103,6 +121,7 @@ def test_story_task_routing_follows_the_artifacts(tmp_path):
         "message": "out now",
         "cta": {"text": "Buy"},
     }
+    brief["treatment"] = ""
     write_json(root / "brief.json", brief)
     assert prompts.select_task(root, "story", "writer") == "concepts"
 

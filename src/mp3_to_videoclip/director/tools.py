@@ -45,6 +45,9 @@ def _tool(
     }
 
 
+# A skeleton cannot be rebuilt, and one giant shot cannot be split by update_shots.
+MAX_SKELETON_SHOT_SECONDS = 30
+
 TOOLS: list[dict] = [
     _tool("get_project", "Read the project summary.", {"slug": {"type": "string"}}, ["slug"]),
     _tool("get_brief", "Read the brief.", {"slug": {"type": "string"}}, ["slug"]),
@@ -71,18 +74,19 @@ TOOLS: list[dict] = [
     _tool("get_lyrics", "Read the lyrics.", {"slug": {"type": "string"}}, ["slug"]),
     _tool(
         "get_treatments",
-        "Read the three concepts and the chosen concept ID, if any.",
+        "Read the concepts and the chosen concept ID, if any.",
         {"slug": {"type": "string"}},
         ["slug"],
     ),
     _tool(
         "update_treatments",
-        "Write exactly three structurally different concepts. Returns the saved artifact.",
+        "Write one to three structurally different concepts, including any you keep. "
+        "Returns the saved artifact.",
         {
             "slug": {"type": "string"},
             "concepts": {
                 "type": "array",
-                "minItems": 3,
+                "minItems": 1,
                 "maxItems": 3,
                 "items": {
                     "type": "object",
@@ -93,11 +97,20 @@ TOOLS: list[dict] = [
                         "logline": {"type": "string", "maxLength": 300},
                         "why": {"type": "string", "maxLength": 1200},
                         "world": {"type": "string", "maxLength": 1200},
-                        "shape": {
+                        "beats": {
                             "type": "array",
                             "minItems": 4,
                             "maxItems": 6,
-                            "items": {"type": "string"},
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "start": {"type": "number"},
+                                    "end": {"type": "number"},
+                                    "label": {"type": "string", "maxLength": 60},
+                                    "text": {"type": "string", "maxLength": 400},
+                                },
+                                "required": ["start", "end", "label", "text"],
+                            },
                         },
                         "signature_moment": {"type": "string", "maxLength": 300},
                         "risk": {"type": "string", "maxLength": 800},
@@ -109,7 +122,7 @@ TOOLS: list[dict] = [
                         "logline",
                         "why",
                         "world",
-                        "shape",
+                        "beats",
                         "signature_moment",
                         "risk",
                     ],
@@ -118,6 +131,50 @@ TOOLS: list[dict] = [
             "chosen_id": {"type": "string"},
         },
         ["slug", "concepts"],
+    ),
+    _tool(
+        "get_idea",
+        "Read the user's newest pasted idea, exactly as written, and how it is sorted.",
+        {"slug": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
+        "sort_idea",
+        "Say which of the user's own sentences are story, style, rules or things to avoid. "
+        "Copy them word for word: anything not in the paste, used twice or left out is "
+        "refused. Saves them to the brief and returns the saved idea.",
+        {
+            "slug": {"type": "string"},
+            "story": {"type": "array", "items": {"type": "string"}},
+            "style": {"type": "array", "items": {"type": "string"}},
+            "rules": {"type": "array", "items": {"type": "string"}},
+            "avoid": {"type": "array", "items": {"type": "string"}},
+        },
+        ["slug", "story", "style", "rules", "avoid"],
+    ),
+    _tool(
+        "place_story",
+        "Say when each passage of brief.treatment plays. Together the passages must hold "
+        "every word of the treatment, unchanged and in order; times are seconds from the "
+        "film's first frame. Does not change the story or its approval.",
+        {
+            "slug": {"type": "string"},
+            "passages": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 40,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "start": {"type": "number"},
+                        "end": {"type": "number"},
+                        "text": {"type": "string"},
+                    },
+                    "required": ["start", "end", "text"],
+                },
+            },
+        },
+        ["slug", "passages"],
     ),
     _tool(
         "get_images",
@@ -229,11 +286,16 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "create_storyboard",
-        "Build a timing skeleton for the project.",
+        "Build the film's timing skeleton once; it cannot be rebuilt afterwards. Leave "
+        "seconds and timing out unless you have a reason: the defaults follow the music.",
         {
             "slug": {"type": "string"},
-            "seconds": {"type": "number"},
-            "timing": {"type": "string"},
+            "seconds": {
+                "type": "number",
+                "description": "Target length of ONE shot, not of the film.",
+                "maximum": MAX_SKELETON_SHOT_SECONDS,
+            },
+            "timing": {"type": "string", "enum": ["adaptive", "beats", "events", "free"]},
         },
         ["slug"],
     ),
@@ -352,9 +414,28 @@ def _dispatch(
         return treatments.model_dump() if treatments is not None else {"concepts": []}
 
     if name == "update_treatments":
-        return P.update_treatments(
-            root, {key: value for key, value in arguments.items() if key != "slug"}
-        ).model_dump()
+        payload = {key: value for key, value in arguments.items() if key != "slug"}
+        # A model with no choice to report tends to send an empty string for this field.
+        if not payload.get("chosen_id"):
+            payload["chosen_id"] = None
+        return P.update_treatments(root, payload).model_dump()
+
+    if name == "get_idea":
+        from mp3_to_videoclip import idea
+
+        return idea.latest(root) or {"available": False}
+
+    if name == "sort_idea":
+        from mp3_to_videoclip import idea
+
+        parts = {key: arguments.get(key) or [] for key in idea.PARTS}
+        return idea.apply_sort(root, parts, by="writer")
+
+    if name == "place_story":
+        from mp3_to_videoclip import story_beats
+
+        placement = story_beats.place_story(root, {"passages": arguments.get("passages")})
+        return {"placed": len(placement.passages)}
 
     if name == "get_images":
         return _get_images(root, arguments.get("shot_ids") or [])
@@ -384,6 +465,12 @@ def _dispatch(
         return {"changed": changed, "storyboard": board.model_dump()}
 
     if name == "create_storyboard":
+        seconds = arguments.get("seconds")
+        if seconds is not None and seconds > MAX_SKELETON_SHOT_SECONDS:
+            raise ValueError(
+                f"seconds is the length of one shot, at most {MAX_SKELETON_SHOT_SECONDS}; "
+                "leave it out to follow the music"
+            )
         board = P.skeleton(
             root,
             arguments.get("seconds"),

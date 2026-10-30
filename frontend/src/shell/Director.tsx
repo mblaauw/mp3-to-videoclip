@@ -37,6 +37,9 @@ type StreamEvent = {
   payload?: Record<string, unknown>;
 };
 
+/** Text for the composer, or with `send` a Writer job a button has already asked for. */
+export type DirectorPrompt = { text: string; at: number; send?: boolean; task?: string };
+
 const TOOL_LABEL: Record<string, string> = {
   get_project: "Read the project",
   get_brief: "Read the story",
@@ -47,6 +50,9 @@ const TOOL_LABEL: Record<string, string> = {
   get_lyrics: "Read the lyrics",
   get_treatments: "Read the concepts",
   update_treatments: "Rewrote the concepts",
+  get_idea: "Read your idea",
+  sort_idea: "Sorted your idea",
+  place_story: "Put the story on the song",
   get_images: "Looked at the pictures",
   update_brief: "Changed the story",
   update_shots: "Changed the storyboard",
@@ -63,6 +69,7 @@ const UNDO_ARTIFACT: Record<string, string> = {
   update_shots: "storyboard",
   update_edit: "edit",
   update_treatments: "treatments",
+  sort_idea: "brief",
 };
 
 const MONEY_TOOLS = new Set(["generate_images", "transcribe_lyrics"]);
@@ -321,7 +328,7 @@ export function Director({
   slug: string;
   stage: Stage;
   open: boolean;
-  prefill?: { text: string; at: number } | null;
+  prefill?: DirectorPrompt | null;
   selectedShots?: string[];
   onClose: () => void;
   onSettings: () => void;
@@ -340,6 +347,7 @@ export function Director({
   }, [busy, onBusyChange]);
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<Role>(defaultRole);
+  const [historyFor, setHistoryFor] = useState<Role | null>(null);
   const [gateway, setGateway] = useState("opencode");
   const [models, setModels] = useState<{ writer: string; editor: string }>({
     writer: "the configured Writer",
@@ -378,17 +386,39 @@ export function Director({
   }, []);
 
   useEffect(() => {
-    if (!prefill?.text) return;
+    if (!prefill?.text || prefill.send) return;
     setText(prefill.text);
     const element = composerRef.current;
     if (element) {
       element.focus();
       element.setSelectionRange(prefill.text.length, prefill.text.length);
     }
-  }, [prefill?.at, prefill?.text]);
+  }, [prefill?.at, prefill?.send, prefill?.text]);
+
+  // A job from a button is the Writer's, and waits for that thread and any reply in progress.
+  const sentPrompt = useRef<number | null>(null);
+  useEffect(() => {
+    if (!prefill?.send || sentPrompt.current === prefill.at) return;
+    if (role !== "writer") {
+      if (!busy) setRole("writer");
+      return;
+    }
+    if (busy || historyFor !== "writer") return;
+    sentPrompt.current = prefill.at;
+    void send(prefill.text, prefill.task);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.at, prefill?.send, role, busy, historyFor]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("studio:writer-busy", { detail: busy }));
+    return () => {
+      if (busy) window.dispatchEvent(new CustomEvent("studio:writer-busy", { detail: false }));
+    };
+  }, [busy]);
 
   useEffect(() => {
     let live = true;
+    setHistoryFor(null);
     api
       .chat(slug, role)
       .then((data) => {
@@ -420,9 +450,12 @@ export function Director({
           }
         }
         setItems(restored);
+        setHistoryFor(role);
       })
       .catch(() => {
-        if (live) setItems([]);
+        if (!live) return;
+        setItems([]);
+        setHistoryFor(role);
       });
     return () => {
       live = false;
@@ -517,7 +550,7 @@ export function Director({
     });
   };
 
-  const send = async (override?: string) => {
+  const send = async (override?: string, task?: string) => {
     const message = (override ?? text).trim();
     if (!message || busy) return;
     if (override === undefined) setText("");
@@ -542,6 +575,7 @@ export function Director({
           message,
           stage,
           role,
+          ...(task ? { task } : {}),
           context: {
             stage,
             time: Math.max(0, Number(player.current()) || 0),
