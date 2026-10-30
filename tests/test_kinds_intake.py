@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from mp3_to_videoclip import kinds, profiles, styles
+from mp3_to_videoclip import kinds, profiles, story_beats, styles
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.domain import intake
 from mp3_to_videoclip.models import Brief, Intent
-from mp3_to_videoclip.storage import read_json, write_json
+from mp3_to_videoclip.storage import digest, read_json, write_json
 
 EXAMPLE_INTENT = {
     "kind": "advert",
@@ -200,6 +200,70 @@ def test_apply_intake_updates_window_and_invalidates_stale_measurement(tmp_path,
     assert result["project"].style_preset == "brand-graphic-v1"
     assert result["brief"].creative.look == styles.preset("brand-graphic-v1").look
     assert not (root / "work" / "music.json").exists()
+
+
+def _placed_promo(tmp_path: Path) -> tuple[Path, dict]:
+    created = intake.create_from_upload(
+        tmp_path / "projects",
+        _source(tmp_path),
+        title="Placed",
+        kind="promo",
+        length_seconds=30,
+    )
+    root = created["root"]
+    P.apply_intake(root, audio_window={"start": 10, "end": 40, "fade_in": 0, "fade_out": 1.5})
+    P.update_brief(root, {"treatment": "One walks.\n\nTwo runs."})
+    placement = {
+        "passages": [
+            {"start": 0, "end": 10, "text": "One walks."},
+            {"start": 10, "end": 20, "text": "Two runs."},
+        ]
+    }
+    story_beats.place_story(root, placement)
+    return root, read_json(root / story_beats.PATH)
+
+
+def test_a_same_length_window_move_unplaces_the_story_and_keeps_the_placement(tmp_path, fake_probe):
+    root, placed = _placed_promo(tmp_path)
+    assert all(item["start"] is not None for item in story_beats.passages(root))
+
+    result = P.apply_intake(
+        root, audio_window={"start": 50, "end": 80, "fade_in": 0, "fade_out": 1.5}
+    )
+
+    assert result["project"].duration == 30.0
+    assert not (root / story_beats.PATH).exists()
+    items = story_beats.passages(root)
+    assert [item["text"] for item in items] == ["One walks.", "Two runs."]
+    assert all(item["start"] is None and item["end"] is None for item in items)
+    assert read_json(root / f"work/story-beats-history/{digest(placed)}.json") == placed
+
+
+def test_a_new_fade_plays_the_same_music_so_the_story_stays_placed(tmp_path, fake_probe):
+    root, placed = _placed_promo(tmp_path)
+    P.apply_intake(root, audio_window={"start": 10, "end": 40, "fade_in": 2, "fade_out": 3})
+    assert read_json(root / story_beats.PATH) == placed
+
+
+def test_a_refused_intake_leaves_the_story_placed(tmp_path, fake_probe):
+    root, placed = _placed_promo(tmp_path)
+    with pytest.raises(ValueError, match="intent is invalid"):
+        P.apply_intake(
+            root,
+            audio_window={"start": 50, "end": 80, "fade_in": 0, "fade_out": 1.5},
+            intent={"length_seconds": "long"},
+        )
+    assert read_json(root / story_beats.PATH) == placed
+    assert P.load_project(root).audio_window.start == 10.0
+
+
+def test_a_damaged_placement_refuses_the_move_rather_than_losing_the_file(tmp_path, fake_probe):
+    root, _ = _placed_promo(tmp_path)
+    (root / story_beats.PATH).write_text("{not json")
+    with pytest.raises(ValueError):
+        P.apply_intake(root, audio_window={"start": 50, "end": 80, "fade_in": 0, "fade_out": 1.5})
+    assert (root / story_beats.PATH).read_text() == "{not json"
+    assert P.load_project(root).audio_window.start == 10.0
 
 
 def test_window_change_is_refused_once_a_storyboard_exists(tmp_path, fake_probe):
