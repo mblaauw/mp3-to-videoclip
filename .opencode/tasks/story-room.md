@@ -136,6 +136,21 @@ of a 30 s film refused, the Director drawer below 1180 px, no sideways scroll at
 after a mouse click. The Studio's skeleton route gave 48 shots from the approved story with the
 approval unchanged.
 
-**Not proven live.** The Writer filling a storyboard from a placed story, and one concept from
-the music. Sorting varied a little between runs ("No lip-sync." went to avoid once and rules
+**Two more live turns, authorized by the owner the same day, each run alone with a watchdog.**
+
+9. One concept from the music on a 30 s promo: passed in 55 s, with six beats inside the film,
+   no errors, and the title and artist left as questions rather than invented. The earlier
+   stall did not recur; its cause is still unknown.
+10. Storyboard from a placed story: **no board**. The hand-built fixture had an empty cast, so
+    the Writer wrote a profile first, which un-approved the story, and it stopped to ask for
+    approval, correctly. Answering would have been an eleventh turn. Story, style, direction and
+    the sorted avoid lines came through intact, and the placement held.
+
+**Found in turn 10, older than this phase.** The Writer set `permission_confirmed: true` on an
+invented character by itself. `profile.md` forbids that, but nothing enforces it.
+
+**Not proven live.** The Writer filling a storyboard, so the `create_storyboard` fix is untested
+against the model. The Studio's own skeleton route does work. The Writer also cannot see the
+story's timings when it makes the board: neither the storyboard task nor its context reads
+`work/story-beats.json`. Sorting varied a little between runs ("No lip-sync." went to avoid once and rules
 once), which moving a sentence covers.
