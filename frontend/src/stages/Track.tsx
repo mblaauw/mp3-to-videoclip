@@ -48,7 +48,6 @@ export function TrackStage({ slug }: { slug: string }) {
   const [editing, setEditing] = useState(false);
   const [lyricsSaving, setLyricsSaving] = useState(false);
   const [modeSaving, setModeSaving] = useState(false);
-  const [transcribeNote, setTranscribeNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savedTimer = useRef<number | null>(null);
 
@@ -76,7 +75,6 @@ export function TrackStage({ slug }: { slug: string }) {
     setNames([]);
     setEditing(false);
     setDraft("");
-    setTranscribeNote(false);
     void load();
     return () => { loadEpoch.current += 1; };
   }, [load]);
@@ -398,22 +396,7 @@ export function TrackStage({ slug }: { slug: string }) {
                       Cancel
                     </button>
                   )}
-                  {!hasLyrics && !editing && (
-                    <button
-                      type="button"
-                      className="ui-btn ui-btn--small ui-btn--quiet"
-                      onClick={() => setTranscribeNote(true)}
-                    >
-                      Transcribe instead · $0.05
-                    </button>
-                  )}
                 </div>
-                {!hasLyrics && !editing && transcribeNote && (
-                  <p className="hint">
-                    Transcription uploads the song and costs about $0.05. It is not enabled in
-                    this build, so paste the words above instead.
-                  </p>
-                )}
               </>
             )}
           </section>

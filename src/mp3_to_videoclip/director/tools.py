@@ -314,7 +314,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "transcribe_lyrics",
-        "Start a paid transcription when the user has no lyrics to paste.",
+        "Price a paid transcription. It cannot be run from the Studio.",
         {"slug": {"type": "string"}, "language": {"type": "string"}},
         ["slug"],
     ),
@@ -619,7 +619,10 @@ def _transcribe(root, arguments, runner):
         return {"needs_budget": True, "quote": quote, "decision": decision}
     # Uploading personal audio is a separate consent; the director cannot give it.
     return {
-        "needs_confirmation": "the source audio will be uploaded; confirm transcription in the Track stage",
+        "needs_confirmation": (
+            "transcription uploads the source audio and can't be started in the Studio; ask the "
+            "owner to paste the words in Track, or to run it from the command line"
+        ),
         "quote": {key: quote.get(key) for key in ("id", "reserve_total_usd", "language")},
     }
 

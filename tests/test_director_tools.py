@@ -146,6 +146,7 @@ def test_transcription_never_uploads_audio_from_chat(tmp_path, monkeypatch):
     runner = FakeRunner()
     result = json.loads(asyncio.run(tools.dispatch("transcribe_lyrics", {"slug": "demo"}, runner)))
     assert "needs_confirmation" in result
+    assert "can't be started in the Studio" in result["needs_confirmation"]
     assert runner.submitted == []
 
 
