@@ -31,6 +31,7 @@ import httpx
 from mp3_to_videoclip.storage import read_optional, write_json
 
 from .conversation import append_message
+from .llm import IDLE_LIMIT, NOTHING_LOST, stall_message
 from .loop import TurnEvent
 
 WRITER_MODEL = "openai/gpt-6.1-sol"
@@ -40,6 +41,10 @@ MAX_VERSION = (2, 2, 0)
 HEALTH_TIMEOUT = 20.0
 STOP_GRACE = 5.0
 WARMUP_DELAY = 0.5
+TURN_LIMIT = 900.0
+# The event stream opens a tool's arguments and then says nothing until they are
+# complete, so an open tool call gets longer than the plain silence limit.
+TOOL_INPUT_IDLE_LIMIT = 300.0
 
 WRITER_SYSTEM = (
     "You are the Studio Writer: concepts, scripts, storyboards, shot prompts and "
@@ -481,6 +486,13 @@ def _text_content(content) -> str:
     ).strip()
 
 
+async def _interrupt(client: OpenCodeClient, session_id: str) -> None:
+    try:
+        await asyncio.wait_for(client.interrupt(session_id), STOP_GRACE)
+    except Exception:  # noqa: BLE001 - stopping must never mask the turn
+        pass
+
+
 async def run_gateway_turn(
     client: OpenCodeClient,
     root: Path,
@@ -490,7 +502,9 @@ async def run_gateway_turn(
     context: str,
     *,
     model: str,
-    timeout: float = 900.0,
+    timeout: float = TURN_LIMIT,
+    idle_limit: float = IDLE_LIMIT,
+    tool_input_idle_limit: float = TOOL_INPUT_IDLE_LIMIT,
     warmup_delay: float = WARMUP_DELAY,
     prompt_meta: dict | None = None,
 ) -> AsyncIterator[TurnEvent]:
@@ -498,7 +512,9 @@ async def run_gateway_turn(
 
     The OpenCode session is reused per production and role until the model
     changes. The event stream is opened before the prompt so the first delta
-    cannot be lost. Cancelling the consumer interrupts the gateway execution.
+    cannot be lost. Cancelling the consumer interrupts the gateway execution, and
+    so does silence: only this session's events count as life, never heartbeats or
+    another session's work.
     """
     wait_for_mcp = getattr(client, "wait_for_mcp", None)
     if wait_for_mcp is not None:
@@ -533,90 +549,138 @@ async def run_gateway_turn(
     done = False
     assistant_text = ""
     names: dict[str, str] = {}
+    writing: set[str] = set()
+    limit = idle_limit
+
+    async def ended(message: str) -> TurnEvent:
+        # Stop the gateway first, so the turn is over before it says so. The text
+        # already shown stays on record.
+        nonlocal done
+        done = True
+        await _interrupt(client, session_id)
+        if assistant_text.strip():
+            append_message(
+                root,
+                {"role": "assistant", "content": assistant_text, "name": role, "interrupted": True},
+                agent=role,
+            )
+        return TurnEvent(
+            kind="done", text=assistant_text, payload={"error": message, "stalled": True}
+        )
+
+    clock = asyncio.get_running_loop().time
+    turn_ends = clock() + timeout
     try:
-        async for event in events:
+        connected = clock() + idle_limit
+        while True:
+            event = await asyncio.wait_for(anext(events), connected - clock())
             if event.get("type") == "server.connected":
                 break
         await client.prompt(session_id, prompt_text)
 
-        async with asyncio.timeout(timeout):
-            async for event in events:
-                kind = event.get("type", "")
-                data = event.get("data") or {}
-                if data.get("sessionID") not in (None, session_id):
-                    continue
+        last_heard = clock()
+        while True:
+            limit = tool_input_idle_limit if writing else idle_limit
+            event = await asyncio.wait_for(
+                anext(events), min(last_heard + limit, turn_ends) - clock()
+            )
+            kind = event.get("type", "")
+            data = event.get("data") or {}
+            if data.get("sessionID") not in (None, session_id):
+                continue
+            alive = kind.startswith(("session.", "permission."))
+            if alive:
+                last_heard = clock()
 
-                if kind == "session.text.delta":
-                    delta = str(data.get("delta") or "")
-                    if delta:
-                        assistant_text += delta
-                        yield TurnEvent(kind="text", text=delta)
-                elif kind == "session.text.ended" and not assistant_text:
-                    text = str(data.get("text") or "")
-                    if text:
-                        assistant_text = text
-                        yield TurnEvent(kind="text", text=text)
-                elif kind == "session.tool.input.started":
-                    names[str(data.get("id"))] = str(data.get("name") or "tool")
-                elif kind == "session.tool.called":
-                    name = _tool_name(names, data)
-                    arguments = json.dumps(data.get("input") or {}, ensure_ascii=False)
-                    yield TurnEvent(kind="tool", tool=name, arguments=arguments)
-                elif kind == "session.tool.success":
-                    name = _tool_name(names, data)
-                    result = _text_content(data.get("content"))
-                    append_message(
-                        root,
-                        {"role": "tool", "name": name, "content": result[:4000]},
-                        agent=role,
-                    )
-                    yield TurnEvent(kind="tool", tool=name, result=result)
-                elif kind == "session.tool.error":
-                    name = _tool_name(names, data)
-                    result = _text_content(data.get("content")) or "tool failed"
-                    yield TurnEvent(kind="tool", tool=name, result=result)
-                elif kind == "permission.asked":
-                    yield TurnEvent(kind="permission", payload=data)
-                elif kind == "session.execution.succeeded":
-                    append_message(
-                        root,
-                        {"role": "assistant", "content": assistant_text, "name": role},
-                        agent=role,
-                    )
-                    done = True
-                    yield TurnEvent(kind="done", text=assistant_text)
-                    return
-                elif kind == "session.execution.interrupted":
-                    append_message(
-                        root,
-                        {
-                            "role": "assistant",
-                            "content": assistant_text,
-                            "name": role,
-                            "interrupted": True,
-                        },
-                        agent=role,
-                    )
-                    done = True
-                    yield TurnEvent(kind="done", text=assistant_text, payload={"interrupted": True})
-                    return
-                elif kind == "session.execution.failed":
-                    done = True
-                    error = data.get("error")
-                    if isinstance(error, dict):
-                        error = error.get("message") or error.get("type")
-                    yield TurnEvent(
-                        kind="done",
-                        text=assistant_text,
-                        payload={"error": str(error or "gateway execution failed")},
-                    )
-                    return
+            if kind == "session.text.delta":
+                delta = str(data.get("delta") or "")
+                if delta:
+                    assistant_text += delta
+                    yield TurnEvent(kind="text", text=delta)
+            elif kind == "session.text.ended" and not assistant_text:
+                text = str(data.get("text") or "")
+                if text:
+                    assistant_text = text
+                    yield TurnEvent(kind="text", text=text)
+            elif kind == "session.tool.input.started":
+                names[str(data.get("id"))] = str(data.get("name") or "tool")
+                writing.add(str(data.get("id")))
+                yield TurnEvent(kind="progress", tool=_tool_name(names, data))
+            elif kind == "session.tool.called":
+                writing.discard(str(data.get("id")))
+                name = _tool_name(names, data)
+                arguments = json.dumps(data.get("input") or {}, ensure_ascii=False)
+                yield TurnEvent(kind="tool", tool=name, arguments=arguments)
+            elif kind == "session.tool.success":
+                name = _tool_name(names, data)
+                result = _text_content(data.get("content"))
+                append_message(
+                    root,
+                    {"role": "tool", "name": name, "content": result[:4000]},
+                    agent=role,
+                )
+                yield TurnEvent(kind="tool", tool=name, result=result)
+            elif kind == "session.tool.error":
+                name = _tool_name(names, data)
+                result = _text_content(data.get("content")) or "tool failed"
+                yield TurnEvent(kind="tool", tool=name, result=result)
+            elif kind == "permission.asked":
+                yield TurnEvent(kind="permission", payload=data)
+            elif kind == "session.execution.succeeded":
+                append_message(
+                    root,
+                    {"role": "assistant", "content": assistant_text, "name": role},
+                    agent=role,
+                )
+                done = True
+                yield TurnEvent(kind="done", text=assistant_text)
+                return
+            elif kind == "session.execution.interrupted":
+                append_message(
+                    root,
+                    {
+                        "role": "assistant",
+                        "content": assistant_text,
+                        "name": role,
+                        "interrupted": True,
+                    },
+                    agent=role,
+                )
+                done = True
+                yield TurnEvent(kind="done", text=assistant_text, payload={"interrupted": True})
+                return
+            elif kind == "session.execution.failed":
+                done = True
+                error = data.get("error")
+                if isinstance(error, dict):
+                    error = error.get("message") or error.get("type")
+                yield TurnEvent(
+                    kind="done",
+                    text=assistant_text,
+                    payload={"error": str(error or "gateway execution failed")},
+                )
+                return
+            elif kind == "session.tool.input.ended":
+                writing.discard(str(data.get("id")))
+                yield TurnEvent(kind="progress")
+            elif alive:
+                yield TurnEvent(kind="progress")
     except TimeoutError:
-        yield TurnEvent(kind="done", payload={"error": "gateway turn timed out"})
+        if clock() >= turn_ends:
+            minutes = round(timeout / 60)
+            yield await ended(
+                f"The {role.capitalize()} was still working after {minutes} minutes, "
+                f"so this turn was ended. {NOTHING_LOST}"
+            )
+        else:
+            yield await ended(stall_message(role, limit))
+    except StopAsyncIteration:
+        yield await ended(f"The connection to the {role.capitalize()} closed. {NOTHING_LOST}")
+    except httpx.TimeoutException:
+        yield await ended(stall_message(role, idle_limit))
+    except httpx.HTTPError:
+        yield await ended(f"The connection to the {role.capitalize()} was lost. {NOTHING_LOST}")
     finally:
         if not done:
-            try:
-                await client.interrupt(session_id)
-            except Exception:  # noqa: BLE001 - stopping must never mask the turn
-                pass
+            await _interrupt(client, session_id)
         await events.aclose()

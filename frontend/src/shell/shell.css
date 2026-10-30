@@ -636,6 +636,19 @@ body {
   color: var(--gold);
   font-size: var(--t-13);
 }
+.director-quiet {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-control);
+  color: var(--ink-2);
+  font-size: var(--t-13);
+}
+.director-quiet p {
+  margin: 0;
+}
 .director-error {
   display: grid;
   gap: var(--s-2);

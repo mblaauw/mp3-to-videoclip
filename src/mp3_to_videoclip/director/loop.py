@@ -2,18 +2,29 @@
 
 A turn is a job. It streams text deltas to the UI, executes tool calls through
 ``tools.dispatch``, appends the results and continues, and stops at end_turn, an
-``ask_user`` call, a max of 25 tool calls, or user cancellation.
+``ask_user`` call, a max of 25 tool calls, user cancellation, or a stalled stream.
+Tool calls only run once their stream has finished, so a stall never applies a
+half-written one.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from dataclasses import dataclass, field
 from typing import Any
 
 from .conversation import append_message, compact_messages, load_messages
-from .llm import DirectorLLM, TextDelta, ToolCall, TurnResult
+from .llm import (
+    DirectorLLM,
+    Progress,
+    StreamStalled,
+    TextDelta,
+    ToolCall,
+    TurnResult,
+    stall_message,
+)
 from .tools import TOOLS, ToolResult, dispatch
 
 MAX_TOOL_CALLS = 25
@@ -21,7 +32,7 @@ MAX_TOOL_CALLS = 25
 
 @dataclass
 class TurnEvent:
-    kind: str  # text / tool / done / ask
+    kind: str  # text / progress / tool / done / ask
     text: str = ""
     tool: str = ""
     arguments: str = ""
@@ -61,14 +72,29 @@ async def run_turn(
         result: TurnResult | None = None
         assistant_text = ""
         pending: list[ToolCall] = []
-        async for event in llm.stream(messages, tools=TOOLS, system=system):
-            if isinstance(event, TextDelta):
-                assistant_text += event.text
-                yield TurnEvent(kind="text", text=event.text)
-            elif isinstance(event, ToolCall):
-                pending.append(event)
-            elif isinstance(event, TurnResult):
-                result = event
+        try:
+            async with aclosing(llm.stream(messages, tools=TOOLS, system=system)) as stream:
+                async for event in stream:
+                    if isinstance(event, TextDelta):
+                        assistant_text += event.text
+                        yield TurnEvent(kind="text", text=event.text)
+                    elif isinstance(event, Progress):
+                        yield TurnEvent(
+                            kind="progress", tool=event.tool, payload={"chars": event.chars}
+                        )
+                    elif isinstance(event, ToolCall):
+                        pending.append(event)
+                    elif isinstance(event, TurnResult):
+                        result = event
+        except StreamStalled as stalled:
+            if assistant_text.strip():
+                append_message(root, {"role": "assistant", "content": assistant_text}, agent=role)
+            yield TurnEvent(
+                kind="done",
+                text=assistant_text,
+                payload={"error": stall_message(role, stalled.seconds), "stalled": True},
+            )
+            return
 
         if result is None:
             break
