@@ -337,8 +337,13 @@ def render_base(
     preview_banner=False,
     preview_placeholders=(),
     brand=None,
+    titles: dict | None = None,
 ) -> dict:
-    """Remotion visuals + existing atomic FFmpeg/audio/verification contracts."""
+    """Remotion visuals + existing atomic FFmpeg/audio/verification contracts.
+
+    ``titles`` (see :func:`titles_input`) draws the planned titles in the same
+    pass; without it the request and the visual cache key are unchanged.
+    """
     from . import render as R
     from .branding import pack_hash, render_brand_plate
 
@@ -355,6 +360,8 @@ def render_base(
         "preview_banner": preview_banner,
         "preview_placeholders": list(preview_placeholders),
     }
+    if titles is not None:
+        inputs["titles"] = titles
     if brand is not None and brand.plate:
         plate = assets / f"brand-{pack_hash(brand)}-{project.width}x{project.height}.png"
         if not plate.exists():
@@ -464,6 +471,7 @@ def render_base(
         "source_sha256": file_hash(audio),
         "preview": preview_banner,
         "rendered_shots": len(shots),
+        "titles": [window["id"] for window in titles["windows"]] if titles else [],
         "dissolves": sum(s.shot.dissolve_frames > 0 for s in shots),
         "preview_placeholders": list(preview_placeholders),
         "verification": "Measured exact frames/dimensions/fps/audio/duration/faststart; not artistic acceptance",
@@ -472,8 +480,8 @@ def render_base(
     return report
 
 
-def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
-    """Render one alpha element; existing compositor retains audio packet copying."""
+def title_assets(spec: dict, palette: dict) -> dict:
+    """The spec, palette, logo and font every title element is drawn from."""
     from .branding import filmstrip_svg
 
     if spec.get("intro", {}).get("mark", {}).get("kind") != "filmstrip":
@@ -483,8 +491,7 @@ def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
         "data:image/svg+xml;base64,"
         + base64.b64encode(filmstrip_svg(colours["accent"]).encode()).decode()
     )
-    inputs = {
-        "part": part,
+    return {
         "spec": spec,
         "intro": spec["intro"],
         "palette": colours,
@@ -493,6 +500,16 @@ def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
         # not a portable webfont. Its source bytes are still in the fingerprint.
         "font": None,
     }
+
+
+def titles_input(spec: dict, palette: dict, windows: list[dict]) -> dict:
+    """``input.titles`` for the Film composition: assets plus the planned windows."""
+    return {**title_assets(spec, palette), "windows": windows}
+
+
+def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
+    """Render one alpha element; existing compositor retains audio packet copying."""
+    inputs = {"part": part, **title_assets(spec, palette)}
     invoke(
         "graphics", output, output.parent / "remotion-assets", canvas, fps, part["frames"], inputs
     )

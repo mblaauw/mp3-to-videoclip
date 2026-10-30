@@ -288,7 +288,11 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
   );
 }
 
-export function BaseFilm({input}) {
+/**
+ * The still film. `overlay` is drawn over the pictures and the brand plate but
+ * under the placeholder and preview markings; Film passes the title layer here.
+ */
+export function BaseFilm({input, overlay = null}) {
   const frame = useCurrentFrame();
   const {width, height, fps} = useVideoConfig();
   const shots = input?.shots ?? [];
@@ -375,6 +379,7 @@ export function BaseFilm({input}) {
           <Img src={brandPlate} style={{width: "100%", height: "100%", objectFit: "cover"}} />
         </AbsoluteFill>
       ) : null}
+      {overlay}
       {placeholderId ? (
         <AbsoluteFill
           style={{

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from mp3_to_videoclip import production, profiles, remotion, timeline
+from mp3_to_videoclip import graphics, production, profiles, remotion, timeline, titles
 from mp3_to_videoclip.models import (
     Brief,
     Character,
@@ -140,14 +140,62 @@ def _contract(root: Path) -> dict:
         project.total_frames,
         {"shots": [{"id": shot.id, "frames": shot.duration_frames} for shot in board.shots]},
     )
-    # Absolute paths must not leak into the pinned contract.
-    request["output"] = "<output>"
-    request["assetRoot"] = "<assets>"
-    request["chrome"] = "<chrome>"
+    spec = _title_spec()
+    captions = titles.resolve_titles(spec, board, project.fps)
+    windows, _total = titles.plan_titles(
+        spec, fps=project.fps, duration=project.duration, captions=captions
+    )
+    titled = remotion.request(
+        "base",
+        root / "renders" / "final-v001.mp4",
+        root / "work" / "assets",
+        (project.width, project.height),
+        project.fps,
+        project.total_frames,
+        {
+            "shots": [{"id": shot.id, "frames": shot.duration_frames} for shot in board.shots],
+            "titles": remotion.titles_input(spec, graphics.resolve_palette(spec), windows),
+        },
+    )
+    for value in (request, titled):
+        # Absolute paths must not leak into the pinned contract.
+        value["output"] = "<output>"
+        value["assetRoot"] = "<assets>"
+        value["chrome"] = "<chrome>"
     return {
         "prompts": [production.image_spec(root, shot) for shot in board.shots],
         "timing": [timeline.label_at_frame(board, frame) for frame in frames],
         "remotion_request": request,
+        "remotion_titled_request": titled,
+    }
+
+
+def _title_spec() -> dict:
+    """A joint-design signature with one shot-bound caption, on the 90 s fixture."""
+    return {
+        "version": 1,
+        "renderer": "remotion",
+        "design": "joint-v1",
+        "intro_seconds": 25.0,
+        "credits_tail_seconds": 40.0,
+        "lockup_seconds": 4.0,
+        "intro": {
+            "names": "A  ◆  B",
+            "title": "Contract fixture",
+            "tagline": "A JOINT A & B PRODUCTION",
+            "mark": {"kind": "filmstrip"},
+        },
+        "captions": [
+            {
+                "id": "street-line",
+                "style": "caption",
+                "text": "WET STREET",
+                "shot_id": "s002",
+                "offset_frames": 24,
+                "duration_frames": 48,
+            }
+        ],
+        "credits": {"cards": [["MUSIC", "A"], ["FILM", "B"]], "lockup": "A JOINT A & B PRODUCTION"},
     }
 
 

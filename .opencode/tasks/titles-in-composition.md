@@ -139,3 +139,13 @@ policy, and deleting the FFmpeg/Pillow paths (assessment phase 2).
   intro and card rendered through the moved code are frame-for-frame identical
   (framemd5) to the previous code. Any renderer source change moves the
   renderer revision, and with it the current-input check for existing bases.
+- **T3 done.** The `Base` composition renders `Film.jsx`, which is `BaseFilm` plus
+  `TitleLayer` in a new overlay slot: above the pictures and brand plate, below
+  the placeholder and preview markings. `request.mjs` validates `input.titles`
+  (integer, ordered, unique, inside the film, local logo/font).
+  `titles.render_input(root)` builds it, and `remotion.render_base(..., titles=)`
+  draws it in the same pass. A render without titles has the same request and
+  visual cache key as before. The golden contract gained only
+  `remotion_titled_request`; its three existing entries are byte-identical. A
+  320×180 render through the Film composition drew a credit card on its own
+  local clock.

@@ -142,22 +142,57 @@ export function validateRequest(request) {
     if (normalized.base.totalFrames !== frames) fail("shot allocations must equal requested frames");
   } else {
     normalized.part = validateGraphicsPart(input.part, frames);
-    if (input.spec === null || typeof input.spec !== "object") {
-      fail("graphics input.spec must be the resolved graphics spec object");
-    }
+    validateTitleAssets(input);
     validateCompactLayout(input.spec.layout, normalized.part);
-    if (typeof input.logo !== "string" || !input.logo.startsWith("data:image/svg+xml;base64,")) {
-      fail("graphics logo must be an embedded local SVG, never a remote URL or black-background raster");
-    }
-    const svg = Buffer.from(input.logo.split(",")[1], "base64").toString("utf8");
-    if (/<script|<foreignObject|\bhref\s*=|https?:\/\//i.test(svg.replace('xmlns="http://www.w3.org/2000/svg"', ''))) {
-      fail("SVG logo must not load external resources or scripts");
-    }
-    if (input.font != null && (typeof input.font !== "string" || !input.font.startsWith("data:font/"))) {
-      fail("graphics font must be local embedded bytes or the local system stack");
-    }
   }
   return normalized;
+}
+
+/** The spec, logo and font a title element is drawn from: local bytes only. */
+export function validateTitleAssets(input) {
+  if (input.spec === null || typeof input.spec !== "object") {
+    fail("graphics input.spec must be the resolved graphics spec object");
+  }
+  if (typeof input.logo !== "string" || !input.logo.startsWith("data:image/svg+xml;base64,")) {
+    fail("graphics logo must be an embedded local SVG, never a remote URL or black-background raster");
+  }
+  const svg = Buffer.from(input.logo.split(",")[1], "base64").toString("utf8");
+  if (/<script|<foreignObject|\bhref\s*=|https?:\/\//i.test(svg.replace('xmlns="http://www.w3.org/2000/svg"', ''))) {
+    fail("SVG logo must not load external resources or scripts");
+  }
+  if (input.font != null && (typeof input.font !== "string" || !input.font.startsWith("data:font/"))) {
+    fail("graphics font must be local embedded bytes or the local system stack");
+  }
+}
+
+/**
+ * Planned titles over a base film: integer-frame windows in order, never
+ * overlapping and never past the film, each a drawable title element.
+ */
+export function validateTitles(titles, totalFrames) {
+  if (titles === null || typeof titles !== "object" || Array.isArray(titles)) {
+    fail("base input.titles must be an object");
+  }
+  if (!Array.isArray(titles.windows) || titles.windows.length === 0) {
+    fail("base input.titles.windows must be a non-empty array");
+  }
+  validateTitleAssets(titles);
+  const ids = new Set();
+  let end = 0;
+  const windows = titles.windows.map((window) => {
+    const part = validateGraphicsPart(window);
+    const start = requireInteger(window.start_frame, `title ${window.id ?? "?"} start_frame`, {min: 0});
+    if (typeof window.id !== "string" || window.id.length === 0 || ids.has(window.id)) {
+      fail(`title windows need unique non-empty ids, got ${JSON.stringify(window.id)}`);
+    }
+    ids.add(window.id);
+    if (start < end) fail(`title ${window.id} starts before the previous window ends`);
+    end = start + part.frames;
+    if (end > totalFrames) fail(`title ${window.id} ends at frame ${end}, past the film's ${totalFrames}`);
+    validateCompactLayout(titles.spec.layout, part);
+    return {...part, start_frame: start};
+  });
+  return windows;
 }
 
 export function validateBaseInput(input, fps) {
@@ -209,5 +244,9 @@ export function validateBaseInput(input, fps) {
         `starting at ${first.start_frame}; at most 3 per second are allowed`,
     );
   }
-  return {spans, totalFrames, preview_placeholders: input.preview_placeholders ?? []};
+  const titles =
+    input.titles === undefined || input.titles === null
+      ? null
+      : validateTitles(input.titles, totalFrames);
+  return {spans, totalFrames, preview_placeholders: input.preview_placeholders ?? [], titles};
 }

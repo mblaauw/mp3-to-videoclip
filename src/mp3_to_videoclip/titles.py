@@ -125,3 +125,26 @@ def timing_board(root: Path, board: Storyboard) -> Storyboard:
     from .edits import effective_board
 
     return effective_board(root, board)
+
+
+def plan_for(root: Path) -> tuple[dict, list[dict]]:
+    """This production's resolved title spec and its windows on the current cut."""
+    from . import graphics
+
+    project = graphics._load_project(root)
+    spec = graphics.load_spec(root)
+    fps, duration = int(project["fps"]), float(project["duration"])
+    board = graphics._timing_board(root, project) if needs_board(spec) else None
+    windows, _total = plan_titles(
+        spec, fps=fps, duration=duration, captions=resolve_titles(spec, board, fps)
+    )
+    return spec, windows
+
+
+def render_input(root: Path) -> dict:
+    """``input.titles`` for a render or the Player: the plan plus its local assets."""
+    from .graphics import resolve_palette
+    from .remotion import titles_input
+
+    spec, windows = plan_for(root)
+    return titles_input(spec, resolve_palette(spec), windows)

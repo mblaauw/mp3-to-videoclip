@@ -1,7 +1,8 @@
 // Remotion compositions for the mp3-to-videoclip renderer module.
 //
 // Two compositions, both driven purely by input props:
-//   "Base"     -> the still film (shots, cameras, dissolves, wipes, grade)
+//   "Base"     -> the film: shots, cameras, transitions, grade and, when the input
+//                 carries them, the planned titles (see Film.jsx)
 //   "Graphics" -> one local overlay element (intro, identity, role card, lockup, caption)
 //
 // Every animated value is a function of the current frame. There are no CSS
@@ -10,7 +11,7 @@
 import React from "react";
 import {Composition, registerRoot} from "remotion";
 
-import {BaseFilm} from "./BaseFilm.jsx";
+import {Film} from "./Film.jsx";
 import {GraphicsFrame} from "./Titles.jsx";
 
 // --------------------------------------------------------------------------- //
@@ -46,7 +47,7 @@ const Root = () => (
   <>
     <Composition
       id="Base"
-      component={BaseFilm}
+      component={Film}
       width={DEFAULT_PROPS.width}
       height={DEFAULT_PROPS.height}
       fps={DEFAULT_PROPS.fps}
