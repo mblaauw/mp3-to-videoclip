@@ -136,3 +136,37 @@ def test_archived_summary_and_player_routes_are_read_only(tmp_path):
         assert movie.status_code == 200
         assert movie.content == b"movie"
         assert client.get("/api/projects/old/archive/stills/9").status_code == 404
+
+
+def test_film_is_done_only_for_a_verified_final_newer_than_its_inputs(tmp_path):
+    import os
+
+    from mp3_to_videoclip.api.projects import _final_state
+
+    root = make_api_project(tmp_path)
+    renders = root / "renders"
+    renders.mkdir(exist_ok=True)
+    assert _final_state(root) is None
+
+    # A movie named like a final, from a compositor that never stamped it.
+    (renders / "production-final-v001.mp4").write_bytes(b"movie")
+    write_json(renders / "production-final-v001.json", {"delivery_ready": True})
+    assert _final_state(root) is None
+
+    report = {
+        "render_kind": "final",
+        "verified": True,
+        "delivery_ready": True,
+        "current": True,
+    }
+    (renders / "production-final-v002.mp4").write_bytes(b"movie")
+    write_json(renders / "production-final-v002.json", report)
+    assert _final_state(root) == "done"
+
+    board = root / "work" / "storyboard.json"
+    later = (renders / "production-final-v002.json").stat().st_mtime + 60
+    os.utime(board, (later, later))
+    assert _final_state(root) == "changed"
+
+    write_json(renders / "production-final-v002.json", {**report, "current": False})
+    assert _final_state(root) is None

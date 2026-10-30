@@ -526,7 +526,7 @@ test("film is ready when every gate is approved", () => {
   assert.equal(step.actions[0].target, "render");
 });
 
-test("film reports a delivered final", () => {
+test("film reports a verified final without sending you to Film again", () => {
   const step = nextStep(
     "film",
     project({
@@ -537,7 +537,8 @@ test("film reports a delivered final", () => {
     budget,
   );
   assert.equal(step.tone, "done");
-  assert.match(step.title, /Delivered/);
+  assert.match(step.title, /Final ready/);
+  assert.deepEqual(step.actions, []);
 });
 
 test("film skips the preview and titles when this production has neither gate", () => {

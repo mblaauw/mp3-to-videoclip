@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   api,
   type Brief,
+  type ImageShot,
   type Music,
   type Shot,
   type Storyboard,
@@ -59,11 +60,17 @@ function groupsFor(board: Storyboard, music: Music | null): Group[] {
 
 export function StoryboardStage({
   slug,
+  images,
   onInspect,
 }: {
   slug: string;
+  images: ImageShot[];
   onInspect: (shotId: string) => void;
 }) {
+  const imageFor = useMemo(() => {
+    const byId = new Map(images.map((image) => [image.id, image]));
+    return (shotId: string) => byId.get(shotId);
+  }, [images]);
   const [board, setBoard] = useState<Storyboard | null>(null);
   const [music, setMusic] = useState<Music | null>(null);
   const [creating, setCreating] = useState(false);
@@ -317,7 +324,7 @@ export function StoryboardStage({
                             onClick={() => onInspect(shot.id)}
                             aria-label={`Inspect ${shot.id}`}
                           >
-                            <ShotThumb slug={slug} shot={shot} />
+                            <ShotThumb slug={slug} shot={shot} image={imageFor(shot.id)} />
                             <span className="shot-card-caption">
                               {shot.message || shot.purpose}
                             </span>
@@ -394,7 +401,12 @@ export function StoryboardStage({
                             className="table-shot"
                             onClick={() => onInspect(shot.id)}
                           >
-                            <ShotThumb slug={slug} shot={shot} className="table-thumb" />
+                            <ShotThumb
+                              slug={slug}
+                              shot={shot}
+                              image={imageFor(shot.id)}
+                              className="table-thumb"
+                            />
                             <span>{shot.id}</span>
                           </button>
                         </td>

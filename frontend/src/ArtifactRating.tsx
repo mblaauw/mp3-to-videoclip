@@ -130,7 +130,7 @@ export function ArtifactRating({
   return (
     <div className="rating-inline" aria-label={`Rate the ${LABELS[artifact]}`}>
       <span className="rating-label" title={`${revision}. ${latest}`}>
-        Rate
+        Rate {LABELS[artifact]}
       </span>
       <button
         type="button"

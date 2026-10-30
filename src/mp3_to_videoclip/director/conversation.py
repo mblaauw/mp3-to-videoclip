@@ -15,13 +15,49 @@ from typing import Any
 MAX_CONTEXT_MESSAGES = 60
 KEEP_RECENT_MESSAGES = 24
 SUMMARY_SNIPPET = 160
+ROLES = ("writer", "editor")
 
 
 def chat_path(root: Path) -> Path:
     return root / "work" / "chat.jsonl"
 
 
-def load_messages(root: Path) -> list[dict[str, Any]]:
+def _prompt_role(message: dict[str, Any]) -> str | None:
+    """The role whose prompt files a recorded user turn was assembled from."""
+    prompt = message.get("prompt")
+    files = prompt.get("files") if isinstance(prompt, dict) else None
+    for item in files if isinstance(files, list) else ():
+        path = item.get("path") if isinstance(item, dict) else None
+        head = path.split("/", 1)[0] if isinstance(path, str) else None
+        if head in ROLES:
+            return head
+    return None
+
+
+def _for_role(messages: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
+    """Keep one role's turns; rows from before the split stay visible to both.
+
+    New rows carry ``agent``. Older rows are attributed through their user turn's
+    recorded prompt files (or a gateway reply's ``name``) and the rows after it;
+    a turn that recorded neither predates the two roles and is shared.
+    """
+    kept: list[dict[str, Any]] = []
+    current: str | None = None
+    for message in messages:
+        agent = message.get("agent")
+        if agent not in ROLES:
+            agent = None
+        if message.get("role") == "user":
+            current = agent or _prompt_role(message)
+        elif agent is None and message.get("name") in ROLES and message.get("role") == "assistant":
+            agent = message["name"]
+        owner = agent or current
+        if owner in (None, role):
+            kept.append(message)
+    return kept
+
+
+def load_messages(root: Path, role: str | None = None) -> list[dict[str, Any]]:
     path = chat_path(root)
     if not path.is_file():
         return []
@@ -34,10 +70,12 @@ def load_messages(root: Path) -> list[dict[str, Any]]:
             messages.append(json.loads(line))
         except json.JSONDecodeError:
             continue
-    return messages
+    return messages if role is None else _for_role(messages, role)
 
 
-def append_message(root: Path, message: dict[str, Any]) -> None:
+def append_message(root: Path, message: dict[str, Any], *, agent: str | None = None) -> None:
+    if agent is not None:
+        message = {**message, "agent": agent}
     path = chat_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as handle:

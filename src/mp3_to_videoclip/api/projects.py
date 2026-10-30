@@ -84,6 +84,47 @@ def _changed_since(record: dict | None, paths: list[Path]) -> bool:
     return _newest(paths) > approved.timestamp() + 1
 
 
+# The render inputs ``domain.exports`` fingerprints, minus the budget-bearing
+# project document: a top-up never makes a delivered film stale.
+FINAL_INPUTS = (
+    "brief.json",
+    "brand.json",
+    "work/storyboard.json",
+    "work/assets.json",
+    "work/edit.json",
+    "work/graphics-spec.json",
+    "work/lyrics.json",
+    "work/events.json",
+)
+
+
+def _final_state(root: Path) -> str | None:
+    """Cheap library signal for Film: ``done``, ``changed`` or ``None``.
+
+    Only a stamped, verified, delivery-ready final counts; a movie named
+    ``*-final-*`` without that report (an older compositor's output) does not.
+    The movie bytes are not re-hashed here; Film's export list stays the
+    authoritative check.
+    """
+    inputs = _newest([root / name for name in FINAL_INPUTS])
+    state = None
+    for report_path in (root / "renders").glob("*-final-*.json"):
+        report = read_optional(report_path)
+        if not (
+            isinstance(report, dict)
+            and report.get("render_kind") == "final"
+            and report.get("verified") is True
+            and report.get("delivery_ready") is True
+            and report.get("current") is not False
+            and report_path.with_suffix(".mp4").is_file()
+        ):
+            continue
+        if _mtime(report_path) + 1 >= inputs:
+            return "done"
+        state = "changed"
+    return state
+
+
 def _poster_stills(root: Path, slug: str, assets: dict) -> list[str]:
     """First four selected stills, addressed through the image route."""
     result: list[str] = []
@@ -157,11 +198,11 @@ def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
     else:
         states["images"] = "you"
 
-    finals = list((root / "renders").glob("*-final-*.mp4"))
-    if finals:
+    final = _final_state(root)
+    if final == "done":
         states["film"] = "done"
     elif states["images"] == "done":
-        states["film"] = "you"
+        states["film"] = final or "you"
     else:
         states["film"] = "not_ready"
 

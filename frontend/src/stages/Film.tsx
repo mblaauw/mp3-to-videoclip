@@ -588,7 +588,11 @@ export function FilmStage({
                 </div>
                 {checklist && (
                   <span className={`delivery-state ${workflow.ready ? "ready" : ""}`}>
-                    {workflow.ready ? "Delivery ready" : checklist.can_final ? "Gates approved" : `${checklist.outstanding.length} gates to go`}
+                    {workflow.ready
+                      ? "Delivery ready"
+                      : checklist.can_final
+                        ? "Gates approved"
+                        : `${checklist.outstanding.length} ${checklist.outstanding.length === 1 ? "gate" : "gates"} to go`}
                   </span>
                 )}
               </header>

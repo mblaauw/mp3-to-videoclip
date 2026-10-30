@@ -158,6 +158,7 @@ function StageView({
   onPendingConsumed,
   reserve,
   onNavigate,
+  images,
 }: {
   slug: string;
   stage: Stage;
@@ -170,6 +171,7 @@ function StageView({
   onPendingConsumed: () => void;
   reserve: string;
   onNavigate: (stage: Stage) => void;
+  images: ImageShot[];
 }) {
   if (stage === "track") return <TrackStage slug={slug} />;
   if (stage === "story")
@@ -182,7 +184,8 @@ function StageView({
         onIntakeChange={onIntakeChange}
       />
     );
-  if (stage === "storyboard") return <StoryboardStage slug={slug} onInspect={onInspect} />;
+  if (stage === "storyboard")
+    return <StoryboardStage slug={slug} images={images} onInspect={onInspect} />;
   if (stage === "images")
     return (
       <ImagesStage
@@ -552,6 +555,7 @@ function FilmShellContent({
                 onPendingConsumed={() => setPendingPaid(null)}
                 reserve={reserve}
                 onNavigate={onNavigate}
+                images={images}
               />
             </div>
           </div>

@@ -589,6 +589,8 @@ def test_events_stream_starts_with_json_hello(client):
 
 def test_director_chat_reads_and_streams(client, monkeypatch):
     assert client.get("/api/projects/production/chat").json() == {"messages": []}
+    assert client.get("/api/projects/production/chat?role=editor").json() == {"messages": []}
+    assert client.get("/api/projects/production/chat?role=critic").status_code == 400
     empty = client.post("/api/projects/production/chat", json={"message": ""})
     assert empty.status_code == 400
     assert empty.json()["detail"] == "message required"

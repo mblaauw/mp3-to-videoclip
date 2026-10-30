@@ -30,7 +30,8 @@ function clock(seconds: number | null | undefined): string {
 }
 
 function nextLabel(project: ProjectSummary): string {
-  if (!project.next_step) return "Delivered";
+  // "Delivered" is the archive shelf; an open production with a final is not on it.
+  if (!project.next_step) return "Final ready";
   if (project.next_step === "track") {
     if (!project.has_analysis) return "Measure the song";
     const needsLyrics =
@@ -149,7 +150,15 @@ export function Library({
 
   const active = projects.filter((project) => !project.archived);
   const delivered = projects.filter((project) => project.archived);
-  const summary = `${active.length} in progress${delivered.length ? `, ${delivered.length} delivered` : ""}.`;
+  const finished = active.filter((project) => !project.next_step).length;
+  const summary = [
+    `${active.length - finished} in progress`,
+    finished ? `${finished} final ready` : "",
+    delivered.length ? `${delivered.length} delivered` : "",
+  ]
+    .filter(Boolean)
+    .join(", ")
+    .concat(".");
 
   const startNew = (file: File | null = null) => {
     setNewFile(file);
