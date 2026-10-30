@@ -1,5 +1,5 @@
 import { AbsoluteFill, Audio } from "remotion";
-import { BaseFilm, type BaseFilmInput } from "./baseFilm";
+import { Film, type BaseFilmInput } from "./baseFilm";
 
 export type PreviewProps = {
   input: BaseFilmInput;
@@ -7,14 +7,15 @@ export type PreviewProps = {
 };
 
 /**
- * The live Player runs the renderer's own BaseFilm and timing module. Only the
- * image source and the audio element differ from the MP4 composition.
+ * The live Player runs the renderer's own Film composition (BaseFilm plus the
+ * planned titles) and timing module. Only the image source and the audio
+ * element differ from the MP4 composition.
  */
 export function LivePreview({ input, audio }: PreviewProps) {
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
       {audio && <Audio src={audio} />}
-      <BaseFilm input={input} />
+      <Film input={input} />
     </AbsoluteFill>
   );
 }

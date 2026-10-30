@@ -149,3 +149,11 @@ policy, and deleting the FFmpeg/Pillow paths (assessment phase 2).
   `remotion_titled_request`; its three existing entries are byte-identical. A
   320×180 render through the Film composition drew a credit card on its own
   local clock.
+- **T4 done.** `player_input` adds the planned `titles`, or a `titles_note` saying
+  why there are none (Zero Bars: its caption conflict). The Player renders the
+  renderer's `Film.jsx`, Film has a "Show titles" toggle, and a render error
+  shows as an error card instead of breaking the preview. Live on a scratch copy
+  of Tree of Love: the opening title at 0:10 and the VJDJ69 credit card with
+  its filmstrip mark at 3:30 drew in the Player, and the toggle removed them.
+  Follow-up outside this phase: `index.html` has no `Cache-Control`, so a
+  browser can keep running an old build after an update.

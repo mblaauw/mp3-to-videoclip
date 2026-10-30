@@ -132,3 +132,35 @@ def test_a_shot_bound_caption_follows_the_edit_not_the_storyboard(tmp_path):
     resolved = titles.resolve_titles(spec, board, 24)[0]
     assert (resolved["start_frame"], resolved["end_frame"]) == (26, 32)
     assert titles.needs_board(spec)
+
+
+def test_the_player_gets_the_planned_titles_or_says_why_not(tmp_path):
+    from test_signature_iteration import signature_root
+
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip import signature
+    from mp3_to_videoclip.services.preview import player_input
+    from mp3_to_videoclip.storage import read_json, write_json
+
+    root = signature_root(tmp_path)
+    spec = read_json(root / signature.SPEC)
+    spec["renderer"] = "remotion"
+    spec["intro"]["mark"] = {"kind": "filmstrip"}
+    write_json(root / signature.SPEC, spec)
+
+    payload = player_input(root, "production")
+    assert payload["titles_note"] is None
+    windows = payload["titles"]["windows"]
+    assert windows[0]["id"] == "intro" and windows[0]["start_frame"] == 0
+    total = P.load_project(root).total_frames
+    assert windows[-1]["id"] == "lockup"
+    assert windows[-1]["start_frame"] + windows[-1]["frames"] == total
+    assert payload["titles"]["logo"].startswith("data:image/svg+xml;base64,")
+
+    spec["captions"] = [
+        {"id": "late", "style": "caption", "text": "x", "start": 160.0, "end": 170.0}
+    ]
+    write_json(root / signature.SPEC, spec)
+    payload = player_input(root, "production")
+    assert payload["titles"] is None
+    assert "overlaps the credits" in payload["titles_note"]

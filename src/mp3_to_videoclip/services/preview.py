@@ -159,4 +159,20 @@ def player_input(root: Path, slug: str) -> dict:
             render_brand_plate(brand, project, plate)
         payload["brand_plate"] = data_url(plate, "image/png")
         payload["brand_duration_frames"] = round(brand.duration_seconds * project.fps)
+    payload["titles"], payload["titles_note"] = _titles(root, project)
     return payload
+
+
+def _titles(root: Path, project) -> tuple[dict | None, str | None]:
+    """The planned titles for the Player, or why this film shows none."""
+    from mp3_to_videoclip import titles
+    from mp3_to_videoclip.graphics import ComposeError
+
+    if not P.requires_signature(root, project):
+        return None, None
+    if not (root / "work" / "graphics-spec.json").is_file():
+        return None, "The titles have not been set up yet."
+    try:
+        return titles.render_input(root), None
+    except (OSError, ValueError, ComposeError) as exc:
+        return None, f"The titles cannot be laid out yet: {exc}"

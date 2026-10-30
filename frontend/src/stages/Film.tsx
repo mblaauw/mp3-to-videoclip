@@ -40,6 +40,8 @@ type LiveState = {
   width: number;
   height: number;
   stale: number;
+  titles: BaseFilmInput["titles"];
+  titlesNote: string | null;
 };
 
 function clock(seconds: number): string {
@@ -170,6 +172,7 @@ export function FilmStage({
   const [signatureRequired, setSignatureRequired] = useState<boolean | undefined>();
   const [selected, setSelected] = useState<FilmFile | null>(null);
   const [live, setLive] = useState<LiveState | null>(null);
+  const [showTitles, setShowTitles] = useState(true);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [graphics, setGraphics] = useState<GraphicsReview | null>(null);
   const [rendererReady, setRendererReady] = useState<boolean | null>(null);
@@ -286,6 +289,8 @@ export function FilmStage({
           width: Math.round(payload.width * scale),
           height: Math.round(payload.height * scale),
           stale: payload.stale_shots.length,
+          titles: payload.titles ?? null,
+          titlesNote: payload.titles_note ?? null,
         });
         setLiveError(null);
       })
@@ -538,7 +543,8 @@ export function FilmStage({
                 <div>
                   <h3>Live preview</h3>
                   <p className="hint">
-                    Free, marked and local. Same timing, camera and transitions as the render.
+                    Free, marked and local. Same timing, camera, transitions and titles as the
+                    render.
                   </p>
                 </div>
                 {currentBoardShot && (
@@ -553,7 +559,7 @@ export function FilmStage({
                 <>
                   <Suspense fallback={<p className="empty">Loading the player…</p>}>
                     <LivePlayer
-                      input={live.input}
+                      input={{ ...live.input, titles: showTitles ? live.titles : null }}
                       audio={null}
                       durationInFrames={live.durationInFrames}
                       fps={live.fps}
@@ -572,6 +578,22 @@ export function FilmStage({
                         } older than the storyboard`
                       : ""}
                   </p>
+                  {live.titles ? (
+                    <label className="live-titles">
+                      <input
+                        type="checkbox"
+                        checked={showTitles}
+                        onChange={(event) => setShowTitles(event.target.checked)}
+                      />
+                      Show titles ({live.titles.windows.length} planned: opening, credits
+                      {live.titles.windows.some((window) => window.kind === "caption")
+                        ? ", captions"
+                        : ""}
+                      )
+                    </label>
+                  ) : (
+                    live.titlesNote && <p className="hint">{live.titlesNote}</p>
+                  )}
                 </>
               ) : (
                 <p className="empty">{liveError ?? "No storyboard yet."}</p>

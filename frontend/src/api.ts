@@ -400,6 +400,9 @@ export type PreviewInput = {
   brand_plate?: string | null;
   brand_duration_frames?: number;
   grade?: import("./baseFilm").Grade | null;
+  /** Planned titles, or null with a note when this film has none to show yet. */
+  titles?: import("./baseFilm").TitlesInput | null;
+  titles_note?: string | null;
 };
 
 export type EditFinding = {
