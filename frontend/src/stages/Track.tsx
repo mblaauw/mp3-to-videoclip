@@ -56,7 +56,7 @@ export function TrackStage({ slug }: { slug: string }) {
             }
           }}
         >
-          <SectionsPart model={model} />
+          <SectionsPart slug={slug} model={model} />
           <LyricsPart slug={slug} model={model} />
         </div>
       )}

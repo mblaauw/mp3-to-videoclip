@@ -65,19 +65,20 @@ def accent_label(value: EditAccent) -> str:
     return ACCENT_LABELS.get(value.type, value.type.replace("_", " ").title())
 
 
-def _section_names(root: Path) -> list[str]:
-    """Measured sections with their human names, in measured order."""
-    from .domain import music_notes
+def _section_name(
+    names: dict[float, str], start_frame: int, fps: int, index: int, fallback: str
+) -> str:
+    """A cut section's name by where it starts, so a changed section map can't shift names."""
+    for start, name in names.items():
+        if abs(start * fps - start_frame) <= 1:
+            return name
+    return fallback or f"Section {index + 1}"
 
-    music = read_optional(root / "work" / "music.json")
-    if not isinstance(music, dict):
-        return []
-    named = music_notes.apply_names(music, music_notes.read(root)) or {}
-    return [
-        str(item.get("name") or music_notes.default_name(index))
-        for index, item in enumerate(named.get("sections") or [])
-        if isinstance(item, dict)
-    ]
+
+def _section_labels(root: Path) -> dict[float, str]:
+    from .domain import section_map
+
+    return section_map.names_by_start(root)
 
 
 # Storyboard fields that belong to the edit once work/edit.json exists.
@@ -710,7 +711,9 @@ def report(
 
 
 def _seed_sections(root: Path, project: Project, total: int) -> list[EditSection]:
-    music = read_optional(root / "work" / "music.json")
+    from .domain import section_map
+
+    music = section_map.apply(root, read_optional(root / "work" / "music.json"))
     values = music.get("sections") if isinstance(music, dict) else None
     if isinstance(values, list) and values:
         starts = []
@@ -909,14 +912,24 @@ def cut_summary(root: Path, edit: EditDecisionList | None = None) -> dict:
         }
 
     value = report(root, edit=edit, board=board, project=project)
-    names = _section_names(root)
+    names = _section_labels(root)
+    measured = read_optional(root / "work" / "music.json")
+    measured_count = len(measured.get("sections") or []) if isinstance(measured, dict) else 0
     windows = _section_windows(edit, board.total_frames)
     sections = []
     for index, (section, start, end) in enumerate(windows):
         sections.append(
             {
                 "id": section.id,
-                "name": names[index] if index < len(names) else (section.feel or section.id),
+                "name": _section_name(
+                    names,
+                    start,
+                    board.fps,
+                    index,
+                    f"Section {index + 1}"
+                    if index < measured_count
+                    else section.feel or section.id,
+                ),
                 "feel": section.feel,
                 "start_frame": start,
                 "end_frame": end,

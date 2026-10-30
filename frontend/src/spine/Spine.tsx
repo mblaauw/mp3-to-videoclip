@@ -12,6 +12,7 @@ import { usePlayer } from "./player";
 import { Transport } from "./Transport";
 import { clock, sectionAt, sectionColor, sectionName, waveformBars } from "./wave";
 import { Waveform } from "./Waveform";
+import { SECTION_EDGE } from "../track/useTrackData";
 
 const MAX_BARS = 320;
 
@@ -109,7 +110,20 @@ export function Spine({
         : waveformBars(music, timelineDuration),
     [audioWindow, excerptMode, music, sourceDuration, sourcePeaks, timelineDuration],
   );
-  const sections = music?.sections ?? [];
+  const [edgeDrag, setEdgeDrag] = useState<{ index: number; time: number } | null>(null);
+  const edgeGrab = useRef<number | null>(null);
+  const sections = useMemo(() => {
+    const list = music?.sections ?? [];
+    if (!edgeDrag) return list;
+    return list.map((section, index) =>
+      index === edgeDrag.index
+        ? { ...section, start: edgeDrag.time }
+        : index === edgeDrag.index - 1
+          ? { ...section, end: edgeDrag.time }
+          : section,
+    );
+  }, [edgeDrag, music?.sections]);
+  const edgesEditable = stage === "track" && !excerptMode;
   const total = board?.total_frames ?? 0;
   const cutStage = stage === "storyboard" && !!board && !readOnly;
   const windowLength = audioWindow ? Math.max(0, audioWindow.end - audioWindow.start) : 0;
@@ -262,7 +276,7 @@ export function Spine({
     if (event.button !== 0) return;
     if (
       event.target instanceof Element &&
-      event.target.closest(".spine-cut, .spine-window-handle, .spine-window")
+      event.target.closest(".spine-cut, .spine-edge, .spine-window-handle, .spine-window")
     ) {
       return;
     }
@@ -605,6 +619,63 @@ export function Spine({
             />
           );
         })}
+        {edgesEditable &&
+          sections.slice(1).map((section, offset) => {
+            const index = offset + 1;
+            const at = Number(section.start);
+            const previous = Number(sections[index - 1].start);
+            const next = index + 1 < sections.length ? Number(sections[index + 1].start) : timelineDuration;
+            const finish = (time: number) =>
+              window.dispatchEvent(new CustomEvent(SECTION_EDGE, { detail: { index, time } }));
+            const edgeTime = (clientX: number) =>
+              Math.max(previous + 2, Math.min(next - 2, timeAtPointer(clientX)));
+            return (
+              <button
+                type="button"
+                key={`edge-${index}`}
+                className={`spine-edge ${edgeDrag?.index === index ? "dragging" : ""}`}
+                style={{ left: `${toPercent(at)}%` }}
+                role="slider"
+                aria-label={`Edge before ${sectionName(section, index)}`}
+                aria-orientation="horizontal"
+                aria-valuemin={Math.round(previous)}
+                aria-valuemax={Math.round(next)}
+                aria-valuenow={Math.round(at)}
+                aria-valuetext={clock(at)}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  edgeGrab.current = index;
+                  setEdgeDrag({ index, time: at });
+                }}
+                onPointerMove={(event) => {
+                  if (edgeGrab.current !== index) return;
+                  event.stopPropagation();
+                  setEdgeDrag({ index, time: edgeTime(event.clientX) });
+                }}
+                onPointerUp={(event) => {
+                  if (edgeGrab.current !== index) return;
+                  event.stopPropagation();
+                  edgeGrab.current = null;
+                  setEdgeDrag(null);
+                  const time = edgeTime(event.clientX);
+                  // `at` is already the dragged position; compare with where the edge was.
+                  if (time !== Number(music?.sections?.[index]?.start)) finish(time);
+                }}
+                onPointerCancel={() => {
+                  edgeGrab.current = null;
+                  setEdgeDrag(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const step = event.shiftKey ? 1 : 0.25;
+                  finish(at + (event.key === "ArrowLeft" ? -step : step));
+                }}
+              />
+            );
+          })}
         {bands.map((band) => (
           <div
             key={band.start}

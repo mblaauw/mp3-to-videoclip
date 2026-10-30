@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from mp3_to_videoclip import lyric_tools
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
-from mp3_to_videoclip.domain import lyric_timing, music_notes
+from mp3_to_videoclip.domain import lyric_timing, music_notes, section_map
 from mp3_to_videoclip.storage import (
     inside,
     project_lock,
@@ -58,7 +58,7 @@ async def get_track(slug: str, request: Request):
     music = read_optional(root / "work" / "music.json")
     notes = music_notes.read(root)
     if isinstance(music, dict):
-        music = music_notes.apply_names(music, notes)
+        music = section_map.apply(root, music)
     lyrics = read_optional(root / "work" / "lyrics.json")
     project = P.load_project(root)
     return {
@@ -69,6 +69,7 @@ async def get_track(slug: str, request: Request):
         "duration": project.duration,
         "source_duration": project.source_duration or project.duration,
         "section_names": notes["sections"],
+        "section_map": section_map.read(root) is not None,
     }
 
 
@@ -145,6 +146,39 @@ async def put_lyric_timing(slug: str, request: Request, payload: dict):
         return lyric_timing.save(root, payload, P.load_project(root).duration)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/section-map")
+async def put_section_map(slug: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    try:
+        return section_map.save(root, payload, P.load_project(root).duration)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/section-map/propose")
+async def propose_section_map(slug: str, request: Request):
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    if not (root / "work" / "music-deep.json").is_file() and (root / "work/music.json").is_file():
+        # Local and free: a finer set of edges for the tags to land on.
+        await asyncio.to_thread(services.analysis.deep_analyze_project, root)
+    try:
+        return {"sections": section_map.propose(root, P.load_project(root).duration)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/section-map/reset")
+async def reset_section_map(slug: str, request: Request):
+    root = project_root(request, slug)
+    try:
+        section_map.reset(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "reset"}
 
 
 @router.put("/music-mode")

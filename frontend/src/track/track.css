@@ -52,7 +52,7 @@
 
 .track-sec {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 44px 72px;
+  grid-template-columns: 26px minmax(0, 1fr) 44px 72px 22px;
   align-items: center;
   gap: 8px;
   padding: 3px 6px 3px 4px;
@@ -107,6 +107,76 @@
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+.track-join {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.track-join:hover {
+  color: var(--ink);
+}
+
+.track-join:disabled {
+  visibility: hidden;
+}
+
+.track-offers {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2 / -1;
+  gap: 5px;
+  padding: 1px 6px 5px;
+}
+
+.track-chip {
+  padding: 2px 7px;
+  background: var(--raised);
+  border: 0;
+  border-radius: 3px;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.track-chip:hover {
+  background: var(--line);
+}
+
+.track-proposal {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.track-proposal h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 640;
+}
+
+.track-proposal ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.track-proposal li span {
+  display: inline-block;
+  width: 44px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-refused {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .track-shape {
@@ -251,7 +321,7 @@
   }
 
   .track-sec {
-    grid-template-columns: 26px minmax(0, 1fr) 44px;
+    grid-template-columns: 26px minmax(0, 1fr) 44px 22px;
   }
 
   .track-shape {
@@ -265,4 +335,40 @@
   .track-line {
     grid-template-columns: 42px minmax(0, 1fr);
   }
+}
+
+/* A section edge on the song, draggable on Track only. */
+.spine-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 13px;
+  margin-left: -6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.spine-edge::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 1px;
+  background: rgba(236, 234, 229, 0.3);
+}
+
+.spine-edge:hover::after,
+.spine-edge:focus-visible::after,
+.spine-edge.dragging::after {
+  width: 2px;
+  background: var(--gold);
+}
+
+.track-edge-actions {
+  margin-top: 10px;
 }

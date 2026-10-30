@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
-import type { Music } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { api, type Music } from "../api";
 import { usePlayerControls, usePlayerTime } from "../spine/player";
 import { clock, sectionColor } from "../spine/wave";
 import { PlayIcon } from "../ui/icons";
+import type { SectionEdit } from "./sectionEdit";
 import { defaultName, type TrackModel } from "./useTrackData";
 
 type Section = NonNullable<Music["sections"]>[number];
@@ -51,14 +52,52 @@ function Shape({ values }: { values: number[] }) {
   );
 }
 
-export function SectionsPart({ model }: { model: TrackModel }) {
-  const { data, names, setNames, namesSaved, analyzing, analyze, saveNames } = model;
+export function SectionsPart({ slug, model }: { slug: string; model: TrackModel }) {
+  const {
+    data,
+    names,
+    setNames,
+    namesSaved,
+    analyzing,
+    analyze,
+    saveNames,
+    canUndoSections,
+    undoSections,
+    resetSections,
+    addSectionEdge,
+    joinSection,
+    changeSections,
+  } = model;
   const music = data?.music;
   const sections: Section[] = music?.sections || [];
   const player = usePlayerControls();
   const time = usePlayerTime(0.1);
   const { clock: playerClock, pause, seek, play } = player;
   const stopAt = useRef<{ start: number; end: number } | null>(null);
+  const [edgeRefused, setEdgeRefused] = useState(false);
+  const [focused, setFocused] = useState(-1);
+  const [proposal, setProposal] = useState<SectionEdit[] | null>(null);
+  const [proposing, setProposing] = useState(false);
+  const tags = [
+    ...new Set(
+      (data?.lyrics?.lines || []).flatMap((line) => {
+        const match = line.trim().match(/^\[([^[\]]+)\]$/);
+        return match ? [match[1].trim()] : [];
+      }),
+    ),
+  ];
+
+  const propose = async () => {
+    setProposing(true);
+    try {
+      const result = await api.proposeSections(slug);
+      setProposal(result.sections);
+    } catch {
+      // request() already surfaced the error.
+    } finally {
+      setProposing(false);
+    }
+  };
 
   // A section played on its own stops at its end; moving elsewhere cancels that.
   useEffect(
@@ -88,6 +127,7 @@ export function SectionsPart({ model }: { model: TrackModel }) {
         <h2>Sections</h2>
         <small>Name them the way you talk about the song</small>
         {namesSaved && <span className="saved-note">Saved</span>}
+        {edgeRefused && <span className="track-refused">Too close to an edge</span>}
       </div>
       {!sections.length && (
         <div className="empty-block">
@@ -125,12 +165,118 @@ export function SectionsPart({ model }: { model: TrackModel }) {
                   return next;
                 })
               }
-              onBlur={() => void saveNames()}
+              onFocus={() => setFocused(index)}
+              onBlur={() => {
+                setFocused(-1);
+                void saveNames();
+              }}
             />
             <span className="t">{clock(Number(section.start))}</span>
             <Shape values={loudnessShape(music, Number(section.start), Number(section.end))} />
+            <button
+              type="button"
+              className="track-join"
+              aria-label={`Join ${names[index] ?? defaultName(index)} with the next section`}
+              title="Join with the next section"
+              disabled={index === sections.length - 1}
+              onClick={() => joinSection(index)}
+            >
+              ⌄
+            </button>
+            {focused === index && tags.length > 0 && (
+              <div className="track-offers">
+                {tags.map((tag) => (
+                  <button
+                    type="button"
+                    key={tag}
+                    className="track-chip"
+                    // Keep the field focused until the name is taken.
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      const next = [...names];
+                      next[index] = tag;
+                      setNames(next);
+                      void saveNames(next);
+                    }}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ))}
+      {proposal && (
+        <div className="track-proposal" role="group" aria-label="Sections from your lyric tags">
+          <h3>From your lyric tags</h3>
+          <ul>
+            {proposal.map((item) => (
+              <li key={item.start}>
+                <span>{clock(item.start)}</span> {item.name}
+              </li>
+            ))}
+          </ul>
+          <div className="row-actions">
+            <button
+              type="button"
+              className="ui-btn ui-btn--primary ui-btn--small"
+              onClick={() => {
+                void changeSections(proposal);
+                setProposal(null);
+              }}
+            >
+              Use these sections
+            </button>
+            <button
+              type="button"
+              className="ui-btn ui-btn--small ui-btn--quiet"
+              onClick={() => setProposal(null)}
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
+      {!!sections.length && (
+        <div className="row-actions track-edge-actions">
+          {tags.length > 0 && (
+            <button
+              type="button"
+              className={`ui-btn ui-btn--small ${data?.section_map ? "" : "ui-btn--primary"}`}
+              onClick={() => void propose()}
+              disabled={proposing}
+            >
+              {proposing ? "Reading the structure…" : "Use the lyric structure"}
+            </button>
+          )}
+          <button
+            type="button"
+            className="ui-btn ui-btn--small"
+            onClick={() => {
+              const added = addSectionEdge(player.current());
+              setEdgeRefused(!added);
+            }}
+          >
+            Add an edge at the playhead
+          </button>
+          {canUndoSections && (
+            <button type="button" className="ui-btn ui-btn--small" onClick={() => void undoSections()}>
+              Undo
+            </button>
+          )}
+          {data?.section_map && (
+            <button type="button" className="ui-btn ui-btn--small" onClick={() => void resetSections()}>
+              Reset to detected sections
+            </button>
+          )}
+        </div>
+      )}
+      {!!sections.length && (
+        <p className="hint">
+          Drag a line on the song below to move an edge. Your changes never alter the song or the
+          measurement.
+        </p>
+      )}
     </section>
   );
 }

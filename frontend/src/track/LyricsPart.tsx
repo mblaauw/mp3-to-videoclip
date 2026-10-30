@@ -281,7 +281,7 @@ export function LyricsPart({ slug, model }: { slug: string; model: TrackModel })
             {tools?.supported && timed < sung && (
               <button
                 type="button"
-                className="ui-btn ui-btn--small ui-btn--primary"
+                className={`ui-btn ui-btn--small ${timed === 0 ? "ui-btn--primary" : ""}`}
                 onClick={() => void timeAutomatically()}
                 disabled={timingBusy || setupBusy}
               >

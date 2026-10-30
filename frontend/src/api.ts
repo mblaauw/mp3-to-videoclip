@@ -193,6 +193,8 @@ export type TrackData = {
   duration: number;
   source_duration: number;
   section_names: { start: number; name: string }[];
+  /** True while the owner's corrected sections replace the detected ones. */
+  section_map?: boolean;
 };
 
 export type ConceptBeat = {
@@ -938,6 +940,18 @@ export const api = {
     ),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
+  saveSectionMap: (slug: string, sections: { start: number; name: string }[]) =>
+    request<{ sections: { start: number; name: string }[] }>(`/api/projects/${slug}/section-map`, {
+      method: "PUT",
+      body: JSON.stringify({ sections }),
+    }),
+  proposeSections: (slug: string) =>
+    request<{ sections: { start: number; name: string }[] }>(
+      `/api/projects/${slug}/section-map/propose`,
+      { method: "POST" },
+    ),
+  resetSectionMap: (slug: string) =>
+    request<{ status: string }>(`/api/projects/${slug}/section-map/reset`, { method: "POST" }),
   lyricTools: (slug: string) => request<LyricTools>(`/api/projects/${slug}/lyric-tools`),
   setupLyricTools: (slug: string) =>
     request<{ job_id: string }>(`/api/projects/${slug}/lyric-tools/setup`, { method: "POST" }),

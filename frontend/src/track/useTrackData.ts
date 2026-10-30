@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type TrackData } from "../api";
 import { notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
+import { toast } from "../toast";
+import { addEdge, joinNext, moveEdge, type SectionEdit } from "./sectionEdit";
+
+export const SECTION_EDGE = "studio:section-edge";
 
 export function defaultName(index: number): string {
   return `Section ${index + 1}`;
@@ -18,6 +22,10 @@ export function useTrackData(slug: string) {
   const [error, setError] = useState<string | null>(null);
   const savedTimer = useRef<number | null>(null);
   const loadEpoch = useRef(0);
+  const [undoDepth, setUndoDepth] = useState(0);
+  const currentNames = useRef<string[]>([]);
+  currentNames.current = names;
+  const undoStack = useRef<{ map: boolean; sections: SectionEdit[] }[]>([]);
 
   const adopt = useCallback((next: TrackData) => {
     setData(next);
@@ -42,6 +50,8 @@ export function useTrackData(slug: string) {
   useEffect(() => {
     setData(null);
     setNames([]);
+    undoStack.current = [];
+    setUndoDepth(0);
     void load();
     return () => {
       loadEpoch.current += 1;
@@ -91,12 +101,26 @@ export function useTrackData(slug: string) {
     }
   };
 
-  const saveNames = async () => {
+  const saveNames = async (names = currentNames.current) => {
     const sections = data?.music?.sections || [];
     if (!sections.length || namesSaving) return;
     setNamesSaving(true);
     setError(null);
     try {
+      if (data?.section_map) {
+        await api.saveSectionMap(
+          slug,
+          sections.map((section, index) => ({
+            start: Number(section.start),
+            name: names[index]?.trim() || defaultName(index),
+          })),
+        );
+        setNamesSaved(true);
+        if (savedTimer.current) window.clearTimeout(savedTimer.current);
+        savedTimer.current = window.setTimeout(() => setNamesSaved(false), 2000);
+        notifyProjectChanged();
+        return;
+      }
       const saved = await api.saveMusicNotes(
         slug,
         sections.map((section, index) => ({
@@ -138,6 +162,80 @@ export function useTrackData(slug: string) {
     }
   };
 
+  const currentEdits = useCallback(
+    (): SectionEdit[] =>
+      (data?.music?.sections || []).map((section, index) => ({
+        start: Number(section.start),
+        name: names[index]?.trim() || section.name || defaultName(index),
+      })),
+    [data?.music?.sections, names],
+  );
+
+  const changeSections = useCallback(
+    async (next: SectionEdit[]) => {
+      const before = currentEdits();
+      undoStack.current.push({ map: !!data?.section_map, sections: before });
+      setUndoDepth(undoStack.current.length);
+      try {
+        await api.saveSectionMap(slug, next);
+        await load();
+        notifyProjectChanged();
+      } catch (caught) {
+        undoStack.current.pop();
+        setUndoDepth(undoStack.current.length);
+        toast(`Could not change the sections: ${String(caught)}`);
+      }
+    },
+    [currentEdits, data?.section_map, load, slug],
+  );
+
+  const undoSections = async () => {
+    const step = undoStack.current.pop();
+    setUndoDepth(undoStack.current.length);
+    if (!step) return;
+    try {
+      if (step.map) await api.saveSectionMap(slug, step.sections);
+      else await api.resetSectionMap(slug);
+      await load();
+      notifyProjectChanged();
+    } catch (caught) {
+      toast(`Could not undo: ${String(caught)}`);
+    }
+  };
+
+  const resetSections = async () => {
+    undoStack.current.push({ map: true, sections: currentEdits() });
+    setUndoDepth(undoStack.current.length);
+    try {
+      await api.resetSectionMap(slug);
+      await load();
+      notifyProjectChanged();
+    } catch (caught) {
+      toast(`Could not reset the sections: ${String(caught)}`);
+    }
+  };
+
+  const duration = data?.duration ?? 0;
+  const addSectionEdge = (time: number): boolean => {
+    const next = addEdge(currentEdits(), time, duration);
+    if (!next) return false;
+    void changeSections(next);
+    return true;
+  };
+  const joinSection = (index: number) => void changeSections(joinNext(currentEdits(), index));
+
+  // The Spine owns the song strip, so a dragged edge arrives as an event.
+  useEffect(() => {
+    const onEdge = (event: Event) => {
+      const { index, time } = (event as CustomEvent<{ index: number; time: number }>).detail;
+      const before = currentEdits();
+      const next = moveEdge(before, index, time, duration);
+      if (next !== before && next[index]?.start !== before[index]?.start) void changeSections(next);
+    };
+    window.addEventListener(SECTION_EDGE, onEdge);
+    return () => window.removeEventListener(SECTION_EDGE, onEdge);
+  }, [changeSections, currentEdits, duration]);
+
   /** True when the words were saved. */
   const saveLyrics = async (text: string): Promise<boolean> => {
     if (lyricsSaving || !text.trim()) return false;
@@ -174,6 +272,12 @@ export function useTrackData(slug: string) {
     saveNames,
     setMode,
     saveLyrics,
+    canUndoSections: undoDepth > 0,
+    undoSections,
+    resetSections,
+    addSectionEdge,
+    joinSection,
+    changeSections,
   };
 }
 
