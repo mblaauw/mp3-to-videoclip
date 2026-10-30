@@ -439,3 +439,31 @@ def test_the_direct_client_does_not_keep_the_library_defaults():
     assert llm._client.max_retries == MAX_RETRIES
     # A long tool call takes a minute or more and must fit well inside the limit.
     assert IDLE_LIMIT >= 120
+
+
+def test_a_refused_model_call_ends_the_turn_with_a_plain_error(tmp_path, monkeypatch):
+    import httpx
+    from openai import InternalServerError
+
+    root = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    class Refused:
+        async def stream(self, messages, tools=None, system=None):
+            raise InternalServerError(
+                "unavailable",
+                response=httpx.Response(503, request=httpx.Request("POST", "https://x.test")),
+                body=None,
+            )
+            yield  # pragma: no cover
+
+    async def collect():
+        return [
+            event
+            async for event in run_turn(Refused(), root, "demo", "Cut it.", "system", role="editor")
+        ]
+
+    events = asyncio.run(collect())
+    assert events[-1].kind == "done"
+    assert "503" in events[-1].payload["error"]
+    assert "stalled" not in events[-1].payload
