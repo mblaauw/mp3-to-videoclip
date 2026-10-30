@@ -644,6 +644,7 @@ def apply_intake(
     project = load_project(root)
     brief = load_brief(root)
     analysis_needed = False
+    previous_window = project.audio_window
     if audio_window is not None:
         project, analysis_needed = _apply_window(root, project, audio_window)
     if style_preset is not None:
@@ -697,6 +698,16 @@ def apply_intake(
                 )
             }
         )
+    # Last before the writes, so a refused intake keeps the story on the song. A new fade
+    # plays the same music at the same times, so only a new start or end sets it aside.
+    window = project.audio_window
+    if window is not None and (
+        previous_window is None
+        or (previous_window.start, previous_window.end) != (window.start, window.end)
+    ):
+        from . import story_beats
+
+        story_beats.set_aside(root)
     write_json(root / "project.json", project.model_dump())
     write_json(root / "brief.json", brief.model_dump())
     return {

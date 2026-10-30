@@ -115,7 +115,10 @@ recording and `project.audio_window` is the absolute source window with fades.
 `audio.py` writes a derived PCM WAV under `work/audio/`, keyed by source hash and
 window; the source MP3 is only read. Analysis, the live Player, preview, base and
 final all render the excerpt. A window change is refused once a storyboard,
-non-empty event map or lyrics exist, and it deletes stale measurement.
+non-empty event map or lyrics exist, and it deletes stale measurement. A new start
+or end also moves the story's timings to `work/story-beats-history/`, because they
+count from the film's first frame: every passage then reads as not on the song. A
+new fade keeps them.
 
 Style presets are Markdown files in `director/prompts/styles/` with a small
 JSON-valued header (look, image rules, model settings, protected flag). The

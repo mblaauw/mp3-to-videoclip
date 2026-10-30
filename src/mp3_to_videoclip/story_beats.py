@@ -44,11 +44,24 @@ def place_story(root: Path, payload: dict) -> StoryPlacement:
     if previous == value:
         return placement
     if isinstance(previous, dict):
-        history = root / f"work/story-beats-history/{digest(previous)}.json"
-        if not history.exists():
-            write_json(history, previous)
+        _keep(root, previous)
     write_json(path, value)
     return placement
+
+
+def _keep(root: Path, value: dict) -> None:
+    history = root / f"work/story-beats-history/{digest(value)}.json"
+    if not history.exists():
+        write_json(history, value)
+
+
+@state_mutation
+def set_aside(root: Path) -> None:
+    """The excerpt moved, so the times point at other music: history keeps them, unplaced."""
+    path = root / PATH
+    if path.is_file():
+        _keep(root, read_json(path))
+        path.unlink()
 
 
 def _untimed(treatment: str, start: int, end: int) -> list[dict]:
