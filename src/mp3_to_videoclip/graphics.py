@@ -49,7 +49,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from . import operations
+from . import operations, titles
 from .branding import load_brand, paste_collaboration_mark
 from .models import Storyboard
 from .timeline import (
@@ -66,7 +66,7 @@ CACHE_SCHEMA = 2
 #: Modules whose bytes can change a rendered element or its resolved timing.
 #: ``branding.py`` owns the collaboration mark's geometry, which this module
 #: draws, so its bytes change rendered pixels just as much as our own do.
-IMPLEMENTATION_MODULES = ("graphics.py", "timeline.py", "branding.py")
+IMPLEMENTATION_MODULES = ("graphics.py", "timeline.py", "titles.py", "branding.py")
 #: Upper bound on the default representative preflight sample set.
 PREFLIGHT_MAX_SAMPLES = 64
 #: Storyboard location, relative to the project root.
@@ -130,10 +130,10 @@ MARKS = ("signal", "cat_ears", "joint", "filmstrip")
 #: Design variants. ``None`` (no ``design`` key) is the private Signal v2
 #: layout, preserved byte-for-byte so existing approved productions are never
 #: re-rendered by this change.
-DESIGN_JOINT = "joint-v1"
+DESIGN_JOINT = titles.DESIGN_JOINT
 DESIGNS = (DESIGN_JOINT,)
 
-MIN_CAPTION_GAP = 0.25
+MIN_CAPTION_GAP = titles.MIN_CAPTION_GAP
 #: Fraction of the canvas each edge keeps clear of any drawn element. Raised from
 #: 0.03 after the Cool Cat typography review found a long SFX burst sitting ~2.5%
 #: from the top edge, which is inside broadcast title-safe.
@@ -1710,6 +1710,15 @@ def _load_storyboard(root: Path, project: dict) -> Storyboard:
     return board
 
 
+def _timing_board(root: Path, project: dict) -> Storyboard:
+    """The storyboard with the edit's timing applied, as shot-bound captions see it."""
+    board = _load_storyboard(root, project)
+    try:
+        return titles.timing_board(root, board)
+    except (OSError, ValueError) as exc:
+        raise ComposeError(f"invalid edit for caption timing: {exc}") from exc
+
+
 def _selected_stills(root: Path, board: Storyboard | None) -> dict:
     """The recorded selected still per shot, from ``work/assets.json`` when present.
 
@@ -1813,62 +1822,21 @@ def _unique_output(output: Path) -> Path:
 
 
 def _plan_parts(spec: dict, duration: float, fps: int, captions=None):
-    intro_frames = max(1, round(float(spec["intro_seconds"]) * fps))
-    total = math.ceil(duration * fps)
-    credits_start = duration - float(spec["credits_tail_seconds"])
-    lockup_seconds = float(spec["lockup_seconds"])
-    credits_tail = float(spec["credits_tail_seconds"])
-    parts = [{"kind": "intro", "id": "intro", "start": 0.0, "frames": intro_frames}]
-    planned = list(captions) if captions is not None else list(spec["captions"])
-    for cap in sorted(planned, key=lambda c: float(c["start"])):
-        start, end = float(cap["start"]), float(cap["end"])
-        if start < intro_frames / fps + MIN_CAPTION_GAP:
-            raise ComposeError(f"caption {cap['id']} starts inside the intro window")
-        if end > credits_start - MIN_CAPTION_GAP:
-            raise ComposeError(f"caption {cap['id']} overlaps the credits window")
-        parts.append(
-            {
-                "kind": "caption",
-                "id": cap["id"],
-                "caption": cap,
-                "start": start,
-                "frames": max(1, round((end - start) * fps)),
-            }
-        )
-    cursor = credits_start
-    cards = spec["credits"]["cards"]
-    design = resolve_design(spec)
-    # A joint-identity beat opens the closing package, so the partnership reads
-    # as a signature rather than as one more name in a list. Its window is
-    # capped so a short credit tail degrades to the plain card sequence.
-    identity_span = 0.0
-    if design == DESIGN_JOINT:
-        identity_span = max(0.0, min(6.0, (credits_tail - lockup_seconds) / (len(cards) + 1)))
-        if identity_span > 0:
-            frames = max(1, round(identity_span * fps))
-            parts.append({"kind": "identity", "id": "identity", "start": cursor, "frames": frames})
-            cursor += frames / fps
-    card_span = (credits_tail - lockup_seconds - identity_span) / len(cards)
-    for index, card in enumerate(cards):
-        frames = max(1, round(card_span * fps))
-        parts.append(
-            {
-                "kind": "card",
-                "id": f"card-{index + 1:02d}",
-                "card": list(card),
-                "start": cursor,
-                "frames": frames,
-            }
-        )
-        cursor += frames / fps
-    lock_frames = max(1, total - round(cursor * fps))
-    parts.append({"kind": "lockup", "id": "lockup", "start": cursor, "frames": lock_frames})
-    parts.sort(key=lambda p: p["start"])
-    for a, b in zip(parts, parts[1:], strict=False):
-        if b["start"] < a["start"] + a["frames"] / fps - 1e-6:
-            raise ComposeError(f"overlay window {b['id']} overlaps {a['id']}")
-    if cursor + lock_frames / fps > duration + 2 / fps:
-        raise ComposeError("credits extend past the end of the music")
+    """The compositor's view of :func:`titles.plan_titles`: ``start`` in seconds.
+
+    ``start`` is exactly ``start_frame / fps``, so every placement that rounds
+    ``start * fps`` lands on the planned frame.
+    """
+    resolve_design(spec)
+    try:
+        windows, total = titles.plan_titles(spec, fps=fps, duration=duration, captions=captions)
+    except titles.TitleError as exc:
+        raise ComposeError(str(exc)) from exc
+    parts = []
+    for window in windows:
+        part = {key: value for key, value in window.items() if key not in ("start_frame", "index")}
+        part["start"] = window["start_frame"] / fps
+        parts.append(part)
     return parts, total
 
 
@@ -1970,7 +1938,7 @@ def compose(
     fps, duration = int(project["fps"]), float(project["duration"])
     canvas = (int(project["width"]), int(project["height"]))
     board = (
-        _load_storyboard(root, project)
+        _timing_board(root, project)
         if any(is_shot_bound(cap) for cap in spec["captions"])
         else None
     )
@@ -2371,7 +2339,7 @@ def preflight_frames(
     board = None
     if needs_board or (root / STORYBOARD_PATH).exists():
         try:
-            board = _load_storyboard(root, project)
+            board = _timing_board(root, project)
         except ComposeError:
             if needs_board:
                 raise

@@ -116,3 +116,19 @@ stills + edit ──► resolved_assets ─► RenderShot[] ───┤
 The editorial title design (D5), portrait titles, moving the hard-coded joint
 identity (`signature.NAMES`, `PRODUCTION_LINE`) into settings, a cache reclaim
 policy, and deleting the FFmpeg/Pillow paths (assessment phase 2).
+
+## Progress
+
+- **T1 done.** `titles.plan_titles` returns integer-frame windows, and
+  `graphics._plan_parts` adapts it for the compositor that remains this phase.
+  - 168 parametrised layouts match the old planner frame for frame.
+  - The real specs plan identically: Forward Ever (6 windows), Stof en Stilte (5)
+    and Tree of Love (8).
+  - Zero Bars' `end-line` caption (235.75–239.83 s) overlaps its own credits
+    (from 199.8 s), and the old planner refuses it too. Its spec needs a creative
+    fix before it can have titles.
+  - Shot-bound captions now follow the edit's timing; before, they used the
+    storyboard's. No current production had both.
+  - `titles.py` joins the graphics implementation revision, so the existing
+    titles reviews need renewing. Tree of Love's is unapproved and superseded
+    anyway (D4).
