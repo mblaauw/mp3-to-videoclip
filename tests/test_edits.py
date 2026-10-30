@@ -539,3 +539,37 @@ def test_cut_material_offers_sections_lines_and_changes_in_frames(tmp_path):
     assert material["lines"] == [{"frame": 48, "text": "one", "source": "auto"}]
     assert material["changes"][0]["frame"] == 96
     assert material["beats"] == [12, 24]
+
+
+def test_crop_cuts_are_bounded_counted_and_absent_when_unused(tmp_path):
+    from mp3_to_videoclip.models import EditCrop
+
+    root = _energetic_root(tmp_path)
+    edit = edits.seed_edit(root)
+    assert "crops" not in edit.shots[0].model_dump(by_alias=True)
+    shots = list(edit.shots)
+    start = shots[0].start_frame
+    shots[0] = shots[0].model_copy(
+        update={"crops": [EditCrop(frame=start + 6, zoom=1.5, x=0.2, y=0.8)]}
+    )
+    cropped = edit.model_copy(update={"shots": shots})
+    report = edits.report(root, edit=cropped)
+    assert "crop_soft" in {item["code"] for item in report["warnings"]}
+    baseline = edits.report(root, edit=edit)
+    assert report["sections"][0]["cuts"] == baseline["sections"][0]["cuts"] + 1
+    with pytest.raises(ValueError, match="outside"):
+        EditShot(
+            shot_id="s001",
+            start_frame=0,
+            duration_frames=24,
+            crops=[EditCrop(frame=24, zoom=1.2)],
+        )
+    with pytest.raises(ValueError, match="in order"):
+        EditShot(
+            shot_id="s001",
+            start_frame=0,
+            duration_frames=24,
+            crops=[EditCrop(frame=12, zoom=1.2), EditCrop(frame=6, zoom=1.2)],
+        )
+    with pytest.raises(ValueError):
+        EditCrop(frame=6, zoom=1.7)

@@ -49,6 +49,14 @@ export type EditAccent = {
   reason?: string;
 };
 
+export type EditCrop = {
+  frame: number;
+  zoom: number;
+  x?: number;
+  y?: number;
+  reason?: string;
+};
+
 export type EditText = {
   id: string;
   style: "super" | "title" | "lower_third" | "lyric" | "card";
@@ -68,6 +76,7 @@ export type EditShot = {
   split_layout?: "row" | "column" | "grid" | null;
   accents: EditAccent[];
   text: EditText[];
+  crops?: EditCrop[];
 };
 
 export type Grade = {

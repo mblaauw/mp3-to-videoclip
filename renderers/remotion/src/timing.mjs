@@ -325,6 +325,8 @@ export function cameraAtFrame(span, frame) {
   const last = Math.max(span.duration_frames + span.handle - 1, 1);
   const local = clamp(Math.round(frame), 0, last);
   if (span.edit?.motion) {
+    const crop = activeCrop(span.edit.crops, span.edit.start_frame + local);
+    if (crop) return {zoom: crop.zoom, x: crop.x ?? 0.5, y: crop.y ?? 0.5};
     return editCamera(span.edit.motion, local / last);
   }
   if (Array.isArray(span.camera_keyframes) && span.camera_keyframes.length > 0) {
@@ -343,6 +345,16 @@ export function cameraAtFrame(span, frame) {
     };
   }
   return legacyCamera(span.camera ?? "zoom_in", local / last);
+}
+
+/** The latest crop cut at this absolute frame, or null before the first one. */
+export function activeCrop(crops, absoluteFrame) {
+  if (!Array.isArray(crops)) return null;
+  let active = null;
+  for (const crop of crops) {
+    if (crop.frame <= absoluteFrame) active = crop;
+  }
+  return active;
 }
 
 /** Edit-owned motion, bounded like the legacy camera. */
@@ -595,6 +607,27 @@ export function validateEditText(value, label = "edit text") {
   return value;
 }
 
+export function validateEditCrops(crops, start, duration, id) {
+  if (crops === undefined || crops === null) return;
+  if (!Array.isArray(crops)) fail(`edit shot ${id} crops must be an array`);
+  let previous = start;
+  for (const [index, crop] of crops.entries()) {
+    const label = `edit shot ${id} crop ${index}`;
+    if (crop === null || typeof crop !== "object") fail(`${label} must be an object`);
+    requireIndex(crop.frame, `${label}.frame`);
+    if (crop.frame <= previous || crop.frame >= start + duration) {
+      fail(`${label} must be inside the shot, in order`);
+    }
+    previous = crop.frame;
+    const zoom = requireNumber(crop.zoom, `${label}.zoom`);
+    if (zoom < 1 || zoom > 1.6) fail(`${label}.zoom must stay between 1.0 and 1.6`);
+    for (const key of ["x", "y"]) {
+      const value = requireNumber(crop[key] ?? 0.5, `${label}.${key}`);
+      if (value < 0 || value > 1) fail(`${label}.${key} is normalized 0..1`);
+    }
+  }
+}
+
 export function validateEditShot(value, shot) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail(`shot ${shot.id} edit must be an object`);
@@ -617,6 +650,7 @@ export function validateEditShot(value, shot) {
       fail(`edit shot ${shot.id} accent ${index} is outside the shot`);
     }
   }
+  validateEditCrops(value.crops, value.start_frame, duration, shot.id);
   for (const [index, text] of (value.text ?? []).entries()) {
     validateEditText(text, `edit shot ${shot.id} text ${index}`);
     if (

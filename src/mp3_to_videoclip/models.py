@@ -871,6 +871,23 @@ class EditAccent(Model):
         return value
 
 
+class EditCrop(Model):
+    """A jump to a new framing of the same still, on an absolute film frame."""
+
+    frame: int = Field(ge=0)
+    zoom: float = Field(ge=1.0, le=1.6)
+    x: float = Field(default=0.5, ge=0, le=1)
+    y: float = Field(default=0.5, ge=0, le=1)
+    reason: str = Field(default="", max_length=240)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("reason") == "":
+            value.pop("reason", None)
+        return value
+
+
 class EditText(Model):
     """One timed text layer. Frames are absolute film frames."""
 
@@ -907,12 +924,16 @@ class EditShot(Model):
     split_layout: Literal["row", "column", "grid"] | None = None
     accents: list[EditAccent] = Field(default_factory=list, max_length=8)
     text: list[EditText] = Field(default_factory=list, max_length=8)
+    crops: list[EditCrop] = Field(default_factory=list, max_length=16)
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
         value = handler(self)
         if value.get("split_layout") is None:
             value.pop("split_layout", None)
+        # Absent when unused, so a cut without crop cuts hashes as it always has.
+        if not value.get("crops"):
+            value.pop("crops", None)
         return value
 
     @model_validator(mode="after")
@@ -921,6 +942,12 @@ class EditShot(Model):
         for accent in self.accents:
             if not self.start_frame <= accent.frame < end:
                 raise ValueError(f"accent frame {accent.frame} is outside shot {self.shot_id}")
+        frames = [crop.frame for crop in self.crops]
+        if frames != sorted(set(frames)):
+            raise ValueError(f"crop cuts in shot {self.shot_id} must be in order, one per frame")
+        for frame in frames:
+            if not self.start_frame < frame < end:
+                raise ValueError(f"crop cut at {frame} is outside shot {self.shot_id}")
         ids = {item.id for item in self.text}
         if len(ids) != len(self.text):
             raise ValueError(f"text ids in shot {self.shot_id} must be unique")

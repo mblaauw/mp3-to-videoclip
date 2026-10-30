@@ -7,7 +7,9 @@ import test from "node:test";
 
 import {
   accentState,
+  activeCrop,
   allocateSpans,
+  cameraAtFrame,
   editTransitionStyle,
   flashViolations,
   gradeStyle,
@@ -204,4 +206,36 @@ test("the renderer request refuses four flashes in one second", () => {
       }),
     /flash limit/,
   );
+});
+
+test("a crop cut jumps to its framing on its frame and holds it", () => {
+  const crops = [
+    {frame: 30, zoom: 1.35, x: 0.2, y: 0.7},
+    {frame: 60, zoom: 1.1},
+  ];
+  const span = {
+    id: "a",
+    duration_frames: 120,
+    handle: 0,
+    edit: {start_frame: 10, motion: {type: "push_in", from: 1, to: 1.08}, crops},
+  };
+  assert.ok(cameraAtFrame(span, 19).zoom < 1.08);
+  assert.deepEqual(cameraAtFrame(span, 20), {zoom: 1.35, x: 0.2, y: 0.7});
+  assert.deepEqual(cameraAtFrame(span, 49), {zoom: 1.35, x: 0.2, y: 0.7});
+  assert.deepEqual(cameraAtFrame(span, 50), {zoom: 1.1, x: 0.5, y: 0.5});
+  assert.equal(activeCrop(undefined, 10), null);
+});
+
+test("crop cuts are validated like the Python model", () => {
+  const withCrops = (crops) => shot("a", 0, 48, {crops});
+  assert.doesNotThrow(() => validateEditShot(withCrops([{frame: 10, zoom: 1.5}]).edit, withCrops([])));
+  for (const bad of [
+    [{frame: 0, zoom: 1.2}],
+    [{frame: 48, zoom: 1.2}],
+    [{frame: 10, zoom: 1.7}],
+    [{frame: 20, zoom: 1.2}, {frame: 10, zoom: 1.2}],
+    [{frame: 10, zoom: 1.2, x: 2}],
+  ]) {
+    assert.throws(() => validateEditShot(withCrops(bad).edit, withCrops([])));
+  }
 });

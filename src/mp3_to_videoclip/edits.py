@@ -116,6 +116,7 @@ TECHNIQUE_NAMES = {
     "slide_up": "slide-up type",
     "pop": "pop type",
     "kinetic_words": "kinetic typography",
+    "crop": "crop cut",
 }
 
 ENERGY_WORDS = {
@@ -125,6 +126,7 @@ ENERGY_WORDS = {
 
 
 SAME_TRAVEL_RUN = 4
+SOFT_CROP_ZOOM = 1.4
 LONG_STATIC_SECONDS = 12.0
 UNREVIEWED_FEELS = ("unreviewed", "section", "")
 
@@ -505,6 +507,8 @@ def report(
     for section, start, end in windows:
         decisions = [shot for shot in edit.shots if start <= shot.start_frame < end]
         cuts = sum(1 for shot in decisions if shot.start_frame > start)
+        # A crop cut is a cut the viewer sees, whichever shot it falls in.
+        cuts += sum(1 for shot in edit.shots for crop in shot.crops if start <= crop.frame < end)
         seconds = max((end - start) / fps, 1 / fps)
         density = round(cuts / seconds * 10, 2)
         holds = sum(1 for shot in decisions if shot.motion.type == "hold")
@@ -622,12 +626,30 @@ def report(
             )
     for shot in edit.shots:
         seconds = shot.duration_frames / fps
-        if shot.motion.type == "hold" and seconds > LONG_STATIC_SECONDS and not shot.accents:
+        if (
+            shot.motion.type == "hold"
+            and seconds > LONG_STATIC_SECONDS
+            and not shot.accents
+            and not shot.crops
+        ):
             warnings.append(
                 {
                     "code": "long_static_shot",
                     "shot_id": shot.shot_id,
                     "message": f"{shot.shot_id} stays still for {seconds:.1f}s",
+                }
+            )
+    for shot in edit.shots:
+        soft = [crop for crop in shot.crops if crop.zoom > SOFT_CROP_ZOOM]
+        if soft:
+            warnings.append(
+                {
+                    "code": "crop_soft",
+                    "shot_id": shot.shot_id,
+                    "message": (
+                        f"{shot.shot_id} crops in to {max(crop.zoom for crop in soft):.2f}x; "
+                        "check that the still stays sharp enough"
+                    ),
                 }
             )
     for section, _start, _end in windows:

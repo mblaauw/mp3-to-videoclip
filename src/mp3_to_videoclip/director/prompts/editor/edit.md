@@ -29,6 +29,10 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    and an anchor. Default travel is 1.00→1.05–1.10, varied with the music: less in
    a quiet passage, more into a release. Avoid the same move three times in a row;
    keep screen direction consistent.
+   Add `crops` to cut within a shot: at each absolute `frame` the picture jumps to
+   a new framing of the same still and holds it, with `zoom` 1.00–1.60 and `x`, `y`
+   0–1 saying which part of the frame it keeps. Inspect the still first, so each
+   crop lands on something worth looking at. Past 1.40 a still starts to go soft.
 4. **Transitions.** Hard cut is the default. `fade`, `wipe_left`, `wipe_right`,
    `dip_to_black`, `dip_to_white`, `whip_pan`, `push` and `slide` need handle
    frames and a stated reason. Use `direction` where the transition has one.
@@ -60,6 +64,8 @@ grade. The edit must cover the storyboard's whole timeline exactly.
     "transition_in": {"type": "whip_pan", "frames": 8, "direction": "left",
       "reason": "chorus entry"},
     "split_layout": null,
+    "crops": [{"frame": 1476, "zoom": 1.35, "x": 0.3, "y": 0.6,
+      "reason": "find the hands on the line"}],
     "accents": [{"frame": 1440, "type": "punch_in", "amount": 1.04,
       "duration_frames": 6, "reason": "first chorus hit"}],
     "text": [{"id": "t3", "style": "super", "text": "OUT 14 NOV",
