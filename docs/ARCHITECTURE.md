@@ -300,6 +300,16 @@ production and role while its model fingerprint matches; a primary agent's
 model is **not** applied at session creation, so the gateway sets the session
 model explicitly.
 
+Silence is bounded on both paths. The direct stream ends a turn after 180 s with no
+chunk (`IDLE_LIMIT`, waiting for the first response included), and any chunk counts,
+so tool-call arguments that are still arriving are never cut off. The gateway uses
+the same limit, 300 s while a tool call's arguments are open because its events say
+nothing until they are complete, and keeps the 900 s limit on a whole turn. Only this
+session's events count there, not heartbeats or other sessions. Either way the turn
+ends with a `done` event carrying a plain `error` and `stalled`, and tool calls
+only run once complete, so nothing half-written is applied. `progress` events tell the
+Director what is being written, and after 60 s with nothing new it offers Stop.
+
 Known v2.1.4 limits: the event stream ignores `Last-Event-ID`, so a reconnect
 must refetch `/api/session/{id}/message`; interrupt ends the step as
 `finish: "error"` plus `session.execution.interrupted`; and a model missing from
