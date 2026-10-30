@@ -169,6 +169,13 @@ export type TrackData = {
   section_names: { start: number; name: string }[];
 };
 
+export type ConceptBeat = {
+  start: number;
+  end: number;
+  label: string;
+  text: string;
+};
+
 export type Concept = {
   id: string;
   title: string;
@@ -176,7 +183,9 @@ export type Concept = {
   logline: string;
   why: string;
   world: string;
-  shape: string[];
+  /** Older concepts: free text with the times inside. */
+  shape?: string[];
+  beats?: ConceptBeat[];
   signature_moment: string;
   risk: string;
 };

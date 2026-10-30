@@ -9,8 +9,8 @@ QUESTIONS = (
         "id": "routes",
         "label": "Distinct routes",
         "question": (
-            "Are the three routes structurally different, rather than one film "
-            "with three grades or three versions of the same shot list?"
+            "When there is more than one route, are they structurally different, "
+            "rather than one film with new grades or the same shot list?"
         ),
     },
     {

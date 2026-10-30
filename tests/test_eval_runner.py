@@ -254,7 +254,7 @@ def test_failing_writer_run_is_reported_not_hidden(tmp_path):
     assert summary["failed"] == 1
     page = (reports / "prompt-eval-writer-bad.md").read_text()
     assert "FAIL" in page
-    assert "three different structures" in page
+    assert "different structure" in page
 
 
 def test_editor_text_claims_must_trace_to_the_fixture(tmp_path):

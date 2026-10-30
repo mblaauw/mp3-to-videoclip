@@ -71,18 +71,19 @@ TOOLS: list[dict] = [
     _tool("get_lyrics", "Read the lyrics.", {"slug": {"type": "string"}}, ["slug"]),
     _tool(
         "get_treatments",
-        "Read the three concepts and the chosen concept ID, if any.",
+        "Read the concepts and the chosen concept ID, if any.",
         {"slug": {"type": "string"}},
         ["slug"],
     ),
     _tool(
         "update_treatments",
-        "Write exactly three structurally different concepts. Returns the saved artifact.",
+        "Write one to three structurally different concepts, including any you keep. "
+        "Returns the saved artifact.",
         {
             "slug": {"type": "string"},
             "concepts": {
                 "type": "array",
-                "minItems": 3,
+                "minItems": 1,
                 "maxItems": 3,
                 "items": {
                     "type": "object",
@@ -93,11 +94,20 @@ TOOLS: list[dict] = [
                         "logline": {"type": "string", "maxLength": 300},
                         "why": {"type": "string", "maxLength": 1200},
                         "world": {"type": "string", "maxLength": 1200},
-                        "shape": {
+                        "beats": {
                             "type": "array",
                             "minItems": 4,
                             "maxItems": 6,
-                            "items": {"type": "string"},
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "start": {"type": "number"},
+                                    "end": {"type": "number"},
+                                    "label": {"type": "string", "maxLength": 60},
+                                    "text": {"type": "string", "maxLength": 400},
+                                },
+                                "required": ["start", "end", "label", "text"],
+                            },
                         },
                         "signature_moment": {"type": "string", "maxLength": 300},
                         "risk": {"type": "string", "maxLength": 800},
@@ -109,7 +119,7 @@ TOOLS: list[dict] = [
                         "logline",
                         "why",
                         "world",
-                        "shape",
+                        "beats",
                         "signature_moment",
                         "risk",
                     ],

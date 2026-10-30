@@ -365,8 +365,27 @@ class ScriptBeat(Model):
         return {key: value for key, value in handler(self).items() if value != ""}
 
 
+class ConceptBeat(Model):
+    """One step of a concept, placed on the song in seconds from the film's first frame."""
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    label: str = Field(min_length=1, max_length=60)
+    text: str = Field(min_length=1, max_length=400)
+
+    @model_validator(mode="after")
+    def ordered(self):
+        if self.end <= self.start:
+            raise ValueError("a concept beat must end after it starts")
+        return self
+
+
 class Concept(Model):
-    """One genuinely different route for the film, before the treatment is chosen."""
+    """One genuinely different route for the film, before the treatment is chosen.
+
+    New concepts carry timed ``beats``. ``shape`` is the older free-text form and
+    stays readable on films made before beats existed.
+    """
 
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
     title: str = Field(min_length=1, max_length=120)
@@ -374,7 +393,8 @@ class Concept(Model):
     logline: str = Field(min_length=1, max_length=300)
     why: str = Field(min_length=1, max_length=1200)
     world: str = Field(min_length=1, max_length=1200)
-    shape: list[str] = Field(min_length=4, max_length=6)
+    shape: list[str] = Field(default_factory=list, max_length=6)
+    beats: list[ConceptBeat] = Field(default_factory=list, max_length=6)
     signature_moment: str = Field(min_length=1, max_length=300)
     risk: str = Field(min_length=1, max_length=800)
 
@@ -382,14 +402,27 @@ class Concept(Model):
     def useful(self):
         if any(not value.strip() for value in self.shape):
             raise ValueError("every concept shape beat needs text")
+        if not 4 <= len(self.beats or self.shape) <= 6:
+            raise ValueError("a concept needs four to six beats")
+        for before, after in zip(self.beats, self.beats[1:], strict=False):
+            if after.start < before.end:
+                raise ValueError("concept beats must run in order without overlapping")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        for field in ("shape", "beats"):
+            if not value.get(field):
+                value.pop(field, None)
+        return value
 
 
 class Treatments(Model):
-    """Three structurally distinct routes; the Writer may mark one chosen."""
+    """One to three structurally distinct routes; one may be marked chosen."""
 
     schema_version: Literal[1] = 1
-    concepts: list[Concept] = Field(min_length=3, max_length=3)
+    concepts: list[Concept] = Field(min_length=1, max_length=3)
     chosen_id: str | None = None
 
     @model_validator(mode="after")
@@ -399,7 +432,7 @@ class Treatments(Model):
             raise ValueError("concept IDs must be unique")
         structures = [concept.structure.strip().casefold() for concept in self.concepts]
         if len(set(structures)) != len(structures):
-            raise ValueError("three concepts need three different structures")
+            raise ValueError("each concept needs a different structure")
         if self.chosen_id is not None and self.chosen_id not in ids:
             raise ValueError("chosen_id must name a concept")
         return self

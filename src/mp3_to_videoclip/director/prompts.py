@@ -143,9 +143,11 @@ def select_task(root: Path, stage: str | None, role: Role) -> str:
             return "brief"
         treatments = _json(root, "work/treatments.json")
         concepts = treatments.get("concepts") or treatments.get("treatments") or []
-        if not isinstance(concepts, list) or len(concepts) < 3:
+        concepts = concepts if isinstance(concepts, list) else []
+        # Your own treatment needs no concept, but concepts on file still await a choice.
+        if not concepts and not str(brief.get("treatment") or "").strip():
             return "concepts"
-        if not treatments.get("chosen_id"):
+        if concepts and not treatments.get("chosen_id"):
             return "concepts"
         if not brief.get("script"):
             return "script_ad" if kind in ("promo", "advert") else "script_mv"

@@ -6,7 +6,7 @@ Three frozen inputs live in `fixtures/`:
 - `slow-instrumental.json` — 240 s instrumental music video.
 - `advert-30s.json` — 30 s advert over the 62–92 s excerpt, with allowed facts.
 
-`checks.py` validates artifact shapes without a model: three distinct concept
+`checks.py` validates artifact shapes without a model: one to three distinct concept
 structures, a contiguous board, the advert's local kinds, invented dates/URLs/
 prices and the Editor's edit report. `materialize_stills` draws deterministic
 gradient stand-ins so a run needs no Runware spend.

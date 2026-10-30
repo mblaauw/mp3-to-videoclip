@@ -542,13 +542,23 @@ def set_creative_profile(
 
 @state_mutation
 def update_treatments(root: Path, payload: dict) -> Treatments:
-    """Write exactly three structurally distinct concepts as one validated artifact."""
+    """Write one to three structurally distinct concepts as one validated artifact."""
     if not isinstance(payload, dict):
         raise ValueError("treatments must be a JSON object")
     try:
         treatments = Treatments.model_validate(payload)
     except ValueError as exc:
         raise ValueError(f"treatments are invalid: {exc}") from exc
+    project = read_optional(root / "project.json")
+    duration = project.get("duration") if isinstance(project, dict) else None
+    if duration:
+        for concept in treatments.concepts:
+            for beat in concept.beats:
+                if beat.end > duration + 0.5:
+                    raise ValueError(
+                        f"concept {concept.id}: a beat ends at {beat.end:.1f} s, "
+                        f"but the film is {duration:.1f} s"
+                    )
     value = treatments.model_dump()
     path = root / "work" / "treatments.json"
     previous = read_optional(path)
