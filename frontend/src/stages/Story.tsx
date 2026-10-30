@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import type { AudioWindow, IntakePayload, Music } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
-import { ConceptPart, FilmFacts } from "../story/ConceptPart";
+import { ConceptRoom } from "../story/ConceptRoom";
 import { CreditsCard } from "../story/CreditsCard";
+import { FilmFacts } from "../story/FilmFacts";
 import { ScriptPart } from "../story/ScriptPart";
 import { StartPart } from "../story/StartPart";
 import { StoryChanges } from "../story/StoryChanges";
@@ -113,7 +114,14 @@ export function StoryStage({
       {part === "start" && (
         <StartPart story={story} music={music} onStarted={() => setPicked("concept")} />
       )}
-      {part === "concept" && <ConceptPart story={story} onStart={() => setPicked("start")} />}
+      {part === "concept" && (
+        <ConceptRoom
+          story={story}
+          music={music}
+          onStart={() => setPicked("start")}
+          onRead={() => setPicked("story")}
+        />
+      )}
       {part === "story" && <ScriptPart story={story} />}
       {part === "world" && <WorldPart slug={slug} story={story} intake={intake} />}
       {part === "credits" && <CreditsCard slug={slug} />}

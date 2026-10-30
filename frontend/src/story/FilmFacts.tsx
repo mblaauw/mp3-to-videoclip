@@ -1,5 +1,4 @@
 import type { AudioWindow, IntakePayload } from "../api";
-import { Button } from "../ui";
 import { BriefCard } from "./BriefCard";
 import type { StoryData } from "./useStoryData";
 
@@ -63,45 +62,5 @@ export function FilmFacts({
         </div>
       )}
     </>
-  );
-}
-
-export function ConceptPart({ story, onStart }: { story: StoryData; onStart: () => void }) {
-  const { concepts, chosen, chooseConcept, writeConcepts, writerBusy } = story;
-  return (
-    <section className="stage-block concepts-block">
-      <h2>
-        Concepts <small>From the Writer · pick one to build on</small>
-      </h2>
-      {concepts.length ? (
-        <>
-          <div className="concepts">
-            {concepts.map((concept) => (
-              <button
-                type="button"
-                className="concept"
-                key={concept.id}
-                aria-pressed={chosen === concept.id}
-                onClick={() => void chooseConcept(concept.id)}
-              >
-                {chosen === concept.id && <span className="chosen">Chosen</span>}
-                <h3>{concept.title}</h3>
-                <p>{concept.logline}</p>
-              </button>
-            ))}
-          </div>
-          <div className="row-actions">
-            <Button size="small" variant="quiet" disabled={writerBusy} onClick={() => writeConcepts(3)}>
-              Ask for three more
-            </Button>
-          </div>
-        </>
-      ) : (
-        <div className="empty-block">
-          <p>{writerBusy ? "The Writer is working on this." : "No concepts yet."}</p>
-          {!writerBusy && <Button onClick={onStart}>Choose how to start</Button>}
-        </div>
-      )}
-    </section>
   );
 }

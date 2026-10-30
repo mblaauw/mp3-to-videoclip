@@ -5,7 +5,9 @@ import {
   type ApprovalChanges,
   type ApprovalState,
   type Brief,
+  type Concept,
   type Idea,
+  type StoryPassage,
   type IntakePayload,
   type TreatmentsPayload,
 } from "../api";
@@ -33,6 +35,7 @@ export function useStoryData({
   const [savingFields, setSavingFields] = useState(false);
   const [fieldsDirty, setFieldsDirty] = useState(false);
   const [idea, setIdea] = useState<Idea | null>(null);
+  const [passages, setPassages] = useState<StoryPassage[]>([]);
   const [starting, setStarting] = useState(false);
   const [writerBusy, setWriterBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -227,7 +230,7 @@ export function useStoryData({
   };
 
   const chooseConcept = async (id: string) => {
-    if (!treatments) return;
+    if (!treatments) return false;
     setError(null);
     try {
       const updated = await api.putTreatments(slug, {
@@ -240,8 +243,10 @@ export function useStoryData({
           : current,
       );
       notifyProjectChanged();
+      return true;
     } catch (caught) {
       setError(String(caught));
+      return false;
     }
   };
 
@@ -284,6 +289,19 @@ export function useStoryData({
     }
   };
 
+  useEffect(() => {
+    let live = true;
+    api
+      .storyPassages(slug)
+      .then((value) => {
+        if (live) setPassages(value.passages);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [slug, brief?.treatment, revision]);
+
   /** Concepts from the music, within any style or rules already on the brief. */
   const writeConcepts = (count: number) => {
     runWriter(
@@ -291,6 +309,29 @@ export function useStoryData({
         "Keep to any style and rules I already gave.",
       "concepts",
     );
+  };
+
+  /** One more route: the ones on file stay exactly as they are. */
+  const askForAnother = () => {
+    runWriter(
+      concepts.length
+        ? "Add one more concept and keep the ones on file word for word."
+        : "Suggest one concept that builds on my story and keeps its story, characters and ending.",
+      "concepts",
+    );
+  };
+
+  /** Choose a route and have its story written. Says whether the Writer was asked. */
+  const buildOn = async (concept: Concept) => {
+    if (!(await chooseConcept(concept.id))) return false;
+    const replacing = brief?.treatment?.trim()
+      ? " It replaces the treatment on file, which stays in the history."
+      : "";
+    runWriter(
+      `Write the story from the concept "${concept.title}", and put it on the song.${replacing}`,
+      intake?.kind === "promo" || intake?.kind === "advert" ? "script_ad" : "script_mv",
+    );
+    return true;
   };
 
   const saveStatus: SaveStatus =
@@ -314,6 +355,7 @@ export function useStoryData({
     direction,
     style,
     idea,
+    passages,
     starting,
     writerBusy,
     savingTreatment,
@@ -341,6 +383,8 @@ export function useStoryData({
     sortMyIdea,
     startFromIdea,
     writeConcepts,
+    askForAnother,
+    buildOn,
   };
 }
 
