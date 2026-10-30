@@ -8,6 +8,7 @@ import { clock } from "../spine/wave";
 import { ShotThumb } from "../storyboard/ShotThumb";
 import { CreditsCard } from "../story/CreditsCard";
 import { Button } from "../ui";
+import type { CutNote } from "./cutNotes";
 import { DeliveryCard } from "./DeliveryCard";
 import {
   joinMaxFrames,
@@ -38,20 +39,25 @@ export type PanelEdit = (next: EditPayload, label: string) => Promise<boolean>;
 export function FilmPanel({
   film,
   edit,
+  notes,
   selection,
   onSelect,
   onChange,
   onWatchJoin,
+  onSeekNote,
   onNavigate,
 }: {
   film: FilmData;
   edit: EditPayload | null;
+  notes: CutNote[];
   selection: FilmSelection;
   onSelect: (selection: FilmSelection) => void;
   onChange: PanelEdit;
   onWatchJoin: (id: string) => void;
+  onSeekNote: (note: CutNote) => void;
   onNavigate: (stage: Stage) => void;
 }) {
+  const note = selection?.kind === "note" ? notes[selection.index] : null;
   return (
     <div className="film-panel">
       <JobBanner slug={film.slug} kinds={["render"]} className="in-card" />
@@ -73,14 +79,53 @@ export function FilmPanel({
           onChange={onChange}
           onDone={() => onSelect(null)}
         />
+      ) : note ? (
+        <>
+          <header className="panel-head">
+            <h2>{note.title}</h2>
+          </header>
+          {note.why && <p>{note.why}</p>}
+          <div className="row-actions">
+            {note.shotId && (
+              <Button
+                size="small"
+                variant="quiet"
+                onClick={() => onSelect({ kind: "shot", id: note.shotId as string })}
+              >
+                Open the shot
+              </Button>
+            )}
+            <Button size="small" variant="quiet" onClick={() => onSelect(null)}>
+              All notes
+            </Button>
+          </div>
+        </>
       ) : (
-        <Overview film={film} onNavigate={onNavigate} />
+        <Overview
+          film={film}
+          notes={notes}
+          onSelect={onSelect}
+          onSeekNote={onSeekNote}
+          onNavigate={onNavigate}
+        />
       )}
     </div>
   );
 }
 
-function Overview({ film, onNavigate }: { film: FilmData; onNavigate: (stage: Stage) => void }) {
+function Overview({
+  film,
+  notes,
+  onSelect,
+  onSeekNote,
+  onNavigate,
+}: {
+  film: FilmData;
+  notes: CutNote[];
+  onSelect: (selection: FilmSelection) => void;
+  onSeekNote: (note: CutNote) => void;
+  onNavigate: (stage: Stage) => void;
+}) {
   const { cut, board, rendererReady, slug } = film;
   return (
     <>
@@ -111,6 +156,28 @@ function Overview({ film, onNavigate }: { film: FilmData; onNavigate: (stage: St
           )}
           {cut.notes && <p className="cut-notes">{cut.notes}</p>}
           <ArtifactRating slug={slug} artifact="edit" />
+          {notes.length > 0 && (
+            <details className="panel-notes" open={notes.length <= 6}>
+              <summary>
+                {notes.length} {notes.length === 1 ? "note" : "notes"} on this cut
+              </summary>
+              <ul>
+                {notes.map((note) => (
+                  <li key={note.index}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect({ kind: "note", index: note.index });
+                        onSeekNote(note);
+                      }}
+                    >
+                      {note.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </>
       )}
       {rendererReady !== false && <DeliveryCard film={film} onNavigate={onNavigate} />}

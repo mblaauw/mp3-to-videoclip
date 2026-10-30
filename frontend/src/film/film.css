@@ -996,6 +996,57 @@
 .film-wave .spine-wave {
   height: 100%;
 }
+.film-flags {
+  position: relative;
+  height: 10px;
+}
+.film-flags button {
+  position: absolute;
+  top: 1px;
+  width: 7px;
+  height: 7px;
+  margin-left: -3px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--gold);
+  opacity: 0.8;
+}
+.film-flags button::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+.film-flags button:hover,
+.film-flags button.selected {
+  opacity: 1;
+  outline: 2px solid var(--ink);
+}
+.panel-notes summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: var(--t-13);
+  font-weight: var(--w-medium);
+}
+.panel-notes ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.panel-notes button {
+  display: block;
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  color: var(--ink-2);
+  font-size: var(--t-13);
+  text-align: left;
+}
+.panel-notes button:hover {
+  color: var(--ink);
+}
 .film-strip {
   position: relative;
   height: 72px;

@@ -13,6 +13,7 @@ import { Transport } from "../spine/Transport";
 import { clock, sectionColor, sectionName, waveformBars } from "../spine/wave";
 import { Waveform } from "../spine/Waveform";
 import { imageUrl } from "../storyboard/ShotThumb";
+import type { CutNote } from "./cutNotes";
 import { editBoundaryLimits, moveEditBoundary } from "./editTimeline";
 import { joinSelected, type FilmSelection } from "./selection";
 
@@ -43,11 +44,13 @@ export function FilmTimeline({
   images,
   edit,
   windows,
+  notes,
   selection,
   zoom,
   onZoom,
   onSelectJoin,
   onSelectShot,
+  onSelectNote,
   onMoveBoundary,
 }: {
   slug: string;
@@ -56,11 +59,13 @@ export function FilmTimeline({
   images: ImageShot[];
   edit: EditPayload | null;
   windows: TitleWindow[];
+  notes: CutNote[];
   selection: FilmSelection;
   zoom: number;
   onZoom: (zoom: number) => void;
   onSelectJoin: (id: string, additive: boolean) => void;
   onSelectShot: (id: string) => void;
+  onSelectNote: (index: number) => void;
   onMoveBoundary: (next: EditPayload, label: string) => void;
 }) {
   const player = usePlayerControls();
@@ -244,6 +249,25 @@ export function FilmTimeline({
           <div className="film-wave" {...scrubProps}>
             <Waveform bars={bars} sections={sections} duration={duration} />
           </div>
+          {notes.length > 0 && (
+            <div className="film-flags">
+              {notes.map((note) => (
+                <button
+                  type="button"
+                  key={note.index}
+                  className={selection?.kind === "note" && selection.index === note.index ? "selected" : ""}
+                  // Notes on one section start would stack; a nudge keeps each clickable.
+                  style={{ left: `calc(${(note.frame / total) * 100}% + ${note.shotId ? 0 : 5}px)` }}
+                  title={note.title}
+                  aria-label={`Note: ${note.title}`}
+                  onClick={() => {
+                    onSelectNote(note.index);
+                    player.seek(note.frame / fps);
+                  }}
+                />
+              ))}
+            </div>
+          )}
           <div className="film-strip">
             {shots.map(({ shot, start, end }) => {
               const url = imageUrl(slug, imageById.get(shot.id));

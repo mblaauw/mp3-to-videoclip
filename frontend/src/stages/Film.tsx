@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, type EditPayload, type Music } from "../api";
 import { CutEditor, type ApplyResult } from "../film/cutEditor";
+import { describeNotes } from "../film/cutNotes";
 import { CutList } from "../film/CutList";
 import { applyEditBoard } from "../film/editTimeline";
 import { FilmPanel } from "../film/FilmPanel";
@@ -73,6 +74,17 @@ export function FilmStage({
   const edit = editor.current.current ?? serverEdit;
   const timelineBoard = film.board && edit ? applyEditBoard(film.board, edit) : film.board;
   const fps = timelineBoard?.fps || 24;
+  const findings = film.cut?.present ? film.cut.warnings : null;
+  const notes = useMemo(
+    () =>
+      findings
+        ? describeNotes(findings, {
+            sections: film.cut?.sections ?? [],
+            shots: edit?.shots ?? [],
+          })
+        : [],
+    [findings, film.cut?.sections, edit?.shots],
+  );
 
   const keys = useRef({ step: (_direction: 1 | -1) => {}, clear: () => {}, nudge: (_frames: number) => {}, zoomBy: (_by: number) => {} });
   keys.current = {
@@ -236,10 +248,12 @@ export function FilmStage({
           <FilmPanel
             film={film}
             edit={edit}
+            notes={notes}
             selection={selection}
             onSelect={select}
             onChange={change}
             onWatchJoin={watchJoin}
+            onSeekNote={(note) => player.seek(note.frame / fps)}
             onNavigate={onNavigate}
           />,
           sideSlot,
@@ -253,11 +267,13 @@ export function FilmStage({
             images={film.images}
             edit={edit}
             windows={film.live?.titles?.windows ?? []}
+            notes={notes}
             selection={selection}
             zoom={zoom}
             onZoom={setZoom}
             onSelectJoin={(id, additive) => select(selectJoin(selection, id, additive))}
             onSelectShot={(id) => select({ kind: "shot", id })}
+            onSelectNote={(index) => select({ kind: "note", index })}
             onMoveBoundary={(next, label) => void change(next, label)}
           />,
           lineSlot,
