@@ -12,6 +12,7 @@ in the app is a second state store.
 | `timeline.py`, `pacing.py` | Frame/second lookup, shot-bound caption resolution, adaptive boundary planning with a validated tail. |
 | `production.py` | Artifact IO, storyboard skeleton, reference binding, the prompt compiler and the content-bound approval chain. |
 | `analysis.py`, `deep_analysis.py` | Local measurement only. Every estimate is labelled; nothing invents meter, sections or lyrics. |
+| `lyric_tools.py`, `lyric_tools_worker.py` | Optional local lyric timing: Demucs and Parakeet in a private environment, as a separate process. No provider, no upload. |
 | `generation.py`, `providers.py` | Runware client with pre-submit journaling: reservation and task UUID are durable before the request; recovery is by UUID and never resubmits; changed bytes are quarantined. |
 | `budget.py` | Cap, committed cost, unresolved reservations, admission. |
 | `remotion.py`, `render.py` | Remotion render entry (film, titles review stills) plus FFmpeg probe/mux/verify. |
@@ -30,6 +31,9 @@ projects/<slug>/
   work/audio/           derived excerpt WAV for promo/advert (source stays untouched)
   work/music.json       measured beats/energy/sections
   work/lyrics.json      supplied or transcribed lyrics (drafts until reviewed)
+  work/lyric-timing.json when each line starts (tapped or estimated), matched by text
+  work/section-map.json the owner's corrected sections, a layer over the measurement
+  work/heard/           words the local tools heard, cached by audio and tool versions
   work/storyboard.json  shots: stable ID, frames, kind, purpose, message, text, prompt, camera
   work/assets.json      generated versions per shot: path, sha256, input_hash, selected
   work/local-plates/    deterministic cards, splits, bridges, logos and end cards
@@ -43,6 +47,37 @@ projects/<slug>/
 `projects/`, `backups/` and `archive/` are never deleted and never rewritten in
 place. Code rollback is the git tag `pre-gui-rework`; production rollback is the
 metadata snapshot in `backups/` written by `scripts/snapshot_projects.py`.
+
+## Track: words on the song, and corrected sections
+
+`work/music.json` and `work/lyrics.json` sit in the approval chain, so nothing on
+Track writes to them after the words are saved. Two layers sit beside them:
+
+- `domain/lyric_timing.py` keeps when each line starts in `work/lyric-timing.json`.
+  Lines match back to the words by text, so editing a line clears only that line's
+  time. `[Spoken Hook]` lines are headings and are never timed; production notes after
+  a colon or comma stay out of the name. A time is either tapped, automatic or an LRC
+  line's own, and a time is never guessed.
+- `domain/section_map.py` keeps moved, added and joined sections in
+  `work/section-map.json`. Reset writes the layer empty, so it needs no re-measuring.
+  The Writer, the Director and newly seeded cuts read the layer; existing cuts keep
+  their own sections, and their names match by start frame.
+
+`lyric_tools.py` is optional. A button installs pinned tools
+(`lyric_tools.lock.txt`, Python 3.11) under `~/.cache/mp3-to-videoclip/lyric-tools`,
+apart from the Studio's environment, after saying what it downloads. A job isolates
+vocals with Demucs, hears words with Parakeet and aligns them to the known lyrics.
+Heard words are cached in `work/heard/` by audio and lock hash. Lines not heard stay
+untimed, and tapped lines are never overwritten. It runs on Apple Silicon only; other
+machines keep tap-along. Tests use a fake runner.
+
+Suno's MP3s carry their lyrics and tags in the file, which Track offers as a starting
+point. Section proposals start a sung part at its first word and an instrumental part
+at the last word before it, then move a start to a detected edge up to 5 s earlier,
+never back across a sung word.
+
+Licences: Parakeet TDT 0.6 v3 is CC BY 4.0 (NVIDIA). Demucs is MIT; its repository is
+archived and its README states no separate licence for the pretrained weights.
 
 ## Production kinds and intake
 

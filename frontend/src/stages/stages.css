@@ -70,79 +70,6 @@
 }
 
 /* ------------------------------------------------------------------ track */
-.facts-row {
-  display: flex;
-  gap: var(--s-7);
-  margin: 0 0 var(--s-5);
-  flex-wrap: wrap;
-}
-.fact b {
-  display: block;
-  font-size: var(--t-24);
-  font-weight: var(--w-bold);
-  line-height: 1.1;
-}
-.fact > span {
-  color: var(--muted);
-  font-size: var(--t-13);
-}
-.track-mode {
-  margin-top: 2px;
-}
-.stage-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--s-7);
-  align-items: start;
-}
-
-.stage-columns > * {
-  min-width: 0;
-}
-.sections {
-  display: grid;
-  gap: 2px;
-}
-.sec-row {
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) 110px 84px;
-  gap: var(--s-3);
-  align-items: center;
-  padding: 5px var(--s-2);
-  border-radius: var(--r-control);
-}
-.sec-row:hover {
-  background: var(--panel);
-}
-.sec-row .sw {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-}
-.sec-row input {
-  width: 100%;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--r-control);
-  padding: 5px 6px;
-  color: var(--ink);
-  font: inherit;
-  font-weight: var(--w-medium);
-}
-.sec-row input:hover,
-.sec-row input:focus {
-  border-color: var(--line);
-  background: var(--raised);
-  outline: none;
-}
-.sec-row .t,
-.sec-row .e {
-  color: var(--muted);
-  font-size: var(--t-13);
-}
-.sec-row .t {
-  font-variant-numeric: tabular-nums;
-}
 .lyrics-input {
   width: 100%;
   min-height: 180px;
@@ -153,28 +80,6 @@
   padding: var(--s-3);
   color: var(--ink);
   font: var(--t-15) / 1.6 var(--font);
-}
-.lyric-lines {
-  display: grid;
-  gap: 3px;
-  max-height: 380px;
-  overflow: auto;
-  font-size: var(--t-15);
-  line-height: 1.55;
-}
-.lyric-lines div {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  gap: var(--s-3);
-}
-.lyric-lines.untimed div {
-  grid-template-columns: minmax(0, 1fr);
-}
-.lyric-lines time {
-  color: var(--muted);
-  font-size: var(--t-13);
-  padding-top: 2px;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------------ story */
@@ -592,9 +497,6 @@
 }
 
 @media (max-width: 960px) {
-  .stage-columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .brief-groups {
     grid-template-columns: minmax(0, 1fr);
   }

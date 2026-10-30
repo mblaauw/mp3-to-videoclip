@@ -542,6 +542,11 @@ function FilmShellContent({
       }
       return;
     }
+    if (action.target === "lyrics") {
+      scrollTo("#track-lyrics");
+      document.querySelector<HTMLElement>("#track-lyrics")?.focus({ preventScroll: true });
+      return;
+    }
     if (action.target === "changes") {
       if (stage !== "story") onNavigate("story");
       scrollTo("#story-changes", 180);
@@ -591,7 +596,7 @@ function FilmShellContent({
           budget={budget}
           stageStates={shellStates}
           next={
-            stage === "film" || stage === "story" ? (
+            stage === "film" || stage === "story" || stage === "track" ? (
               <NextStepBar compact allowNote={stage === "story"} step={step} ready={approvalsLoaded} onAction={act} />
             ) : null
           }
@@ -614,7 +619,7 @@ function FilmShellContent({
         />
         <main className="shell-main">
           {loadError && <p role="alert">Could not refresh film data: {loadError}</p>}
-          {stage !== "film" && stage !== "story" && (
+          {stage !== "film" && stage !== "story" && stage !== "track" && (
             <NextStepBar
               step={step}
               ready={approvalsLoaded}

@@ -159,6 +159,32 @@ export type Music = {
   warnings?: string[];
 };
 
+export type LyricLine = {
+  index: number;
+  text: string;
+  /** A `[Spoken Hook]` line: a heading of the song, never sung or timed. */
+  tag: string | null;
+  start: number | null;
+  end: number | null;
+  source: "tapped" | "auto" | "lrc" | null;
+};
+
+export type LyricTools = {
+  supported: boolean;
+  reason: string | null;
+  ready: boolean;
+  download_gb: number;
+};
+
+export type LyricTiming = { lines: LyricLine[] };
+
+export type LyricTimingSave = {
+  index: number;
+  start: number;
+  end: number | null;
+  source: "tapped" | "auto";
+};
+
 export type TrackData = {
   music: Music | null;
   lyrics: Lyrics | null;
@@ -167,6 +193,8 @@ export type TrackData = {
   duration: number;
   source_duration: number;
   section_names: { start: number; name: string }[];
+  /** True while the owner's corrected sections replace the detected ones. */
+  section_map?: boolean;
 };
 
 export type ConceptBeat = {
@@ -912,6 +940,34 @@ export const api = {
     ),
   analyze: (slug: string) =>
     request<unknown>(`/api/projects/${slug}/analyze`, { method: "POST", body: "{}" }),
+  saveSectionMap: (slug: string, sections: { start: number; name: string }[]) =>
+    request<{ sections: { start: number; name: string }[] }>(`/api/projects/${slug}/section-map`, {
+      method: "PUT",
+      body: JSON.stringify({ sections }),
+    }),
+  proposeSections: (slug: string) =>
+    request<{ sections: { start: number; name: string }[] }>(
+      `/api/projects/${slug}/section-map/propose`,
+      { method: "POST" },
+    ),
+  resetSectionMap: (slug: string) =>
+    request<{ status: string }>(`/api/projects/${slug}/section-map/reset`, { method: "POST" }),
+  lyricTools: (slug: string) => request<LyricTools>(`/api/projects/${slug}/lyric-tools`),
+  setupLyricTools: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/lyric-tools/setup`, { method: "POST" }),
+  runLyricTiming: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/lyric-timing/run`, { method: "POST" }),
+  embeddedLyrics: (slug: string) =>
+    request<{ text: string | null }>(`/api/projects/${slug}/embedded-lyrics`),
+  lyricDraft: (slug: string) => request<{ lines: string[] }>(`/api/projects/${slug}/lyric-draft`),
+  runLyricDraft: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/lyric-draft/run`, { method: "POST" }),
+  lyricTiming: (slug: string) => request<LyricTiming>(`/api/projects/${slug}/lyric-timing`),
+  saveLyricTiming: (slug: string, lines: LyricTimingSave[]) =>
+    request<LyricTiming>(`/api/projects/${slug}/lyric-timing`, {
+      method: "PUT",
+      body: JSON.stringify({ lines }),
+    }),
   saveLyrics: (slug: string, text: string) =>
     request<{ status?: string; segments?: number; lines?: number; error?: string }>(
       `/api/projects/${slug}/lyrics`,

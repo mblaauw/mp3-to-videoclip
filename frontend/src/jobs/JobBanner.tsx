@@ -9,11 +9,20 @@ const TITLE: Record<string, string> = {
   render: "Rendering",
   analysis: "Measuring the song",
   transcription: "Transcribing the lyrics",
+  lyric_tools: "Setting up the lyric tools",
+  lyric_timing: "Putting the words on the song",
+  lyric_draft: "Drafting the words",
 };
 
 /** Engine phases in plain words; unknown phases are shown as they come. */
 const PHASE: Record<string, string> = {
   starting: "Starting",
+  "installing-tools": "Installing the tools",
+  "downloading-vocal-model": "Downloading the vocal model",
+  "downloading-word-model": "Downloading the word model",
+  "isolating-vocals": "Isolating the vocals, a few minutes",
+  "hearing-words": "Listening to the words",
+  "matching-words": "Matching them to your lyrics",
   "submitting-images": "Sending to the image service",
   "receiving-images": "Receiving stills",
   "validating-request": "Checking the request",

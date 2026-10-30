@@ -82,13 +82,13 @@ def _still_status(root: Path, shot, assets: dict) -> str:
 
 
 def _music(root: Path) -> str:
-    from mp3_to_videoclip.domain import music_notes
+    from mp3_to_videoclip.domain import music_notes, section_map
 
-    music = read_optional(root / "work" / "music.json")
+    music = section_map.apply(root, read_optional(root / "work" / "music.json"))
     if not isinstance(music, dict):
         return "not analysed"
     sections = music.get("sections") or []
-    names = music_notes.names_by_start(root)
+    names = section_map.names_by_start(root)
     labels = []
     try:
         labels = [

@@ -292,3 +292,108 @@ def test_image_review_note_is_optional_but_inspection_is_not(tmp_path):
     assert accepted.json()["review"]["note"] is None
     stored = json.loads((root / "work" / "reviews.json").read_text())
     assert stored[-1]["note"] is None
+
+
+def _hashes(root):
+    return {stage: P.stage_hash(root, stage) for stage in ("analysis", "lyrics")}
+
+
+def _measure(root):
+    """A one-minute song with two measured sections."""
+    duration = 60.0
+    project = read_json(root / "project.json")
+    project["duration"] = duration
+    write_json(root / "project.json", project)
+    music = {
+        "duration": duration,
+        "sections": [
+            {"start": 0.0, "end": duration / 2, "energy": 0.1, "label": "unreviewed"},
+            {"start": duration / 2, "end": duration, "energy": 0.5, "label": "unreviewed"},
+        ],
+    }
+    write_json(root / "work/music.json", music)
+    return duration
+
+
+def test_line_times_and_section_changes_leave_approvals_alone(tmp_path):
+    root = make_api_project(tmp_path)
+    duration = _measure(root)
+    middle = round(duration / 3, 3)
+    with api_client(tmp_path) as client:
+        lyrics = client.put(
+            "/api/projects/production/lyrics", json={"text": "[Hook]\nOne line\nTwo lines"}
+        )
+        assert lyrics.status_code == 200, lyrics.text
+        music_before = read_json(root / "work/music.json")
+        lyrics_before = read_json(root / "work/lyrics.json")
+        hashes = _hashes(root)
+
+        timed = client.put(
+            "/api/projects/production/lyric-timing",
+            json={"lines": [{"index": 1, "start": 1.0, "end": None, "source": "tapped"}]},
+        )
+        assert timed.status_code == 200, timed.text
+        assert timed.json()["lines"][1]["start"] == 1.0
+
+        saved = client.put(
+            "/api/projects/production/section-map",
+            json={"sections": [{"start": 0, "name": "Opening"}, {"start": middle, "name": "Hook"}]},
+        )
+        assert saved.status_code == 200, saved.text
+        track = client.get("/api/projects/production/track").json()
+        assert track["section_map"] is True
+        assert [section["name"] for section in track["music"]["sections"]] == ["Opening", "Hook"]
+
+        assert read_json(root / "work/music.json") == music_before
+        assert read_json(root / "work/lyrics.json") == lyrics_before
+        assert _hashes(root) == hashes
+
+        reset = client.post("/api/projects/production/section-map/reset", json={})
+        assert reset.status_code == 200, reset.text
+        track = client.get("/api/projects/production/track").json()
+        assert track["section_map"] is False
+        assert [section["start"] for section in track["music"]["sections"]] == [0.0, duration / 2]
+        assert _hashes(root) == hashes
+
+
+def test_the_writer_sees_line_times_marked_as_estimates(tmp_path, monkeypatch):
+    import asyncio
+
+    from mp3_to_videoclip.director import tools
+
+    projects = tmp_path / "projects"
+    make_api_project(projects)
+    monkeypatch.chdir(tmp_path)
+    with api_client(projects) as client:
+        client.put("/api/projects/production/lyrics", json={"text": "One line\nTwo lines"})
+        client.put(
+            "/api/projects/production/lyric-timing",
+            json={"lines": [{"index": 0, "start": 1.0, "end": None, "source": "auto"}]},
+        )
+    result = json.loads(asyncio.run(tools.dispatch("get_lyrics", {"slug": "production"}, None)))
+    assert result["line_times"] == [{"text": "One line", "start": 1.0, "source": "auto"}]
+    assert "estimates" in result["line_times_note"]
+
+
+def test_a_new_cut_seeds_from_the_section_map_and_old_names_stay_put(tmp_path):
+    from mp3_to_videoclip import edits
+    from mp3_to_videoclip.domain import section_map
+
+    root = make_api_project(tmp_path)
+    duration = _measure(root)
+    project = P.load_project(root)
+    total = round(duration * project.fps)
+    middle = round(duration / 3, 3)
+    assert len(edits._seed_sections(root, project, total)) == 2
+    section_map.save(
+        root,
+        {"sections": [{"start": 0, "name": "Opening"}, {"start": middle, "name": "Hook"}]},
+        duration,
+    )
+    frame = round(middle * project.fps)
+    seeded = edits._seed_sections(root, project, total)
+    assert [section.start_frame for section in seeded] == [0, frame]
+    # A cut's section keeps a name by where it starts, not by its position.
+    names = section_map.names_by_start(root)
+    assert edits._section_name(names, frame, project.fps, 0, "fallback") == "Hook"
+    assert edits._section_name(names, frame + 50, project.fps, 5, "fallback") == "fallback"

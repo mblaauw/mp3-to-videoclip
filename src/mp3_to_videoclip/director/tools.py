@@ -314,7 +314,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "transcribe_lyrics",
-        "Start a paid transcription when the user has no lyrics to paste.",
+        "Price a paid transcription. It cannot be run from the Studio.",
         {"slug": {"type": "string"}, "language": {"type": "string"}},
         ["slug"],
     ),
@@ -391,7 +391,7 @@ def _dispatch(
         return edits.summary(root, edit)
 
     if name == "get_music_summary":
-        from mp3_to_videoclip.domain import music_notes
+        from mp3_to_videoclip.domain import section_map
 
         path = root / "work" / "music.json"
         if not path.is_file():
@@ -399,15 +399,29 @@ def _dispatch(
         data = read_json(path)
         return {
             "estimated_tempo_bpm": data.get("estimated_tempo_bpm"),
-            "sections": (music_notes.apply_names(data, music_notes.read(root)) or {}).get(
-                "sections"
-            ),
+            "sections": (section_map.apply(root, data) or {}).get("sections"),
             "warnings": data.get("warnings"),
         }
 
     if name == "get_lyrics":
+        from mp3_to_videoclip.domain import lyric_timing
+
         path = root / "work" / "lyrics.json"
-        return read_json(path) if path.is_file() else {"available": False}
+        if not path.is_file():
+            return {"available": False}
+        lines = lyric_timing.view(root)["lines"]
+        timed = [
+            {"text": line["text"], "start": line["start"], "source": line["source"]}
+            for line in lines
+            if line["start"] is not None
+        ]
+        if not timed:
+            return read_json(path)
+        return {
+            **read_json(path),
+            "line_times": timed,
+            "line_times_note": "Automatic times are estimates; tapped times are the owner's.",
+        }
 
     if name == "get_treatments":
         treatments = P.load_treatments(root)
@@ -631,7 +645,10 @@ def _transcribe(root, arguments, runner):
         return {"needs_budget": True, "quote": quote, "decision": decision}
     # Uploading personal audio is a separate consent; the director cannot give it.
     return {
-        "needs_confirmation": "the source audio will be uploaded; confirm transcription in the Track stage",
+        "needs_confirmation": (
+            "transcription uploads the source audio and can't be started in the Studio; ask the "
+            "owner to paste the words in Track, or to run it from the command line"
+        ),
         "quote": {key: quote.get(key) for key in ("id", "reserve_total_usd", "language")},
     }
 

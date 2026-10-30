@@ -10,6 +10,7 @@ import "./storyboard/storyboard.css";
 import "./images/images.css";
 import "./film/film.css";
 import "./story/story.css";
+import "./track/track.css";
 import "./shell/settings.css";
 import "./rating.css";
 import "./styles/polish.css";
