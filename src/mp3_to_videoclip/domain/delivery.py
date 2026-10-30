@@ -67,14 +67,17 @@ def _human_reason(reason: str | None, stage: str) -> str | None:
         "stills": "The still set",
         "graphics": "The titles",
     }
+    plural = {"lyrics", "graphics"}
     if reason.endswith("needs current user approval"):
         parent = reason[: -len(" needs current user approval")]
-        return f"{names.get(parent, parent)} needs your approval."
+        verb = "need" if parent in plural else "needs"
+        return f"{names.get(parent, parent)} {verb} your approval."
     if "no current selected still" in reason and reason.startswith("shot "):
         return f"{reason.split(' ', 2)[1]} has no picture yet."
     if reason.endswith("is missing; its artifact has not been created"):
         parent = reason[: -len(" is missing; its artifact has not been created")]
-        return f"{names.get(parent, parent)} has not been made yet."
+        verb = "have" if parent in plural else "has"
+        return f"{names.get(parent, parent)} {verb} not been made yet."
     if reason.endswith("review artifact is missing; recreate and obtain current user approval"):
         return f"The {stage} review is missing; make it again."
     return reason
