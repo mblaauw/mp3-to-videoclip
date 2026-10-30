@@ -1170,3 +1170,42 @@
   padding-left: 18px;
   color: var(--ink-2);
 }
+
+.film-crop-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(236, 234, 229, 0.55);
+  pointer-events: none;
+}
+
+.film-crops {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.film-crop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.film-crop-time {
+  padding: 0 4px;
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.film-look .panel-options {
+  margin: 8px 0;
+}
+
+.cut-against-seed {
+  margin: 6px 0;
+}

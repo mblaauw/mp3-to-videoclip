@@ -1,20 +1,27 @@
 import { useEffect, useState } from "react";
-import { api, type EditPayload, type EditSuggestion } from "../api";
+import { api, type CutSummary, type EditPayload, type EditSuggestion } from "../api";
 import { ArtifactRating } from "../ArtifactRating";
-import type { EditMotion, EditTransition } from "../baseFilm";
+import type { EditMotion, EditTransition, Grade } from "../baseFilm";
 import { JobBanner } from "../jobs/JobBanner";
 import type { Stage } from "../shell/nextStep";
+import { usePlayerControls } from "../spine/player";
 import { clock } from "../spine/wave";
 import { ShotThumb } from "../storyboard/ShotThumb";
 import { Button } from "../ui";
 import type { CutNote } from "./cutNotes";
 import { DeliveryPanel } from "./DeliveryPanel";
 import {
+  addCrop,
   joinMaxFrames,
+  removeCrop,
   setEditMotion,
   setEditTransition,
+  setGradePreset,
   setJoins,
+  setLookAmount,
   SET_BY_HAND,
+  updateCrop,
+  type LookAmount,
   TRANSITION_TYPES,
 } from "./editTimeline";
 import { SeedCut } from "./SeedCut";
@@ -104,6 +111,7 @@ export function FilmPanel({
       ) : (
         <Overview
           film={film}
+          edit={edit}
           onChange={onChange}
           notes={notes}
           onSelect={onSelect}
@@ -178,8 +186,191 @@ function SuggestCut({
   );
 }
 
+function AgainstSeed({ changes }: { changes: NonNullable<CutSummary["against_seed"]> }) {
+  const parts = [
+    changes.joins_moved ? `${changes.joins_moved} joins moved` : "",
+    changes.moves_changed ? `${changes.moves_changed} camera moves changed` : "",
+    changes.crops ? `${changes.crops} crop cuts` : "",
+    changes.accents ? `${changes.accents} accents` : "",
+    changes.named_joins ? `${changes.named_joins} styled joins` : "",
+  ].filter(Boolean);
+  return (
+    <p className="hint cut-against-seed">
+      {parts.length ? `Compared with the starting cut: ${parts.join(", ")}.` : "This is still the starting cut."}
+    </p>
+  );
+}
+
+const PRESETS: { value: Grade["preset"]; label: string }[] = [
+  { value: "neutral", label: "Neutral" },
+  { value: "warm-night", label: "Warm night" },
+  { value: "clean-day", label: "Clean day" },
+  { value: "film-fade", label: "Film fade" },
+  { value: "vivid", label: "Vivid" },
+  { value: "monochrome", label: "Mono" },
+];
+
+const LOOK_AMOUNTS: { key: LookAmount; label: string }[] = [
+  { key: "grain", label: "Grain" },
+  { key: "weave", label: "Gate weave" },
+  { key: "drift", label: "Handheld drift" },
+];
+
+function LookAmountField({
+  edit,
+  amount,
+  onChange,
+}: {
+  edit: EditPayload;
+  amount: { key: LookAmount; label: string };
+  onChange: PanelEdit;
+}) {
+  const saved = edit.grade.look?.[amount.key] ?? 0;
+  const [value, setValue] = useState(saved);
+  useEffect(() => setValue(saved), [saved]);
+  // Saved on release, so dragging doesn't write one cut per pixel.
+  const commit = () => {
+    if (value !== saved) void onChange(setLookAmount(edit, amount.key, value), amount.label.toLowerCase());
+  };
+  return (
+    <label className="panel-field">
+      <span>{amount.label}</span>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={value}
+        aria-valuetext={value ? `${Math.round(value * 100)}%` : "Off"}
+        onChange={(event) => setValue(Number(event.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+      />
+    </label>
+  );
+}
+
+function LookControls({ edit, onChange }: { edit: EditPayload; onChange: PanelEdit }) {
+  return (
+    <details className="panel-notes film-look">
+      <summary>Colour and film look</summary>
+      <div className="panel-options" role="group" aria-label="Grade">
+        {PRESETS.map((preset) => (
+          <button
+            type="button"
+            key={preset.value}
+            aria-pressed={edit.grade.preset === preset.value}
+            onClick={() => void onChange(setGradePreset(edit, preset.value), `the ${preset.label} grade`)}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+      {LOOK_AMOUNTS.map((amount) => (
+        <LookAmountField key={amount.key} edit={edit} amount={amount} onChange={onChange} />
+      ))}
+      <p className="hint">Text and titles stay crisp above the look.</p>
+    </details>
+  );
+}
+
+const CROP_ZOOMS = [1.15, 1.3, 1.45, 1.6];
+const CROP_SPOTS: { label: string; x: number; y: number }[] = [
+  { label: "Top left", x: 0.15, y: 0.15 },
+  { label: "Top", x: 0.5, y: 0.15 },
+  { label: "Top right", x: 0.85, y: 0.15 },
+  { label: "Left", x: 0.15, y: 0.5 },
+  { label: "Centre", x: 0.5, y: 0.5 },
+  { label: "Right", x: 0.85, y: 0.5 },
+  { label: "Bottom left", x: 0.15, y: 0.85 },
+  { label: "Bottom", x: 0.5, y: 0.85 },
+  { label: "Bottom right", x: 0.85, y: 0.85 },
+];
+
+function CropCuts({
+  edit,
+  id,
+  fps,
+  onChange,
+}: {
+  edit: EditPayload;
+  id: string;
+  fps: number;
+  onChange: PanelEdit;
+}) {
+  const player = usePlayerControls();
+  const [refused, setRefused] = useState(false);
+  const crops = edit.shots.find((shot) => shot.shot_id === id)?.crops ?? [];
+  return (
+    <div className="film-crops">
+      <b>Crop cuts</b>
+      {crops.map((crop) => {
+        const spot =
+          CROP_SPOTS.find((item) => item.x === (crop.x ?? 0.5) && item.y === (crop.y ?? 0.5)) ?? null;
+        return (
+          <div className="film-crop" key={crop.frame}>
+            <button
+              type="button"
+              className="film-crop-time"
+              onClick={() => player.seek(crop.frame / fps)}
+            >
+              {clock(crop.frame / fps)}
+            </button>
+            <select
+              aria-label="How far to crop in"
+              value={crop.zoom}
+              onChange={(event) =>
+                void onChange(updateCrop(edit, id, crop.frame, { zoom: Number(event.target.value) }), "the crop")
+              }
+            >
+              {[...new Set([...CROP_ZOOMS, crop.zoom])].map((zoom) => (
+                <option key={zoom} value={zoom}>
+                  {zoom.toFixed(2)}×
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Which part of the frame to keep"
+              value={spot?.label ?? ""}
+              onChange={(event) => {
+                const chosen = CROP_SPOTS.find((item) => item.label === event.target.value);
+                if (chosen) void onChange(updateCrop(edit, id, crop.frame, { x: chosen.x, y: chosen.y }), "the crop");
+              }}
+            >
+              {!spot && <option value="">Custom</option>}
+              {CROP_SPOTS.map((item) => (
+                <option key={item.label}>{item.label}</option>
+              ))}
+            </select>
+            <Button
+              size="small"
+              variant="quiet"
+              aria-label={`Remove the crop cut at ${clock(crop.frame / fps)}`}
+              onClick={() => void onChange(removeCrop(edit, id, crop.frame), "the crop cut")}
+            >
+              Remove
+            </Button>
+          </div>
+        );
+      })}
+      <Button
+        size="small"
+        onClick={() => {
+          const next = addCrop(edit, id, player.current() * fps);
+          setRefused(!next);
+          if (next) void onChange(next, "the crop cut");
+        }}
+      >
+        Add a crop cut at the playhead
+      </Button>
+      {refused && <p className="hint">Move the playhead inside this shot first.</p>}
+    </div>
+  );
+}
+
 function Overview({
   film,
+  edit,
   onChange,
   notes,
   onSelect,
@@ -187,6 +378,7 @@ function Overview({
   onNavigate,
 }: {
   film: FilmData;
+  edit: EditPayload | null;
   onChange: PanelEdit;
   notes: CutNote[];
   onSelect: (selection: FilmSelection) => void;
@@ -222,7 +414,9 @@ function Overview({
             </div>
           )}
           {cut.notes && <p className="cut-notes">{cut.notes}</p>}
+          {cut.against_seed && <AgainstSeed changes={cut.against_seed} />}
           <SuggestCut slug={slug} onChange={onChange} />
+          {edit && <LookControls edit={edit} onChange={onChange} />}
           <ArtifactRating slug={slug} artifact="edit" />
           {notes.length > 0 && (
             <details className="panel-notes" open={notes.length <= 6}>
@@ -465,6 +659,7 @@ function ShotPanel({
               </button>
             ))}
           </div>
+          <CropCuts edit={edit} id={id} fps={fps} onChange={onChange} />
         </div>
       ) : (
         <p className="hint">Make a first cut to change the camera move here.</p>

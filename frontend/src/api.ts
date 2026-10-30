@@ -603,6 +603,13 @@ export type CutSummary = {
   warnings: EditFinding[];
   notes: string;
   grade: string | null;
+  against_seed?: {
+    joins_moved: number;
+    moves_changed: number;
+    crops: number;
+    accents: number;
+    named_joins: number;
+  } | null;
 };
 
 export type HistorySnapshot = {

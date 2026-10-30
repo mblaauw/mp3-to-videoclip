@@ -992,6 +992,28 @@ def summary(root: Path, edit: EditDecisionList | None = None) -> dict:
     }
 
 
+def _against_seed(root: Path, edit: EditDecisionList) -> dict | None:
+    """What this cut did beyond the starting cut, so the owner can see an editor's work."""
+    try:
+        seed = {shot.shot_id: shot for shot in seed_edit_preview(root).shots}
+    except (OSError, ValueError):
+        return None
+    if set(seed) != {shot.shot_id for shot in edit.shots}:
+        return None
+    motion = lambda shot: (shot.motion.type, shot.motion.from_scale, shot.motion.to_scale)  # noqa: E731
+    return {
+        "joins_moved": sum(
+            1 for shot in edit.shots if shot.start_frame != seed[shot.shot_id].start_frame
+        ),
+        "moves_changed": sum(
+            1 for shot in edit.shots if motion(shot) != motion(seed[shot.shot_id])
+        ),
+        "crops": sum(len(shot.crops) for shot in edit.shots),
+        "accents": sum(len(shot.accents) for shot in edit.shots),
+        "named_joins": sum(1 for shot in edit.shots if shot.transition_in.type != "cut"),
+    }
+
+
 def cut_summary(root: Path, edit: EditDecisionList | None = None) -> dict:
     """The cut list Film shows: human joins, moves, reasons and section names.
 
@@ -1153,4 +1175,5 @@ def cut_summary(root: Path, edit: EditDecisionList | None = None) -> dict:
         "warnings": value["warnings"],
         "notes": edit.notes,
         "grade": edit.grade.preset,
+        "against_seed": _against_seed(root, edit),
     }

@@ -167,6 +167,7 @@ def suggest(root: Path) -> dict[str, Any]:
                     "accents": accents,
                     "transition_in": transition,
                     "text": kept_text,
+                    "crops": [crop for crop in shot.crops if start < crop.frame < end],
                 }
             )
         )
