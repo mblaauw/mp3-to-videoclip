@@ -104,3 +104,20 @@ stages' layout. Only `edits.py`'s noise rule changes on the backend, plus the op
 - `docs/screenshots/film-cut-1440.webp` is removed, not replaced: this repo is
   public and a current screenshot would show a large frame of an unreleased film.
   The owner decides whether to publish one or use neutral stills.
+
+## Acceptance result
+
+On a scratch copy of Tree of Love and Zero Bars, with $0 spend and your real films
+only read (a test approval lived in the copy):
+
+- Viewer 988 px wide at 1440×900, against about 590 px before. Full view 1440×810.
+  No sideways page scroll at 768 px or 375 px.
+- A join set in the panel played in the Player. Undo, retiming by drag and seeding a
+  first cut all saved correctly.
+- From the new screen: approved the cut, checked titles (14 s), opened all 17 samples,
+  approved and rendered a final in 666 s. It classifies as a verified, current,
+  delivery-ready final, its decoded audio is bit-identical to base v002, and the dip
+  to black set by hand is in the movie at frame 1784.
+- Scrubbing Zero Bars' 79 shots: 120 seeks at about 20 ms each, no long tasks. The
+  pane was hidden, so painting was not measured; that needs a real look.
+- `pytest`, `ruff`, frontend `tsc`/tests/build and renderer tests pass.

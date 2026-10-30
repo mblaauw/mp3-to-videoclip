@@ -41,7 +41,7 @@ export function RenderedFiles({ film }: { film: FilmData }) {
               </>
             ) : (
               <p className="empty">
-                No renders yet. A preview is local and free; the checklist queues one.
+                No renders yet. A preview is local and free; delivery in the panel queues one.
               </p>
             )}
             <JobBanner slug={slug} kinds={["render"]} className="in-card" />
