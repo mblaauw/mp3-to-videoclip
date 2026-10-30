@@ -535,6 +535,9 @@ function FilmShellContent({
     }
     if (action.target === "brief") {
       if (stage !== "story") onNavigate("story");
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("studio:story-part", { detail: "concept" }));
+      }, 0);
       scrollTo(".brief-card", 180);
       return;
     }
@@ -574,8 +577,8 @@ function FilmShellContent({
           budget={budget}
           stageStates={shellStates}
           next={
-            stage === "film" ? (
-              <NextStepBar compact step={step} ready={approvalsLoaded} onAction={act} />
+            stage === "film" || stage === "story" ? (
+              <NextStepBar compact allowNote={stage === "story"} step={step} ready={approvalsLoaded} onAction={act} />
             ) : null
           }
           onNavigate={onNavigate}
@@ -597,7 +600,7 @@ function FilmShellContent({
         />
         <main className="shell-main">
           {loadError && <p role="alert">Could not refresh film data: {loadError}</p>}
-          {stage !== "film" && (
+          {stage !== "film" && stage !== "story" && (
             <NextStepBar
               step={step}
               ready={approvalsLoaded}

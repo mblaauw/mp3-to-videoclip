@@ -20,6 +20,7 @@ export function NextStepBar({
   onAction,
   back,
   compact = false,
+  allowNote = false,
 }: {
   step: NextStep;
   ready?: boolean;
@@ -28,6 +29,8 @@ export function NextStepBar({
   back?: { label: string; onClick: () => void } | null;
   /** One line for Film's top bar; the detail moves to a tooltip. */
   compact?: boolean;
+  /** Keeps the approval note when compact, for stages that approve in the top bar. */
+  allowNote?: boolean;
 }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -89,7 +92,7 @@ export function NextStepBar({
       </div>
       <div className="next-actions">
         {approving &&
-          !compact &&
+          (!compact || allowNote) &&
           (noteOpen ? (
             <input
               ref={noteRef}
