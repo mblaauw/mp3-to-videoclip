@@ -49,6 +49,24 @@ HEARTBEAT_SECONDS = 15.0
 DISCONNECT_POLL_SECONDS = 2.0
 
 
+class FrontendFiles(StaticFiles):
+    """The built Studio: the page shell is revalidated, hashed assets never change.
+
+    Vite names every built asset by its content, so ``assets/`` can be cached for
+    good. ``index.html`` names the current assets; without ``no-cache`` a browser
+    may reuse an old copy heuristically and keep running a previous build after
+    an update. ``no-cache`` still allows a cheap 304 through the ETag.
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if path.startswith("assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def _projects_dir(app: FastAPI) -> Path:
     return Path(getattr(app.state, "projects_dir", "projects"))
 
@@ -318,6 +336,6 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
 
     frontend = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
     if frontend.is_dir():
-        app.mount("/", StaticFiles(directory=str(frontend), html=True), name="frontend")
+        app.mount("/", FrontendFiles(directory=str(frontend), html=True), name="frontend")
 
     return app
