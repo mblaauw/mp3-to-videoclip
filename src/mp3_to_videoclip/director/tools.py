@@ -406,9 +406,11 @@ def _dispatch(
         return treatments.model_dump() if treatments is not None else {"concepts": []}
 
     if name == "update_treatments":
-        return P.update_treatments(
-            root, {key: value for key, value in arguments.items() if key != "slug"}
-        ).model_dump()
+        payload = {key: value for key, value in arguments.items() if key != "slug"}
+        # A model with no choice to report tends to send an empty string for this field.
+        if not payload.get("chosen_id"):
+            payload["chosen_id"] = None
+        return P.update_treatments(root, payload).model_dump()
 
     if name == "get_idea":
         from mp3_to_videoclip import idea

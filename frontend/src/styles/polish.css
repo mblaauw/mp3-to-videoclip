@@ -497,6 +497,12 @@
 .director {
   position: relative;
 }
+/* Below the shell's breakpoint the drawer floats over the stage; see shell.css. */
+@media (max-width: 1180px) {
+  .director {
+    position: fixed;
+  }
+}
 .director .messages {
   display: flex;
   flex-direction: column;

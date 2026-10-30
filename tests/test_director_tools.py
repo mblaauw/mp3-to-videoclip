@@ -596,6 +596,35 @@ def test_concept_beats_must_be_ordered_and_inside_the_film(tmp_path):
         P.update_treatments(root, {"concepts": [backwards]})
 
 
+def test_an_empty_chosen_id_from_the_writer_means_no_choice(tmp_path):
+    make_api_project(tmp_path)
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_treatments",
+                {
+                    "slug": "production",
+                    "concepts": [_route(0, "narrative", beats=[])],
+                    "chosen_id": "",
+                },
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "error" in result  # no beats and no shape is still refused
+    route = _route(0, "narrative", shape=["a", "b", "c", "d"], beats=[])
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_treatments",
+                {"slug": "production", "concepts": [route], "chosen_id": ""},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert result.get("chosen_id") is None and len(result["concepts"]) == 1
+
+
 def test_older_concepts_with_free_text_shape_still_read_and_keep_their_form(tmp_path):
     root = tmp_path / "p"
     root.mkdir()

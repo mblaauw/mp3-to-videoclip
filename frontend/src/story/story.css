@@ -578,3 +578,10 @@
   font: inherit;
   font-size: 13px;
 }
+
+/* With the next action in the bar, the stage names give up their state words first. */
+@media (max-width: 1560px) {
+  .shell:has(.next-bar.compact) .step-state {
+    display: none;
+  }
+}

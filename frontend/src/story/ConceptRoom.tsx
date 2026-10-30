@@ -32,6 +32,7 @@ function BeatRow({
   beats,
   duration,
   picked,
+  empty = "Not on the song yet",
   onShow,
   onBeat,
 }: {
@@ -42,6 +43,7 @@ function BeatRow({
   beats: ConceptBeat[] | null;
   duration: number;
   picked: number | null;
+  empty?: string;
   onShow: () => void;
   onBeat: (index: number) => void;
 }) {
@@ -73,7 +75,7 @@ function BeatRow({
             </button>
           ))
         ) : (
-          <p className="story-lane-empty">Not on the song yet</p>
+          <p className="story-lane-empty">{empty}</p>
         )}
       </div>
     </div>
@@ -202,13 +204,20 @@ function OwnDetail({ story, onRead }: { story: StoryData; onRead: () => void }) 
   if (!idea) return null;
   const sorted = idea.sorted;
   const noStory = !!sorted && sorted.story.length === 0;
-  const lists: [string, string[]][] = sorted
-    ? [
-        ["Style", sorted.style],
-        ["Rules", sorted.rules],
-        ["Avoid", sorted.avoid],
-      ]
-    : [];
+  const list = (name: string, items: string[], empty: string) => (
+    <div>
+      <h3>{name}</h3>
+      {items.length ? (
+        <ul className="story-plain-list">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="hint">{empty}</p>
+      )}
+    </div>
+  );
   return (
     <div className="story-detail-grid">
       <div>
@@ -294,22 +303,15 @@ function OwnDetail({ story, onRead }: { story: StoryData; onRead: () => void }) 
           <div className="story-own-text story-read">{sorted?.story.join("\n\n") ?? idea.text}</div>
         )}
       </div>
-      {lists.map(([name, items]) => (
-        <div className="story-detail-column" key={name}>
-          <div>
-            <h3>{name}</h3>
-            {items.length ? (
-              <ul className="story-plain-list">
-                {items.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="hint">{name === "Style" ? "Nothing yet." : "None given."}</p>
-            )}
+      {sorted && (
+        <>
+          <div className="story-detail-column">{list("Style", sorted.style, "Nothing yet.")}</div>
+          <div className="story-detail-column">
+            {list("Rules", sorted.rules, "None given.")}
+            {list("Avoid", sorted.avoid, "None given.")}
           </div>
-        </div>
-      ))}
+        </>
+      )}
     </div>
   );
 }
@@ -338,7 +340,10 @@ export function ConceptRoom({
   const current =
     shown && (shown === OWN ? idea : concepts.some((concept) => concept.id === shown))
       ? shown
-      : (chosen ?? (idea ? OWN : (concepts[0]?.id ?? null)));
+      : (chosen ??
+        (idea && (idea.sorted?.story.length !== 0 || !concepts.length)
+          ? OWN
+          : (concepts[0]?.id ?? null)));
 
   // A played beat stops at its end, so comparing two means hearing just those two.
   useEffect(
@@ -410,6 +415,7 @@ export function ConceptRoom({
               active={current === OWN}
               chosen={!chosen && !!idea.sorted?.story.length}
               beats={ownBeats.length ? ownBeats : null}
+              empty={idea.sorted?.story.length === 0 ? "Style and rules, no story" : undefined}
               duration={duration}
               picked={picked?.id === OWN ? picked.index : null}
               onShow={() => setShown(OWN)}
