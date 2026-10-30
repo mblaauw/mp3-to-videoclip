@@ -234,11 +234,12 @@ def test_gateway_turn_relays_text_tools_and_persists_history(tmp_path):
         ]
 
     events = asyncio.run(run())
-    assert [event.kind for event in events] == ["text", "text", "tool", "tool", "done"]
+    assert [event.kind for event in events] == ["text", "text", "progress", "tool", "tool", "done"]
     assert events[0].text + events[1].text == "Hello world"
     assert events[2].tool == "clipstudio_update_brief"
-    assert json.loads(events[2].arguments) == {"slug": "production"}
-    assert events[3].result == '{"ok": true}'
+    assert events[3].tool == "clipstudio_update_brief"
+    assert json.loads(events[3].arguments) == {"slug": "production"}
+    assert events[4].result == '{"ok": true}'
     assert client.created == 2
     assert client.models == ["openai/gpt-6.1-sol"]
     assert client.waited == 1
@@ -336,3 +337,119 @@ def test_closing_the_gateway_turn_interrupts_the_session(tmp_path):
     event = asyncio.run(run())
     assert event.text == "partial"
     assert client.interrupted == 1
+
+
+class StallingClient(FakeClient):
+    """Sends its events, then only heartbeats and another session's work."""
+
+    def __init__(self, events, noise=0.01):
+        super().__init__(events)
+        self.noise = noise
+
+    async def events(self):
+        yield {"type": "server.connected"}
+        while not self.prompted:
+            await asyncio.sleep(0)
+        for event in self.events_in:
+            yield event
+        while True:
+            await asyncio.sleep(self.noise)
+            yield {"type": "server.heartbeat"}
+            yield {"type": "session.text.delta", "data": {"sessionID": "other", "delta": "x"}}
+
+
+async def _collect_bounded(client, root, **limits):
+    return [
+        event
+        async for event in run_gateway_turn(
+            client,
+            root,
+            "production",
+            "writer",
+            "Keep going.",
+            "CONTEXT",
+            model="openai/gpt-6.1-sol",
+            warmup_delay=0,
+            **limits,
+        )
+    ]
+
+
+def test_a_silent_gateway_turn_ends_interrupted_with_a_plain_error(tmp_path):
+    root = make_api_project(tmp_path)
+    client = StallingClient(
+        [{"type": "session.text.delta", "data": {"sessionID": "ses_test", "delta": "partial"}}]
+    )
+    events = asyncio.run(asyncio.wait_for(_collect_bounded(client, root, idle_limit=0.05), 5))
+    assert [event.kind for event in events] == ["text", "done"]
+    assert events[-1].payload["stalled"] is True
+    assert "The Writer sent nothing" in events[-1].payload["error"]
+    assert "Nothing was lost" in events[-1].payload["error"]
+    assert client.interrupted == 1
+    stored = [json.loads(line) for line in (root / "work" / "chat.jsonl").read_text().splitlines()]
+    assert [message["role"] for message in stored] == ["user", "assistant"]
+    assert stored[-1]["content"] == "partial"
+    assert stored[-1]["interrupted"] is True
+
+
+def test_an_open_tool_call_gets_the_longer_limit_and_is_never_applied(tmp_path):
+    root = make_api_project(tmp_path)
+    client = StallingClient(
+        [
+            {
+                "type": "session.tool.input.started",
+                "data": {"sessionID": "ses_test", "id": "c1", "name": "clipstudio_update_brief"},
+            }
+        ]
+    )
+
+    async def run():
+        started = asyncio.get_running_loop().time()
+        events = await _collect_bounded(client, root, idle_limit=0.05, tool_input_idle_limit=0.3)
+        return events, asyncio.get_running_loop().time() - started
+
+    events, took = asyncio.run(asyncio.wait_for(run(), 5))
+    assert took >= 0.3
+    assert [event.kind for event in events] == ["progress", "done"]
+    assert events[0].tool == "clipstudio_update_brief"
+    assert client.interrupted == 1
+    stored = (root / "work" / "chat.jsonl").read_text()
+    assert '"tool"' not in stored
+
+
+def test_a_gateway_that_never_connects_or_closes_is_a_plain_error(tmp_path):
+    root = make_api_project(tmp_path)
+
+    class Silent(FakeClient):
+        async def events(self):
+            await asyncio.Event().wait()
+            yield {}
+
+    class Closes(FakeClient):
+        async def events(self):
+            yield {"type": "server.connected"}
+
+    silent = Silent([])
+    events = asyncio.run(asyncio.wait_for(_collect_bounded(silent, root, idle_limit=0.05), 5))
+    assert "sent nothing" in events[-1].payload["error"]
+    assert not silent.prompted
+
+    events = asyncio.run(asyncio.wait_for(_collect_bounded(Closes([]), root), 5))
+    assert events[-1].kind == "done"
+    assert "closed" in events[-1].payload["error"]
+
+
+def test_a_busy_turn_still_stops_at_the_turn_limit(tmp_path):
+    root = make_api_project(tmp_path)
+
+    class Busy(FakeClient):
+        async def events(self):
+            yield {"type": "server.connected"}
+            while True:
+                await asyncio.sleep(0.01)
+                yield {"type": "session.usage.updated", "data": {"sessionID": "ses_test"}}
+
+    events = asyncio.run(
+        asyncio.wait_for(_collect_bounded(Busy([]), root, timeout=0.1, idle_limit=5), 5)
+    )
+    assert "still working" in events[-1].payload["error"]
