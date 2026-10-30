@@ -639,3 +639,19 @@ def test_older_concepts_with_free_text_shape_still_read_and_keep_their_form(tmp_
     loaded = P.load_treatments(root)
     assert loaded.chosen_id == "c1" and loaded.concepts[0].shape == ["a", "b", "c", "d"]
     assert "beats" not in loaded.model_dump()["concepts"][0]
+
+
+def test_a_film_length_passed_as_shot_length_is_refused_before_it_locks_the_board(tmp_path):
+    root = make_api_project(tmp_path)
+    (root / P.STAGE_FILES["storyboard"]).unlink(missing_ok=True)
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "create_storyboard",
+                {"slug": "production", "seconds": 240},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert "length of one shot" in result["error"]
+    assert not (root / P.STAGE_FILES["storyboard"]).exists()

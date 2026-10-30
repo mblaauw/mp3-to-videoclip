@@ -45,6 +45,9 @@ def _tool(
     }
 
 
+# A skeleton cannot be rebuilt, and one giant shot cannot be split by update_shots.
+MAX_SKELETON_SHOT_SECONDS = 30
+
 TOOLS: list[dict] = [
     _tool("get_project", "Read the project summary.", {"slug": {"type": "string"}}, ["slug"]),
     _tool("get_brief", "Read the brief.", {"slug": {"type": "string"}}, ["slug"]),
@@ -283,11 +286,16 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "create_storyboard",
-        "Build a timing skeleton for the project.",
+        "Build the film's timing skeleton once; it cannot be rebuilt afterwards. Leave "
+        "seconds and timing out unless you have a reason: the defaults follow the music.",
         {
             "slug": {"type": "string"},
-            "seconds": {"type": "number"},
-            "timing": {"type": "string"},
+            "seconds": {
+                "type": "number",
+                "description": "Target length of ONE shot, not of the film.",
+                "maximum": MAX_SKELETON_SHOT_SECONDS,
+            },
+            "timing": {"type": "string", "enum": ["adaptive", "beats", "events", "free"]},
         },
         ["slug"],
     ),
@@ -457,6 +465,12 @@ def _dispatch(
         return {"changed": changed, "storyboard": board.model_dump()}
 
     if name == "create_storyboard":
+        seconds = arguments.get("seconds")
+        if seconds is not None and seconds > MAX_SKELETON_SHOT_SECONDS:
+            raise ValueError(
+                f"seconds is the length of one shot, at most {MAX_SKELETON_SHOT_SECONDS}; "
+                "leave it out to follow the music"
+            )
         board = P.skeleton(
             root,
             arguments.get("seconds"),
