@@ -744,11 +744,13 @@ export function editTransitionStyle(value, progress) {
   }
   const direction = transition.direction ?? "left";
   if (kind === "whip_pan") {
+    // Both shots travel together, and the blur runs along the move, peaking mid-whip.
     const sign = direction === "right" ? -1 : 1;
     return {
       ...defaultStyle,
       transform: `translateX(${sign * (1 - p) * 100}%)`,
-      filter: `blur(${(1 - p) * 14}px)`,
+      outgoingTransform: `translateX(${-sign * p * 100}%)`,
+      blurShare: 0.03 * Math.sin(Math.PI * p),
     };
   }
   if (kind === "push") {

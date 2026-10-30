@@ -200,7 +200,9 @@ const GRAIN_IMAGE = `url("data:image/svg+xml,${encodeURIComponent(
     "<rect width='100%' height='100%' filter='url(#g)'/></svg>",
 )}")`;
 
-export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height}) {
+const WHIP_BLUR_ID = "whip-blur";
+
+export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height, whipBlur = 0}) {
   const grade = timing.gradeStyle(span.grade, span.post_effects);
   const accent = timing.accentState(span.edit?.accents, absoluteFrame);
   const camera = timing.cameraAtFrame(span, localFrame);
@@ -221,7 +223,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
         overflow: "hidden",
         clipPath: reveal.clipPath ?? undefined,
         transform: reveal.transform ?? undefined,
-        filter: reveal.filter ?? undefined,
+        filter: reveal.filter ?? (whipBlur > 0 ? `url(#${WHIP_BLUR_ID})` : undefined),
       }}
     >
       <div
@@ -358,8 +360,17 @@ export function BaseFilm({input, overlay = null}) {
     }
   }
 
+  const whipBlur = (incoming.blurShare ?? 0) * width;
+
   return (
     <AbsoluteFill style={{backgroundColor: "#000"}}>
+      {whipBlur > 0 ? (
+        <svg style={{position: "absolute", width: 0, height: 0}} aria-hidden="true">
+          <filter id={WHIP_BLUR_ID} x="-10%" width="120%">
+            <feGaussianBlur stdDeviation={`${whipBlur.toFixed(2)} 0`} />
+          </filter>
+        </svg>
+      ) : null}
       {layers.map((layer, position) => {
         const span = spans[layer.index];
         const isTop = position === layers.length - 1;
@@ -369,7 +380,7 @@ export function BaseFilm({input, overlay = null}) {
               kind: "fade",
               clipPath: null,
               opacity: 1,
-              transform: null,
+              transform: incoming.outgoingTransform ?? null,
               filter: null,
               black: 0,
               white: 0,
@@ -387,6 +398,7 @@ export function BaseFilm({input, overlay = null}) {
               reveal={reveal}
               width={width}
               height={height}
+              whipBlur={whipBlur}
             />
           </Sequence>
         );

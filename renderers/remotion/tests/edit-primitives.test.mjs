@@ -90,7 +90,9 @@ test("every edit transition is a pure reveal with a bounded visual", () => {
     0.25,
   );
   assert.match(whip.transform, /translateX/);
-  assert.match(whip.filter, /blur/);
+  assert.match(whip.outgoingTransform, /translateX\(-/);
+  assert.ok(whip.blurShare > 0);
+  assert.equal(editTransitionStyle({type: "fade", frames: 6}, 0.5).blurShare, undefined);
 
   const push = editTransitionStyle({type: "push", frames: 6}, 0.25);
   assert.match(push.transform, /scale/);
