@@ -1,11 +1,12 @@
 """User settings: one TOML file, never committed into a production folder.
 
-Secrets live in the OS keychain when ``keyring`` is installed and fall back to
-the file otherwise. Every value has a neutral default so a fresh clone boots.
+Saved keys are plain text in this file, which only the owner can read. Every value
+has a neutral default so a fresh clone boots.
 """
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Literal
@@ -62,14 +63,21 @@ def save_settings(settings: Settings) -> None:
     lines = ["[settings]"]
     for key, value in settings.model_dump().items():
         if isinstance(value, list):
-            lines.append(f"{key} = {value!r}".replace("'", '"'))
+            lines.append(f"{key} = {json.dumps(value)}")
         elif isinstance(value, bool):
             lines.append(f"{key} = {'true' if value else 'false'}")
         elif isinstance(value, str):
-            lines.append(f'{key} = "{value}"')
+            # JSON string escapes are valid TOML, so a quote or backslash can't break the file.
+            lines.append(f"{key} = {json.dumps(value)}")
         else:
             lines.append(f"{key} = {value}")
-    path.write_text("\n".join(lines) + "\n")
+    # Written private and swapped in, because this file can hold API keys.
+    temporary = path.with_suffix(".toml.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w") as handle:
+        handle.write("\n".join(lines) + "\n")
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
 
 
 class EnvSettings(BaseSettings):

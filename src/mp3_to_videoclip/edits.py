@@ -26,8 +26,6 @@ from .models import (
 from .storage import digest, read_json, read_optional, require_revision, state_mutation, write_json
 
 EDIT = "work/edit.json"
-HARD = "hard"
-WARNING = "warning"
 
 TRANSITION_LABELS = {
     "cut": "Cut",

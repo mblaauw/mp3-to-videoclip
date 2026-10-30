@@ -1,9 +1,11 @@
 """Project-local Remotion adapter; derived inputs, never a second edit timeline."""
 
 import base64
+import contextlib
 import fcntl
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -17,6 +19,8 @@ from .models import Project, RenderShot
 from .storage import digest, file_hash, read_json, write_json
 
 ENGINE = Path(__file__).resolve().parents[2] / "renderers/remotion"
+# Far longer than any frame takes, even under load; a render this quiet has hung.
+STALL_SECONDS = 300.0
 
 
 class AssetCacheCorruption(ValueError):
@@ -205,8 +209,14 @@ def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: i
     """
     log = output.with_suffix(".render.log")
     collector = _OutputCollector(log)
+    # Its own process group, so a stopped render takes its browser with it.
     process = subprocess.Popen(
-        argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
+        argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+        start_new_session=True,
     )
     readers = [
         Thread(target=collector.drain, args=(process.stdout,), daemon=True),
@@ -214,32 +224,55 @@ def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: i
     ]
     for reader in readers:
         reader.start()
+    moved_at = time.monotonic()
+    last_done = None
+    stalled = False
     while process.poll() is None:
-        _relay_progress(progress_path, frames)
+        done = _relay_progress(progress_path, frames)
+        if done != last_done:
+            last_done, moved_at = done, time.monotonic()
+        # A crashed browser page can leave the renderer alive and its heartbeat
+        # updating, so only frames count as progress. Bundling reports none yet.
+        elif done is not None and time.monotonic() - moved_at > STALL_SECONDS:
+            stalled = True
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGTERM)
+            process.wait()
+            break
         time.sleep(0.5)
     _relay_progress(progress_path, frames)
     for reader in readers:
         reader.join(timeout=5)
     collector.close()
+    if stalled:
+        return None, (
+            f"The render stopped at frame {last_done} of {frames}: no new frame for "
+            f"{STALL_SECONDS:.0f} seconds. "
+        ) + _tail(collector.stderr)
     if process.returncode == 0:
         return _tail(collector.stdout), _tail(collector.stderr)
     return None, _tail(collector.stderr) + _tail(collector.stdout, 1000)
 
 
-def _relay_progress(progress_path: Path, frames: int) -> None:
-    """Best-effort: a missing or partially written progress file is not an error."""
+def _relay_progress(progress_path: Path, frames: int) -> int | None:
+    """Best-effort: a missing or partially written progress file is not an error.
+
+    Returns the frames done so far, or None before any are reported.
+    """
     try:
         info = read_json(progress_path)
     except (OSError, ValueError):
-        return
+        return None
     if not isinstance(info, dict):
-        return
+        return None
     operations.tick(
         phase=info.get("phase"),
         done=info.get("done"),
         total=info.get("total"),
         unit=info.get("unit"),
     )
+    done = info.get("done")
+    return done if isinstance(done, int) and info.get("phase") == "rendering-frames" else None
 
 
 class _OutputCollector:

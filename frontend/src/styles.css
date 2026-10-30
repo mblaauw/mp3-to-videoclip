@@ -35,18 +35,6 @@ a { color: var(--gold); }
   grid-template-rows: 1fr 42px;
   height: 100%;
 }
-.rail {
-  border-right: 1px solid var(--line);
-  padding: 18px 14px;
-  overflow: auto;
-}
-.rail h1 { font-size: 15px; margin: 0 0 2px; }
-.rail .kicker { color: var(--gold); text-transform: uppercase; letter-spacing: 0.14em; font-size: 10px; font-weight: 700; }
-.rail ul { list-style: none; padding: 0; margin: 18px 0 0; }
-.rail li { margin: 0 0 6px; }
-.rail button { width: 100%; text-align: left; display: block; }
-.rail button.active { border-color: var(--gold); }
-.rail .meta { color: var(--muted); font-size: 11px; }
 .main { overflow: auto; padding: 22px 24px 28px; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 22px; }
 .tabs button.active { border-color: var(--gold); color: var(--gold); }
@@ -142,7 +130,6 @@ button.active { border-color: var(--gold); color: var(--gold); }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* stage controls and approvals */
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .inline { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .inline input[type="number"] {
   width: 76px;
@@ -200,7 +187,6 @@ button.active { border-color: var(--gold); color: var(--gold); }
 .kind-badge { color: var(--gold); margin-right: 4px; }
 
 /* intake */
-.rail .new { width: 100%; margin: 12px 0 0; border-color: #3a4b59; }
 .intake { max-width: 760px; }
 .intake .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .intake label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
@@ -356,14 +342,6 @@ button.active { border-color: var(--gold); color: var(--gold); }
 .boundary:focus-visible::before { left: 7px; width: 3px; background: var(--ink); }
 .boundary:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 .boundary:disabled { opacity: 0.45; cursor: wait; }
-.timeline-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 5px;
-  color: var(--muted);
-  font-size: 11px;
-}
 @media (max-width: 600px) {
   .waveform { height: 64px; }
   .shot-block { font-size: 9px; padding: 0 3px; }
@@ -439,16 +417,6 @@ button.active { border-color: var(--gold); color: var(--gold); }
   font-size: 12px;
 }
 .review-controls .inline { font-size: 12px; }
-.approvals .attest {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  flex: 1 1 100%;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
-.approvals .attest input { margin-top: 2px; }
 .chip.accept { border-color: var(--ok); color: var(--ok); }
 .chip.reject { border-color: var(--bad); color: var(--bad); }
 .chip.uncertain { border-color: var(--warn); color: var(--warn); }
@@ -464,33 +432,6 @@ button.active { border-color: var(--gold); color: var(--gold); }
 .setup li.missing { color: var(--warn); }
 
 /* production intake */
-.intake-card .grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.intake-card label {
-  display: grid;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.intake-card input,
-.intake-card select,
-.intake-card textarea {
-  width: 100%;
-  background: var(--raised);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--r-control);
-  padding: 8px 11px;
-  font: inherit;
-  font-size: var(--t-15);
-  line-height: 1.55;
-}
-.intake-card textarea { resize: vertical; }
-.intake-card .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
-.intake-card .actions .meta { color: var(--muted); }
 .window-card { margin-top: 16px; }
 .window-card h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
 .window-waveform {

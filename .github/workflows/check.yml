@@ -22,5 +22,22 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Lint
         run: uv run ruff check .
+      - name: Format
+        run: uv run ruff format --check .
       - name: Test
         run: uv run pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Frontend install
+        run: npm ci --prefix frontend
+      - name: Frontend tests and build
+        run: |
+          npm test --prefix frontend
+          npm run build --prefix frontend
+      - name: Committed frontend build is current
+        run: git diff --exit-code --stat -- frontend/dist
+      - name: Renderer install
+        run: npm ci --prefix renderers/remotion --ignore-scripts
+      - name: Renderer tests
+        run: npm test --prefix renderers/remotion
