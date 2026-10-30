@@ -150,7 +150,7 @@ approval unchanged.
 invented character by itself. `profile.md` forbids that, but nothing enforces it.
 
 **Not proven live.** The Writer filling a storyboard, so the `create_storyboard` fix is untested
-against the model. The Studio's own skeleton route does work. The Writer also cannot see the
-story's timings when it makes the board: neither the storyboard task nor its context reads
-`work/story-beats.json`. Sorting varied a little between runs ("No lip-sync." went to avoid once and rules
+against the model. The Studio's own skeleton route does work. The Writer could not see the
+story's timings when it made the board; `storyboard.md` v2 now reads them from its project
+snapshot, also not yet proven live. Sorting varied a little between runs ("No lip-sync." went to avoid once and rules
 once), which moving a sentence covers.
