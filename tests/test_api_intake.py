@@ -317,3 +317,13 @@ def test_a_promo_can_use_a_whole_instrumental_track(tmp_path, fake_probe):
     project = json.loads((tmp_path / created.json()["slug"] / "project.json").read_text())
     assert project["music_mode"] == "instrumental"
     assert project.get("audio_window") is None
+
+
+def test_the_reference_routes_serve_only_real_references(tmp_path):
+    root = tmp_path / "film"
+    with api_client(tmp_path) as client:
+        (root / "media/references").mkdir(parents=True)
+        (root / "project.json").write_text(json.dumps({"schema_version": 3, "slug": "film"}))
+        (root / "media/references/one.png").write_bytes(b"png")
+        assert client.get("/api/projects/film/references/one.png").status_code == 200
+        assert client.get("/api/projects/film/references/two.png").status_code == 404

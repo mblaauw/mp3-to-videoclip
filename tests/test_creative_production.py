@@ -806,3 +806,64 @@ def test_the_owners_avoid_list_reaches_the_picture_prompt(tmp_path):
     board = P.load_board(root)
     prompt = P.image_spec(root, board.shots[0])["positivePrompt"]
     assert "Avoid: Captions; Alcohol; Mocktails only" in prompt
+
+
+def _with_still(root):
+    from PIL import Image as Picture
+
+    path = root / "assets/s001/v001-test.jpg"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Picture.new("RGB", (64, 48), "navy").save(path)
+    write_json(
+        root / "work/assets.json",
+        {
+            "s001": {
+                "selected": 1,
+                "versions": [{"version": 1, "path": "assets/s001/v001-test.jpg"}],
+            }
+        },
+    )
+    return path
+
+
+def _character_id(root, *, permission=True):
+    brief = read_json(root / "brief.json")
+    brief["characters"] = [
+        {
+            "id": "hero",
+            "identity": "A tall black cat",
+            "permission_confirmed": permission,
+            "references": [],
+        }
+    ]
+    write_json(root / "brief.json", brief)
+    return "hero"
+
+
+def test_a_still_can_become_a_characters_reference_and_leaves_the_still_alone(tmp_path):
+    root = make_root(tmp_path)
+    still = _with_still(root)
+    before = still.read_bytes()
+    who = _character_id(root)
+    brief = P.add_character_reference(root, who, "s001", 1, [8, 8, 40, 40])
+    reference = brief.characters[0].references[0]
+    assert reference.startswith("media/references/")
+    with Image.open(root / reference) as picture:
+        assert picture.size == (32, 32)
+    assert still.read_bytes() == before
+    # Asking again changes nothing, and the reference can be removed.
+    assert P.add_character_reference(root, who, "s001", 1, [8, 8, 40, 40]).characters[
+        0
+    ].references == [reference]
+    assert P.remove_character_reference(root, who, reference).characters[0].references == []
+
+
+def test_a_reference_needs_the_owners_permission_and_a_real_still(tmp_path):
+    root = make_root(tmp_path)
+    _with_still(root)
+    who = _character_id(root, permission=False)
+    with pytest.raises(ValueError, match="permission"):
+        P.add_character_reference(root, who, "s001", 1)
+    who = _character_id(root)
+    with pytest.raises(ValueError, match="no version"):
+        P.add_character_reference(root, who, "s001", 9)

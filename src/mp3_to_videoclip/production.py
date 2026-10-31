@@ -968,6 +968,56 @@ def write_storyboard(
     return updated
 
 
+def add_character_reference(
+    root: Path, character_id: str, shot_id: str, version: int, box: list[int] | None = None
+) -> Brief:
+    """Make a still from this film the reference that keeps a character consistent."""
+    from .references import import_reference
+
+    brief = load_brief(root)
+    character = next((item for item in brief.characters if item.id == character_id), None)
+    if character is None:
+        raise ValueError(f"unknown character {character_id}")
+    if not character.permission_confirmed:
+        raise _character_refusal(character_id)
+    entry = read_json(root / "work/assets.json").get(shot_id) or {}
+    still = next((item for item in entry.get("versions", []) if item["version"] == version), None)
+    if still is None:
+        raise ValueError(f"shot {shot_id} has no version {version}")
+    imported = import_reference(
+        root,
+        inside(root, still["path"]),
+        note=f"Still {shot_id} v{version} of this film, chosen by the owner",
+        permission_confirmed=True,
+        box=box,
+    )
+    if imported["path"] in character.references:
+        return brief
+    return _set_character_references(
+        root, brief, character_id, [*character.references, imported["path"]]
+    )
+
+
+def remove_character_reference(root: Path, character_id: str, path: str) -> Brief:
+    brief = load_brief(root)
+    character = next((item for item in brief.characters if item.id == character_id), None)
+    if character is None or path not in character.references:
+        raise ValueError(f"{character_id} has no such reference")
+    return _set_character_references(
+        root, brief, character_id, [item for item in character.references if item != path]
+    )
+
+
+def _set_character_references(
+    root: Path, brief: Brief, character_id: str, paths: list[str]
+) -> Brief:
+    characters = [
+        {**item.model_dump(), "references": paths} if item.id == character_id else item.model_dump()
+        for item in brief.characters
+    ]
+    return update_brief(root, {"characters": characters}, owner=True)
+
+
 def _avoid_list(brief: Brief) -> list[str]:
     """What pictures must leave out: the profile's list plus the owner's own in the intent."""
     owner = brief.intent.avoid if brief.intent else []

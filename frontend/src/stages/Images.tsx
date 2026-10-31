@@ -10,6 +10,7 @@ import {
   type Storyboard,
 } from "../api";
 import { ApprovalBar, useApprovals } from "../ApprovalBar";
+import { ReferencePicker } from "../images/ReferencePicker";
 import { PaidCard } from "../images/PaidCard";
 import { usePaidImages } from "../images/paid";
 import { JobBanner } from "../jobs/JobBanner";
@@ -774,6 +775,16 @@ export function ImagesStage({
                   </button>
                 ))}
               </div>
+            )}
+
+            {!current.local && current.selected !== null && (
+              <ReferencePicker
+                key={`${current.owner}-${current.selected}`}
+                slug={slug}
+                shotId={current.owner}
+                version={current.selected}
+                src={`/api/projects/${slug}/images/${encodeURIComponent(current.owner)}/${current.selected}`}
+              />
             )}
 
             {!current.local && current.selected !== null && (

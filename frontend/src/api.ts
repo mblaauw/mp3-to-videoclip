@@ -1020,6 +1020,20 @@ export const api = {
       "/api/setup/renderer",
       { method: "POST", body: JSON.stringify({}) },
     ),
+  addCharacterReference: (
+    slug: string,
+    character: string,
+    body: { shot_id: string; version: number; box: number[] | null },
+  ) =>
+    request<Brief>(`/api/projects/${slug}/characters/${encodeURIComponent(character)}/references`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  removeCharacterReference: (slug: string, character: string, path: string) =>
+    request<Brief>(
+      `/api/projects/${slug}/characters/${encodeURIComponent(character)}/references/remove`,
+      { method: "POST", body: JSON.stringify({ path }) },
+    ),
   directorModel: (slug: string, role: "writer" | "editor") =>
     request<{ model: string; gateway: string; can_see: boolean | null }>(
       `/api/projects/${slug}/director/model?role=${role}`,
