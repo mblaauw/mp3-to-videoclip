@@ -488,7 +488,7 @@ export const EDIT_TRANSITIONS = [
 ];
 export const EDIT_MOTIONS = ["hold", "push_in", "pull_back", "pan_left", "pan_right"];
 export const EDIT_ACCENTS = ["punch_in", "flash", "light_leak"];
-export const TEXT_ANIMATIONS = ["fade", "type_on", "slide_up", "pop", "kinetic_words"];
+export const TEXT_ANIMATIONS = ["fade", "fade_in", "type_on", "slide_up", "pop", "kinetic_words"];
 export const EDIT_TEXT_STYLES = [
   "super",
   "title",
@@ -879,6 +879,9 @@ export function textAnimationStyle(animation, progress, index = 0, count = 1) {
   const enter = smoothstep(clamp01(p * 5));
   const leave = 1 - smoothstep(clamp01((p - 0.85) / 0.15));
   const opacity = enter * leave;
+  if (animation === "fade_in") {
+    return {opacity: enter, reveal: 1, transform: null};
+  }
   if (animation === "type_on") {
     return {opacity, reveal: smoothstep(clamp01(p * 2.4)), transform: null};
   }

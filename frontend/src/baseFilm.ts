@@ -64,7 +64,7 @@ export type EditText = {
   text: string;
   in_frame: number;
   out_frame: number;
-  animation: "fade" | "type_on" | "slide_up" | "pop" | "kinetic_words";
+  animation: "fade" | "fade_in" | "type_on" | "slide_up" | "pop" | "kinetic_words";
   reason?: string;
 };
 

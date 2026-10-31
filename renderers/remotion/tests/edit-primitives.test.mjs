@@ -310,3 +310,10 @@ test("brand text styles are accepted and a colour must be a hex value", () => {
   assert.doesNotThrow(() => timing.validateEditText(item));
   assert.throws(() => timing.validateEditText({...item, color: "gold"}));
 });
+
+
+test("fade_in rises and then stays, so words hold through the last frame", () => {
+  assert.equal(timing.textAnimationStyle("fade_in", 0).opacity, 0);
+  assert.equal(timing.textAnimationStyle("fade_in", 0.5).opacity, 1);
+  assert.equal(timing.textAnimationStyle("fade_in", 1).opacity, 1);
+});

@@ -789,7 +789,7 @@ EditTransitionType = Literal[
 ]
 EditMotionType = Literal["hold", "push_in", "pull_back", "pan_left", "pan_right"]
 EditAccentType = Literal["punch_in", "flash", "light_leak"]
-EditTextAnimation = Literal["fade", "type_on", "slide_up", "pop", "kinetic_words"]
+EditTextAnimation = Literal["fade", "fade_in", "type_on", "slide_up", "pop", "kinetic_words"]
 EditTextStyle = Literal[
     "super", "title", "lower_third", "lyric", "card", "logotype", "tagline", "cta"
 ]
