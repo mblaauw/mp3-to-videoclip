@@ -169,6 +169,19 @@ export type LyricLine = {
   source: "tapped" | "auto" | "lrc" | null;
 };
 
+export type EditSuggestion = {
+  edit: EditPayload;
+  changes: {
+    joins_moved: number;
+    largest_move_seconds: number;
+    moves_changed: number;
+    accents: number;
+    dissolves: number;
+    holds: number;
+    sections: number;
+  };
+};
+
 export type LyricTools = {
   supported: boolean;
   reason: string | null;
@@ -590,6 +603,13 @@ export type CutSummary = {
   warnings: EditFinding[];
   notes: string;
   grade: string | null;
+  against_seed?: {
+    joins_moved: number;
+    moves_changed: number;
+    crops: number;
+    accents: number;
+    named_joins: number;
+  } | null;
 };
 
 export type HistorySnapshot = {
@@ -888,6 +908,11 @@ export const api = {
     request<RatingResponse>(`/api/projects/${slug}/ratings`, {
       method: "POST",
       body: JSON.stringify({ artifact, rating, note }),
+    }),
+  suggestEdit: (slug: string) =>
+    request<EditSuggestion>(`/api/projects/${slug}/edit/suggest`, {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
   seedEdit: (slug: string) =>
     request<EditSummary>(`/api/projects/${slug}/edit/seed`, {

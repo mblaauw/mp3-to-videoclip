@@ -1,5 +1,5 @@
 import type { EditPayload, Storyboard } from "../api";
-import type { EditMotion, EditTransition } from "../baseFilm";
+import type { EditCrop, EditMotion, EditTransition, Grade } from "../baseFilm";
 
 /** Drag limits for the join between two edit-owned shots. */
 export type BoundaryLimits = { low: number; high: number };
@@ -41,6 +41,7 @@ export function editBoundaryLimits(edit: EditPayload, index: number): BoundaryLi
       leftStart + left.transition_in.frames + 1,
       leftStart + right.transition_in.frames + 1,
       ...left.accents.map((accent) => accent.frame + 1),
+      ...(left.crops ?? []).map((crop) => crop.frame + 1),
       ...left.text.map((item) => item.out_frame),
     ],
     leftStart + 1,
@@ -50,6 +51,8 @@ export function editBoundaryLimits(edit: EditPayload, index: number): BoundaryLi
       rightEnd - 1,
       rightEnd - right.transition_in.frames - 1,
       ...right.accents.map((accent) => accent.frame),
+      // A crop must stay strictly after the shot's first frame.
+      ...(right.crops ?? []).map((crop) => crop.frame - 1),
       ...right.text.map((item) => item.in_frame),
     ],
     rightEnd - 1,
@@ -158,6 +161,77 @@ export function setEditMotion(
         : shot,
     ),
   };
+}
+
+export type LookAmount = "grain" | "weave" | "drift";
+
+export function setGradePreset(edit: EditPayload, preset: Grade["preset"]): EditPayload {
+  return { ...edit, grade: { ...edit.grade, preset } };
+}
+
+/** All amounts at zero means no look at all, so the cut reads as if it never had one. */
+export function setLookAmount(edit: EditPayload, key: LookAmount, amount: number): EditPayload {
+  const look = { grain: 0, weave: 0, drift: 0, ...edit.grade.look, [key]: amount };
+  const { look: _dropped, ...rest } = edit.grade;
+  return {
+    ...edit,
+    grade: look.grain || look.weave || look.drift ? { ...rest, look } : rest,
+  };
+}
+
+function withCrops(edit: EditPayload, shotId: string, crops: EditCrop[]): EditPayload {
+  return {
+    ...edit,
+    shots: edit.shots.map((shot) => {
+      if (shot.shot_id !== shotId) return shot;
+      const { crops: _dropped, ...rest } = shot;
+      return crops.length ? { ...rest, crops } : rest;
+    }),
+  };
+}
+
+/** Adds a crop cut at this frame, or returns null if the shot has no room there. */
+export function addCrop(edit: EditPayload, shotId: string, frame: number): EditPayload | null {
+  const shot = edit.shots.find((item) => item.shot_id === shotId);
+  if (!shot) return null;
+  const at = Math.round(frame);
+  const existing = shot.crops ?? [];
+  if (
+    at <= shot.start_frame ||
+    at >= shot.start_frame + shot.duration_frames ||
+    existing.some((crop) => crop.frame === at)
+  ) {
+    return null;
+  }
+  const crop: EditCrop = { frame: at, zoom: 1.3, x: 0.5, y: 0.5, reason: SET_BY_HAND };
+  return withCrops(
+    edit,
+    shotId,
+    [...existing, crop].sort((left, right) => left.frame - right.frame),
+  );
+}
+
+export function updateCrop(
+  edit: EditPayload,
+  shotId: string,
+  frame: number,
+  change: Partial<Pick<EditCrop, "zoom" | "x" | "y">>,
+): EditPayload {
+  const shot = edit.shots.find((item) => item.shot_id === shotId);
+  return withCrops(
+    edit,
+    shotId,
+    (shot?.crops ?? []).map((crop) => (crop.frame === frame ? { ...crop, ...change } : crop)),
+  );
+}
+
+export function removeCrop(edit: EditPayload, shotId: string, frame: number): EditPayload {
+  const shot = edit.shots.find((item) => item.shot_id === shotId);
+  return withCrops(
+    edit,
+    shotId,
+    (shot?.crops ?? []).filter((crop) => crop.frame !== frame),
+  );
 }
 
 /** The filmstrip and spine use edit order and spans once a cut owns timing. */

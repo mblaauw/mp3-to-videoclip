@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from pathlib import Path
 
@@ -178,6 +179,18 @@ async def seed_edit(slug: str, request: Request):
         edit = edits.seed_edit(root)
         return edits.summary(root, edit)
     except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/edit/suggest")
+async def suggest_edit(slug: str, request: Request):
+    """A suggested cut to look at. Nothing is written until it is saved like any other cut."""
+    from mp3_to_videoclip import first_cut
+
+    root = project_root(request, slug)
+    try:
+        return await asyncio.to_thread(first_cut.suggest, root)
+    except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

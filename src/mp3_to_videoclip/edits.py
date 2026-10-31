@@ -116,12 +116,20 @@ TECHNIQUE_NAMES = {
     "slide_up": "slide-up type",
     "pop": "pop type",
     "kinetic_words": "kinetic typography",
+    "crop": "crop cut",
 }
 
 ENERGY_WORDS = {
     "high": ("chorus", "drop", "climax", "release", "peak", "explode", "loud"),
     "low": ("intro", "outro", "verse", "calm", "quiet", "breakdown", "bridge", "breath"),
 }
+
+
+TOOL_PAGE_SHOTS = 30
+SAME_TRAVEL_RUN = 4
+SOFT_CROP_ZOOM = 1.4
+LONG_STATIC_SECONDS = 12.0
+UNREVIEWED_FEELS = ("unreviewed", "section", "")
 
 
 def edit_path(root: Path) -> Path:
@@ -500,6 +508,8 @@ def report(
     for section, start, end in windows:
         decisions = [shot for shot in edit.shots if start <= shot.start_frame < end]
         cuts = sum(1 for shot in decisions if shot.start_frame > start)
+        # A crop cut is a cut the viewer sees, whichever shot it falls in.
+        cuts += sum(1 for shot in edit.shots for crop in shot.crops if start <= crop.frame < end)
         seconds = max((end - start) / fps, 1 / fps)
         density = round(cuts / seconds * 10, 2)
         holds = sum(1 for shot in decisions if shot.motion.type == "hold")
@@ -593,6 +603,63 @@ def report(
                     "code": "motion_repetition",
                     "shot_id": shot.shot_id,
                     "message": f"three {shot.motion.type} moves in a row",
+                }
+            )
+    # The same travel over and over reads as a machine, even between different shots.
+    run = 0
+    previous_travel = None
+    for shot in edit.shots:
+        if shot.motion.type == "hold":
+            continue
+        travel = (shot.motion.type, shot.motion.from_scale, shot.motion.to_scale)
+        run = run + 1 if travel == previous_travel else 1
+        previous_travel = travel
+        if run == SAME_TRAVEL_RUN:
+            warnings.append(
+                {
+                    "code": "travel_repetition",
+                    "shot_id": shot.shot_id,
+                    "message": (
+                        f"{SAME_TRAVEL_RUN} {shot.motion.type} moves in a row with the same "
+                        f"travel, {shot.motion.from_scale:.2f} to {shot.motion.to_scale:.2f}"
+                    ),
+                }
+            )
+    for shot in edit.shots:
+        seconds = shot.duration_frames / fps
+        if (
+            shot.motion.type == "hold"
+            and seconds > LONG_STATIC_SECONDS
+            and not shot.accents
+            and not shot.crops
+        ):
+            warnings.append(
+                {
+                    "code": "long_static_shot",
+                    "shot_id": shot.shot_id,
+                    "message": f"{shot.shot_id} stays still for {seconds:.1f}s",
+                }
+            )
+    for shot in edit.shots:
+        soft = [crop for crop in shot.crops if crop.zoom > SOFT_CROP_ZOOM]
+        if soft:
+            warnings.append(
+                {
+                    "code": "crop_soft",
+                    "shot_id": shot.shot_id,
+                    "message": (
+                        f"{shot.shot_id} crops in to {max(crop.zoom for crop in soft):.2f}x; "
+                        "check that the still stays sharp enough"
+                    ),
+                }
+            )
+    for section, _start, _end in windows:
+        if section.feel.strip().lower() in UNREVIEWED_FEELS:
+            warnings.append(
+                {
+                    "code": "section_no_feel",
+                    "section": section.id,
+                    "message": f"section {section.id} has no written feel",
                 }
             )
     # Hard cut is the default and is not repetition; only named transitions are.
@@ -797,13 +864,55 @@ def _seed_motion(shot) -> EditMotion:
     return EditMotion(type="pan_right", **{"from": 1.08, "to": 1.08}, reason=reason)
 
 
-@state_mutation
-def seed_edit(root: Path) -> EditDecisionList:
-    """Create the first edit without changing the approved cut.
+def cut_material(root: Path) -> dict:
+    """What the music and the words offer to cut on, in film frames. Evidence, not orders."""
+    from . import production as P
+    from .domain import lyric_timing, section_map
 
-    The storyboard's join and camera controls are translated into edit language so
-    seeding is a move of ownership, not a rewrite of the film.
-    """
+    project = P.load_project(root)
+    fps = project.fps
+    frame = lambda seconds: round(float(seconds) * fps)  # noqa: E731
+    music = section_map.apply(root, read_optional(root / "work" / "music.json")) or {}
+    sections = [
+        {
+            "name": item.get("name") or f"Section {index + 1}",
+            "start_frame": frame(item["start"]),
+            "end_frame": frame(item["end"]),
+            "energy": round(float(item.get("energy") or 0), 2),
+        }
+        for index, item in enumerate(music.get("sections") or [])
+        if isinstance(item, dict)
+    ]
+    lines = [
+        {"frame": frame(line["start"]), "text": line["text"], "source": line["source"]}
+        for line in lyric_timing.view(root)["lines"]
+        if line["start"] is not None and not line["tag"]
+    ]
+    changes = [
+        {"frame": frame(item["time"]), "strength": item.get("spectral_change")}
+        for item in music.get("candidate_changes") or []
+        if isinstance(item, dict) and "time" in item
+    ]
+    beats = [
+        frame(item["time"] if isinstance(item, dict) else item) for item in music.get("beats") or []
+    ]
+    board = effective_board(root) if (root / P.STAGE_FILES["storyboard"]).is_file() else None
+    return {
+        "fps": fps,
+        "total_frames": board.total_frames if board else round(project.duration * fps),
+        "sections": sections,
+        "lines": lines,
+        "changes": changes,
+        "beats": beats,
+        "notes": (
+            "All of this is estimated unless a line's source is tapped. Beats may be half or "
+            "double the felt pulse. Prefer sections, sung lines and strong changes."
+        ),
+    }
+
+
+def seed_edit_preview(root: Path) -> EditDecisionList:
+    """The cut seeding would write, without writing it."""
     from . import production as P
 
     board = P.load_board(root)
@@ -836,7 +945,20 @@ def seed_edit(root: Path) -> EditDecisionList:
         grade=Grade(),
         notes="Seeded from the storyboard; timing, motion and joins are now edit-owned.",
     )
-    return save_edit(root, edit, board=board)
+    edit.check_board(board)
+    return edit
+
+
+@state_mutation
+def seed_edit(root: Path) -> EditDecisionList:
+    """Create the first edit without changing the approved cut.
+
+    The storyboard's join and camera controls are translated into edit language so
+    seeding is a move of ownership, not a rewrite of the film.
+    """
+    from . import production as P
+
+    return save_edit(root, seed_edit_preview(root), board=P.load_board(root))
 
 
 def attach_edit(shots: list[RenderShot], edit: EditDecisionList | None) -> list[RenderShot]:
@@ -868,6 +990,93 @@ def summary(root: Path, edit: EditDecisionList | None = None) -> dict:
         "present": True,
         "edit": edit.model_dump(by_alias=True),
         "report": value,
+    }
+
+
+def tool_page(root: Path, first: int = 0, count: int = TOOL_PAGE_SHOTS) -> dict:
+    """The cut for a model, a page of shots at a time.
+
+    A whole cut with its report outgrows what a tool result can carry on a longer
+    film, and a gateway may truncate it to something the model can't read.
+    """
+    edit = load_edit(root)
+    if edit is None:
+        return {"available": False, "present": False, "report": _tool_report(report(root))}
+    first = max(0, int(first))
+    count = max(1, min(TOOL_PAGE_SHOTS, int(count)))
+    shots = edit.shots[first : first + count]
+    value = {
+        "available": True,
+        "present": True,
+        "shot_total": len(edit.shots),
+        "first": first,
+        "shots": [shot.model_dump(by_alias=True) for shot in shots],
+    }
+    if first + count < len(edit.shots):
+        value["next_first"] = first + count
+    if first == 0:
+        value["sections"] = [section.model_dump() for section in edit.sections]
+        value["grade"] = edit.grade.model_dump()
+        value["notes"] = edit.notes
+        value["report"] = _tool_report(report(root, edit=edit))
+    return value
+
+
+def _tool_report(value: dict) -> dict:
+    return {
+        "ok": value.get("ok"),
+        "hard": value.get("hard"),
+        "warnings": value.get("warnings"),
+        "counts": value.get("counts"),
+    }
+
+
+EDITABLE_SHOT_FIELDS = {"motion", "crops", "accents", "text", "transition_in", "split_layout"}
+
+
+def patch_shots(root: Path, changes: list[dict]) -> dict:
+    """Change named fields of named shots, without resending or retiming the whole cut."""
+    if not isinstance(changes, list) or not changes:
+        raise ValueError("name at least one shot to change")
+    edit = load_edit(root)
+    if edit is None:
+        raise ValueError("there is no cut yet")
+    values = edit.model_dump(by_alias=True)
+    by_id = {shot["shot_id"]: shot for shot in values["shots"]}
+    for change in changes:
+        if not isinstance(change, dict) or change.get("shot_id") not in by_id:
+            raise ValueError(
+                f"no shot {change.get('shot_id') if isinstance(change, dict) else change}"
+            )
+        extra = set(change) - EDITABLE_SHOT_FIELDS - {"shot_id"}
+        if extra:
+            raise ValueError(f"these can't be changed here: {sorted(extra)}")
+        by_id[change["shot_id"]].update(
+            {key: value for key, value in change.items() if key != "shot_id"}
+        )
+    saved = save_edit(root, values)
+    return {"saved": len(changes), "report": _tool_report(report(root, edit=saved))}
+
+
+def _against_seed(root: Path, edit: EditDecisionList) -> dict | None:
+    """What this cut did beyond the starting cut, so the owner can see an editor's work."""
+    try:
+        seed = {shot.shot_id: shot for shot in seed_edit_preview(root).shots}
+    except (OSError, ValueError):
+        return None
+    if set(seed) != {shot.shot_id for shot in edit.shots}:
+        return None
+    motion = lambda shot: (shot.motion.type, shot.motion.from_scale, shot.motion.to_scale)  # noqa: E731
+    return {
+        "joins_moved": sum(
+            1 for shot in edit.shots if shot.start_frame != seed[shot.shot_id].start_frame
+        ),
+        "moves_changed": sum(
+            1 for shot in edit.shots if motion(shot) != motion(seed[shot.shot_id])
+        ),
+        "crops": sum(len(shot.crops) for shot in edit.shots),
+        "accents": sum(len(shot.accents) for shot in edit.shots),
+        "named_joins": sum(1 for shot in edit.shots if shot.transition_in.type != "cut"),
     }
 
 
@@ -1032,4 +1241,5 @@ def cut_summary(root: Path, edit: EditDecisionList | None = None) -> dict:
         "warnings": value["warnings"],
         "notes": edit.notes,
         "grade": edit.grade.preset,
+        "against_seed": _against_seed(root, edit),
     }

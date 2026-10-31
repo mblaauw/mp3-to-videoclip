@@ -15,6 +15,8 @@ from contextlib import aclosing
 from dataclasses import dataclass, field
 from typing import Any
 
+from openai import APIError
+
 from .conversation import append_message, compact_messages, load_messages
 from .llm import (
     DirectorLLM,
@@ -23,6 +25,7 @@ from .llm import (
     TextDelta,
     ToolCall,
     TurnResult,
+    service_failed_message,
     stall_message,
 )
 from .tools import TOOLS, ToolResult, dispatch
@@ -93,6 +96,17 @@ async def run_turn(
                 kind="done",
                 text=assistant_text,
                 payload={"error": stall_message(role, stalled.seconds), "stalled": True},
+            )
+            return
+        except APIError as failure:
+            # The model service refused or dropped the call. Tools already run keep
+            # their results, and the owner hears why instead of an empty reply.
+            if assistant_text.strip():
+                append_message(root, {"role": "assistant", "content": assistant_text}, agent=role)
+            yield TurnEvent(
+                kind="done",
+                text=assistant_text,
+                payload={"error": service_failed_message(role, failure)},
             )
             return
 

@@ -54,9 +54,20 @@ TOOLS: list[dict] = [
     _tool("get_storyboard", "Read the storyboard.", {"slug": {"type": "string"}}, ["slug"]),
     _tool(
         "get_edit",
-        "Read the edit decision list and its computed report, if an edit exists.",
-        {"slug": {"type": "string"}},
+        "Read the cut, up to 30 shots at a time. The first page also has its sections, "
+        "grade and report; follow next_first for the rest.",
+        {"slug": {"type": "string"}, "first": {"type": "integer"}, "count": {"type": "integer"}},
         ["slug"],
+    ),
+    _tool(
+        "update_edit_shots",
+        "Change motion, crops, accents, text or transition_in on named shots, leaving the "
+        "rest of the cut alone. Returns the report.",
+        {
+            "slug": {"type": "string"},
+            "shots": {"type": "array", "items": {"type": "object"}},
+        },
+        ["slug", "shots"],
     ),
     _tool(
         "update_edit",
@@ -64,6 +75,13 @@ TOOLS: list[dict] = [
         "Returns the saved edit and its report; fix every hard finding.",
         {"slug": {"type": "string"}, "edit": {"type": "object"}},
         ["slug", "edit"],
+    ),
+    _tool(
+        "get_cut_material",
+        "Read what the music and words offer to cut on, in film frames: named sections, sung "
+        "line starts, strong changes and beat estimates.",
+        {"slug": {"type": "string"}},
+        ["slug"],
     ),
     _tool(
         "get_music_summary",
@@ -382,13 +400,23 @@ def _dispatch(
     if name == "get_edit":
         from mp3_to_videoclip import edits
 
-        return edits.summary(root)
+        return edits.tool_page(root, arguments.get("first") or 0, arguments.get("count") or 30)
+
+    if name == "update_edit_shots":
+        from mp3_to_videoclip import edits
+
+        return edits.patch_shots(root, arguments.get("shots") or [])
+
+    if name == "get_cut_material":
+        from mp3_to_videoclip import edits
+
+        return edits.cut_material(root)
 
     if name == "update_edit":
         from mp3_to_videoclip import edits
 
         edit = edits.save_edit(root, arguments.get("edit") or {})
-        return edits.summary(root, edit)
+        return {"saved": True, "report": edits._tool_report(edits.report(root, edit=edit))}
 
     if name == "get_music_summary":
         from mp3_to_videoclip.domain import section_map

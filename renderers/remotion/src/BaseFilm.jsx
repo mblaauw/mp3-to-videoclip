@@ -192,7 +192,17 @@ function TextLayer({item, absoluteFrame, width, height}) {
   );
 }
 
-export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height}) {
+// One tile of noise, drawn once and only moved per frame, which is what keeps it cheap.
+const GRAIN_IMAGE = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='${timing.GRAIN_TILE}' height='${timing.GRAIN_TILE}'>` +
+    "<filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='7' stitchTiles='stitch'/>" +
+    "<feColorMatrix type='saturate' values='0'/></filter>" +
+    "<rect width='100%' height='100%' filter='url(#g)'/></svg>",
+)}")`;
+
+const WHIP_BLUR_ID = "whip-blur";
+
+export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height, whipBlur = 0}) {
   const grade = timing.gradeStyle(span.grade, span.post_effects);
   const accent = timing.accentState(span.edit?.accents, absoluteFrame);
   const camera = timing.cameraAtFrame(span, localFrame);
@@ -202,6 +212,8 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
     ...camera,
     zoom: camera.zoom * accent.punch,
   });
+  const {fps} = useVideoConfig();
+  const look = timing.lookState(span.grade?.look, absoluteFrame, span.index, width, height, fps);
   const panes = Array.isArray(span.split_panes) ? span.split_panes : [];
   const splitLayout = span.edit?.split_layout ?? "row";
   return (
@@ -211,7 +223,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
         overflow: "hidden",
         clipPath: reveal.clipPath ?? undefined,
         transform: reveal.transform ?? undefined,
-        filter: reveal.filter ?? undefined,
+        filter: reveal.filter ?? (whipBlur > 0 ? `url(#${WHIP_BLUR_ID})` : undefined),
       }}
     >
       <div
@@ -221,6 +233,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
           height: rect.height,
           left: rect.left,
           top: rect.top,
+          transform: look?.transform,
         }}
       >
         <div
@@ -262,6 +275,18 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
           />
         ) : null}
       </div>
+      {look && look.grainOpacity > 0 ? (
+        <AbsoluteFill
+          style={{
+            backgroundImage: GRAIN_IMAGE,
+            backgroundSize: `${timing.GRAIN_TILE}px ${timing.GRAIN_TILE}px`,
+            backgroundPosition: `${look.grainX}px ${look.grainY}px`,
+            mixBlendMode: "overlay",
+            opacity: look.grainOpacity,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
       {(span.edit?.text ?? []).map((item) => (
         <TextLayer
           key={item.id}
@@ -335,8 +360,17 @@ export function BaseFilm({input, overlay = null}) {
     }
   }
 
+  const whipBlur = (incoming.blurShare ?? 0) * width;
+
   return (
     <AbsoluteFill style={{backgroundColor: "#000"}}>
+      {whipBlur > 0 ? (
+        <svg style={{position: "absolute", width: 0, height: 0}} aria-hidden="true">
+          <filter id={WHIP_BLUR_ID} x="-10%" width="120%">
+            <feGaussianBlur stdDeviation={`${whipBlur.toFixed(2)} 0`} />
+          </filter>
+        </svg>
+      ) : null}
       {layers.map((layer, position) => {
         const span = spans[layer.index];
         const isTop = position === layers.length - 1;
@@ -346,7 +380,7 @@ export function BaseFilm({input, overlay = null}) {
               kind: "fade",
               clipPath: null,
               opacity: 1,
-              transform: null,
+              transform: incoming.outgoingTransform ?? null,
               filter: null,
               black: 0,
               white: 0,
@@ -364,6 +398,7 @@ export function BaseFilm({input, overlay = null}) {
               reveal={reveal}
               width={width}
               height={height}
+              whipBlur={whipBlur}
             />
           </Sequence>
         );

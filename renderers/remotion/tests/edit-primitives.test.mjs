@@ -7,13 +7,17 @@ import test from "node:test";
 
 import {
   accentState,
+  activeCrop,
   allocateSpans,
+  cameraAtFrame,
   editTransitionStyle,
   flashViolations,
   gradeStyle,
+  lookState,
   splitLayout,
   textAnimationStyle,
   validateEditShot,
+  validateGrade,
 } from "../src/timing.mjs";
 import {validateBaseInput, validateRequest} from "../src/request.mjs";
 
@@ -86,7 +90,9 @@ test("every edit transition is a pure reveal with a bounded visual", () => {
     0.25,
   );
   assert.match(whip.transform, /translateX/);
-  assert.match(whip.filter, /blur/);
+  assert.match(whip.outgoingTransform, /translateX\(-/);
+  assert.ok(whip.blurShare > 0);
+  assert.equal(editTransitionStyle({type: "fade", frames: 6}, 0.5).blurShare, undefined);
 
   const push = editTransitionStyle({type: "push", frames: 6}, 0.25);
   assert.match(push.transform, /scale/);
@@ -204,4 +210,67 @@ test("the renderer request refuses four flashes in one second", () => {
       }),
     /flash limit/,
   );
+});
+
+test("a crop cut jumps to its framing on its frame and holds it", () => {
+  const crops = [
+    {frame: 30, zoom: 1.35, x: 0.2, y: 0.7},
+    {frame: 60, zoom: 1.1},
+  ];
+  const span = {
+    id: "a",
+    duration_frames: 120,
+    handle: 0,
+    edit: {start_frame: 10, motion: {type: "push_in", from: 1, to: 1.08}, crops},
+  };
+  assert.ok(cameraAtFrame(span, 19).zoom < 1.08);
+  assert.deepEqual(cameraAtFrame(span, 20), {zoom: 1.35, x: 0.2, y: 0.7});
+  assert.deepEqual(cameraAtFrame(span, 49), {zoom: 1.35, x: 0.2, y: 0.7});
+  assert.deepEqual(cameraAtFrame(span, 50), {zoom: 1.1, x: 0.5, y: 0.5});
+  assert.equal(activeCrop(undefined, 10), null);
+});
+
+test("crop cuts are validated like the Python model", () => {
+  const withCrops = (crops) => shot("a", 0, 48, {crops});
+  assert.doesNotThrow(() => validateEditShot(withCrops([{frame: 10, zoom: 1.5}]).edit, withCrops([])));
+  for (const bad of [
+    [{frame: 0, zoom: 1.2}],
+    [{frame: 48, zoom: 1.2}],
+    [{frame: 10, zoom: 1.7}],
+    [{frame: 20, zoom: 1.2}, {frame: 10, zoom: 1.2}],
+    [{frame: 10, zoom: 1.2, x: 2}],
+  ]) {
+    assert.throws(() => validateEditShot(withCrops(bad).edit, withCrops([])));
+  }
+});
+
+test("the film look is off unless asked for, and the same frame always looks the same", () => {
+  assert.equal(lookState(undefined, 10, 0, 1920, 1080, 24), null);
+  assert.equal(lookState({grain: 0, weave: 0, drift: 0}, 10, 0, 1920, 1080, 24), null);
+  const look = {grain: 0.4, weave: 0.4, drift: 0.4};
+  assert.deepEqual(lookState(look, 10, 3, 1920, 1080, 24), lookState(look, 10, 3, 1920, 1080, 24));
+  assert.notDeepEqual(lookState(look, 10, 3, 1920, 1080, 24), lookState(look, 11, 3, 1920, 1080, 24));
+  assert.notEqual(
+    lookState(look, 10, 3, 1920, 1080, 24).transform,
+    lookState(look, 10, 4, 1920, 1080, 24).transform,
+  );
+});
+
+test("the film look's overscan always covers how far it moves", () => {
+  const width = 1920;
+  const height = 1080;
+  for (let frame = 0; frame < 2000; frame += 7) {
+    const {transform} = lookState({weave: 1, drift: 1}, frame, 2, width, height, 24);
+    const [, x, y, , scale] = transform.match(
+      /translate\((-?[\d.]+)px, (-?[\d.]+)px\) rotate\((-?[\d.]+)deg\) scale\(([\d.]+)\)/,
+    );
+    assert.ok(Math.abs(Number(x)) <= ((Number(scale) - 1) * width) / 2 + 0.01);
+    assert.ok(Math.abs(Number(y)) <= ((Number(scale) - 1) * height) / 2 + 0.01);
+  }
+});
+
+test("grade look values are bounded", () => {
+  assert.doesNotThrow(() => validateGrade({preset: "neutral", look: {grain: 1, drift: 0}}));
+  assert.throws(() => validateGrade({preset: "neutral", look: {grain: 2}}));
+  assert.throws(() => validateGrade({preset: "neutral", look: "heavy"}));
 });

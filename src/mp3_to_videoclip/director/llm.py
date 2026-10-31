@@ -53,6 +53,12 @@ def stall_message(role: str | None, seconds: float) -> str:
     return f"The {_who(role)} sent nothing for {span}, so this turn was ended. {NOTHING_LOST}"
 
 
+def service_failed_message(role: str | None, failure: Exception) -> str:
+    status = getattr(failure, "status_code", None)
+    detail = f" (error {status})" if status else ""
+    return f"The model service didn't answer the {_who(role)}{detail}, so this turn ended. {NOTHING_LOST}"
+
+
 @dataclass
 class TextDelta:
     text: str
