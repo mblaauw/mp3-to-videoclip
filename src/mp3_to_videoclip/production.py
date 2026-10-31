@@ -405,13 +405,36 @@ def _merge_patch(target, patch):
     return result
 
 
+def _keep_owner_character_fields(previous, value):
+    """A model's rewrite keeps what only the owner sets: permission and reference images."""
+    stored = previous.get(value.id)
+    if stored is None:
+        return value.model_copy(update={"permission_confirmed": False})
+    states = {
+        state_id: state.model_copy(
+            update={
+                "references": stored.states[state_id].references
+                if state_id in stored.states
+                else state.references
+            }
+        )
+        for state_id, state in value.states.items()
+    }
+    return value.model_copy(
+        update={
+            "permission_confirmed": stored.permission_confirmed,
+            "references": stored.references,
+            "states": states,
+        }
+    )
+
+
 def _keep_stored_permissions(previous: Brief, brief: Brief) -> Brief:
-    """Only the owner sets the permission gate: keep what is stored, new entries start false."""
-    characters = {value.id: value.permission_confirmed for value in previous.characters}
+    """Only the owner sets the permission gate and a character's references."""
+    characters = {value.id: value for value in previous.characters}
     update: dict = {
         "characters": [
-            value.model_copy(update={"permission_confirmed": characters.get(value.id, False)})
-            for value in brief.characters
+            _keep_owner_character_fields(characters, value) for value in brief.characters
         ]
     }
     if brief.creative is not None:
@@ -537,6 +560,13 @@ def set_creative_profile(
         if problem:
             raise ValueError(problem)
         additions = look_text[len(guarded.look) :].strip()
+        if len(additions.split()) > PROFILE_MAX_LOOK_ADDITIONS:
+            raise ValueError(
+                f"keep film-specific look additions to {PROFILE_MAX_LOOK_ADDITIONS} words"
+            )
+    elif (preset := _matching_preset(look_text)) is not None:
+        # The preset's words are approved already; only the film's own note is counted.
+        additions = look_text[len(preset.look) :].strip()
         if len(additions.split()) > PROFILE_MAX_LOOK_ADDITIONS:
             raise ValueError(
                 f"keep film-specific look additions to {PROFILE_MAX_LOOK_ADDITIONS} words"
@@ -1016,6 +1046,37 @@ def _set_character_references(
         for item in brief.characters
     ]
     return update_brief(root, {"characters": characters}, owner=True)
+
+
+def out_of_date_stills(root: Path) -> list[str]:
+    """Paid shots whose selected still was made from a different prompt than today's."""
+    path = root / "work/assets.json"
+    assets = read_json(path) if path.is_file() else {}
+    stale = []
+    try:
+        shots = load_board(root).shots
+    except (OSError, ValueError):
+        # A board that can't load yet is another check's job to report.
+        return stale
+    for shot in shots:
+        entry = assets.get(shot.asset_shot_id or shot.id) or {}
+        chosen = next(
+            (
+                item
+                for item in entry.get("versions", [])
+                if item["version"] == entry.get("selected")
+            ),
+            None,
+        )
+        if chosen is None or shot.asset_shot_id is not None or not shotkinds.is_paid(shot):
+            continue
+        try:
+            if chosen.get("input_hash") != digest(image_spec(root, shot)):
+                stale.append(shot.id)
+        except (OSError, ValueError):
+            # A shot the profile can't compile yet is another check's job to report.
+            continue
+    return stale
 
 
 def _avoid_list(brief: Brief) -> list[str]:

@@ -300,8 +300,8 @@ TOOLS: list[dict] = [
             "avoid": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
             "look": {
                 "type": "string",
-                "description": "Rendering only, 90-150 words. Protected preset: core verbatim "
-                "plus at most 60 words.",
+                "description": "Rendering only, 90-150 words. With a style preset: send the current "
+                "look unchanged, or the preset's words verbatim plus at most 60 words.",
             },
         },
         ["slug", "characters", "scenes", "arc", "image_rules", "avoid", "look"],
@@ -515,29 +515,40 @@ def _dispatch(
         for field in ("direction", "style", "treatment"):
             if field in patch and (not isinstance(patch[field], str) or not patch[field].strip()):
                 raise ValueError(f"brief {field} cannot be blank; omit it to keep the current text")
-        return _brief_result(P.update_brief(root, patch))
+        before = P.out_of_date_stills(root) if (root / "work/storyboard.json").is_file() else []
+        return _with_still_cost(root, before, _brief_result(P.update_brief(root, patch)))
 
     if name == "set_creative_profile":
-        return _brief_result(
-            P.set_creative_profile(
-                root,
-                characters=arguments.get("characters") or [],
-                scenes=arguments.get("scenes") or [],
-                arc=arguments.get("arc") or [],
-                image_rules=arguments.get("image_rules") or [],
-                avoid=arguments.get("avoid") or [],
-                look=arguments.get("look") or "",
-            )
+        before = P.out_of_date_stills(root) if (root / "work/storyboard.json").is_file() else []
+        return _with_still_cost(
+            root,
+            before,
+            _brief_result(
+                P.set_creative_profile(
+                    root,
+                    characters=arguments.get("characters") or [],
+                    scenes=arguments.get("scenes") or [],
+                    arc=arguments.get("arc") or [],
+                    image_rules=arguments.get("image_rules") or [],
+                    avoid=arguments.get("avoid") or [],
+                    look=arguments.get("look") or "",
+                )
+            ),
         )
 
     if name == "update_shots":
+        before = P.out_of_date_stills(root)
         board, changed = P.update_shots(root, arguments.get("changes") or [])
         # A whole board can outgrow what a gateway carries back to the model.
-        return {
-            "changed": changed,
-            "shots": [shot.model_dump() for shot in board.shots if shot.id in changed],
-            "shot_total": len(board.shots),
-        }
+        return _with_still_cost(
+            root,
+            before,
+            {
+                "changed": changed,
+                "shots": [shot.model_dump() for shot in board.shots if shot.id in changed],
+                "shot_total": len(board.shots),
+            },
+        )
 
     if name == "write_storyboard":
         from mp3_to_videoclip import shotkinds
@@ -592,6 +603,23 @@ def _dispatch(
         return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}
 
     raise ValueError(f"unknown tool: {name}")
+
+
+def _with_still_cost(root: Path, before: list[str], value: dict) -> dict:
+    """Say plainly when a change just made kept stills out of date."""
+    from mp3_to_videoclip import production as P
+
+    try:
+        lost = [shot for shot in P.out_of_date_stills(root) if shot not in before]
+    except (OSError, ValueError):
+        return value
+    if lost:
+        value["stills_now_out_of_date"] = lost
+        value["warning"] = (
+            f"This change made {len(lost)} kept stills out of date, and each costs money to remake. "
+            "Tell the user. If only some shots need it, undo this and change those shots' prompts."
+        )
+    return value
 
 
 def _brief_result(brief) -> dict:

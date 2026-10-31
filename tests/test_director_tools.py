@@ -909,3 +909,31 @@ def test_a_skeleton_cuts_on_the_owners_sections(tmp_path):
     P.approve(root, "brief", note="test")
     board = P.skeleton(root, 1, timing="adaptive", min_seconds=0.5, max_seconds=1.5)
     assert round(start * project.fps) in [shot.start_frame for shot in board.shots]
+
+
+def test_the_writer_is_told_when_a_change_makes_kept_stills_out_of_date(tmp_path):
+    root = make_api_project(tmp_path)
+    shot = P.load_board(root).shots[0]
+    write_json(
+        root / "work/assets.json",
+        {
+            shot.id: {
+                "selected": 1,
+                "versions": [{"version": 1, "input_hash": digest(P.image_spec(root, shot))}],
+            }
+        },
+    )
+    result = json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "update_shots",
+                {
+                    "slug": "production",
+                    "changes": [{"id": shot.id, "image_prompt": "A different picture"}],
+                },
+                projects_dir=tmp_path,
+            )
+        )
+    )
+    assert result["stills_now_out_of_date"] == [shot.id]
+    assert "out of date" in result["warning"]

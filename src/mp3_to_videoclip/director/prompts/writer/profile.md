@@ -1,9 +1,13 @@
 ---
-version: 2
+version: 3
 task: profile
 role: writer
 ---
 # W3.5 — Creative profile
+
+Global image rules, the look and a place go into the prompt of every shot they touch,
+so once stills exist, changing them makes those stills out of date, and each costs
+money to remake. A change for one shot belongs in that shot's prompt.
 
 Turn the treatment and beat script into the structured profile every still uses.
 This is the one place for recurring people, places, the arc, global image rules,
@@ -31,7 +35,8 @@ For each character:
   `village`, `evening`, `rain`), with a one-line `description` and optional
   `attributes`.
 - `default_state`: the state most shots use.
-- `references`: supplied or permitted images only; never invent a real likeness.
+- `references`: the owner sets these in Studio. Leave them out; yours are ignored and
+  theirs are kept.
 
 Do not send `permission_confirmed`: it is the owner's gate and tools ignore it.
 A new character starts unconfirmed. After saving, name anyone in

@@ -911,3 +911,63 @@ def test_a_still_from_a_prompt_that_has_since_changed_never_takes_over(tmp_path)
     root = make_root(tmp_path)
     _two_versions(root, "older", "also-older")
     assert _selected_after(root, "also-older") == 1
+
+
+def test_a_models_rewrite_of_the_cast_keeps_the_owners_references(tmp_path):
+    root = make_root(tmp_path)
+    _with_still(root)
+    who = _character_id(root)
+    reference = P.add_character_reference(root, who, "s001", 1).characters[0].references[0]
+    rewritten = read_json(root / "brief.json")
+    rewritten["characters"][0]["references"] = []
+    rewritten["characters"][0]["identity"] = "A tall black cat with amber eyes"
+    kept = P._keep_stored_permissions(P.load_brief(root), Brief.model_validate(rewritten))
+    assert kept.characters[0].references == [reference]
+    assert kept.characters[0].identity == "A tall black cat with amber eyes"
+    assert kept.characters[0].permission_confirmed is True
+
+
+def test_out_of_date_stills_names_a_paid_shot_whose_prompt_moved(tmp_path):
+    root = make_root(tmp_path)
+    shot = P.load_board(root).shots[0]
+    write_json(
+        root / "work/assets.json",
+        {
+            shot.id: {
+                "selected": 1,
+                "versions": [{"version": 1, "input_hash": digest(P.image_spec(root, shot))}],
+            }
+        },
+    )
+    assert P.out_of_date_stills(root) == []
+    P.update_shots(root, [{"id": shot.id, "image_prompt": "A different picture"}])
+    assert P.out_of_date_stills(root) == [shot.id]
+
+
+def test_a_preset_look_with_its_film_note_passes_the_word_limit(tmp_path):
+    from mp3_to_videoclip import styles
+
+    root = make_root(tmp_path)
+    look = styles.preset("painted-comic-noir-v1").look + "\n\nPainted in oil and gouache."
+    assert P._matching_preset(look) is not None
+    brief = P.load_brief(root)
+    saved = P.set_creative_profile(
+        root,
+        characters=[item.model_dump() for item in brief.characters],
+        scenes=[item.model_dump() for item in brief.creative.scenes],
+        arc=[],
+        image_rules=[],
+        avoid=[],
+        look=look,
+    )
+    assert saved.creative.look == look
+    with pytest.raises(ValueError, match="additions"):
+        P.set_creative_profile(
+            root,
+            characters=[item.model_dump() for item in brief.characters],
+            scenes=[item.model_dump() for item in brief.creative.scenes],
+            arc=[],
+            image_rules=[],
+            avoid=[],
+            look=styles.preset("painted-comic-noir-v1").look + "\n\n" + "word " * 61,
+        )
