@@ -739,6 +739,7 @@ export type ImageEstimate = {
 };
 
 export type ImageEstimateResponse = {
+  needs_new_round?: string[];
   estimate?: ImageEstimate;
   decision?: BudgetDecision;
   budget?: Omit<Budget, "history">;
@@ -1125,6 +1126,11 @@ export const api = {
     request<ImageEstimateResponse>(`/api/projects/${slug}/images/estimate`, {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  startNewRound: (slug: string, shotIds: string[], note: string) =>
+    request<{ started: string[] }>(`/api/projects/${slug}/images/new-round`, {
+      method: "POST",
+      body: JSON.stringify({ shot_ids: shotIds, note }),
     }),
   generateImages: (
     slug: string,

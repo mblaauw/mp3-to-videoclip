@@ -11,6 +11,7 @@ import {
 } from "../api";
 import { ApprovalBar, useApprovals } from "../ApprovalBar";
 import { ReferencePicker } from "../images/ReferencePicker";
+import { NewRoundCard } from "../images/NewRoundCard";
 import { PaidCard } from "../images/PaidCard";
 import { usePaidImages } from "../images/paid";
 import { JobBanner } from "../jobs/JobBanner";
@@ -585,6 +586,16 @@ export function ImagesStage({
             busy={paid.busy}
             onTopUp={paid.topUp}
             onConfirm={paid.confirm}
+            onCancel={paid.clear}
+          />
+        </div>
+      )}
+      {paid.newRound && (
+        <div className="paid-dock">
+          <NewRoundCard
+            shots={paid.newRound.used}
+            busy={paid.busy}
+            onStart={(note) => void paid.startNewRound(note)}
             onCancel={paid.clear}
           />
         </div>

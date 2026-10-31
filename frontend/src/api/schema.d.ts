@@ -761,6 +761,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{slug}/images/new-round": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start New Round
+         * @description The owner's reasoned decision to go past a shot's correction limit. Spends nothing.
+         */
+        post: operations["start_new_round_api_projects__slug__images_new_round_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{slug}/images/review": {
         parameters: {
             query?: never;
@@ -3198,6 +3218,43 @@ export interface operations {
         };
     };
     generate_images_api_projects__slug__images_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_new_round_api_projects__slug__images_new_round_post: {
         parameters: {
             query?: never;
             header?: never;
