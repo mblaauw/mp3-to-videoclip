@@ -202,3 +202,36 @@ Still open:
 - **A brand card made from a scene** raises advert checks on a promo, because they look for an `end_card` shot. Phase 4 needs this.
 - **Small:** the storyboard stale message can blame timing when only the brief changed; Director tool results show a raw file path; the Director covers the next-step button at 1024 px.
 - **The promo's first 5 s** carry no brand, by the owner's script, and the report warns about it.
+
+## Phases 3 to 5, 31 Oct
+
+**Budget.** 23 of 25 live turns, all on `gpt-6.1-sol`, none lost to a provider. Promo $1.27 of $8, advert $0.01 of $2.
+
+**Critic (T8).** Three live reviews. Across them it caught the door changing design, duplicated performers in the overhead and a small
+CTA, none of which I had noticed. Its early must-fix on the opening title was wrong, and led to two fixes below. `docs/EVALUATION.md` has none
+of its scores: it hasn't been measured against a human verdict.
+
+**Baseline (T9).** See `docs/EVALUATION.md`. Thin, and two of its four runs fail.
+
+**Advert (T10).** `projects/cool-cat-after-dark-advert/`, final v001: 30 s (720 frames) from the track's 40 to 70 s, no broken frames, 91 s to render. 11 reused promo stills;
+3 voice takes. The film makes the brand visible in the first 5 s and holds the card for 5 s.
+
+Found and fixed:
+
+| Found | Fix |
+| --- | --- |
+| OpenCode swaps long tool results for a file the model can't read, so no role received a whole brief or storyboard through its tools | Read tools return long results in parts |
+| A reused Critic session hit its image limit | Each review starts fresh |
+| The Critic treated kind defaults as the owner's wishes | The script outranks them |
+| The harness passed a board that was never written | A placeholder fails |
+| Advert checks counted undrawn storyboard words and ignored the words drawn | They read what is drawn |
+| A film with no paid stills could never pass the style check | The bar offers approval |
+| The voice panel said takes failed when they hadn't | It checks the right status |
+
+**Not done or not proven.**
+- **Reusing a still in another film is a manual file copy.** Studio has no control for it; the advert's stills were copied by hand, an exception to "nothing hand-edited".
+- **Nobody has watched or heard the advert or the promo** in motion; neither has an owner verdict.
+- **The Critic's notes are unapplied** on both films, because fixing them spends money or re-opens approvals: see the summary to the owner.
+- **Dependency PRs weren't merged.** Merging was refused without the owner's go-ahead, and the failing ones' cause wasn't found (their log tails show no reason).
+- **T14:** a fresh metadata snapshot exists, `backups/projects-metadata-20261031T202316Z.zip`. An off-machine copy wasn't checked. `scripts/clean_caches.py` wasn't run for real.
+- **Slow instrumental fixture** has no live run.
