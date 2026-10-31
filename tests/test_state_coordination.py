@@ -149,7 +149,7 @@ def test_selection_and_new_generation_index_both_survive(tmp_path, monkeypatch):
     input_hash = digest(P.image_spec(root, P.load_board(root).shots[1]))
     _serialized_pair(
         monkeypatch,
-        P,
+        P.assets,
         root / "work/assets.json",
         lambda: P.select_asset(root, "s001", 2),
         lambda: P.record_asset(root, "s002", 3, path, input_hash, "new-task"),

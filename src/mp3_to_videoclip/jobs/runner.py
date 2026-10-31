@@ -433,7 +433,3 @@ class JobRunner:
         # unobserved exception, even if shield delivers cancellation first.
         if not worker.cancelled():
             worker.exception()
-
-    def run_sync(self, func, *args, **kwargs):
-        """Run a blocking function in the thread pool."""
-        return self._executor.submit(func, *args, **kwargs)

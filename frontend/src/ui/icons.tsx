@@ -87,10 +87,6 @@ export function LeftIcon(props: IconProps) {
   return svg({ ...props, children: <path d="M12.5 4.5L7 10l5.5 5.5" /> });
 }
 
-export function RightIcon(props: IconProps) {
-  return svg({ ...props, children: <path d="M7.5 4.5L13 10l-5.5 5.5" /> });
-}
-
 export function PlusIcon(props: IconProps) {
   return svg({ ...props, children: <path d="M10 4v12M4 10h12" /> });
 }

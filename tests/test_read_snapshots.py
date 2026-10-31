@@ -234,7 +234,8 @@ def test_images_hash_and_copy_counts_scale_linearly(tmp_path, monkeypatch, shot_
         return original(path)
 
     hashed = snapshot_read(counted)
-    monkeypatch.setattr(P, "file_hash", hashed)
+    for module in (P.approvals, P.assets, P.image_specs, P.project):
+        monkeypatch.setattr(module, "file_hash", hashed)
     from mp3_to_videoclip import reviews
 
     monkeypatch.setattr(reviews, "file_hash", hashed)

@@ -471,10 +471,12 @@ def test_init_preserves_original_and_refuses_existing_directory(tmp_path, monkey
     source = tmp_path / "original.mp3"
     source.write_bytes(b"original audio")
     monkeypatch.setattr(
-        P, "probe", lambda _: {"format": {"duration": "1.1"}, "streams": [{"codec_type": "audio"}]}
+        P.intake,
+        "probe",
+        lambda _: {"format": {"duration": "1.1"}, "streams": [{"codec_type": "audio"}]},
     )
     # The fixture is not real audio, so the decode-based length is stubbed too.
-    monkeypatch.setattr(P, "audio_seconds", lambda _: 1.1)
+    monkeypatch.setattr(P.intake, "audio_seconds", lambda _: 1.1)
     root = tmp_path / "new"
     before = file_hash(source)
     project = P.init_project(root, source, "demo", "9:16")

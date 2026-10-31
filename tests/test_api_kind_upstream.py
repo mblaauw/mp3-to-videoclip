@@ -9,10 +9,10 @@ from mp3_to_videoclip.storage import write_json
 
 def _fake_probe(monkeypatch):
     monkeypatch.setattr(
-        "mp3_to_videoclip.production.probe",
+        "mp3_to_videoclip.production.intake.probe",
         lambda path: {"streams": [{"codec_type": "audio"}]},
     )
-    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 60.0)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.audio_seconds", lambda path: 60.0)
 
 
 def _advert_upload(client):

@@ -19,10 +19,10 @@ from mp3_to_videoclip.storage import write_json
 @pytest.fixture
 def fake_probe(monkeypatch):
     monkeypatch.setattr(
-        "mp3_to_videoclip.production.probe",
+        "mp3_to_videoclip.production.intake.probe",
         lambda path: {"streams": [{"codec_type": "audio"}]},
     )
-    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 12.0)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.audio_seconds", lambda path: 12.0)
 
 
 def _source(tmp_path: Path, name: str = "song.mp3", payload: bytes = b"ID3fake") -> Path:
@@ -180,7 +180,7 @@ def test_unreadable_audio_is_a_clean_value_error(tmp_path, monkeypatch):
     def broken(path):
         raise RuntimeError("ffprobe failed")
 
-    monkeypatch.setattr("mp3_to_videoclip.production.probe", broken)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.probe", broken)
     with pytest.raises(ValueError, match="readable MP3"):
         intake.create_from_upload(projects, _source(tmp_path), title="Broken")
     assert not (projects / "broken").exists()
