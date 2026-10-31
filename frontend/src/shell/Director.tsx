@@ -365,7 +365,8 @@ export function Director({
   const [role, setRole] = useState<Role>(defaultRole);
   const [historyFor, setHistoryFor] = useState<Role | null>(null);
   const [gateway, setGateway] = useState("opencode");
-  const [canSee, setCanSee] = useState<boolean | null>(null);
+  // Undefined until the gateway answers, so nothing warns about a model it hasn't asked about.
+  const [canSee, setCanSee] = useState<boolean | null | undefined>(undefined);
   const [models, setModels] = useState<Record<Role, string>>({
     writer: "the configured Writer",
     editor: "the configured Editor",
@@ -398,6 +399,7 @@ export function Director({
 
   useEffect(() => {
     let current = true;
+    setCanSee(undefined);
     api
       .directorModel(slug, role)
       .then((value) => {
@@ -763,7 +765,7 @@ export function Director({
             {ROLE_NAME[role]} · {model}
             {gateway === "direct" && <span className="director-gateway">Direct API</span>}
           </div>
-          {canSee !== true && (
+          {(canSee === false || canSee === null) && (
             <div className="director-sight">
               {canSee === false
                 ? "This model can't see pictures, so it can't check framing or judge stills."
@@ -960,7 +962,7 @@ export function Director({
                 void send();
               }
             }}
-            placeholder={`Ask the ${role === "writer" ? "Writer" : "Editor"}…`}
+            placeholder={`Ask the ${ROLE_NAME[role]}…`}
             aria-label="Message the director"
           />
           <Button

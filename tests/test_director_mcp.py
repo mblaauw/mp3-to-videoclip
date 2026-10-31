@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from pathlib import Path
 
 from api_support import add_assets, make_api_project
@@ -78,3 +80,30 @@ def test_mcp_rejects_an_unavailable_tool(tmp_path):
     result = _call("generate_images", {"slug": "production", "shot_ids": ["s001"]}, tmp_path)
     assert "error" in result
     assert "unavailable" in result["error"]["message"]
+
+
+def test_a_long_read_comes_in_parts_that_rebuild_the_whole(tmp_path):
+    root = make_api_project(tmp_path)
+    treatment = "A long treatment. " * 1000
+    _call("update_brief", {"slug": "production", "patch": {"treatment": treatment}}, tmp_path)
+    assert root.is_dir()
+    text, offset, calls = "", 0, 0
+    while offset is not None:
+        result = _call("get_brief", {"slug": "production", "offset": offset}, tmp_path)
+        content = result["result"]["content"][0]["text"]
+        assert len(content) < mcp.MAX_RESULT_CHARS + 500
+        part = json.loads(content)
+        text += part["part"]
+        offset = part.get("next_offset")
+        calls += 1
+    assert calls > 1
+    assert json.loads(text)["treatment"] == treatment
+
+
+def test_a_short_read_is_unchanged_and_every_read_can_continue(tmp_path):
+    make_api_project(tmp_path)
+    result = _call("get_project", {"slug": "production"}, tmp_path)
+    assert "part" not in json.loads(result["result"]["content"][0]["text"])
+    for tool in mcp.tool_descriptors():
+        has_offset = "offset" in tool["inputSchema"]["properties"]
+        assert has_offset == tool["name"].startswith("get_")

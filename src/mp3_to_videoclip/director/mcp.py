@@ -33,6 +33,10 @@ EXCLUDED = {
     "ask_user",
 }
 
+# OpenCode swaps a long tool result for a path to a file the model can't read, so a
+# whole brief or storyboard never reached it. Read tools hand long results over in parts.
+MAX_RESULT_CHARS = 6000
+
 SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
@@ -42,11 +46,23 @@ def tool_descriptors() -> list[dict[str, Any]]:
         function = tool["function"]
         if function["name"] in EXCLUDED:
             continue
+        schema = function["parameters"]
+        if function["name"].startswith("get_"):
+            schema = {
+                **schema,
+                "properties": {
+                    **schema.get("properties", {}),
+                    "offset": {
+                        "type": "integer",
+                        "description": "Where to continue a long result; see next_offset.",
+                    },
+                },
+            }
         descriptors.append(
             {
                 "name": function["name"],
                 "description": function["description"],
-                "inputSchema": function["parameters"],
+                "inputSchema": schema,
                 "annotations": {
                     "readOnlyHint": function["name"].startswith("get_"),
                     "destructiveHint": False,
@@ -84,12 +100,35 @@ def _content(value) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": str(value)}], "isError": is_error}
 
 
+def _part_of(text: str, offset: int) -> str:
+    """One readable part of a long result, saying how to fetch the rest."""
+    if offset == 0 and len(text) <= MAX_RESULT_CHARS:
+        return text
+    end = offset + MAX_RESULT_CHARS
+    value = {
+        "part": text[offset:end],
+        "total_chars": len(text),
+        "note": "A long result, in parts: join each part's text in order.",
+    }
+    if end < len(text):
+        value["next_offset"] = end
+    return json.dumps(value)
+
+
 def call_tool(name: str, arguments: dict[str, Any] | None, projects_dir: Path) -> dict[str, Any]:
     if name not in {item["name"] for item in tool_descriptors()}:
         raise ValueError(f"unknown or unavailable tool {name!r}")
     args = dict(arguments or {})
     _root(projects_dir, args)
+    offset = args.pop("offset", 0)
+    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+        raise ValueError("offset must be a whole number from next_offset")
     result = asyncio.run(tools.dispatch(name, args, projects_dir=projects_dir))
+    if name.startswith("get_"):
+        if isinstance(result, tools.ToolResult):
+            result = tools.ToolResult(text=_part_of(result.text, offset), images=result.images)
+        else:
+            result = _part_of(str(result), offset)
     return _content(result)
 
 
