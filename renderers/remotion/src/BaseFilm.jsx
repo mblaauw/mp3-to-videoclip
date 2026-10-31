@@ -213,7 +213,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
     zoom: camera.zoom * accent.punch,
   });
   const {fps} = useVideoConfig();
-  const look = timing.lookState(span.grade?.look, absoluteFrame, span.index, width, height, fps);
+  const look = timing.lookState(span.grade?.look, localFrame, span.id, width, height, fps);
   const panes = Array.isArray(span.split_panes) ? span.split_panes : [];
   const splitLayout = span.edit?.split_layout ?? "row";
   return (
