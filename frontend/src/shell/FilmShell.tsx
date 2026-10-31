@@ -577,7 +577,6 @@ function FilmShellContent({
       if (!action.paid) return;
       setPendingPaid(action.paid);
       if (stage !== "images") onNavigate("images");
-      scrollTo(".images-body", 180);
       return;
     }
     if (action.target === "pictures") {

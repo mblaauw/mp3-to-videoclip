@@ -154,6 +154,13 @@ export function ImagesStage({
     void load();
   });
 
+  // Whatever a paid request needs answered must be on screen, not above the fold.
+  const answerRef = useRef<HTMLDivElement>(null);
+  const waitingForAnswer = Boolean(paid.quote || paid.newRound || paid.error);
+  useEffect(() => {
+    if (waitingForAnswer) answerRef.current?.scrollIntoView({ block: "center" });
+  }, [waitingForAnswer, paid.quote, paid.newRound, paid.error]);
+
   const scheduleRefresh = () => {
     if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
     refreshPending.current = true;
@@ -579,6 +586,7 @@ export function ImagesStage({
         </div>
       </div>
 
+      <div ref={answerRef}>
       {paid.quote && (
         <div className="paid-dock">
           <PaidCard
@@ -603,6 +611,7 @@ export function ImagesStage({
       {(paid.message || paid.error) && (
         <p className={paid.error ? "error" : "message"}>{paid.error || paid.message}</p>
       )}
+      </div>
 
       {visible.length ? (
         <div className="contact-sheet">
