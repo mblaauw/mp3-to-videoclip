@@ -225,7 +225,7 @@ def test_stored_versions_are_json_metadata(tmp_path):
 def test_the_storyboard_prompt_asks_for_shots_inside_each_passage(tmp_path):
     root = make_api_project(tmp_path)
     bundle = _bundle(root, "storyboard")
-    assert {"path": "writer/storyboard.md", "version": 2} in bundle.meta["files"]
+    assert {"path": "writer/storyboard.md", "version": 3} in bundle.meta["files"]
     assert "Keep each timed\npassage's shots inside its frames" in bundle.text
     assert 'marked "not on the song" has no time' in bundle.text
 
