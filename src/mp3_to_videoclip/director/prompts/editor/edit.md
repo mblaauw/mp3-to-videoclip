@@ -1,5 +1,5 @@
 ---
-version: 3
+version: 4
 task: edit
 role: editor
 ---
@@ -48,7 +48,12 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    four slider overrides only when a preset is close but not enough. Add `look` for
    texture, each amount 0–1: `grain`, `weave` and `drift`. Drift lets a held still
    breathe. A light touch is usually about 0.3–0.5; text stays crisp above it.
-8. **Self-review.** Read the report returned by `update_edit`. Fix every hard
+8. **Voiceover.** When the brief has spoken lines, place each with
+   `update_voice_lines`, in the user's exact words and order. Start lines on a
+   phrase rather than a hit, give a line room before the next one, and leave the
+   big musical arrivals clear of speech. You place the lines; the user makes the
+   audio in Studio.
+9. **Self-review.** Read the report returned by `update_edit`. Fix every hard
    finding and the warnings that matter, then save again. `get_edit` reads a cut 30
    shots at a time; change a few shots with `update_edit_shots` rather than resending
    the whole cut. If you can't see the pictures `get_images` returns, say so: don't

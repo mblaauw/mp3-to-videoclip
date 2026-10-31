@@ -1018,6 +1018,8 @@ def tool_page(root: Path, first: int = 0, count: int = TOOL_PAGE_SHOTS) -> dict:
         value["sections"] = [section.model_dump() for section in edit.sections]
         value["grade"] = edit.grade.model_dump()
         value["notes"] = edit.notes
+        if edit.voice:
+            value["voice"] = [line.model_dump() for line in edit.voice]
         value["report"] = _tool_report(report(root, edit=edit))
     return value
 
@@ -1056,6 +1058,17 @@ def patch_shots(root: Path, changes: list[dict]) -> dict:
         )
     saved = save_edit(root, values)
     return {"saved": len(changes), "report": _tool_report(report(root, edit=saved))}
+
+
+def set_voice_lines(root: Path, lines: list[dict]) -> dict:
+    """Replace the cut's spoken lines, leaving every shot alone."""
+    edit = load_edit(root)
+    if edit is None:
+        raise ValueError("there is no cut yet")
+    values = edit.model_dump(by_alias=True)
+    values["voice"] = lines
+    saved = save_edit(root, values)
+    return {"saved": len(saved.voice), "report": _tool_report(report(root, edit=saved))}
 
 
 def _against_seed(root: Path, edit: EditDecisionList) -> dict | None:

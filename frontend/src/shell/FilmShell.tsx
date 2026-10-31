@@ -481,10 +481,13 @@ function FilmShellContent({
   const step = nextStep(stage, projectFacts, approvals, facts, budget || {});
   const baseAudio = project.audio_url || `/api/projects/${slug}/audio`;
   const committedWindow = intake?.audio_window || null;
+  // Film is where the voiceover is heard; Track keeps listening to the music alone.
   const playerSrc =
-    committedWindow && project.kind !== "music_video"
-      ? `${baseAudio}?v=${committedWindow.start}-${committedWindow.end}-${committedWindow.fade_in}-${committedWindow.fade_out}`
-      : baseAudio;
+    stage === "film" && project.film_audio_url
+      ? project.film_audio_url
+      : committedWindow && project.kind !== "music_video"
+        ? `${baseAudio}?v=${committedWindow.start}-${committedWindow.end}-${committedWindow.fade_in}-${committedWindow.fade_out}`
+        : baseAudio;
   const spineBoard = board && editPayload ? applyEditBoard(board, editPayload) : board;
 
   const commitAudioWindow = async (window: AudioWindow): Promise<boolean> => {

@@ -8,7 +8,7 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-from api_support import make_api_project
+from api_support import api_client, make_api_project
 
 from mp3_to_videoclip import audio as music
 from mp3_to_videoclip import budget, edits, flow, generation, voice
@@ -301,3 +301,38 @@ def test_analysis_keeps_hearing_the_music_alone(film):
     voice.import_take(film, "l1", tone(film / "mine.wav", 0.2))
     assert P.render_audio(film, project) == music.render_audio(film, project)
     assert P.film_audio(film, project) != P.render_audio(film, project)
+
+
+def test_voice_routes_place_lines_take_uploads_and_serve_the_mix(film):
+    with api_client(film.parent) as client:
+        base = f"/api/projects/{film.name}"
+        listed = client.get(f"{base}/voice").json()
+        assert [line["id"] for line in listed["lines"]] == ["l1", "l2"]
+        assert listed["lines"][0]["current"] is False
+        take = tone(film / "mine.wav", 0.5)
+        uploaded = client.post(
+            f"{base}/voice/upload",
+            params={"line_id": "l1", "filename": "mine.wav"},
+            content=take.read_bytes(),
+            headers={"content-type": "application/octet-stream"},
+        )
+        assert uploaded.status_code == 200
+        assert uploaded.json()["lines"][0]["current"] is True
+        assert client.get(f"{base}/voice/l1/1").status_code == 200
+        assert client.get(f"{base}/voice/l1/9").status_code == 404
+        mixed = client.get(f"{base}/film-audio")
+        assert mixed.status_code == 200 and mixed.headers["content-type"] == "audio/wav"
+        summary = client.get("/api/projects").json()[0]
+        assert summary["film_audio_url"].startswith(f"{base}/film-audio?v=")
+        assert client.get(f"{base}/preview").json()["audio"] == summary["film_audio_url"]
+
+
+def test_the_editor_places_lines_without_touching_shots(film):
+    before = [shot.model_dump() for shot in edits.load_edit(film).shots]
+    outcome = edits.set_voice_lines(
+        film, [{"id": "v1", "text": "One door.", "start_frame": 12, "reason": "after the hit"}]
+    )
+    assert outcome["saved"] == 1
+    saved = edits.load_edit(film)
+    assert [line.id for line in saved.voice] == ["v1"]
+    assert [shot.model_dump() for shot in saved.shots] == before

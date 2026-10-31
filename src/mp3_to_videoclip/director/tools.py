@@ -70,6 +70,17 @@ TOOLS: list[dict] = [
         ["slug", "shots"],
     ),
     _tool(
+        "update_voice_lines",
+        "Set the film's spoken voiceover lines: id, text, start_frame, optional gain_db and "
+        "reason, ordered by start_frame. Replaces the list. Use the user's words exactly. "
+        "Making the audio is the user's decision in Studio; this only places the lines.",
+        {
+            "slug": {"type": "string"},
+            "lines": {"type": "array", "items": {"type": "object"}},
+        },
+        ["slug", "lines"],
+    ),
+    _tool(
         "update_edit",
         "Write the edit decision list (timing, motion, transitions, accents, text, grade). "
         "Returns the saved edit and its report; fix every hard finding.",
@@ -406,6 +417,11 @@ def _dispatch(
         from mp3_to_videoclip import edits
 
         return edits.patch_shots(root, arguments.get("shots") or [])
+
+    if name == "update_voice_lines":
+        from mp3_to_videoclip import edits
+
+        return edits.set_voice_lines(root, arguments.get("lines") or [])
 
     if name == "get_cut_material":
         from mp3_to_videoclip import edits

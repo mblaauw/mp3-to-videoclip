@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from mp3_to_videoclip import parked as parked_films
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip import voice
 from mp3_to_videoclip.api._helpers import valid_slug
 from mp3_to_videoclip.domain import archive, budget
 from mp3_to_videoclip.storage import read_json, read_optional
@@ -48,6 +49,7 @@ class ProjectSummary(BaseModel):
     next_step: StageName | None = None
     remaining_usd: str | None = None
     audio_url: str | None = None
+    film_audio_url: str | None = None
     updated_at: str | None = None
 
 
@@ -225,6 +227,12 @@ def _updated_at(root: Path, paths: list[Path]) -> str | None:
     return datetime.fromtimestamp(newest, UTC).isoformat()
 
 
+def _film_audio_url(root: Path, project) -> str | None:
+    """The film's mix for the Player, once it has voiceover to hear."""
+    version = voice.audio_version(root, project)
+    return f"/api/projects/{root.name}/film-audio?v={version}" if version else None
+
+
 @router.get("", response_model=list[ProjectSummary])
 async def list_projects(request: Request):
     root = _projects_dir(request)
@@ -324,6 +332,7 @@ async def list_projects(request: Request):
                         if project.audio_window is not None
                         else f"/api/projects/{entry.name}/audio"
                     ),
+                    film_audio_url=_film_audio_url(entry, project),
                     updated_at=_updated_at(
                         entry,
                         [

@@ -4,6 +4,7 @@ import { ArtifactRating } from "../ArtifactRating";
 import type { EditMotion, EditTransition, Grade } from "../baseFilm";
 import { JobBanner } from "../jobs/JobBanner";
 import type { Stage } from "../shell/nextStep";
+import { notifyProjectChanged } from "../shell/projectEvents";
 import { usePlayerControls } from "../spine/player";
 import { clock } from "../spine/wave";
 import { ShotThumb } from "../storyboard/ShotThumb";
@@ -25,6 +26,7 @@ import {
   TRANSITION_TYPES,
 } from "./editTimeline";
 import { SeedCut } from "./SeedCut";
+import { VoicePanel } from "./VoicePanel";
 import { releaseMouseFocus, type FilmSelection } from "./selection";
 import type { FilmData } from "./useFilmData";
 
@@ -84,6 +86,19 @@ export function FilmPanel({
           id={selection.id}
           onChange={onChange}
           onDone={() => onSelect(null)}
+        />
+      ) : selection?.kind === "voice" && edit ? (
+        <VoicePanel
+          slug={film.slug}
+          edit={edit}
+          fps={film.board?.fps || 24}
+          totalFrames={film.board?.total_frames || 0}
+          onChange={onChange}
+          onSound={() => {
+            notifyProjectChanged();
+            void film.reloadLive();
+          }}
+          onBack={() => onSelect(null)}
         />
       ) : selection?.kind === "delivery" ? (
         <DeliveryPanel film={film} onNavigate={onNavigate} onBack={() => onSelect(null)} />
@@ -417,6 +432,13 @@ function Overview({
           {cut.against_seed && <AgainstSeed changes={cut.against_seed} />}
           <SuggestCut slug={slug} onChange={onChange} />
           {edit && <LookControls edit={edit} onChange={onChange} />}
+          {edit && (
+            <div className="row-actions">
+              <Button size="small" onClick={() => onSelect({ kind: "voice" })}>
+                Voiceover{edit.voice?.length ? ` (${edit.voice.length})` : ""}
+              </Button>
+            </div>
+          )}
           <ArtifactRating slug={slug} artifact="edit" />
           {notes.length > 0 && (
             <details className="panel-notes" open={notes.length <= 6}>

@@ -544,12 +544,42 @@ export type EditReport = {
   ad?: { applicable: boolean; checks: { id: string; ok: boolean; message: string }[] };
 };
 
+export type EditVoiceLine = {
+  id: string;
+  text: string;
+  start_frame: number;
+  gain_db?: number;
+  reason?: string;
+};
+
 export type EditPayload = {
   schema_version?: 1;
   sections: unknown[];
   shots: import("./baseFilm").EditShot[];
   grade: import("./baseFilm").Grade;
   notes?: string;
+  voice?: EditVoiceLine[];
+};
+
+export type VoiceLine = {
+  id: string;
+  text: string;
+  start_frame: number;
+  gain_db: number;
+  selected: number | null;
+  current: boolean;
+  end_seconds: number | null;
+  runs_into_next: boolean;
+  runs_past_end: boolean;
+  takes: { version: number; source: string; seconds: number; text: string }[];
+};
+
+export type VoiceEstimate = {
+  quote_id: string;
+  voice: string;
+  tasks: number;
+  characters: number;
+  reserve_usd: string;
 };
 
 export type EditSummary = {
@@ -930,6 +960,32 @@ export const api = {
       headers: revisionHeaders(base, slug, "edit"),
       body: JSON.stringify({ edit }),
     }),
+  voice: (slug: string) =>
+    request<{ voice: string; lines: VoiceLine[] }>(`/api/projects/${slug}/voice`),
+  estimateVoice: (slug: string) =>
+    request<VoiceEstimate | { error: string }>(`/api/projects/${slug}/voice/estimate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  generateVoice: (slug: string, quoteId: string) =>
+    request<{ job_id: string } | { error: string } | { needs_budget: true }>(
+      `/api/projects/${slug}/voice/generate`,
+      { method: "POST", body: JSON.stringify({ quote_id: quoteId }) },
+    ),
+  selectVoiceTake: (slug: string, lineId: string, version: number) =>
+    request<{ voice: string; lines: VoiceLine[] }>(`/api/projects/${slug}/voice/select`, {
+      method: "POST",
+      body: JSON.stringify({ line_id: lineId, version }),
+    }),
+  uploadVoiceTake: (slug: string, lineId: string, file: File) =>
+    request<{ voice: string; lines: VoiceLine[] }>(
+      `/api/projects/${slug}/voice/upload?line_id=${encodeURIComponent(lineId)}&filename=${encodeURIComponent(file.name)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      },
+    ),
   exports: (slug: string) =>
     request<FilmExports>(
       `/api/projects/${slug}/exports`,

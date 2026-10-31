@@ -434,6 +434,12 @@ def mix_key(project: Project, placed: list[tuple[EditVoice, dict]]) -> str:
     )[:20]
 
 
+def audio_version(root: Path, project: Project) -> str | None:
+    """Identifies the mix a Player should load, or ``None`` when there is only music."""
+    placed = _placed(root, project, strict=False)
+    return mix_key(project, placed) if placed else None
+
+
 def film_audio(root: Path, project: Project, *, strict: bool = False) -> Path:
     """The music alone with no takes; otherwise the mix, built once per set of takes.
 
