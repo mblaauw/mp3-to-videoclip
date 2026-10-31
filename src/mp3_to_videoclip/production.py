@@ -771,6 +771,13 @@ def render_audio(root: Path, project: Project | None = None) -> Path:
     return audio.render_audio(root, project or load_project(root))
 
 
+def film_audio(root: Path, project: Project | None = None, *, strict: bool = False) -> Path:
+    """What a film sounds like: the music, mixed with its voiceover when it has any."""
+    from . import voice
+
+    return voice.film_audio(root, project or load_project(root), strict=strict)
+
+
 def is_creative(root: Path) -> bool:
     return load_brief(root).creative is not None
 

@@ -748,6 +748,10 @@ def generate(root: Path, quote_id: str, client=None, *, concurrency: int = 1):
 
 def recover(root: Path, task_uuid: str, client=None):
     task = read_json(root / "work/tasks.json").get(task_uuid)
+    if task and task.get("kind") == "voice":
+        from .voice import recover_voice
+
+        return recover_voice(root, task_uuid, client)
     if task and task.get("kind") == "music-analysis":
         from .music_analysis import recover_music
 
