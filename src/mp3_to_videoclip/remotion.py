@@ -23,6 +23,8 @@ ENGINE = Path(__file__).resolve().parents[2] / "renderers/remotion"
 # Seconds without any change in the renderer's progress before it counts as hung.
 STALL_SECONDS = {"rendering-frames": 120, "rendering-stills": 120}
 STALL_SECONDS_OTHER = 300
+# The renderer's limit on stills per request.
+MAX_STILLS = 64
 
 
 class AssetCacheCorruption(ValueError):
@@ -514,6 +516,72 @@ def render_stills(
     return {**result, "stills": stills}
 
 
+def _fresh_frames(frames: list[int], selected, canvas, fps, total, inputs, directory) -> dict:
+    """Render ``frames`` of the film once more, as PNGs in ``directory``, by frame number."""
+    found = {}
+    for start in range(0, len(frames), MAX_STILLS):
+        batch = frames[start : start + MAX_STILLS]
+        output = directory / f"frames-{start}"
+        result = invoke(
+            "stills",
+            output,
+            selected,
+            canvas,
+            fps,
+            total,
+            {
+                **{key: value for key, value in inputs.items() if key != "capture"},
+                "still_frames": batch,
+            },
+        )
+        report = result.get("renderer_report") or {}
+        for still in report.get("stills") or []:
+            found[still["frame"]] = output / still["file"]
+    if set(found) != set(frames):
+        raise ValueError("Remotion returned a different set of frames than requested")
+    return found
+
+
+def check_frames(movie: Path, start: int, selected, canvas, fps, total, inputs) -> dict:
+    """Look for broken frames in ``movie``, which begins at film frame ``start``."""
+    from . import framecheck
+
+    frames = framecheck.small_frames(movie)
+    found = framecheck.suspects(frames)
+    broken: list[int] = []
+    if found:
+        operations.phase("checking-frames", note=f"{len(found)} frames to look at again")
+        with tempfile.TemporaryDirectory(dir=movie.parent, prefix=".frame-check-") as directory:
+            fresh = _fresh_frames(
+                [start + index for index in found],
+                selected,
+                canvas,
+                fps,
+                total,
+                inputs,
+                Path(directory),
+            )
+            broken = framecheck.broken_frames(
+                frames, found, {index: fresh[start + index] for index in found}
+            )
+    return {
+        "scanned": len(frames),
+        "suspects": [start + index for index in found],
+        "broken": [start + index for index in broken],
+    }
+
+
+def _render_silent(kind, silent: Path, selected, canvas, fps, frames, inputs) -> None:
+    """Render the film's pictures to ``silent``, refusing one with a broken frame."""
+    invoke(kind, silent, selected, canvas, fps, frames, inputs)
+    check = check_frames(silent, 0, selected, canvas, fps, frames, inputs)
+    if check["broken"]:
+        raise ValueError(
+            f"the render has broken frames at {check['broken']}; {silent.name} is kept to inspect"
+        )
+    write_json(silent.with_suffix(".frames.json"), check)
+
+
 def render_base(
     project: Project,
     shots: list[RenderShot],
@@ -569,7 +637,7 @@ def render_base(
         else:
             if cached.exists():
                 raise ValueError("Remotion base cache corruption; orphan sidecar preserved")
-            invoke(
+            _render_silent(
                 "base",
                 silent,
                 selected,
@@ -629,6 +697,11 @@ def render_base(
         "output": str(output),
         "timings_seconds": {"mux": mux_seconds, "output_verification": verification_seconds},
         "visual_cache_hit": cache_hit,
+        "frame_check": (
+            read_json(silent.with_suffix(".frames.json"))
+            if silent.with_suffix(".frames.json").is_file()
+            else None
+        ),
         "renderer_report": (
             read_json(Path(f"{silent}.render.json"))
             if not cache_hit and Path(f"{silent}.render.json").is_file()

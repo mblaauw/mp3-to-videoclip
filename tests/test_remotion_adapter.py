@@ -45,7 +45,7 @@ def base_cache(tmp_path, monkeypatch):
         args[1].write_bytes(b"movie")
         write_json(Path(f"{args[1]}.render.json"), {"timings": "historical"})
 
-    monkeypatch.setattr(remotion, "invoke", invoke)
+    monkeypatch.setattr(remotion, "_render_silent", invoke)
 
     def run(**kwargs):
         return remotion.render_base(
@@ -133,7 +133,7 @@ def test_same_visual_cache_is_serialized_across_processes(base_cache, tmp_path, 
             raise
 
     monkeypatch.setattr(remotion.fcntl, "flock", synchronized_flock)
-    monkeypatch.setattr(remotion, "invoke", invoke)
+    monkeypatch.setattr(remotion, "_render_silent", invoke)
     monkeypatch.setattr(render, "_run", mux)
     first = ctx.Process(target=worker, args=(1,), name="cache-first")
     second = ctx.Process(target=worker, args=(2,), name="cache-second")
@@ -494,7 +494,7 @@ def test_first_base_creates_nested_destination_before_rendering(tmp_path, monkey
         assert output.parent.is_dir()
         raise RuntimeError("stopped after destination check")
 
-    monkeypatch.setattr(remotion, "invoke", invoke)
+    monkeypatch.setattr(remotion, "_render_silent", invoke)
     with pytest.raises(RuntimeError, match="destination check"):
         remotion.render_base(
             project,
