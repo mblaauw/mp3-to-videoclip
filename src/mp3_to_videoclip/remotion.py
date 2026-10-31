@@ -4,9 +4,11 @@ import base64
 import fcntl
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from threading import Thread
 
@@ -17,6 +19,10 @@ from .models import Project, RenderShot
 from .storage import digest, file_hash, read_json, write_json
 
 ENGINE = Path(__file__).resolve().parents[2] / "renderers/remotion"
+
+# Seconds without any change in the renderer's progress before it counts as hung.
+STALL_SECONDS = {"rendering-frames": 120, "rendering-stills": 120}
+STALL_SECONDS_OTHER = 300
 
 
 class AssetCacheCorruption(ValueError):
@@ -180,7 +186,8 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
         str(progress_path.resolve()),
     ]
     started = time.perf_counter()
-    stdout, stderr = _run_streaming(argv, output, progress_path, frames)
+    with _one_render_at_a_time():
+        stdout, stderr = _run_streaming(argv, output, progress_path, frames)
     invoke_seconds = time.perf_counter() - started
     progress_path.unlink(missing_ok=True)
     if stdout is None:
@@ -196,12 +203,77 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
     }
 
 
+@contextmanager
+def _one_render_at_a_time():
+    """Hold the machine-wide render lock: two films at once crash their browser pages.
+
+    The job runner only serializes per project and the CLI is a separate process,
+    so the lock lives with the renderer. Waiting stays stoppable and says why.
+    """
+    (ENGINE / ".cache").mkdir(parents=True, exist_ok=True)
+    with (ENGINE / ".cache/render.lock").open("a") as lock:
+        told = False
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if not told:
+                    operations.phase("waiting-for-another-render")
+                    told = True
+                if operations.stop_requested():
+                    raise ValueError("stopped by the user before rendering began") from None
+                time.sleep(1)
+        yield
+
+
+def _descendants(pid: int) -> list[int]:
+    """Every live process under ``pid``; Chrome detaches from the renderer's group."""
+    try:
+        table = subprocess.run(
+            ["ps", "-axo", "pid=,ppid="], capture_output=True, text=True, check=True
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    children: dict[int, list[int]] = {}
+    for line in table.splitlines():
+        child, parent = line.split()
+        children.setdefault(int(parent), []).append(int(child))
+    found, queue = [], [pid]
+    while queue:
+        for child in children.get(queue.pop(), []):
+            found.append(child)
+            queue.append(child)
+    return found
+
+
+def _signal_all(pids: list[int], number: int) -> None:
+    for pid in pids:
+        try:
+            os.kill(pid, number)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def _end_renderer(process: subprocess.Popen) -> None:
+    """End the renderer and the browser under it, politely and then for certain."""
+    family = _descendants(process.pid)
+    _signal_all([process.pid, *family], signal.SIGTERM)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    _signal_all([process.pid, *family], signal.SIGKILL)
+    process.wait()
+
+
 def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: int):
     """Run the renderer, mirroring its output to a log and polling progress.
 
     Returns ``(stdout_text, stderr_text)``; ``stdout_text`` is ``None`` when the
     renderer exited non-zero. Nothing here retries: a failed render is a failed
-    render, and the caller decides what to do after inspecting the log.
+    render, and the caller decides what to do after inspecting the log. A render
+    whose progress stops moving is ended and fails, as does one the user stops.
     """
     log = output.with_suffix(".render.log")
     collector = _OutputCollector(log)
@@ -214,32 +286,75 @@ def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: i
     ]
     for reader in readers:
         reader.start()
+    watch = _StallWatch()
+    failure = None
     while process.poll() is None:
-        _relay_progress(progress_path, frames)
+        watch.saw(_relay_progress(progress_path, frames))
+        if operations.stop_requested():
+            failure = "stopped by the user; nothing was published"
+        elif watch.stalled():
+            failure = (
+                f"the render stopped moving during {watch.phase or 'startup'} and was ended "
+                f"after {watch.limit()} seconds at {watch.done} frames; see {log.name}"
+            )
+        if failure:
+            _end_renderer(process)
+            break
         time.sleep(0.5)
     _relay_progress(progress_path, frames)
     for reader in readers:
         reader.join(timeout=5)
     collector.close()
+    if failure:
+        raise ValueError(failure)
     if process.returncode == 0:
         return _tail(collector.stdout), _tail(collector.stderr)
     return None, _tail(collector.stderr) + _tail(collector.stdout, 1000)
 
 
-def _relay_progress(progress_path: Path, frames: int) -> None:
+class _StallWatch:
+    """Time since the renderer's phase or frame count last changed.
+
+    Only those two count: the progress file's timestamp kept moving in the renders
+    that hung for an hour.
+    """
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.moved = clock()
+        self.phase = None
+        self.done = None
+
+    def saw(self, info: dict | None) -> None:
+        if not info:
+            return
+        phase, done = info.get("phase"), info.get("done")
+        if (phase, done) != (self.phase, self.done):
+            self.phase, self.done = phase, done
+            self.moved = self.clock()
+
+    def limit(self) -> int:
+        return STALL_SECONDS.get(self.phase, STALL_SECONDS_OTHER)
+
+    def stalled(self) -> bool:
+        return self.clock() - self.moved > self.limit()
+
+
+def _relay_progress(progress_path: Path, frames: int) -> dict | None:
     """Best-effort: a missing or partially written progress file is not an error."""
     try:
         info = read_json(progress_path)
     except (OSError, ValueError):
-        return
+        return None
     if not isinstance(info, dict):
-        return
+        return None
     operations.tick(
         phase=info.get("phase"),
         done=info.get("done"),
         total=info.get("total"),
         unit=info.get("unit"),
     )
+    return info
 
 
 class _OutputCollector:
