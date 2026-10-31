@@ -867,3 +867,47 @@ def test_a_reference_needs_the_owners_permission_and_a_real_still(tmp_path):
     who = _character_id(root)
     with pytest.raises(ValueError, match="no version"):
         P.add_character_reference(root, who, "s001", 9)
+
+
+def _two_versions(root, first_hash, second_hash):
+    write_json(
+        root / "work/assets.json",
+        {
+            "s001": {
+                "selected": 1,
+                "versions": [
+                    {"version": 1, "input_hash": first_hash},
+                    {"version": 2, "input_hash": second_hash},
+                ],
+            }
+        },
+    )
+
+
+def _selected_after(root, input_hash):
+    G._replace_outdated_selection(root, {"shot_id": "s001", "version": 2, "input_hash": input_hash})
+    return read_json(root / "work/assets.json")["s001"]["selected"]
+
+
+def test_a_remake_from_the_current_prompt_replaces_an_outdated_selection(tmp_path):
+    root = make_root(tmp_path)
+    shot = P.load_board(root).shots[0]
+    model = P.load_project(root).image_model or profiles.LEGACY_MODEL
+    current = digest(G.effective_image_spec(P.image_spec(root, shot), model))
+    _two_versions(root, "old-prompt", current)
+    assert _selected_after(root, current) == 2
+
+
+def test_an_alternative_from_the_same_prompt_waits_for_the_owner(tmp_path):
+    root = make_root(tmp_path)
+    shot = P.load_board(root).shots[0]
+    model = P.load_project(root).image_model or profiles.LEGACY_MODEL
+    current = digest(G.effective_image_spec(P.image_spec(root, shot), model))
+    _two_versions(root, current, current)
+    assert _selected_after(root, current) == 1
+
+
+def test_a_still_from_a_prompt_that_has_since_changed_never_takes_over(tmp_path):
+    root = make_root(tmp_path)
+    _two_versions(root, "older", "also-older")
+    assert _selected_after(root, "also-older") == 1
