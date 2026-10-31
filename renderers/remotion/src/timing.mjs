@@ -325,6 +325,8 @@ export function cameraAtFrame(span, frame) {
   const last = Math.max(span.duration_frames + span.handle - 1, 1);
   const local = clamp(Math.round(frame), 0, last);
   if (span.edit?.motion) {
+    const crop = activeCrop(span.edit.crops, span.edit.start_frame + local);
+    if (crop) return {zoom: crop.zoom, x: crop.x ?? 0.5, y: crop.y ?? 0.5};
     return editCamera(span.edit.motion, local / last);
   }
   if (Array.isArray(span.camera_keyframes) && span.camera_keyframes.length > 0) {
@@ -343,6 +345,16 @@ export function cameraAtFrame(span, frame) {
     };
   }
   return legacyCamera(span.camera ?? "zoom_in", local / last);
+}
+
+/** The latest crop cut at this absolute frame, or null before the first one. */
+export function activeCrop(crops, absoluteFrame) {
+  if (!Array.isArray(crops)) return null;
+  let active = null;
+  for (const crop of crops) {
+    if (crop.frame <= absoluteFrame) active = crop;
+  }
+  return active;
 }
 
 /** Edit-owned motion, bounded like the legacy camera. */
@@ -595,6 +607,27 @@ export function validateEditText(value, label = "edit text") {
   return value;
 }
 
+export function validateEditCrops(crops, start, duration, id) {
+  if (crops === undefined || crops === null) return;
+  if (!Array.isArray(crops)) fail(`edit shot ${id} crops must be an array`);
+  let previous = start;
+  for (const [index, crop] of crops.entries()) {
+    const label = `edit shot ${id} crop ${index}`;
+    if (crop === null || typeof crop !== "object") fail(`${label} must be an object`);
+    requireIndex(crop.frame, `${label}.frame`);
+    if (crop.frame <= previous || crop.frame >= start + duration) {
+      fail(`${label} must be inside the shot, in order`);
+    }
+    previous = crop.frame;
+    const zoom = requireNumber(crop.zoom, `${label}.zoom`);
+    if (zoom < 1 || zoom > 1.6) fail(`${label}.zoom must stay between 1.0 and 1.6`);
+    for (const key of ["x", "y"]) {
+      const value = requireNumber(crop[key] ?? 0.5, `${label}.${key}`);
+      if (value < 0 || value > 1) fail(`${label}.${key} is normalized 0..1`);
+    }
+  }
+}
+
 export function validateEditShot(value, shot) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail(`shot ${shot.id} edit must be an object`);
@@ -617,6 +650,7 @@ export function validateEditShot(value, shot) {
       fail(`edit shot ${shot.id} accent ${index} is outside the shot`);
     }
   }
+  validateEditCrops(value.crops, value.start_frame, duration, shot.id);
   for (const [index, text] of (value.text ?? []).entries()) {
     validateEditText(text, `edit shot ${shot.id} text ${index}`);
     if (
@@ -638,6 +672,15 @@ export function validateGrade(value) {
   }
   const strength = requireNumber(value.strength ?? 1, "grade.strength");
   if (strength < 0 || strength > 1) fail("grade.strength must be between 0 and 1");
+  if (value.look !== undefined && value.look !== null) {
+    if (typeof value.look !== "object" || Array.isArray(value.look)) {
+      fail("grade.look must be an object");
+    }
+    for (const key of ["grain", "weave", "drift"]) {
+      const amount = requireNumber(value.look[key] ?? 0, `grade.look.${key}`);
+      if (amount < 0 || amount > 1) fail(`grade.look.${key} must be between 0 and 1`);
+    }
+  }
   if (value.overrides !== undefined && value.overrides !== null) {
     if (typeof value.overrides !== "object" || Array.isArray(value.overrides)) {
       fail("grade.overrides must be an object");
@@ -701,11 +744,13 @@ export function editTransitionStyle(value, progress) {
   }
   const direction = transition.direction ?? "left";
   if (kind === "whip_pan") {
+    // Both shots travel together, and the blur runs along the move, peaking mid-whip.
     const sign = direction === "right" ? -1 : 1;
     return {
       ...defaultStyle,
       transform: `translateX(${sign * (1 - p) * 100}%)`,
-      filter: `blur(${(1 - p) * 14}px)`,
+      outgoingTransform: `translateX(${-sign * p * 100}%)`,
+      blurShare: 0.03 * Math.sin(Math.PI * p),
     };
   }
   if (kind === "push") {
@@ -727,6 +772,68 @@ export function editTransitionStyle(value, progress) {
           ? `translateX(-${offset}%)`
           : `translateX(${offset}%)`;
   return {...defaultStyle, transform};
+}
+
+/** A shot's own number, from its id, so moving or inserting shots changes nothing. */
+function shotSeed(shotId) {
+  let value = 2166136261;
+  for (const character of String(shotId)) {
+    value = Math.imul(value ^ character.codePointAt(0), 16777619) >>> 0;
+  }
+  return value;
+}
+
+function frameNoise(frame, salt) {
+  // A small integer hash, so the same frame always gets the same value on any machine.
+  let value = (Math.imul(frame + 1, 2654435761) ^ Math.imul(salt + 1, 40503)) >>> 0;
+  value = Math.imul(value ^ (value >>> 15), 2246822519) >>> 0;
+  return ((value ^ (value >>> 13)) >>> 0) / 4294967295;
+}
+
+const GRAIN_STRENGTH = 0.26;
+const WEAVE_SHARE = 0.0011;
+const DRIFT_SHARE = 0.007;
+const DRIFT_TILT_DEGREES = 0.12;
+export const GRAIN_TILE = 256;
+
+/**
+ * The film look at one frame of a shot, or null when off. Pure and deterministic, so
+ * the Player and the MP4 draw the same thing. It counts from the shot's own start and
+ * seeds from its id, so a shot that moves along the film looks exactly the same and
+ * its render can be reused. The picture is scaled just enough that no moved edge shows.
+ */
+export function lookState(look, localFrame, shotId, width, height, fps) {
+  if (look === undefined || look === null) return null;
+  const grain = Number(look.grain ?? 0);
+  const weave = Number(look.weave ?? 0);
+  const drift = Number(look.drift ?? 0);
+  if (grain <= 0 && weave <= 0 && drift <= 0) return null;
+  const seed = shotSeed(shotId);
+  const frame = localFrame;
+  const seconds = frame / fps;
+  const phase = (seed % 1000) / 1000 * 2 * Math.PI;
+  const reach = Math.min(width, height);
+  const driftPixels = drift * DRIFT_SHARE * reach;
+  const weavePixels = weave * WEAVE_SHARE * reach;
+  const dx =
+    driftPixels * (0.7 * Math.sin((2 * Math.PI * seconds) / 11 + phase) +
+      0.3 * Math.sin((2 * Math.PI * seconds) / 4.3 + phase * 2)) +
+    weavePixels * (frameNoise(frame, seed + 1) * 2 - 1);
+  const dy =
+    driftPixels * (0.7 * Math.sin((2 * Math.PI * seconds) / 13 + phase + 1) +
+      0.3 * Math.sin((2 * Math.PI * seconds) / 5.1 + phase * 3)) +
+    weavePixels * (frameNoise(frame, seed + 2) * 2 - 1);
+  const tilt = drift * DRIFT_TILT_DEGREES * Math.sin((2 * Math.PI * seconds) / 17 + phase);
+  const margin = driftPixels + weavePixels;
+  // Room for the shift on the short side, plus what the tilt swings into the corners.
+  const tiltMargin = (Math.abs(drift * DRIFT_TILT_DEGREES) * Math.PI) / 180;
+  const scale = 1 + (2 * margin) / reach + 2 * tiltMargin * (Math.max(width, height) / reach);
+  return {
+    transform: `translate(${dx.toFixed(3)}px, ${dy.toFixed(3)}px) rotate(${tilt.toFixed(4)}deg) scale(${scale.toFixed(5)})`,
+    grainOpacity: grain * GRAIN_STRENGTH,
+    grainX: Math.floor(frameNoise(frame, seed + 3) * GRAIN_TILE),
+    grainY: Math.floor(frameNoise(frame, seed + 4) * GRAIN_TILE),
+  };
 }
 
 /** Overlay strength and camera bump from the accents active at an absolute frame. */

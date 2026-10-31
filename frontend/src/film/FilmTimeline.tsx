@@ -297,6 +297,16 @@ export function FilmTimeline({
                 />
               );
             })}
+            {edit?.shots.flatMap((decision) =>
+              (decision.crops ?? []).map((crop) => (
+                <span
+                  key={`${decision.shot_id}-${crop.frame}`}
+                  className="film-crop-tick"
+                  style={{ left: `${(crop.frame / total) * 100}%` }}
+                  title={`Crop cut in ${decision.shot_id}`}
+                />
+              )),
+            )}
             {edit &&
               shots.slice(1).map(({ shot, start }, offset) => {
                 const styled =

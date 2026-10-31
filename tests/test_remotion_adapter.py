@@ -41,11 +41,11 @@ def base_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(render, "_run", lambda argv: Path(argv[-1]).write_bytes(b"mux"))
 
     def invoke(*args):
-        calls.append(args)
+        calls.append(args[:7])
         args[1].write_bytes(b"movie")
         write_json(Path(f"{args[1]}.render.json"), {"timings": "historical"})
 
-    monkeypatch.setattr(remotion, "invoke", invoke)
+    monkeypatch.setattr(remotion, "_render_silent", invoke)
 
     def run(**kwargs):
         return remotion.render_base(
@@ -102,7 +102,7 @@ def test_same_visual_cache_is_serialized_across_processes(base_cache, tmp_path, 
             contending.set()
         return flock(handle, operation)
 
-    def invoke(kind, movie, selected, canvas, fps, frames, inputs):
+    def invoke(kind, movie, selected, canvas, fps, frames, inputs, reuse=False):
         with (tmp_path / "invocations").open("a") as log:
             log.write(f"{selected}\n")
         rendering.set()
@@ -133,7 +133,7 @@ def test_same_visual_cache_is_serialized_across_processes(base_cache, tmp_path, 
             raise
 
     monkeypatch.setattr(remotion.fcntl, "flock", synchronized_flock)
-    monkeypatch.setattr(remotion, "invoke", invoke)
+    monkeypatch.setattr(remotion, "_render_silent", invoke)
     monkeypatch.setattr(render, "_run", mux)
     first = ctx.Process(target=worker, args=(1,), name="cache-first")
     second = ctx.Process(target=worker, args=(2,), name="cache-second")
@@ -494,7 +494,7 @@ def test_first_base_creates_nested_destination_before_rendering(tmp_path, monkey
         assert output.parent.is_dir()
         raise RuntimeError("stopped after destination check")
 
-    monkeypatch.setattr(remotion, "invoke", invoke)
+    monkeypatch.setattr(remotion, "_render_silent", invoke)
     with pytest.raises(RuntimeError, match="destination check"):
         remotion.render_base(
             project,
@@ -572,3 +572,29 @@ def test_titles_join_the_base_pass_and_its_cache_key_only_when_given(base_cache)
     assert titled["titles"] == ["intro"]
     assert titled["input_hash"] != plain["input_hash"]
     assert len(calls) == 2, "a titled pass never reuses the untitled visual cache"
+
+
+def test_capture_joins_the_cache_key_only_when_given(base_cache):
+    _, _, calls, run = base_cache
+    run()
+    assert "capture" not in calls[-1][6]
+    run(capture=remotion.WORKING_CAPTURE)
+    assert calls[-1][6]["capture"] == {"format": "jpeg", "quality": 95}
+    assert len(calls) == 2
+    run(capture=remotion.WORKING_CAPTURE)
+    assert len(calls) == 2
+
+
+def test_chunk_reuse_is_asked_for_and_never_the_default(base_cache, monkeypatch):
+    seen = []
+    real = remotion._render_silent
+
+    def render_silent(*args):
+        seen.append(args[7])
+        return real(*args)
+
+    monkeypatch.setattr(remotion, "_render_silent", render_silent)
+    _, _, _, run = base_cache
+    run()
+    run(capture=remotion.WORKING_CAPTURE, reuse_chunks=True)
+    assert seen == [False, True]

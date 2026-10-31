@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { EditPayload, Storyboard } from "../src/api.ts";
 import {
+  addCrop,
   applyEditBoard,
   editBoundaryLimits,
   moveEditBoundary,
+  removeCrop,
   setEditTransition,
+  setGradePreset,
+  setLookAmount,
+  updateCrop,
 } from "../src/film/editTimeline.ts";
 
 function edit(): EditPayload {
@@ -117,3 +122,35 @@ test("an impossible boundary leaves the cut untouched", () => {
   const moved = moveEditBoundary(value, 0, 60);
   assert.equal(moved, value);
 });
+
+const cropEdit = (): EditPayload =>
+  ({
+    grade: { preset: "neutral", strength: 1 },
+    shots: [
+      { shot_id: "a", start_frame: 0, duration_frames: 48, crops: undefined },
+      { shot_id: "b", start_frame: 48, duration_frames: 48 },
+    ],
+  }) as unknown as EditPayload;
+
+test("a crop cut is added in order and only inside its shot", () => {
+  const once = addCrop(cropEdit(), "a", 30) as EditPayload;
+  const twice = addCrop(once, "a", 10) as EditPayload;
+  assert.deepEqual(twice.shots[0].crops?.map((crop) => crop.frame), [10, 30]);
+  assert.equal(addCrop(cropEdit(), "a", 0), null);
+  assert.equal(addCrop(cropEdit(), "a", 48), null);
+  assert.equal(addCrop(once, "a", 30), null);
+});
+
+test("changing and removing crop cuts leaves no empty list behind", () => {
+  const one = addCrop(cropEdit(), "a", 30) as EditPayload;
+  assert.equal(updateCrop(one, "a", 30, { zoom: 1.6 }).shots[0].crops?.[0].zoom, 1.6);
+  assert.equal("crops" in removeCrop(one, "a", 30).shots[0], false);
+});
+
+test("a look with every amount at zero is no look at all", () => {
+  const on = setLookAmount(cropEdit(), "grain", 0.4);
+  assert.equal(on.grade.look?.grain, 0.4);
+  assert.equal("look" in setLookAmount(on, "grain", 0).grade, false);
+  assert.equal(setGradePreset(on, "vivid").grade.look?.grain, 0.4);
+});
+

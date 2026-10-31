@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from api_support import add_assets, make_api_project
@@ -222,3 +223,24 @@ def test_every_render_path_receives_the_excerpt_audio(tmp_path, monkeypatch):
 
     services.render.render_preview(root, root / "previews" / "excerpt-v001.mp4")
     assert calls == [sentinel]
+
+
+def test_working_renders_use_jpeg_and_reuse_and_a_final_does_neither(tmp_path, monkeypatch):
+    from mp3_to_videoclip.remotion import WORKING_CAPTURE
+
+    calls = []
+    root = tmp_path / "film"
+    root.mkdir()
+    project = SimpleNamespace(slug="film")
+    monkeypatch.setattr(services.render.P, "require_approval", lambda *_a: None)
+    monkeypatch.setattr(services.render.P, "load_project", lambda _r: project)
+    monkeypatch.setattr(services.render.P, "resolved_assets", lambda _r: [])
+    monkeypatch.setattr(services.render.P, "load_brand", lambda _r: None)
+    monkeypatch.setattr(services.render.P, "render_audio", lambda _r, _p: tmp_path / "a.mp3")
+    monkeypatch.setattr(services.render.P, "requires_signature", lambda _r, _p: False)
+    monkeypatch.setattr(services.render, "_provenance", lambda *_a, **_k: {})
+    monkeypatch.setattr(services.render, "_render", _fake_render(calls))
+    services.render.render_base(root)
+    services.render.render_final(root)
+    assert calls[0]["capture"] == WORKING_CAPTURE and calls[0]["reuse_chunks"] is True
+    assert "capture" not in calls[1] and "reuse_chunks" not in calls[1]

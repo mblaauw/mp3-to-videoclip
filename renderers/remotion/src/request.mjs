@@ -143,6 +143,13 @@ export function validateRequest(request) {
     normalized.base = validateBaseInput(input, fps);
     if (normalized.base.totalFrames !== frames) fail("shot allocations must equal requested frames");
     if (kind === "stills") normalized.stills = validateStillFrames(input.still_frames, frames);
+    if (request.chunks !== undefined) {
+      if (kind !== "base") fail("only a base film renders in chunks");
+      normalized.chunks = validateChunks(request.chunks, frames);
+      normalized.chunksReused = request.chunksReused === undefined
+        ? 0
+        : requireInteger(request.chunksReused, "chunksReused", {min: 0});
+    }
   } else {
     normalized.part = validateGraphicsPart(input.part, frames);
     validateTitleAssets(input);
@@ -213,6 +220,37 @@ export function validateTitles(titles, totalFrames) {
   return windows;
 }
 
+/**
+ * Frame ranges of a base film to render as separate movies: in order, not overlapping,
+ * inside the film, each with its own new local output.
+ */
+export function validateChunks(chunks, totalFrames) {
+  if (!Array.isArray(chunks) || chunks.length === 0) fail("chunks must be a non-empty array");
+  let next = 0;
+  return chunks.map((chunk, index) => {
+    const start = requireInteger(chunk?.start, `chunk ${index} start`, {min: 0});
+    const frames = requireInteger(chunk?.frames, `chunk ${index} frames`);
+    if (start < next) fail(`chunk ${index} starts before the previous chunk ends`);
+    next = start + frames;
+    if (next > totalFrames) fail(`chunk ${index} ends past the film's ${totalFrames} frames`);
+    const output = localAbsolutePath(chunk.output, `chunk ${index} output`);
+    if (path.extname(output) !== ".mp4") fail(`chunk ${index} output must end with .mp4`);
+    return {start, frames, output};
+  });
+}
+
+/** How frames leave the browser. Absent means lossless PNG. */
+export function validateCapture(capture) {
+  if (capture === null || typeof capture !== "object" || Array.isArray(capture)) {
+    fail("base input.capture must be an object");
+  }
+  if (capture.format !== "jpeg") fail(`capture format must be "jpeg", got ${JSON.stringify(capture.format)}`);
+  if (!Number.isInteger(capture.quality) || capture.quality < 1 || capture.quality > 100) {
+    fail(`capture quality must be an integer from 1 to 100, got ${JSON.stringify(capture.quality)}`);
+  }
+  return capture;
+}
+
 export function validateBaseInput(input, fps) {
   if (!Array.isArray(input.shots) || input.shots.length === 0) {
     fail("base input.shots must be a non-empty array");
@@ -254,6 +292,7 @@ export function validateBaseInput(input, fps) {
       validateSplitPanes(span.split_panes, span.id);
     }
   }
+  if (input.capture !== undefined) validateCapture(input.capture);
   const flashes = flashViolations(spans, fps);
   if (flashes.length > 0) {
     const first = flashes[0];

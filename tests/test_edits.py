@@ -466,3 +466,155 @@ def test_a_density_warning_needs_a_pace_target_to_compare_against(tmp_path):
     assert not density(edit.model_copy(update={"sections": sections}))
     far = [section.model_copy(update={"density_per_10s": 99}) for section in edit.sections]
     assert density(edit.model_copy(update={"sections": far}))
+
+
+def _codes(root, edit):
+    return {item["code"] for item in edits.report(root, edit=edit)["warnings"]}
+
+
+def test_report_flags_a_long_still_shot_and_a_section_with_no_feel(tmp_path):
+    root = _energetic_root(tmp_path)
+    edit = edits.seed_edit(root)
+    shots = [shot.model_copy(update={"motion": EditMotion(type="hold")}) for shot in edit.shots]
+    long_shot = shots[:1] + []
+    long_shot[0] = long_shot[0].model_copy(update={"duration_frames": 360})
+    board = P.load_board(root)
+    board = board.model_copy(
+        update={
+            "total_frames": 360,
+            "shots": [board.shots[0].model_copy(update={"duration_frames": 360})],
+        }
+    )
+    still = EditDecisionList(
+        sections=[EditSection(id="a", start_frame=0, feel="unreviewed")],
+        shots=long_shot,
+    )
+    assert {"long_static_shot", "section_no_feel"} <= {
+        item["code"] for item in edits.report(root, edit=still, board=board)["warnings"]
+    }
+
+
+def test_report_flags_the_same_travel_again_and_again_but_not_varied_travel(tmp_path):
+    root = _energetic_root(tmp_path)
+    edit = edits.seed_edit(root)
+
+    def pushed(to):
+        return EditMotion(type="push_in", **{"from": 1.0, "to": to})
+
+    same = edit.model_copy(
+        update={"shots": [s.model_copy(update={"motion": pushed(1.08)}) for s in edit.shots]}
+    )
+    assert "travel_repetition" in _codes(root, same)
+    varied = edit.model_copy(
+        update={
+            "shots": [
+                s.model_copy(update={"motion": pushed(1.03 + index * 0.01)})
+                for index, s in enumerate(edit.shots)
+            ]
+        }
+    )
+    assert "travel_repetition" not in _codes(root, varied)
+
+
+def test_cut_material_offers_sections_lines_and_changes_in_frames(tmp_path):
+    from mp3_to_videoclip.domain import lyric_timing
+
+    root = _energetic_root(tmp_path)
+    write_json(
+        root / "work/music.json",
+        {
+            "duration": 10.0,
+            "sections": [{"start": 0.0, "end": 10.0, "energy": 0.5, "label": "unreviewed"}],
+            "candidate_changes": [{"time": 4.0, "spectral_change": 0.7}],
+            "beats": [0.5, 1.0],
+        },
+    )
+    write_json(
+        root / "work/lyrics.json",
+        {"provider": "manual", "model": "text", "segments": [], "lines": ["[Hook]", "one"]},
+    )
+    lyric_timing.save(root, {"lines": [{"index": 1, "start": 2.0, "source": "auto"}]}, 10.0)
+    material = edits.cut_material(root)
+    assert material["sections"][0]["end_frame"] == 240
+    assert material["lines"] == [{"frame": 48, "text": "one", "source": "auto"}]
+    assert material["changes"][0]["frame"] == 96
+    assert material["beats"] == [12, 24]
+
+
+def test_crop_cuts_are_bounded_counted_and_absent_when_unused(tmp_path):
+    from mp3_to_videoclip.models import EditCrop
+
+    root = _energetic_root(tmp_path)
+    edit = edits.seed_edit(root)
+    assert "crops" not in edit.shots[0].model_dump(by_alias=True)
+    shots = list(edit.shots)
+    start = shots[0].start_frame
+    shots[0] = shots[0].model_copy(
+        update={"crops": [EditCrop(frame=start + 6, zoom=1.5, x=0.2, y=0.8)]}
+    )
+    cropped = edit.model_copy(update={"shots": shots})
+    report = edits.report(root, edit=cropped)
+    assert "crop_soft" in {item["code"] for item in report["warnings"]}
+    baseline = edits.report(root, edit=edit)
+    assert report["sections"][0]["cuts"] == baseline["sections"][0]["cuts"] + 1
+    with pytest.raises(ValueError, match="outside"):
+        EditShot(
+            shot_id="s001",
+            start_frame=0,
+            duration_frames=24,
+            crops=[EditCrop(frame=24, zoom=1.2)],
+        )
+    with pytest.raises(ValueError, match="in order"):
+        EditShot(
+            shot_id="s001",
+            start_frame=0,
+            duration_frames=24,
+            crops=[EditCrop(frame=12, zoom=1.2), EditCrop(frame=6, zoom=1.2)],
+        )
+    with pytest.raises(ValueError):
+        EditCrop(frame=6, zoom=1.7)
+
+
+def test_a_film_look_is_bounded_and_absent_when_unset():
+    from mp3_to_videoclip.models import FilmLook
+
+    assert "look" not in Grade().model_dump()
+    assert Grade(look=FilmLook(grain=0.4)).model_dump()["look"]["grain"] == 0.4
+    with pytest.raises(ValueError):
+        FilmLook(grain=1.5)
+
+
+def test_the_editors_tool_reads_a_cut_in_pages(tmp_path):
+    root = _energetic_root(tmp_path)
+    edits.seed_edit(root)
+    first = edits.tool_page(root, 0, 4)
+    assert [shot["shot_id"] for shot in first["shots"]] == ["s001", "s002", "s003", "s004"]
+    assert first["next_first"] == 4 and "report" in first and first["shot_total"] == 10
+    rest = edits.tool_page(root, 8, 4)
+    assert len(rest["shots"]) == 2 and "next_first" not in rest and "report" not in rest
+
+
+def test_patching_shots_changes_only_what_it_names_and_cant_retime(tmp_path):
+    root = _energetic_root(tmp_path)
+    before = edits.seed_edit(root)
+    result = edits.patch_shots(
+        root,
+        [
+            {
+                "shot_id": "s002",
+                "motion": {"type": "push_in", "from": 1.0, "to": 1.04, "anchor": [0.2, 0.7]},
+                "crops": [{"frame": before.shots[1].start_frame + 6, "zoom": 1.2}],
+            }
+        ],
+    )
+    assert result["saved"] == 1
+    after = edits.load_edit(root)
+    assert after.shots[1].motion.anchor == [0.2, 0.7] and len(after.shots[1].crops) == 1
+    assert after.shots[0] == before.shots[0]
+    with pytest.raises(ValueError, match="can't be changed"):
+        edits.patch_shots(root, [{"shot_id": "s002", "start_frame": 3}])
+    with pytest.raises(ValueError, match="no shot"):
+        edits.patch_shots(root, [{"shot_id": "nope", "crops": []}])
+    with pytest.raises(ValueError):
+        edits.patch_shots(root, [{"shot_id": "s002", "crops": [{"frame": 9999, "zoom": 1.2}]}])
+    assert edits.load_edit(root).shots[1].motion.anchor == [0.2, 0.7]

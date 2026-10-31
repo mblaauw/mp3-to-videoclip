@@ -1,5 +1,5 @@
 ---
-version: 2
+version: 3
 reference: techniques
 role: editor
 ---
@@ -17,6 +17,7 @@ role: editor
 | Match cut | Links two images by shape, colour or position | A motif returns; before/after rhymes | The shapes do not actually align | storyboard match + `cut` |
 | Smash cut | Abrupt energy or content contrast | Quiet to loud, calm to chaos, an ad twist | Gentle songs; overuse | `cut` |
 | Jump cut | Same subject, compressed time | Progress, restlessness, a process | Different subjects, which just reads as a cut | two crops or a reprise |
+| Crop cut | Cuts within one still: wide, then hands, then face | A long still, a section that needs more cuts than there are stills, a detail worth finding | A still with one flat subject; zoom beyond about 1.4 goes soft | `crops` |
 | Cross-cutting | Alternates two lines to build tension | Two characters converging; product versus problem | Only one line of action exists | timing |
 | Dissolve / cross-fade | Time passing, dreamy join, emotional drop | Slow songs, memory, a place change | Fast passages; one continuous action | `fade` |
 | Dip to black or white | Chapter break, breath, flash of memory | Section ends, before a reveal, ad end card | Mid-phrase | `dip_to_black`, `dip_to_white` |

@@ -140,6 +140,13 @@ primitives for both outputs:
 three flash accents in any one-second window. This is the renderer's own limit,
 not only a report warning.
 
+A shot can also carry `crops`: jumps to new framings of its own still on chosen
+frames, up to 1.6× with a report warning past 1.4×, because stills go soft. They are
+how one still becomes several cuts without a new paid picture. `grade.look` adds grain,
+gate weave and slow handheld drift, each 0 to 1 and off by default. It is deterministic
+by frame, so the Player and the MP4 match, and text stays crisp above it. Both fields
+are absent when unused, so older cuts render and hash as before.
+
 Two-second visual samples and a gallery are in `docs/primitives/`. They render
 through the production composition; `docs/primitives/render_samples.mjs`
 regenerates them. `renderers/remotion/tests/edit-primitives.test.mjs` unit-tests

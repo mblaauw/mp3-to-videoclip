@@ -53,7 +53,7 @@ from collections.abc import Iterable
 from fractions import Fraction
 from typing import Any
 
-__all__ = ["PacingError", "plan_boundaries"]
+__all__ = ["PacingError", "plan_boundaries", "snap_joins"]
 
 # Candidate tiers; the lowest wins inside a feasible window.
 _EVENT_TIER = 0
@@ -213,3 +213,37 @@ def plan_boundaries(
         boundaries.append(cursor)
     boundaries.append(total)
     return boundaries
+
+
+def snap_joins(
+    joins: list[int],
+    *,
+    total_frames: int,
+    min_frames: int,
+    reach: int,
+    tiers: Iterable[Iterable[int]],
+) -> list[int]:
+    """Move existing joins onto better frames, keeping their order and every shot's minimum.
+
+    ``joins`` are the interior frames between shots. ``tiers`` go from strongest to
+    weakest evidence; a join takes the closest candidate of the first tier within
+    ``reach`` that leaves both neighbouring shots at least ``min_frames``, and
+    otherwise stays where it is. Pure arithmetic, deterministic, and it never adds
+    or removes a join.
+    """
+    total = _positive_frames(total_frames, "total_frames")
+    shortest = _positive_frames(min_frames, "min_frames")
+    reach = _integer(reach, "reach")
+    marked = [sorted(_marked_frames(tier, "tier", total)) for tier in tiers]
+    result = [_integer(join, "join") for join in joins]
+    for index, join in enumerate(result):
+        low = (result[index - 1] if index else 0) + shortest
+        high = (result[index + 1] if index + 1 < len(result) else total) - shortest
+        for frames in marked:
+            options = [
+                frame for frame in frames if abs(frame - join) <= reach and low <= frame <= high
+            ]
+            if options:
+                result[index] = min(options, key=lambda frame: (abs(frame - join), frame))
+                break
+    return result

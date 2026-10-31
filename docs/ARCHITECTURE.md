@@ -16,6 +16,7 @@ in the app is a second state store.
 | `generation.py`, `providers.py` | Runware client with pre-submit journaling: reservation and task UUID are durable before the request; recovery is by UUID and never resubmits; changed bytes are quarantined. |
 | `budget.py` | Cap, committed cost, unresolved reservations, admission. |
 | `remotion.py`, `render.py` | Remotion render entry (film, titles review stills) plus FFmpeg probe/mux/verify. |
+| `chunks.py`, `framecheck.py` | One render chunk per shot and its reuse key; finding broken frames in a rendered movie. |
 | `titles.py`, `graphics.py` | Integer-frame title windows; the graphics spec and the older composite route kept for reviews recorded before titles moved into the film. |
 | `domain/archive.py` | Read-only view of frozen productions (title, duration, newest final render, selected stills). |
 
@@ -220,6 +221,12 @@ overrides. `request.mjs` refuses more than three flash accents in any one-second
 window, independently of the Python report. `docs/EDITING.md` owns the schema,
 report rules and sample gallery; `tests/test_edits.py` and
 `renderers/remotion/tests/edit-primitives.test.mjs` pin the contracts.
+
+`first_cut.py` suggests a cut with no model: it snaps joins to sections and sung lines
+through `pacing.snap_joins`, varies moves with the song's own loudness, and writes each
+section's feel. It writes nothing, and Film saves a suggestion like any other cut.
+`seed_edit` stays faithful to an approved cut. `edits.cut_material` gives the Editor the
+same evidence through `get_cut_material`.
 
 ## Money and evidence
 
