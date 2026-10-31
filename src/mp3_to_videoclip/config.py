@@ -34,11 +34,6 @@ class Settings(BaseModel):
     brand_partner: str = "VJDJ69"
     default_budget_usd: float = Field(default=5.0, ge=0)
     image_reserve_usd: float = Field(default=0.05, ge=0.01, le=10.0)
-    default_credit_roles: list[str] = Field(
-        default_factory=lambda: ["director", "music", "visuals"]
-    )
-    remotion_dir: str = ""
-    ffmpeg_path: str = ""
 
 
 def settings_path() -> Path:

@@ -379,9 +379,6 @@ export type Settings = {
   brand_partner?: string;
   default_budget_usd?: number;
   image_reserve_usd?: number;
-  default_credit_roles?: string[];
-  remotion_dir?: string;
-  ffmpeg_path?: string;
   style_presets?: StylePreset[];
   kinds?: KindProfile[];
   shot_kinds?: {

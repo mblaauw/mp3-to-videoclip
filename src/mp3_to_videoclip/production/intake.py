@@ -252,15 +252,18 @@ def _matching_preset(look: str | None) -> styles.StylePreset | None:
 
 def _init_signature(root: Path, project: Project) -> None:
     """The music-video signature package; other kinds never inherit it."""
-    from ..signature import credits_template, draft_spec
+    from ..config import load_settings
+    from ..signature import _identity, credits_template, draft_spec, film_brand
 
-    spec = draft_spec(project.title)
+    settings = load_settings()
+    brand = film_brand(settings.brand_name, settings.brand_partner)
+    spec = draft_spec(project.title, brand)
     template = credits_template(root.parent)
     if template:
         spec["credits"]["cards"] = template
     spec["renderer"] = "remotion"
     spec["design"] = "joint-v1"
-    spec["intro"]["names"] = "MAHA KALA  ◆  VJDJ69"
+    spec["intro"]["names"] = _identity(brand)[1]
     from ..models import BrandPackage
 
     write_json(
