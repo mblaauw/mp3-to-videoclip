@@ -141,3 +141,48 @@ Headless Chrome, a non-browser renderer, GPU and hardware encoding, half-size pr
 two finished films.
 
 Evidence: `.opencode/scratch/render-speed-study/` (not committed).
+
+## Acceptance record, 31 Oct 2026
+
+Run on a scratch copy of Tree of Love with the Editor's cut, on the final code at `7fbad77`, with one render at a time.
+Real films were only read. No paid call. The stills gate was bypassed on the copy, since the render path was under test.
+
+| Test | Result | Target |
+| --- | --- | --- |
+| Full render, nothing reused | **7 min 16 s** (12–14 min before) | Under 8 min: met |
+| Change one shot's camera | **34 s**, 37 of 38 shots reused, only frames in that shot's chunk changed | Under 1 min: met |
+| Change two shots' lengths, moving the 25 between | **66 s**, 36 of 38 reused | None set |
+| Same film, nothing reused, against the reused one | Lowest frame correlation 0.99988; worst brightness difference 0.33 of 255 | Right pictures: met |
+| Kill a render partway | Finished chunks kept; resumed in 36 s with 35 reused | Resumes: met |
+| Freeze the renderer and browser (30 s limit for the test) | Failed at 37.7 s; no renderer left running | Fails: met |
+| Plant a tiled frame in a chunk | Found, confirmed by a fresh render, set aside, rendered again; clean after | Repairs: met |
+| Scan of each finished film | No broken frames; the dip to white was flagged and correctly cleared | None: met |
+
+**Player.** Stills load from the playhead outward. Across 3 jumps, 882 samples never found a picture still loading. The time
+before this change was seen, not measured. At 3:31 with titles off, the Player and the MP4 matched by eye, on one moment.
+
+**The slow step.** Above one tab, Remotion cycles the browser's tabs every 200 ms so each can capture. That fits more tabs not
+helping, and one tab is now used for chunks. Not profiled further. The planned verbose render wasn't needed.
+
+**Found on the way.**
+- **Closing the lid kills a render.** It sleeps the Mac and the browser's pages die. The watchdog failed the render once the Mac woke,
+  with a message saying so. Working renders resume; a final starts again. Renders now hold off idle sleep, which doesn't cover a closed lid.
+- **The earlier hour-long hang** was blamed on two renders at once. A sleep may have played a part; it wasn't checked at the time.
+- **The exit delay is gone in this mode.** With the renderer opening and closing its own browser, 11.2 s of work took 11.6 s overall.
+  Why `renderMedia` delays exit when it manages the browser is still not explained. Graphics and stills still use that path.
+- **Frame counting cost 23 s a time, twice per render.** It now takes about 6 s and still decodes every frame.
+
+**Costs.**
+- **File size:** 130 MB against 99 MB for this cut. It comes from JPEG, not joins: on one stretch JPEG gave 14.66 MB against 11.84 MB
+  for PNG, and joining added about 1%.
+- **Disk:** the chunk store reached 149 MB after these runs, with nothing cleaned up.
+
+**Not proven.**
+- **The owner hasn't watched** a JPEG film or its joins, so D1 stays as it is. Playing through joins in QuickTime and a browser wasn't done either.
+- **The cause of the broken frames.** About 12,700 frames at one tab had none, where the earlier rate (9 in 41,810) predicts about 3. That
+  suggests the tab cycling but doesn't prove it, and the one full 2-tab render on this branch had none either. The check stays.
+- **Low-contrast glitches.** Tested only on synthetic pictures.
+- **A final** wasn't rendered end to end. Its paths are tested with fakes, and fresh chunks were exercised through the comparison render.
+- **One film, one machine, one run each.**
+
+Evidence: `.opencode/scratch/render-speed-study/` (not committed).
