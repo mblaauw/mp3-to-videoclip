@@ -29,6 +29,11 @@ const PHASE: Record<string, string> = {
   "bundle-cached": "Renderer ready",
   bundling: "Preparing the renderer",
   "selecting-composition": "Preparing the film",
+  "waiting-for-another-render": "Waiting for another film's render to finish",
+  "bundling-assets": "Preparing the renderer",
+  "rendering-frames": "Rendering frames",
+  "checking-frames": "Checking for broken frames",
+  "joining-shots": "Joining the shots",
   "rendering-visuals": "Rendering frames",
   rendering: "Rendering frames",
   encoding: "Encoding",
@@ -56,7 +61,8 @@ export function jobLine(job: Job): string {
     if (progress.part) parts.push(`${progress.part}${progress.part_index && progress.part_total ? ` (${progress.part_index} of ${progress.part_total} parts)` : ""}`);
     if (progress.phase) parts.push(phaseWords(progress.phase));
   }
-  if (progress.total > 0) {
+  if (progress.message) parts.push(progress.message);
+  else if (progress.total > 0) {
     parts.push(`${progress.done} of ${progress.total}${progress.unit ? ` ${progress.unit}` : ""}`);
   }
   return parts.join(" · ");

@@ -147,7 +147,15 @@ def data_url(path: Path, mime: str) -> str:
 
 
 def request(
-    kind: str, output: Path, asset_root: Path, canvas, fps, frames, inputs: dict, chunks=None
+    kind: str,
+    output: Path,
+    asset_root: Path,
+    canvas,
+    fps,
+    frames,
+    inputs: dict,
+    chunks=None,
+    chunks_reused=0,
 ) -> dict:
     """The exact renderer request object; pure, so a contract test can pin it."""
     body = {
@@ -165,11 +173,20 @@ def request(
     }
     if chunks is not None:
         body["chunks"] = chunks
+        body["chunksReused"] = chunks_reused
     return body
 
 
 def invoke(
-    kind: str, output: Path, asset_root: Path, canvas, fps, frames, inputs: dict, chunks=None
+    kind: str,
+    output: Path,
+    asset_root: Path,
+    canvas,
+    fps,
+    frames,
+    inputs: dict,
+    chunks=None,
+    chunks_reused=0,
 ) -> dict:
     """Explicit local subprocess; never npx installs, uploads or implicit fallback.
 
@@ -186,7 +203,9 @@ def invoke(
         )
     output.parent.mkdir(parents=True, exist_ok=True)
     asset_root.mkdir(parents=True, exist_ok=True)
-    request_body = request(kind, output, asset_root, canvas, fps, frames, inputs, chunks)
+    request_body = request(
+        kind, output, asset_root, canvas, fps, frames, inputs, chunks, chunks_reused
+    )
     request_path = output.with_suffix(".request.json")
     write_json(request_path, request_body)
     progress_path = output.with_name(f".{output.stem}.progress.json")
@@ -369,8 +388,19 @@ def _relay_progress(progress_path: Path, frames: int) -> dict | None:
         done=info.get("done"),
         total=info.get("total"),
         unit=info.get("unit"),
+        message=_shots_line(info),
     )
     return info
+
+
+def _shots_line(info: dict) -> str | None:
+    """Where a shot-by-shot render stands, for a person watching it."""
+    total = info.get("chunks_total")
+    if not total:
+        return None
+    reused = info.get("chunks_reused") or 0
+    line = f"{info.get('chunks_done', 0)} of {total} shots"
+    return f"{line}, {reused} reused" if reused else line
 
 
 class _OutputCollector:
@@ -725,6 +755,7 @@ def _render_silent(kind, silent: Path, selected, canvas, fps, frames, inputs, re
                         {"start": c.start, "frames": c.frames, "output": str(paths[c.key])}
                         for c in missing
                     ],
+                    len(plan) - len(missing),
                 )
             results = check_movies(
                 [(paths[c.key], c.start) for c in pending], selected, canvas, fps, frames, inputs

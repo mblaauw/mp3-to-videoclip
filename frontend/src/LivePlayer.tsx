@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
 import type { AnyZodObject } from "remotion";
 import { LivePreview, type PreviewProps } from "./LivePreview";
+import { preloadStills, stillSources } from "./film/preloadStills";
 
 /** Kept in its own module so the Player and Remotion load only on the Film stage. */
 export default function LivePlayer({
@@ -26,6 +27,14 @@ export default function LivePlayer({
 }) {
   const playerRef = useRef<PlayerRef>(null);
   const synced = time !== undefined || clock !== undefined;
+  // Start from the playhead; later changes of position shouldn't restart the loading.
+  const startFrame = useRef(Math.round((time ?? clock?.get() ?? 0) * fps));
+  const sourcesKey = stillSources(input?.shots ?? [], startFrame.current).join("\n");
+
+  useEffect(() => {
+    if (!sourcesKey) return undefined;
+    return preloadStills(sourcesKey.split("\n"));
+  }, [sourcesKey]);
 
   useEffect(() => {
     if (time === undefined) return;

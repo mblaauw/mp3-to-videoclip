@@ -146,6 +146,9 @@ export function validateRequest(request) {
     if (request.chunks !== undefined) {
       if (kind !== "base") fail("only a base film renders in chunks");
       normalized.chunks = validateChunks(request.chunks, frames);
+      normalized.chunksReused = request.chunksReused === undefined
+        ? 0
+        : requireInteger(request.chunksReused, "chunksReused", {min: 0});
     }
   } else {
     normalized.part = validateGraphicsPart(input.part, frames);

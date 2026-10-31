@@ -425,8 +425,9 @@ async function renderChunks(progress, shared, settings, normalized, facts) {
       done: finished + frames,
       total,
       unit: "frames",
-      chunks_done: report.length,
-      chunks_total: normalized.chunks.length,
+      chunks_done: normalized.chunksReused + report.length,
+      chunks_total: normalized.chunksReused + normalized.chunks.length,
+      chunks_reused: normalized.chunksReused,
     });
   update(0);
   const browser = await openBrowser("chrome", {

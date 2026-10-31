@@ -55,6 +55,7 @@ class FakeRenderer:
         self.rendered: list[list[int]] = []
         self.spoil: list[set[int]] = []
         self.fail_after = None
+        self.reused: list[int] = []
 
     def _sound(self, frame):
         for offset, shot in enumerate(self.film["shots"]):
@@ -63,7 +64,9 @@ class FakeRenderer:
                 return _frames(seed, shot["duration_frames"])[frame - shot["start_frame"]]
         raise AssertionError(frame)
 
-    def __call__(self, kind, output, selected, canvas, fps, frames, inputs, chunks=None):
+    def __call__(
+        self, kind, output, selected, canvas, fps, frames, inputs, chunks=None, chunks_reused=0
+    ):
         if kind == "stills":
             output.mkdir()
             stills = []
@@ -74,6 +77,7 @@ class FakeRenderer:
             return {"renderer_report": {"stills": stills}}
         spoiled = self.spoil.pop(0) if self.spoil else set()
         self.rendered.append([chunk["start"] for chunk in chunks])
+        self.reused.append(chunks_reused)
         for done, chunk in enumerate(chunks):
             if self.fail_after == done:
                 raise ValueError("the renderer died")
@@ -120,6 +124,7 @@ def test_only_a_changed_shot_renders_again(rig):
     untouched = sorted(p.stat().st_ino for p in (tmp / "remotion-chunks").glob("*.mp4"))
     silent, check = run("second")
     assert fake.rendered[1:] == [[24]]
+    assert fake.reused == [0, 2]
     assert check["reused"] == 2 and check["scanned"] == 36
     assert set(untouched) <= {p.stat().st_ino for p in (tmp / "remotion-chunks").glob("*.mp4")}
     frames = framecheck.small_frames(silent)
@@ -207,3 +212,10 @@ def test_uneven_timing_refuses_the_join(tmp_path):
     remotion._require_even_timing(tmp_path / "a.mp4", 24)
     with pytest.raises(ValueError, match="uneven timing"):
         remotion._require_even_timing(tmp_path / "a.mp4", 30)
+
+
+def test_progress_says_how_many_shots_and_how_many_were_reused():
+    assert remotion._shots_line({"phase": "bundling-assets"}) is None
+    assert remotion._shots_line({"chunks_done": 3, "chunks_total": 38}) == "3 of 38 shots"
+    line = remotion._shots_line({"chunks_done": 30, "chunks_total": 38, "chunks_reused": 26})
+    assert line == "30 of 38 shots, 26 reused"
