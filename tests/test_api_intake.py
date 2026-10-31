@@ -17,10 +17,10 @@ pytestmark = pytest.mark.usefixtures("fake_probe")
 @pytest.fixture
 def fake_probe(monkeypatch):
     monkeypatch.setattr(
-        "mp3_to_videoclip.production.probe",
+        "mp3_to_videoclip.production.intake.probe",
         lambda path: {"streams": [{"codec_type": "audio"}]},
     )
-    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 12.0)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.audio_seconds", lambda path: 12.0)
 
 
 def _upload(client, overrides=None, **extra):
@@ -149,7 +149,7 @@ def test_unreadable_upload_is_a_400(tmp_path, monkeypatch):
     def broken(path):
         raise RuntimeError("ffprobe failed")
 
-    monkeypatch.setattr("mp3_to_videoclip.production.probe", broken)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.probe", broken)
     with api_client(tmp_path) as client:
         response = _upload(client, title="Broken")
         assert response.status_code == 400
@@ -158,7 +158,7 @@ def test_unreadable_upload_is_a_400(tmp_path, monkeypatch):
 
 
 def test_upload_an_advert_keeps_intent_and_skips_signature(tmp_path, monkeypatch):
-    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 120.0)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.audio_seconds", lambda path: 120.0)
     intent = {
         "kind": "advert",
         "objective": "pre-save the single before 14 Nov",
@@ -264,7 +264,7 @@ def test_advert_upload_refuses_missing_creative_intent(tmp_path):
 
 
 def test_intake_update_applies_style_and_window(tmp_path, monkeypatch):
-    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 120.0)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.audio_seconds", lambda path: 120.0)
     with api_client(tmp_path) as client:
         created = _upload(
             client,

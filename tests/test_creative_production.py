@@ -747,9 +747,11 @@ def test_instrumental_init_and_stage_gates(tmp_path, monkeypatch):
     source = tmp_path / "song.mp3"
     source.write_bytes(b"original audio")
     monkeypatch.setattr(
-        P, "probe", lambda _: {"format": {"duration": "2.0"}, "streams": [{"codec_type": "audio"}]}
+        P.intake,
+        "probe",
+        lambda _: {"format": {"duration": "2.0"}, "streams": [{"codec_type": "audio"}]},
     )
-    monkeypatch.setattr(P, "audio_seconds", lambda _: 2.0)
+    monkeypatch.setattr(P.intake, "audio_seconds", lambda _: 2.0)
     root = tmp_path / "instrumental"
     project = P.init_project(root, source, "instrumental", music_mode="instrumental")
     # Brandless fixture: this test covers instrumental music gates, and the default

@@ -10,7 +10,7 @@ in the app is a second state store.
 | --- | --- |
 | `models.py` | Pydantic contracts. All timing is integer output frames; dissolve handles cannot exceed either neighbour. |
 | `timeline.py`, `pacing.py` | Frame/second lookup, shot-bound caption resolution, adaptive boundary planning with a validated tail. |
-| `production.py` | Artifact IO, storyboard skeleton, reference binding, the prompt compiler and the content-bound approval chain. |
+| `production/` | Artifact IO, storyboard skeleton, reference binding, the prompt compiler (`image_specs.py`) and the content-bound approval chain (`approvals.py`). |
 | `analysis.py`, `deep_analysis.py` | Local measurement only. Every estimate is labelled; nothing invents meter, sections or lyrics. |
 | `lyric_tools.py`, `lyric_tools_worker.py` | Optional local lyric timing: Demucs and Parakeet in a private environment, as a separate process. No provider, no upload. |
 | `generation.py`, `providers.py` | Runware client with pre-submit journaling: reservation and task UUID are durable before the request; recovery is by UUID and never resubmits; changed bytes are quarantined. |

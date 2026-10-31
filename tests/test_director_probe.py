@@ -58,8 +58,8 @@ def probe_project(tmp_path, monkeypatch):
     def fake_probe(path):
         return {"streams": [{"codec_type": "audio"}]}
 
-    monkeypatch.setattr("mp3_to_videoclip.production.probe", fake_probe)
-    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 2.0)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.probe", fake_probe)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.audio_seconds", lambda path: 2.0)
     source = tmp_path / "probe.mp3"
     source.write_bytes(b"ID3probe")
     created = intake.create_from_upload(

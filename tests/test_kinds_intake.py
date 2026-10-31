@@ -30,10 +30,10 @@ EXAMPLE_INTENT = {
 @pytest.fixture
 def fake_probe(monkeypatch):
     monkeypatch.setattr(
-        "mp3_to_videoclip.production.probe",
+        "mp3_to_videoclip.production.intake.probe",
         lambda path: {"streams": [{"codec_type": "audio"}]},
     )
-    monkeypatch.setattr("mp3_to_videoclip.production.audio_seconds", lambda path: 120.0)
+    monkeypatch.setattr("mp3_to_videoclip.production.intake.audio_seconds", lambda path: 120.0)
 
 
 def _source(tmp_path: Path) -> Path:

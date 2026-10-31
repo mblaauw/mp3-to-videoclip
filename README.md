@@ -19,7 +19,7 @@ yet (transcription, listening, backups, signing, maintenance). Start with
 - Local music measurement: tempo, beats, energy, rough sections, deep pass
   (`analysis.py`, `deep_analysis.py`). No upload, no invented meter or lyrics.
 - Versioned stills with an input hash per version, so the app can tell which
-  images came from an older prompt (`production.py`, `generation.py`).
+  images came from an older prompt (`production/image_specs.py`, `generation.py`).
 - Paid image batches with a pre-submit journal: task UUID and reservation are
   written **before** the request, recovery happens by UUID and never resubmits,
   and an unknown cost keeps its reservation until the provider reports it.
