@@ -755,6 +755,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   projects: () => request<ProjectSummary[]>("/api/projects"),
+  setParked: (slug: string, parked: boolean) =>
+    request<{ slug: string; parked: boolean }>(`/api/projects/${slug}/parked`, {
+      method: "PUT",
+      body: JSON.stringify({ parked }),
+    }),
   createProject: async (
     file: File,
     meta: {

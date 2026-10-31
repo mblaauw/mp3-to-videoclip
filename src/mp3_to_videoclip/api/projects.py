@@ -11,6 +11,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from mp3_to_videoclip import parked as parked_films
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import valid_slug
 from mp3_to_videoclip.domain import archive, budget
@@ -32,6 +33,7 @@ class ProjectSummary(BaseModel):
     duration: float | None = None
     kind: str | None = None
     archived: bool = False
+    parked: bool = False
     render: str | None = None
     still_count: int = 0
     shots: int = 0
@@ -229,6 +231,7 @@ async def list_projects(request: Request):
     if not root.is_dir():
         return []
     result: list[ProjectSummary] = []
+    parked = parked_films.read()
     for entry in sorted(root.iterdir()):
         if (
             not entry.is_dir()
@@ -249,6 +252,7 @@ async def list_projects(request: Request):
                     title=film.title,
                     duration=film.duration,
                     archived=True,
+                    parked=entry.name in parked,
                     render=film.render.name if film.render is not None else None,
                     still_count=len(film.stills),
                     shots=len(film.stills),
@@ -299,6 +303,7 @@ async def list_projects(request: Request):
                     duration=project.duration,
                     kind=project.kind,
                     archived=False,
+                    parked=entry.name in parked,
                     still_count=sum(
                         1
                         for item in assets.values()
@@ -339,6 +344,7 @@ async def list_projects(request: Request):
                     slug=entry.name,
                     title=entry.name.replace("-", " ").title(),
                     archived=False,
+                    parked=entry.name in parked,
                     error=(
                         "This production could not be loaded. Check project.json "
                         "and its source audio before opening it."
@@ -346,6 +352,19 @@ async def list_projects(request: Request):
                 )
             )
     return result
+
+
+class ParkedBody(BaseModel):
+    parked: bool
+
+
+@router.put("/{slug}/parked")
+async def set_parked(slug: str, body: ParkedBody, request: Request):
+    """Move a film in or out of the library's parked group; its folder is not touched."""
+    if not valid_slug(slug) or not (_projects_dir(request) / slug / "project.json").is_file():
+        raise HTTPException(status_code=404, detail="That film is not in the library.")
+    parked_films.set_parked(slug, body.parked)
+    return {"slug": slug, "parked": body.parked}
 
 
 @router.post("", status_code=201)

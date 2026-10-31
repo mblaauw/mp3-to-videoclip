@@ -914,6 +914,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{slug}/parked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Parked
+         * @description Move a film in or out of the library's parked group; its folder is not touched.
+         */
+        put: operations["set_parked_api_projects__slug__parked_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{slug}/plates/{shot_id}": {
         parameters: {
             query?: never;
@@ -1389,6 +1409,11 @@ export interface components {
              */
             unit: string;
         };
+        /** ParkedBody */
+        ParkedBody: {
+            /** Parked */
+            parked: boolean;
+        };
         /** ProjectSummary */
         ProjectSummary: {
             /**
@@ -1418,6 +1443,11 @@ export interface components {
             music_mode?: string | null;
             /** Next Step */
             next_step?: ("track" | "story" | "storyboard" | "images" | "film") | null;
+            /**
+             * Parked
+             * @default false
+             */
+            parked: boolean;
             /** Poster Stills */
             poster_stills?: string[];
             /**
@@ -3380,6 +3410,41 @@ export interface operations {
                 "application/json": {
                     [key: string]: unknown;
                 };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_parked_api_projects__slug__parked_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParkedBody"];
             };
         };
         responses: {

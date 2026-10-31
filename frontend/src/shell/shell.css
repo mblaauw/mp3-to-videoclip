@@ -503,6 +503,31 @@ body {
   font-size: var(--t-18);
   font-weight: var(--w-medium);
 }
+.parked-films > summary {
+  margin-bottom: var(--s-3);
+  cursor: pointer;
+  font-size: var(--t-18);
+  font-weight: var(--w-medium);
+}
+.film-card-wrap {
+  position: relative;
+  min-width: 0;
+}
+.card-aside {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  opacity: 0;
+}
+.film-card-wrap:hover .card-aside,
+.card-aside:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .card-aside {
+    opacity: 1;
+  }
+}
 
 /* ------------------------------------------------------------------ modal */
 .modal-scrim {
