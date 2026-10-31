@@ -282,7 +282,7 @@ def _technique_rows(edit: EditDecisionList, board: Storyboard) -> list[dict]:
         for accent in shot.accents:
             add(TECHNIQUE_NAMES[accent.type], accent.reason)
         for item in shot.text:
-            key = "fade_text" if item.animation == "fade" else item.animation
+            key = "fade_text" if item.animation in ("fade", "fade_in") else item.animation
             add(TECHNIQUE_NAMES[key], item.reason)
         content = storyboard.get(shot.shot_id)
         if content is not None and content.kind == "split":
@@ -301,7 +301,9 @@ def _technique_rows(edit: EditDecisionList, board: Storyboard) -> list[dict]:
                     or TECHNIQUE_NAMES.get(decision.transition_in.type) == name
                     or any(TECHNIQUE_NAMES.get(a.type) == name for a in decision.accents)
                     or any(
-                        TECHNIQUE_NAMES.get("fade_text" if t.animation == "fade" else t.animation)
+                        TECHNIQUE_NAMES.get(
+                            "fade_text" if t.animation in ("fade", "fade_in") else t.animation
+                        )
                         == name
                         for t in decision.text
                     )

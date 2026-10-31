@@ -671,3 +671,26 @@ def test_the_report_names_lost_shot_words_and_uncropped_reprises(tmp_path):
         (item["code"], item.get("shot_id")) for item in edits.report(root, edit=cropped)["warnings"]
     }
     assert ("reprise_uncropped", "s002") not in codes
+
+
+@pytest.mark.parametrize(
+    "animation", ["fade", "fade_in", "type_on", "slide_up", "pop", "kinetic_words"]
+)
+def test_the_report_and_summary_handle_every_text_animation(tmp_path, animation):
+    root = make_api_project(tmp_path)
+    edit = edits.seed_edit(root)
+    values = edit.model_dump(by_alias=True)
+    shot = values["shots"][0]
+    shot["text"] = [
+        {
+            "id": "t",
+            "style": "logotype",
+            "text": "Name",
+            "in_frame": shot["start_frame"],
+            "out_frame": shot["start_frame"] + shot["duration_frames"],
+            "animation": animation,
+        }
+    ]
+    saved = edits.save_edit(root, values)
+    assert edits.report(root, edit=saved)["counts"]["text_layers"] == 1
+    assert edits.summary(root, saved)
