@@ -44,8 +44,8 @@ DEFAULT_VOICE = "English_Deep-VoicedGentleman"
 RESERVE_PER_CHARACTER = Decimal("0.0002")
 MIN_RESERVE = Decimal("0.01")
 #: Bumping this re-mixes every film, so it must change whenever the mix does.
-MIX_VERSION = 1
-SPEECH_LEVEL_DB = -18.0
+MIX_VERSION = 2
+SPEECH_LEVEL_DB = -14.0
 DUCK_DB = -10.0
 DUCK_ATTACK_SECONDS = 0.2
 DUCK_RELEASE_SECONDS = 0.35

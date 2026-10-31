@@ -17,7 +17,7 @@ export function NewRoundCard({
   return (
     <section className="paid-card" aria-live="polite">
       <header>
-        <b>{shots.join(", ")} used their correction</b>
+        <b>{shots.join(", ")}: correction used</b>
         <button type="button" className="paid-close" onClick={onCancel} aria-label="Close">
           ×
         </button>
