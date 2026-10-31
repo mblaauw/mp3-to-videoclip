@@ -168,4 +168,37 @@ Found, not fixed:
 - **Copy:** "The brief must be approved first" shows when it's approved, and "8 measured" describes owner-set sections.
 - **Image rules bind every shot,** so a rule about one object can spread. The Writer needs telling.
 
-Style check, round 2: stopped for the owner, as D8 requires.
+Style check, round 2: the owner approved the look and asked for the hero's reference.
+
+**Promo final v003, 31 Oct.** 70 s to the frame, 1,680 frames, 28 chunks rendered fresh, no broken frames, in about 4 minutes.
+$1.27 of $8: $1.24 on 35 stills, $0.024 on 6 voice takes. 13 of 25 live turns, all on `gpt-6.1-sol`, none lost to a provider.
+The 4 old films' 3,269 files are byte-identical to their fingerprint from before this work. The source MP3 is unchanged.
+
+Found after the style check, and fixed:
+
+| Found | Fix |
+| --- | --- |
+| Reference images were CLI-only | A crop control in Images makes a still a character's reference |
+| A remake from a changed prompt left the old still selected | A still from the current prompt replaces an outdated selection |
+| The one-correction limit was a dead end in Studio | A new round, with a stated reason |
+| A paid question could appear off screen | It scrolls into view |
+| Speech sat 3.5 to 6 dB over the groove | About 8 dB now, measured in the final |
+| Reprises couldn't reframe, so their cuts changed nothing | A crop may start on a shot's first frame |
+| Words on a picture were dropped silently | The report names them, and uncropped reprises |
+| The brand card was a template | Logotype, tagline and CTA text over a painted card |
+| One Writer save removed the hero's reference, cut the look to fit a word limit and made all 24 kept stills out of date, unreported | References survive, a preset counts only its note, and a change names the stills it affects |
+| The card's words faded out before the end | `fade_in` holds to the last frame |
+| Adding `fade_in` broke the report and Film's summary | Fixed, and every animation is tested |
+
+Restoring the brief's exact text brought back every approval and still at no cost, which is the content-bound design working.
+
+Still open:
+
+- **Nobody has heard it.** Speech level and mix were measured; the voice, its timing and the track's own rain or thunder need the owner's ears.
+- **Nobody has watched it.** Frames were sampled at about 45 moments, not played.
+- **Motion.** Stills, camera moves and film look only. The ripples, door and camera sweep are suggested, not moving.
+- **The cut's rhythm** alternates push and hold, a little mechanically. 10 stills went unchecked by the Editor; I looked at all of them on contact sheets.
+- **The Editor's notes are out of date:** they still say "no new crops", because nothing asks it to update them.
+- **A brand card made from a scene** raises advert checks on a promo, because they look for an `end_card` shot. Phase 4 needs this.
+- **Small:** the storyboard stale message can blame timing when only the brief changed; Director tool results show a raw file path; the Director covers the next-step button at 1024 px.
+- **The promo's first 5 s** carry no brand, by the owner's script, and the report warns about it.
