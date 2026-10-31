@@ -16,6 +16,7 @@ in the app is a second state store.
 | `generation.py`, `providers.py` | Runware client with pre-submit journaling: reservation and task UUID are durable before the request; recovery is by UUID and never resubmits; changed bytes are quarantined. |
 | `budget.py` | Cap, committed cost, unresolved reservations, admission. |
 | `remotion.py`, `render.py` | Remotion render entry (film, titles review stills) plus FFmpeg probe/mux/verify. |
+| `chunks.py`, `framecheck.py` | One render chunk per shot and its reuse key; finding broken frames in a rendered movie. |
 | `titles.py`, `graphics.py` | Integer-frame title windows; the graphics spec and the older composite route kept for reviews recorded before titles moved into the film. |
 | `domain/archive.py` | Read-only view of frozen productions (title, duration, newest final render, selected stills). |
 

@@ -121,7 +121,7 @@ def test_remotion_mux_uses_the_excerpt_and_keeps_the_fade(tmp_path, monkeypatch)
     )
     shots = [RenderShot(shot=shot, image=str(plate))]
 
-    def fake_invoke(kind, output, asset_root, canvas, fps, frames, inputs):
+    def fake_invoke(kind, output, asset_root, canvas, fps, frames, inputs, reuse=False):
         subprocess.run(
             [
                 "ffmpeg",
@@ -145,7 +145,7 @@ def test_remotion_mux_uses_the_excerpt_and_keeps_the_fade(tmp_path, monkeypatch)
         )
         return {"renderer_revision": "test"}
 
-    monkeypatch.setattr(remotion, "invoke", fake_invoke)
+    monkeypatch.setattr(remotion, "_render_silent", fake_invoke)
     output = root / "renders" / "excerpt-v001.mp4"
     report = remotion.render_base(
         project,

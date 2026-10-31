@@ -774,6 +774,15 @@ export function editTransitionStyle(value, progress) {
   return {...defaultStyle, transform};
 }
 
+/** A shot's own number, from its id, so moving or inserting shots changes nothing. */
+function shotSeed(shotId) {
+  let value = 2166136261;
+  for (const character of String(shotId)) {
+    value = Math.imul(value ^ character.codePointAt(0), 16777619) >>> 0;
+  }
+  return value;
+}
+
 function frameNoise(frame, salt) {
   // A small integer hash, so the same frame always gets the same value on any machine.
   let value = (Math.imul(frame + 1, 2654435761) ^ Math.imul(salt + 1, 40503)) >>> 0;
@@ -788,29 +797,32 @@ const DRIFT_TILT_DEGREES = 0.12;
 export const GRAIN_TILE = 256;
 
 /**
- * The film look at one frame, or null when off. Pure and deterministic, so the
- * Player and the MP4 draw the same thing. Each shot drifts on its own phase, and
- * the picture is scaled just enough that no moved edge can show.
+ * The film look at one frame of a shot, or null when off. Pure and deterministic, so
+ * the Player and the MP4 draw the same thing. It counts from the shot's own start and
+ * seeds from its id, so a shot that moves along the film looks exactly the same and
+ * its render can be reused. The picture is scaled just enough that no moved edge shows.
  */
-export function lookState(look, frame, shotIndex, width, height, fps) {
+export function lookState(look, localFrame, shotId, width, height, fps) {
   if (look === undefined || look === null) return null;
   const grain = Number(look.grain ?? 0);
   const weave = Number(look.weave ?? 0);
   const drift = Number(look.drift ?? 0);
   if (grain <= 0 && weave <= 0 && drift <= 0) return null;
+  const seed = shotSeed(shotId);
+  const frame = localFrame;
   const seconds = frame / fps;
-  const phase = shotIndex * 1.7;
+  const phase = (seed % 1000) / 1000 * 2 * Math.PI;
   const reach = Math.min(width, height);
   const driftPixels = drift * DRIFT_SHARE * reach;
   const weavePixels = weave * WEAVE_SHARE * reach;
   const dx =
     driftPixels * (0.7 * Math.sin((2 * Math.PI * seconds) / 11 + phase) +
       0.3 * Math.sin((2 * Math.PI * seconds) / 4.3 + phase * 2)) +
-    weavePixels * (frameNoise(frame, 1) * 2 - 1);
+    weavePixels * (frameNoise(frame, seed + 1) * 2 - 1);
   const dy =
     driftPixels * (0.7 * Math.sin((2 * Math.PI * seconds) / 13 + phase + 1) +
       0.3 * Math.sin((2 * Math.PI * seconds) / 5.1 + phase * 3)) +
-    weavePixels * (frameNoise(frame, 2) * 2 - 1);
+    weavePixels * (frameNoise(frame, seed + 2) * 2 - 1);
   const tilt = drift * DRIFT_TILT_DEGREES * Math.sin((2 * Math.PI * seconds) / 17 + phase);
   const margin = driftPixels + weavePixels;
   // Room for the shift on the short side, plus what the tilt swings into the corners.
@@ -819,8 +831,8 @@ export function lookState(look, frame, shotIndex, width, height, fps) {
   return {
     transform: `translate(${dx.toFixed(3)}px, ${dy.toFixed(3)}px) rotate(${tilt.toFixed(4)}deg) scale(${scale.toFixed(5)})`,
     grainOpacity: grain * GRAIN_STRENGTH,
-    grainX: Math.floor(frameNoise(frame, 3) * GRAIN_TILE),
-    grainY: Math.floor(frameNoise(frame, 4) * GRAIN_TILE),
+    grainX: Math.floor(frameNoise(frame, seed + 3) * GRAIN_TILE),
+    grainY: Math.floor(frameNoise(frame, seed + 4) * GRAIN_TILE),
   };
 }
 

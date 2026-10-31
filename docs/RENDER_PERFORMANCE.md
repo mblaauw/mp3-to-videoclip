@@ -1,5 +1,30 @@
 # Local renderer diagnostics and benchmark
 
+## How a base film renders now (31 October 2026)
+
+A base, preview or final renders **one chunk per shot** through one browser with one tab, and joins them
+without re-encoding. See `.opencode/tasks/render-speed.md` for decisions and the acceptance record.
+
+- **Reuse:** previews and bases reuse any chunk whose key matches, so changing one shot took 34 s instead of
+  12–14 minutes on Tree of Love. An interrupted render resumes. Finals render every chunk fresh.
+- **Keys** (`chunks.py`) take everything in a shot's compiled entry except named position fields, made relative
+  to the chunk, and written reasons. A new field invalidates by default.
+- **Capture:** previews and bases use JPEG at quality 95. Finals and alpha graphics stay PNG.
+- **Tabs:** one, because above that Remotion cycles the browser's tabs every 200 ms so each can capture.
+- **Broken frames** (`framecheck.py`): a scan flags frames unlike both neighbours, and a fresh render of each decides.
+  A broken chunk is set aside and rendered once more; a second failure fails the render and names the frames.
+- **Stalls:** a render whose phase and frame count stop moving is ended with its browser. A closed lid does this.
+- **One at a time:** a machine-wide lock makes a second render wait. Chunks live in `work/remotion-chunks/`, each with a
+  receipt, and nothing is cleaned up.
+
+| Tree of Love, Editor's cut | Time |
+| --- | --- |
+| Full render | 7 min 16 s |
+| One shot changed | 34 s |
+| Two lengths changed, 25 shots moved | 66 s |
+
+The sections below are the earlier history. Statements there about defaults describe those dates.
+
 Opt-in, synthetic, no production access or paid calls:
 
 ```sh

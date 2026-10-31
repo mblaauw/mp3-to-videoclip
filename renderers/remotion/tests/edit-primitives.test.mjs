@@ -19,7 +19,7 @@ import {
   validateEditShot,
   validateGrade,
 } from "../src/timing.mjs";
-import {validateBaseInput, validateRequest} from "../src/request.mjs";
+import {validateBaseInput, validateChunks, validateRequest} from "../src/request.mjs";
 
 const shot = (id, start, duration, edit = {}) => ({
   id,
@@ -244,23 +244,47 @@ test("crop cuts are validated like the Python model", () => {
   }
 });
 
+test("chunks are ordered, inside the film and local", () => {
+  const chunk = (start, frames, output = `/tmp/c${start}.mp4`) => ({start, frames, output});
+  assert.deepEqual(validateChunks([chunk(0, 10), chunk(20, 5)], 25), [chunk(0, 10), chunk(20, 5)]);
+  assert.throws(() => validateChunks([], 25), /non-empty/);
+  assert.throws(() => validateChunks([chunk(0, 10), chunk(9, 5)], 25), /before the previous/);
+  assert.throws(() => validateChunks([chunk(20, 6)], 25), /past the film/);
+  assert.throws(() => validateChunks([chunk(0, 0)], 25), /frames/);
+  assert.throws(() => validateChunks([chunk(0, 5, "c.mp4")], 25), /absolute/);
+  assert.throws(() => validateChunks([chunk(0, 5, "/tmp/c.mov")], 25), /\.mp4/);
+});
+
+test("capture is optional and bounded", () => {
+  const shots = [{id: "a", image: "a.png", start_frame: 0, duration_frames: 24}];
+  assert.doesNotThrow(() => validateBaseInput({shots}, 24));
+  assert.doesNotThrow(() => validateBaseInput({shots, capture: {format: "jpeg", quality: 95}}, 24));
+  assert.throws(() => validateBaseInput({shots, capture: {format: "webp", quality: 95}}, 24), /format/);
+  assert.throws(() => validateBaseInput({shots, capture: {format: "jpeg", quality: 0}}, 24), /quality/);
+  assert.throws(() => validateBaseInput({shots, capture: "jpeg"}, 24), /capture/);
+});
+
 test("the film look is off unless asked for, and the same frame always looks the same", () => {
-  assert.equal(lookState(undefined, 10, 0, 1920, 1080, 24), null);
-  assert.equal(lookState({grain: 0, weave: 0, drift: 0}, 10, 0, 1920, 1080, 24), null);
+  assert.equal(lookState(undefined, 10, "s001", 1920, 1080, 24), null);
+  assert.equal(lookState({grain: 0, weave: 0, drift: 0}, 10, "s001", 1920, 1080, 24), null);
   const look = {grain: 0.4, weave: 0.4, drift: 0.4};
-  assert.deepEqual(lookState(look, 10, 3, 1920, 1080, 24), lookState(look, 10, 3, 1920, 1080, 24));
-  assert.notDeepEqual(lookState(look, 10, 3, 1920, 1080, 24), lookState(look, 11, 3, 1920, 1080, 24));
+  assert.deepEqual(lookState(look, 10, "s003", 1920, 1080, 24), lookState(look, 10, "s003", 1920, 1080, 24));
+  assert.notDeepEqual(lookState(look, 10, "s003", 1920, 1080, 24), lookState(look, 11, "s003", 1920, 1080, 24));
   assert.notEqual(
-    lookState(look, 10, 3, 1920, 1080, 24).transform,
-    lookState(look, 10, 4, 1920, 1080, 24).transform,
+    lookState(look, 10, "s003", 1920, 1080, 24).transform,
+    lookState(look, 10, "s004", 1920, 1080, 24).transform,
   );
+  // Two shots shouldn't share a grain pattern frame for frame.
+  const a = lookState(look, 10, "s003", 1920, 1080, 24);
+  const b = lookState(look, 10, "s004", 1920, 1080, 24);
+  assert.notDeepEqual([a.grainX, a.grainY], [b.grainX, b.grainY]);
 });
 
 test("the film look's overscan always covers how far it moves", () => {
   const width = 1920;
   const height = 1080;
   for (let frame = 0; frame < 2000; frame += 7) {
-    const {transform} = lookState({weave: 1, drift: 1}, frame, 2, width, height, 24);
+    const {transform} = lookState({weave: 1, drift: 1}, frame, "s002", width, height, 24);
     const [, x, y, , scale] = transform.match(
       /translate\((-?[\d.]+)px, (-?[\d.]+)px\) rotate\((-?[\d.]+)deg\) scale\(([\d.]+)\)/,
     );
