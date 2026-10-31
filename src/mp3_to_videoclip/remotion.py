@@ -8,6 +8,7 @@ import signal
 import subprocess
 import tempfile
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from threading import Thread
@@ -555,44 +556,215 @@ def _fresh_frames(frames: list[int], selected, canvas, fps, total, inputs, direc
     return found
 
 
-def check_frames(movie: Path, start: int, selected, canvas, fps, total, inputs) -> dict:
-    """Look for broken frames in ``movie``, which begins at film frame ``start``."""
+def check_movies(movies: list[tuple[Path, int]], selected, canvas, fps, total, inputs) -> list:
+    """Look for broken frames in movies, each given with the film frame it begins at.
+
+    All suspects are confirmed in one renderer run, which is why this takes a list.
+    """
     from . import framecheck
 
-    frames = framecheck.small_frames(movie)
-    found = framecheck.suspects(frames)
-    broken: list[int] = []
-    if found:
-        operations.phase("checking-frames", note=f"{len(found)} frames to look at again")
-        with tempfile.TemporaryDirectory(dir=movie.parent, prefix=".frame-check-") as directory:
+    if not movies:
+        return []
+    scanned = [(framecheck.small_frames(movie), start) for movie, start in movies]
+    found = [framecheck.suspects(frames) for frames, _ in scanned]
+    wanted = sorted(
+        start + i for (_, start), hits in zip(scanned, found, strict=True) for i in hits
+    )
+    fresh: dict[int, Path] = {}
+    directory = None
+    if wanted:
+        operations.phase("checking-frames", note=f"{len(wanted)} frames to look at again")
+        directory = tempfile.TemporaryDirectory(dir=movies[0][0].parent, prefix=".frame-check-")
+    try:
+        if wanted:
             fresh = _fresh_frames(
-                [start + index for index in found],
-                selected,
-                canvas,
-                fps,
-                total,
-                inputs,
-                Path(directory),
+                wanted, selected, canvas, fps, total, inputs, Path(directory.name)
             )
+        checks = []
+        for (frames, start), hits in zip(scanned, found, strict=True):
             broken = framecheck.broken_frames(
-                frames, found, {index: fresh[start + index] for index in found}
+                frames, hits, {index: fresh[start + index] for index in hits}
             )
-    return {
-        "scanned": len(frames),
-        "suspects": [start + index for index in found],
-        "broken": [start + index for index in broken],
-    }
+            checks.append(
+                {
+                    "scanned": len(frames),
+                    "suspects": [start + index for index in hits],
+                    "broken": [start + index for index in broken],
+                }
+            )
+        return checks
+    finally:
+        if directory is not None:
+            directory.cleanup()
 
 
-def _render_silent(kind, silent: Path, selected, canvas, fps, frames, inputs) -> None:
-    """Render the film's pictures to ``silent``, refusing one with a broken frame."""
-    invoke(kind, silent, selected, canvas, fps, frames, inputs)
-    check = check_frames(silent, 0, selected, canvas, fps, frames, inputs)
-    if check["broken"]:
+def check_frames(movie: Path, start: int, selected, canvas, fps, total, inputs) -> dict:
+    """Look for broken frames in ``movie``, which begins at film frame ``start``."""
+    return check_movies([(movie, start)], selected, canvas, fps, total, inputs)[0]
+
+
+def _chunk_receipt(path: Path) -> Path:
+    return path.with_suffix(".chunk.json")
+
+
+def _trusted_chunk(path: Path, chunk) -> bool:
+    """Whether a finished chunk may be reused; damage fails loudly, like the base cache."""
+    receipt = _chunk_receipt(path)
+    if not receipt.exists():
+        return False
+    try:
+        record = read_json(receipt)
+    except (OSError, ValueError):
+        record = None
+    expected = {"sha256": file_hash(path) if path.is_file() else None, "key": chunk.key}
+    if not isinstance(record, dict) or {k: record.get(k) for k in expected} != expected:
         raise ValueError(
-            f"the render has broken frames at {check['broken']}; {silent.name} is kept to inspect"
+            f"Remotion chunk cache corruption at {path.name}; preserve and investigate"
         )
+    return True
+
+
+def _join_chunks(paths: list[Path], output: Path, fps: int) -> None:
+    """Join movies without re-encoding, publishing only a join with even timing."""
+    from . import render as R
+
+    partial = output.with_name(f".{output.stem}.joining.mp4")
+    listing = output.with_name(f".{output.stem}.joining.txt")
+    quoted = [str(path).replace("'", "'\\''") for path in paths]
+    listing.write_text("".join(f"file '{path}'\n" for path in quoted))
+    try:
+        R._run(
+            [
+                R._binary("ffmpeg"),
+                "-nostdin",
+                "-v",
+                "error",
+                "-n",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(listing),
+                "-c",
+                "copy",
+                "-movflags",
+                "+faststart",
+                str(partial),
+            ]
+        )
+        _require_even_timing(partial, fps)
+        os.link(partial, output)
+    finally:
+        listing.unlink(missing_ok=True)
+        partial.unlink(missing_ok=True)
+
+
+def _require_even_timing(movie: Path, fps: int) -> None:
+    """Every frame one tick after the last: a bad join would show here first."""
+    from . import render as R
+
+    out = R._run(
+        [
+            R._binary("ffprobe"),
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "packet=pts_time",
+            "-of",
+            "csv=p=0",
+            str(movie),
+        ]
+    )
+    times = sorted(float(line.strip().rstrip(",")) for line in out.split() if line.strip(", "))
+    gaps = [later - earlier for earlier, later in zip(times, times[1:], strict=False)]
+    if (
+        not times
+        or abs(times[0]) > 0.5 / fps
+        or any(abs(gap - 1 / fps) > 0.25 / fps for gap in gaps)
+    ):
+        raise ValueError(f"joined chunks have uneven timing in {movie.name}")
+
+
+def _render_silent(kind, silent: Path, selected, canvas, fps, frames, inputs, reuse=False) -> None:
+    """Render the film's pictures to ``silent``, shot by shot.
+
+    With ``reuse``, a shot whose key matches a checked chunk isn't rendered again, and
+    an interrupted render resumes. Without it, as for a final, every chunk is fresh, so
+    a key bug can't reach a delivered film. A chunk with a broken frame is set aside and
+    rendered once more; a second failure fails the render and names the frames.
+    """
+    from .chunks import film_chunks
+
+    plan = film_chunks(inputs, canvas, fps, implementation_hash())
+    shared = silent.parent / "remotion-chunks"
+    shared.mkdir(parents=True, exist_ok=True)
+    store = shared if reuse else Path(tempfile.mkdtemp(prefix="fresh-", dir=shared))
+    paths = {chunk.key: store / f"{chunk.key[:40]}.mp4" for chunk in plan}
+    with (shared / ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        check = {"scanned": 0, "suspects": [], "broken": [], "chunks": len(plan)}
+        check["reused"] = sum(_trusted_chunk(paths[chunk.key], chunk) for chunk in plan)
+        for attempt in range(2):
+            pending = [c for c in plan if not _chunk_receipt(paths[c.key]).exists()]
+            # Two identical shots can share a key, and only one of them needs rendering.
+            pending = list({chunk.key: chunk for chunk in pending}.values())
+            missing = [c for c in pending if not paths[c.key].exists()]
+            if missing:
+                invoke(
+                    kind,
+                    store / f".run-{uuid.uuid4().hex[:12]}.mp4",
+                    selected,
+                    canvas,
+                    fps,
+                    frames,
+                    inputs,
+                    [
+                        {"start": c.start, "frames": c.frames, "output": str(paths[c.key])}
+                        for c in missing
+                    ],
+                )
+            results = check_movies(
+                [(paths[c.key], c.start) for c in pending], selected, canvas, fps, frames, inputs
+            )
+            broken = []
+            for chunk, result in zip(pending, results, strict=True):
+                check["scanned"] += result["scanned"]
+                check["suspects"] += result["suspects"]
+                if result["scanned"] != chunk.frames:
+                    raise ValueError(
+                        f"Remotion chunk for {chunk.shot_id} has {result['scanned']} frames, "
+                        f"not {chunk.frames}"
+                    )
+                if result["broken"]:
+                    broken += result["broken"]
+                    aside = paths[chunk.key].with_suffix(f".broken-{uuid.uuid4().hex[:8]}.mp4")
+                    os.rename(paths[chunk.key], aside)
+                    continue
+                write_json(
+                    _chunk_receipt(paths[chunk.key]),
+                    {
+                        "sha256": file_hash(paths[chunk.key]),
+                        "key": chunk.key,
+                        "shot_id": chunk.shot_id,
+                        "frames": chunk.frames,
+                    },
+                )
+            check["broken"] += broken
+            if not broken:
+                break
+            if attempt == 1:
+                raise ValueError(
+                    f"broken frames at {sorted(broken)} came back after rendering again; "
+                    f"the chunks are kept in {store.name}"
+                )
+        operations.phase("joining-shots", note=f"{len(plan)} shots")
+        _join_chunks([paths[chunk.key] for chunk in plan], silent, fps)
     write_json(silent.with_suffix(".frames.json"), check)
+    if not reuse:
+        shutil.rmtree(store)
 
 
 def render_base(
@@ -607,6 +779,7 @@ def render_base(
     brand=None,
     titles: dict | None = None,
     capture: dict | None = None,
+    reuse_chunks: bool = False,
 ) -> dict:
     """Remotion visuals + existing atomic FFmpeg/audio/verification contracts.
 
@@ -662,6 +835,7 @@ def render_base(
                 project.fps,
                 project.total_frames,
                 inputs,
+                reuse_chunks,
             )
             if R._count_frames(silent) != project.total_frames:
                 raise ValueError("Remotion silent base has incorrect frame count")

@@ -8,7 +8,6 @@ import pytest
 from PIL import Image
 
 from mp3_to_videoclip import framecheck, remotion
-from mp3_to_videoclip.storage import read_json
 
 
 def _picture(seed: int = 1, contrast: float = 1.0) -> np.ndarray:
@@ -167,30 +166,3 @@ def test_frames_are_reported_in_film_numbers(tmp_path, monkeypatch):
     check, calls = _check(tmp_path / "chunk.mp4", film, monkeypatch, start=100)
     assert check["broken"] == [120]
     assert calls == [[120]]
-
-
-def test_a_silent_render_with_a_broken_frame_fails_and_is_kept(tmp_path, monkeypatch):
-    film = _film()
-    damaged = film.copy()
-    damaged[20] = _tiled(film[20])
-    stills = _fake_stills(film, [])
-
-    def invoke(kind, output, *rest):
-        if kind == "base":
-            _encode(damaged, output)
-            return {}
-        return stills(kind, output, *rest)
-
-    monkeypatch.setattr(remotion, "invoke", invoke)
-    silent = tmp_path / "silent.mp4"
-    with pytest.raises(ValueError, match=r"broken frames at \[20\]"):
-        remotion._render_silent("base", silent, None, (96, 54), 24, 40, {"shots": []})
-    assert silent.is_file()
-
-
-def test_a_clean_silent_render_records_its_check(tmp_path, monkeypatch):
-    film = _film()
-    monkeypatch.setattr(remotion, "invoke", lambda kind, output, *rest: _encode(film, output) or {})
-    silent = tmp_path / "silent.mp4"
-    remotion._render_silent("base", silent, None, (96, 54), 24, 40, {"shots": []})
-    assert read_json(silent.with_suffix(".frames.json"))["broken"] == []

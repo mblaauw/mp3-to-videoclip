@@ -78,6 +78,7 @@ def render_base(root: Path, output: Path | None = None) -> dict:
         root / "work",
         brand=brand,
         capture=WORKING_CAPTURE,
+        reuse_chunks=True,
     )
     report["delivery_ready"] = False
     _stamp(root, output, report, "base", provenance)
@@ -220,6 +221,7 @@ def render_preview(root: Path, output: Path | None = None) -> dict:
         preview_banner=True,
         brand=brand,
         capture=WORKING_CAPTURE,
+        reuse_chunks=True,
     )
     report["delivery_ready"] = False
     _stamp(root, output, report, "preview", provenance)

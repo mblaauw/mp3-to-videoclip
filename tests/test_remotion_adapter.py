@@ -41,7 +41,7 @@ def base_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(render, "_run", lambda argv: Path(argv[-1]).write_bytes(b"mux"))
 
     def invoke(*args):
-        calls.append(args)
+        calls.append(args[:7])
         args[1].write_bytes(b"movie")
         write_json(Path(f"{args[1]}.render.json"), {"timings": "historical"})
 
@@ -102,7 +102,7 @@ def test_same_visual_cache_is_serialized_across_processes(base_cache, tmp_path, 
             contending.set()
         return flock(handle, operation)
 
-    def invoke(kind, movie, selected, canvas, fps, frames, inputs):
+    def invoke(kind, movie, selected, canvas, fps, frames, inputs, reuse=False):
         with (tmp_path / "invocations").open("a") as log:
             log.write(f"{selected}\n")
         rendering.set()
@@ -583,3 +583,18 @@ def test_capture_joins_the_cache_key_only_when_given(base_cache):
     assert len(calls) == 2
     run(capture=remotion.WORKING_CAPTURE)
     assert len(calls) == 2
+
+
+def test_chunk_reuse_is_asked_for_and_never_the_default(base_cache, monkeypatch):
+    seen = []
+    real = remotion._render_silent
+
+    def render_silent(*args):
+        seen.append(args[7])
+        return real(*args)
+
+    monkeypatch.setattr(remotion, "_render_silent", render_silent)
+    _, _, _, run = base_cache
+    run()
+    run(capture=remotion.WORKING_CAPTURE, reuse_chunks=True)
+    assert seen == [False, True]

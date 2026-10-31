@@ -121,7 +121,7 @@ def test_remotion_mux_uses_the_excerpt_and_keeps_the_fade(tmp_path, monkeypatch)
     )
     shots = [RenderShot(shot=shot, image=str(plate))]
 
-    def fake_invoke(kind, output, asset_root, canvas, fps, frames, inputs):
+    def fake_invoke(kind, output, asset_root, canvas, fps, frames, inputs, reuse=False):
         subprocess.run(
             [
                 "ffmpeg",
