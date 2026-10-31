@@ -732,6 +732,11 @@ body {
   font-size: 10px;
   letter-spacing: 0.04em;
 }
+.director-sight {
+  margin-top: 2px;
+  color: var(--gold);
+  font-size: 12px;
+}
 .role-row {
   display: flex;
   gap: 4px;

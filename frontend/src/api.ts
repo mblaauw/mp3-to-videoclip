@@ -1020,6 +1020,10 @@ export const api = {
       "/api/setup/renderer",
       { method: "POST", body: JSON.stringify({}) },
     ),
+  directorModel: (slug: string, role: "writer" | "editor") =>
+    request<{ model: string; gateway: string; can_see: boolean | null }>(
+      `/api/projects/${slug}/director/model?role=${role}`,
+    ),
   chat: (slug: string, role?: "writer" | "editor") =>
     request<{ messages: unknown[] }>(
       `/api/projects/${slug}/chat${role ? `?role=${role}` : ""}`,

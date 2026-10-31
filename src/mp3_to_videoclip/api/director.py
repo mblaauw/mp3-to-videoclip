@@ -158,6 +158,29 @@ def _context(payload: dict) -> dict | None:
     return context
 
 
+@router.get("/director/model")
+async def get_director_model(slug: str, request: Request, role: str = "writer"):
+    """Who actually answers for this role, and whether it can look at a still."""
+    if role not in ("writer", "editor"):
+        raise HTTPException(status_code=400, detail="role must be writer or editor")
+    root = project_root(request, slug)
+    settings = effective_settings()
+    if settings.gateway != "opencode":
+        # The direct API doesn't report what a model takes, so this stays honest.
+        return {"model": settings.llm_model, "gateway": "direct", "can_see": None}
+    model = settings.writer_model if role == "writer" else settings.editor_model
+    try:
+        gateway = await get_gateway(settings, root.parent)
+        client = gateway.client()
+        try:
+            can_see = await client.model_can_see(model)
+        finally:
+            await client.aclose()
+    except Exception:  # noqa: BLE001 - gateway boundary; the chat route reports the failure
+        can_see = None
+    return {"model": model, "gateway": "opencode", "can_see": can_see}
+
+
 @router.get("/chat")
 async def get_chat(slug: str, request: Request, role: str | None = None):
     from mp3_to_videoclip.director.conversation import ROLES, load_messages

@@ -353,6 +353,7 @@ export function Director({
   const [role, setRole] = useState<Role>(defaultRole);
   const [historyFor, setHistoryFor] = useState<Role | null>(null);
   const [gateway, setGateway] = useState("opencode");
+  const [canSee, setCanSee] = useState<boolean | null>(null);
   const [models, setModels] = useState<{ writer: string; editor: string }>({
     writer: "the configured Writer",
     editor: "the configured Editor",
@@ -383,17 +384,20 @@ export function Director({
   }, [stage]);
 
   useEffect(() => {
+    let current = true;
     api
-      .settings()
-      .then((settings) => {
-        setModels({
-          writer: modelLabel(settings.writer_model),
-          editor: modelLabel(settings.editor_model),
-        });
-        setGateway(settings.gateway === "direct" ? "direct" : "opencode");
+      .directorModel(slug, role)
+      .then((value) => {
+        if (!current) return;
+        setModels((before) => ({ ...before, [role]: modelLabel(value.model) }));
+        setGateway(value.gateway === "direct" ? "direct" : "opencode");
+        setCanSee(value.can_see);
       })
       .catch(() => {});
-  }, []);
+    return () => {
+      current = false;
+    };
+  }, [slug, role]);
 
   useEffect(() => {
     if (!prefill?.text || prefill.send) return;
@@ -745,6 +749,13 @@ export function Director({
             {role === "writer" ? "Writer" : "Editor"} · {model}
             {gateway === "direct" && <span className="director-gateway">Direct API</span>}
           </div>
+          {canSee !== true && (
+            <div className="director-sight">
+              {canSee === false
+                ? "This model can't see pictures, so it can't check framing or judge stills."
+                : "This model hasn't confirmed it can see pictures. Check any framing it claims."}
+            </div>
+          )}
         </div>
         <button type="button" className="icon-btn" aria-label="Close director" onClick={onClose}>
           <CloseIcon />

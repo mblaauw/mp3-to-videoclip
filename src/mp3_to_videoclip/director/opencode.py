@@ -293,6 +293,15 @@ class OpenCodeClient:
             for item in await self.models()
         )
 
+    async def model_can_see(self, model: str) -> bool | None:
+        """Whether the gateway says this model takes images; ``None`` when it doesn't say."""
+        provider, model_id, _variant = parse_model(model)
+        for item in await self.models():
+            if item.get("providerID") == provider and item.get("id") == model_id:
+                inputs = (item.get("capabilities") or {}).get("input")
+                return "image" in inputs if isinstance(inputs, list) else None
+        return None
+
     async def set_model(self, session_id: str, model: str) -> None:
         provider, model_id, variant = parse_model(model)
         value: dict[str, Any] = {"id": model_id, "providerID": provider}
