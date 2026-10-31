@@ -240,8 +240,8 @@ export function VoicePanel({
       setEstimate(null);
       for (;;) {
         const job = await api.job(started.job_id);
-        if (!["queued", "running"].includes(job.status)) {
-          if (job.status !== "done") setProblem(job.error || "The takes could not be made.");
+        if (!["queued", "running", "stopping"].includes(job.status)) {
+          if (job.status !== "succeeded") setProblem(job.error || "The takes could not be made.");
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));

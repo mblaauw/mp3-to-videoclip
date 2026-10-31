@@ -716,3 +716,20 @@ test("a titles review waiting to be inspected is what the bar asks for", () => {
   assert.match(step.title, /Review the titles/);
   assert.equal(step.actions[0].target, "render");
 });
+
+
+test("a film with no paid stills can still pass the style check", () => {
+  const step = nextStep(
+    "images",
+    project({ stage_states: states({ story: "done", storyboard: "done", images: "you" }) }),
+    approvals({
+      brief: { state: "approved" },
+      storyboard: { state: "approved" },
+      proof: { state: "missing", expected_hash: "abc" },
+    }),
+    images({ proof_total: 0, proof_kept: 0, proof_missing_ids: [] }),
+    budget,
+  );
+  assert.equal(step.actions[0].approve, "proof");
+  assert.match(step.title, /No stills to buy/);
+});
