@@ -24,9 +24,32 @@ REVIEW = "work/graphics-review.json"
 COMPOSITION_METHOD = "composition-v1"
 
 
-def draft_spec(title: str) -> dict:
+def _identity(brand: dict | None) -> tuple[str, str, str]:
+    """A film's names, filmstrip names and production line; no brand means the original pair."""
+    if not brand:
+        return NAMES, FILMSTRIP_NAMES, PRODUCTION_LINE
+    name, partner = brand["name"], brand["partner"]
+    if not partner:
+        return name, name, f"A {name} PRODUCTION"
+    return (
+        f"{name}  ×  {partner}",
+        f"{name}  ◆  {partner}",
+        f"A JOINT {name} & {partner} PRODUCTION",
+    )
+
+
+def film_brand(name: str, partner: str) -> dict | None:
+    """What a new film records for these settings; None for the original pair or no name."""
+    brand = {"name": name.strip().upper(), "partner": partner.strip().upper()}
+    if not brand["name"] or _identity(brand)[0] == NAMES:
+        return None
+    return brand
+
+
+def draft_spec(title: str, brand: dict | None = None) -> dict:
     """Never invent credits. Empty cards deliberately block brief approval."""
-    return {
+    names, _, production_line = _identity(brand)
+    spec = {
         "version": 1,
         "demo": False,
         "credit_roles_confirmed": False,
@@ -34,16 +57,19 @@ def draft_spec(title: str) -> dict:
         "credits_tail_seconds": 40.0,
         "lockup_seconds": 4.0,
         "intro": {
-            "names": NAMES,
+            "names": names,
             "title": title,
-            "tagline": PRODUCTION_LINE,
+            "tagline": production_line,
             "notes": [],
             "mini_credits": [],
         },
         "captions": [],
-        "credits": {"cards": [], "lockup": PRODUCTION_LINE},
+        "credits": {"cards": [], "lockup": production_line},
         "warning": "Draft: record this film's factual credit roles and confirm them before brief approval. Do not reuse randomized demo roles.",
     }
+    if brand:
+        spec["brand"] = brand
+    return spec
 
 
 def _valid_cards(cards) -> list | None:
@@ -105,12 +131,13 @@ def validate_spec(root: Path, project) -> dict:
         raise ValueError(
             "source is too short for the 25/40 signature; obtain an explicit alternate plan, never append a tail"
         )
+    names, filmstrip_names, production_line = _identity(raw.get("brand"))
     expected_names = (
-        FILMSTRIP_NAMES if spec["intro"].get("mark", {}).get("kind") == "filmstrip" else NAMES
+        filmstrip_names if spec["intro"].get("mark", {}).get("kind") == "filmstrip" else names
     )
-    if spec["intro"]["names"] != expected_names or spec["intro"].get("tagline") != PRODUCTION_LINE:
+    if spec["intro"]["names"] != expected_names or spec["intro"].get("tagline") != production_line:
         raise ValueError("restore the approved shared production identity")
-    if spec["credits"]["lockup"] != PRODUCTION_LINE:
+    if spec["credits"]["lockup"] != production_line:
         raise ValueError("closing joint-production lockup is required")
     if spec["intro"]["title"].casefold() != project.title.casefold():
         raise ValueError("graphics title must match the film title, not the MP3 filename")

@@ -6,16 +6,11 @@ film. Money records, the library, source audio and generated stills are kept
 locally. Only an explicitly authorized paid transcription, listening pass or
 image batch sends the required bytes to the provider.
 
-**Current state (27 Oct 2026): the new Studio is live.** `uv run studio` opens the
-library, creates a schema-3 production from an MP3, measures it locally, and takes
-it through Track, Story, Storyboard, Images and Film with content-bound approvals
-and a job tray. The waveform timeline, the Remotion Player preview, the error tray,
-image reviews, the preview and graphics attestations and the stills approval are
-live. The old interim server and its Python UI are gone; `clip` remains only for
-engine tasks that have no GUI yet (transcription, listening, backups, signing,
-maintenance). The phase plan and acceptance criteria live in
-`.opencode/tasks/gui-rework.md`; the decisions came from the 25 Oct 2026 brief it
-references.
+`uv run studio` opens the library, creates a production from an MP3, measures it
+locally, and takes it through Track, Story, Storyboard, Images and Film with
+content-bound approvals and a job tray. `clip` remains for engine tasks with no GUI
+yet (transcription, listening, backups, signing, maintenance). Start with
+[docs/README.md](docs/README.md) for how it is built.
 
 ## What works today
 
@@ -24,7 +19,7 @@ references.
 - Local music measurement: tempo, beats, energy, rough sections, deep pass
   (`analysis.py`, `deep_analysis.py`). No upload, no invented meter or lyrics.
 - Versioned stills with an input hash per version, so the app can tell which
-  images came from an older prompt (`production.py`, `generation.py`).
+  images came from an older prompt (`production/image_specs.py`, `generation.py`).
 - Paid image batches with a pre-submit journal: task UUID and reservation are
   written **before** the request, recovery happens by UUID and never resubmits,
   and an unknown cost keeps its reservation until the provider reports it.

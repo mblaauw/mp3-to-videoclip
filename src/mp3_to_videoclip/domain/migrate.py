@@ -81,13 +81,3 @@ def migrate(root: Path, *, dry_run: bool = False) -> dict:
         "history": str(history.relative_to(root)),
         "budget_entries": len(budget),
     }
-
-
-def migrate_all(projects_dir: Path, *, dry_run: bool = False) -> list[dict]:
-    if not projects_dir.is_dir():
-        return []
-    results = []
-    for entry in sorted(projects_dir.iterdir()):
-        if entry.is_dir() and (entry / "project.json").is_file() and is_legacy(entry):
-            results.append(migrate(entry, dry_run=dry_run))
-    return results

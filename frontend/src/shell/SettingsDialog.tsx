@@ -17,9 +17,6 @@ type Draft = {
   brand_partner: string;
   default_budget_usd: string;
   image_reserve_usd: string;
-  default_credit_roles: string;
-  remotion_dir: string;
-  ffmpeg_path: string;
   show_edit_file: boolean;
 };
 
@@ -36,9 +33,6 @@ function draftFrom(settings: Settings): Draft {
     brand_partner: String(settings.brand_partner || ""),
     default_budget_usd: String(settings.default_budget_usd ?? 5),
     image_reserve_usd: String(settings.image_reserve_usd ?? 0.05),
-    default_credit_roles: (settings.default_credit_roles || []).join(", "),
-    remotion_dir: String(settings.remotion_dir || ""),
-    ffmpeg_path: String(settings.ffmpeg_path || ""),
     show_edit_file: window.localStorage.getItem(SHOW_EDIT_FILE) === "1",
   };
 }
@@ -121,12 +115,6 @@ export function SettingsDialog({
       brand_partner: current.brand_partner.trim(),
       default_budget_usd: Number(current.default_budget_usd || 0),
       image_reserve_usd: Number(current.image_reserve_usd || 0.05),
-      default_credit_roles: current.default_credit_roles
-        .split(",")
-        .map((role) => role.trim())
-        .filter(Boolean),
-      remotion_dir: current.remotion_dir.trim(),
-      ffmpeg_path: current.ffmpeg_path.trim(),
     };
     // An empty secret means "keep the stored key"; never erase it by saving.
     if (current.runware_api_key.trim()) body.runware_api_key = current.runware_api_key.trim();
@@ -346,7 +334,7 @@ export function SettingsDialog({
                     onChange={(event) => set("default_budget_usd", event.target.value)}
                   />
                 </Field>
-                <Field label="Opening names" hint="Shown in the opening and closing graphics.">
+                <Field label="Opening names" hint="Used in the opening and closing graphics of new films.">
                   <span className="settings-pair">
                     <input
                       value={draft.brand_name}
@@ -361,12 +349,6 @@ export function SettingsDialog({
                       placeholder="Partner"
                     />
                   </span>
-                </Field>
-                <Field label="Default credit roles" hint="Comma separated, e.g. director, music, visuals.">
-                  <input
-                    value={draft.default_credit_roles}
-                    onChange={(event) => set("default_credit_roles", event.target.value)}
-                  />
                 </Field>
               </div>
             </section>
@@ -383,22 +365,6 @@ export function SettingsDialog({
                 ) : (
                   <span className="settings-muted">Tool check unavailable.</span>
                 )}
-              </div>
-              <div className="settings-grid">
-                <Field label="Renderer folder" hint="Leave empty for the pinned local renderer.">
-                  <input
-                    value={draft.remotion_dir}
-                    onChange={(event) => set("remotion_dir", event.target.value)}
-                    placeholder="Pinned renderer"
-                  />
-                </Field>
-                <Field label="FFmpeg path" hint="Leave empty to use the one on PATH.">
-                  <input
-                    value={draft.ffmpeg_path}
-                    onChange={(event) => set("ffmpeg_path", event.target.value)}
-                    placeholder="ffmpeg"
-                  />
-                </Field>
               </div>
             </section>
 

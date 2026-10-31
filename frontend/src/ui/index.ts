@@ -1,14 +1,8 @@
 export { Button } from "./Button";
 export type { ButtonProps } from "./Button";
-export { Chip } from "./Chip";
-export type { ChipProps } from "./Chip";
 export { Field } from "./Field";
-export { IconButton } from "./IconButton";
-export type { IconButtonProps } from "./IconButton";
 export { Pill } from "./Pill";
 export type { PillTone } from "./Pill";
-export { Seg } from "./Seg";
-export type { SegOption } from "./Seg";
 export { StatusDot } from "./StatusDot";
 export type { StatusTone } from "./StatusDot";
 export { EmptyState, ErrorState, LoadingState } from "./State";
