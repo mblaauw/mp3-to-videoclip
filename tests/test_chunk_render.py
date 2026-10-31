@@ -219,3 +219,18 @@ def test_progress_says_how_many_shots_and_how_many_were_reused():
     assert remotion._shots_line({"chunks_done": 3, "chunks_total": 38}) == "3 of 38 shots"
     line = remotion._shots_line({"chunks_done": 30, "chunks_total": 38, "chunks_reused": 26})
     assert line == "30 of 38 shots, 26 reused"
+
+
+def test_chunk_requests_use_one_tab_and_others_are_unchanged(tmp_path):
+    plain = remotion.request("base", tmp_path / "a.mp4", tmp_path, (96, 54), 24, 24, {})
+    assert "chunks" not in plain and "concurrency" not in plain
+    listed = remotion.request("base", tmp_path / "a.mp4", tmp_path, (96, 54), 24, 24, {}, [], 2)
+    assert listed["concurrency"] == 1 and listed["chunksReused"] == 2
+
+
+def test_frames_are_counted_by_decoding(tmp_path):
+    _encode(_frames(1, 37), tmp_path / "a.mp4")
+    assert render._count_frames(tmp_path / "a.mp4") == 37
+    (tmp_path / "bad.mp4").write_bytes(b"not a movie")
+    with pytest.raises(ValueError, match="frame count"):
+        render._count_frames(tmp_path / "bad.mp4")

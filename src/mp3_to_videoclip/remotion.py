@@ -27,6 +27,9 @@ STALL_SECONDS_OTHER = 300
 # Previews and bases: much faster than PNG. Finals stay PNG until the owner has
 # judged a JPEG film at full screen (.opencode/tasks/render-speed.md, D1).
 WORKING_CAPTURE = {"format": "jpeg", "quality": 95}
+# One tab. Above that the library cycles the browser's tabs every 200 ms so each can
+# capture, which made more tabs no faster on real frames (14.5 fps at one, 14 at two).
+CHUNK_CONCURRENCY = 1
 # The renderer's limit on stills per request.
 MAX_STILLS = 64
 
@@ -174,6 +177,7 @@ def request(
     if chunks is not None:
         body["chunks"] = chunks
         body["chunksReused"] = chunks_reused
+        body["concurrency"] = CHUNK_CONCURRENCY
     return body
 
 
@@ -321,6 +325,7 @@ def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: i
     ]
     for reader in readers:
         reader.start()
+    awake = _keep_awake(process.pid)
     watch = _StallWatch()
     failure = None
     while process.poll() is None:
@@ -330,7 +335,8 @@ def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: i
         elif watch.stalled():
             failure = (
                 f"the render stopped moving during {watch.phase or 'startup'} and was ended "
-                f"after {watch.limit()} seconds at {watch.done} frames; see {log.name}"
+                f"after {watch.limit()} seconds at {watch.done} frames. A Mac that sleeps, such "
+                f"as with its lid closed, does this; render again. See {log.name}"
             )
         if failure:
             _end_renderer(process)
@@ -340,11 +346,24 @@ def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: i
     for reader in readers:
         reader.join(timeout=5)
     collector.close()
+    if awake is not None:
+        awake.wait()
     if failure:
         raise ValueError(failure)
     if process.returncode == 0:
         return _tail(collector.stdout), _tail(collector.stderr)
     return None, _tail(collector.stderr) + _tail(collector.stdout, 1000)
+
+
+def _keep_awake(pid: int) -> subprocess.Popen | None:
+    """Hold off idle sleep while ``pid`` lives, which kills the browser's pages.
+
+    A closed lid still sleeps. Where the tool doesn't exist, nothing changes.
+    """
+    tool = shutil.which("caffeinate")
+    if tool is None:
+        return None
+    return subprocess.Popen([tool, "-i", "-w", str(pid)], stdin=subprocess.DEVNULL)
 
 
 class _StallWatch:
