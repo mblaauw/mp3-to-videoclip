@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from . import shotkinds
 from .models import (
     EditAccent,
     EditDecisionList,
@@ -396,6 +397,13 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
     return {"applicable": True, "checks": checks}
 
 
+def _is_plain_reprise(board, shot_id: str) -> bool:
+    if board is None:
+        return False
+    shot = next((item for item in board.shots if item.id == shot_id), None)
+    return shot is not None and shotkinds.is_reprise(shot)
+
+
 def report(
     root: Path,
     *,
@@ -650,6 +658,37 @@ def report(
                     "message": (
                         f"{shot.shot_id} crops in to {max(crop.zoom for crop in soft):.2f}x; "
                         "check that the still stays sharp enough"
+                    ),
+                }
+            )
+    if board is not None:
+        board_shots = {shot.id: shot for shot in board.shots}
+        for shot in edit.shots:
+            planned = board_shots.get(shot.shot_id)
+            # Designed plates draw their own words; on a picture only the cut's layers show.
+            on_a_picture = planned is not None and (
+                not shotkinds.is_local(planned) or shotkinds.is_reprise(planned)
+            )
+            if on_a_picture and planned.text and not shot.text:
+                warnings.append(
+                    {
+                        "code": "text_not_drawn",
+                        "shot_id": shot.shot_id,
+                        "message": (
+                            f"{shot.shot_id} has words on the storyboard, but they only show "
+                            "as text layers in the cut, and it has none"
+                        ),
+                    }
+                )
+    for shot in edit.shots:
+        if not shot.crops and _is_plain_reprise(board, shot.shot_id):
+            warnings.append(
+                {
+                    "code": "reprise_uncropped",
+                    "shot_id": shot.shot_id,
+                    "message": (
+                        f"{shot.shot_id} repeats a still with no new framing; give it a crop on "
+                        "its first frame"
                     ),
                 }
             )

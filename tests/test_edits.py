@@ -618,3 +618,56 @@ def test_patching_shots_changes_only_what_it_names_and_cant_retime(tmp_path):
     with pytest.raises(ValueError):
         edits.patch_shots(root, [{"shot_id": "s002", "crops": [{"frame": 9999, "zoom": 1.2}]}])
     assert edits.load_edit(root).shots[1].motion.anchor == [0.2, 0.7]
+
+
+def test_a_crop_can_reframe_a_shot_from_its_first_frame():
+    from mp3_to_videoclip.models import EditShot
+
+    shot = EditShot(
+        shot_id="s001",
+        start_frame=24,
+        duration_frames=24,
+        crops=[{"frame": 24, "zoom": 1.5, "x": 0.3, "y": 0.7}],
+    )
+    assert shot.crops[0].frame == 24
+    with pytest.raises(ValueError, match="outside"):
+        EditShot(
+            shot_id="s001",
+            start_frame=24,
+            duration_frames=24,
+            crops=[{"frame": 23, "zoom": 1.5}],
+        )
+
+
+def test_brand_text_styles_take_a_colour_and_plain_text_stays_as_it_was():
+    from mp3_to_videoclip.models import EditText
+
+    plain = EditText(id="t", text="Words", in_frame=0, out_frame=24)
+    assert "color" not in plain.model_dump()
+    brand = EditText(
+        id="t", style="logotype", text="Name", in_frame=0, out_frame=24, color="#D9B36C"
+    )
+    assert brand.model_dump()["color"] == "#D9B36C"
+    with pytest.raises(ValueError):
+        EditText(id="t", text="Words", in_frame=0, out_frame=24, color="gold")
+
+
+def test_the_report_names_lost_shot_words_and_uncropped_reprises(tmp_path):
+    root = make_api_project(tmp_path)
+    board = read_json(root / "work/storyboard.json")
+    board["shots"][1].update(kind="reprise", asset_shot_id="s001", image_prompt="", text=["A name"])
+    write_json(root / "work/storyboard.json", board)
+    edit = edits.seed_edit(root)
+    codes = {
+        (item["code"], item.get("shot_id")) for item in edits.report(root, edit=edit)["warnings"]
+    }
+    assert ("text_not_drawn", "s002") in codes
+    assert ("reprise_uncropped", "s002") in codes
+    values = edit.model_dump(by_alias=True)
+    start = values["shots"][1]["start_frame"]
+    values["shots"][1]["crops"] = [{"frame": start, "zoom": 1.4}]
+    cropped = edits.save_edit(root, values)
+    codes = {
+        (item["code"], item.get("shot_id")) for item in edits.report(root, edit=cropped)["warnings"]
+    }
+    assert ("reprise_uncropped", "s002") not in codes

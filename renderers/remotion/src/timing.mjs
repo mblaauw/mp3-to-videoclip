@@ -489,7 +489,16 @@ export const EDIT_TRANSITIONS = [
 export const EDIT_MOTIONS = ["hold", "push_in", "pull_back", "pan_left", "pan_right"];
 export const EDIT_ACCENTS = ["punch_in", "flash", "light_leak"];
 export const TEXT_ANIMATIONS = ["fade", "type_on", "slide_up", "pop", "kinetic_words"];
-export const EDIT_TEXT_STYLES = ["super", "title", "lower_third", "lyric", "card"];
+export const EDIT_TEXT_STYLES = [
+  "super",
+  "title",
+  "lower_third",
+  "lyric",
+  "card",
+  "logotype",
+  "tagline",
+  "cta",
+];
 export const GRADE_PRESETS = {
   neutral: {contrast: 1, saturation: 1, brightness: 1, vignette: 0},
   "warm-night": {
@@ -601,6 +610,9 @@ export function validateEditText(value, label = "edit text") {
   if (!TEXT_ANIMATIONS.includes(value.animation ?? "fade")) {
     fail(`${label}.animation is not supported`);
   }
+  if (value.color !== undefined && !/^#[0-9A-Fa-f]{6}$/.test(value.color)) {
+    fail(`${label}.color must be a #RRGGBB colour`);
+  }
   requireIndex(value.in_frame, `${label}.in_frame`);
   requireIndex(value.out_frame, `${label}.out_frame`);
   if (value.out_frame <= value.in_frame) fail(`${label}.out_frame must follow in_frame`);
@@ -610,7 +622,8 @@ export function validateEditText(value, label = "edit text") {
 export function validateEditCrops(crops, start, duration, id) {
   if (crops === undefined || crops === null) return;
   if (!Array.isArray(crops)) fail(`edit shot ${id} crops must be an array`);
-  let previous = start;
+  // A crop on the first frame reframes the whole shot.
+  let previous = start - 1;
   for (const [index, crop] of crops.entries()) {
     const label = `edit shot ${id} crop ${index}`;
     if (crop === null || typeof crop !== "object") fail(`${label} must be an object`);

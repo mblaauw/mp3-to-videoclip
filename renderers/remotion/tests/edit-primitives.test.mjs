@@ -5,6 +5,7 @@ import {tmpdir} from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import * as timing from "../src/timing.mjs";
 import {
   accentState,
   activeCrop,
@@ -234,7 +235,6 @@ test("crop cuts are validated like the Python model", () => {
   const withCrops = (crops) => shot("a", 0, 48, {crops});
   assert.doesNotThrow(() => validateEditShot(withCrops([{frame: 10, zoom: 1.5}]).edit, withCrops([])));
   for (const bad of [
-    [{frame: 0, zoom: 1.2}],
     [{frame: 48, zoom: 1.2}],
     [{frame: 10, zoom: 1.7}],
     [{frame: 20, zoom: 1.2}, {frame: 10, zoom: 1.2}],
@@ -297,4 +297,16 @@ test("grade look values are bounded", () => {
   assert.doesNotThrow(() => validateGrade({preset: "neutral", look: {grain: 1, drift: 0}}));
   assert.throws(() => validateGrade({preset: "neutral", look: {grain: 2}}));
   assert.throws(() => validateGrade({preset: "neutral", look: "heavy"}));
+});
+
+
+test("a crop may reframe a shot from its first frame, never before it", () => {
+  assert.doesNotThrow(() => timing.validateEditCrops([{frame: 24, zoom: 1.5}], 24, 24, "s001"));
+  assert.throws(() => timing.validateEditCrops([{frame: 23, zoom: 1.5}], 24, 24, "s001"));
+});
+
+test("brand text styles are accepted and a colour must be a hex value", () => {
+  const item = {id: "t", style: "logotype", text: "Name", in_frame: 0, out_frame: 24, color: "#D9B36C"};
+  assert.doesNotThrow(() => timing.validateEditText(item));
+  assert.throws(() => timing.validateEditText({...item, color: "gold"}));
 });

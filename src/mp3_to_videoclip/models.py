@@ -790,7 +790,9 @@ EditTransitionType = Literal[
 EditMotionType = Literal["hold", "push_in", "pull_back", "pan_left", "pan_right"]
 EditAccentType = Literal["punch_in", "flash", "light_leak"]
 EditTextAnimation = Literal["fade", "type_on", "slide_up", "pop", "kinetic_words"]
-EditTextStyle = Literal["super", "title", "lower_third", "lyric", "card"]
+EditTextStyle = Literal[
+    "super", "title", "lower_third", "lyric", "card", "logotype", "tagline", "cta"
+]
 GradePreset = Literal["neutral", "warm-night", "clean-day", "monochrome", "vivid", "film-fade"]
 
 
@@ -898,6 +900,7 @@ class EditText(Model):
     out_frame: int = Field(gt=0)
     animation: EditTextAnimation = "fade"
     reason: str = Field(default="", max_length=240)
+    color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
     @model_validator(mode="after")
     def check_window(self):
@@ -910,6 +913,9 @@ class EditText(Model):
         value = handler(self)
         if value.get("reason") == "":
             value.pop("reason", None)
+        # Absent when unused, so existing text hashes as it always has.
+        if value.get("color") is None:
+            value.pop("color", None)
         return value
 
 
@@ -946,7 +952,8 @@ class EditShot(Model):
         if frames != sorted(set(frames)):
             raise ValueError(f"crop cuts in shot {self.shot_id} must be in order, one per frame")
         for frame in frames:
-            if not self.start_frame < frame < end:
+            # A crop on the first frame reframes the whole shot, which a reprise needs.
+            if not self.start_frame <= frame < end:
                 raise ValueError(f"crop cut at {frame} is outside shot {self.shot_id}")
         ids = {item.id for item in self.text}
         if len(ids) != len(self.text):

@@ -1,5 +1,5 @@
 ---
-version: 4
+version: 5
 task: edit
 role: editor
 ---
@@ -41,7 +41,7 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    frames. Spend about one to three per section on the strongest hits. Never
    place more than three `flash` accents inside any one second.
 6. **Text.** Time text layers inside their shot: `super`, `title`,
-   `lower_third`, `lyric` or `card`, with `fade`, `type_on`, `slide_up`, `pop` or
+   `lower_third`, `lyric`, `card`, `logotype`, `tagline` or `cta`, with `fade`, `type_on`, `slide_up`, `pop` or
    `kinetic_words`. Respect safe areas; never cover a face or the product.
 7. **Grade.** Choose one preset for the film: `neutral`, `warm-night`,
    `clean-day`, `monochrome`, `vivid` or `film-fade`, with strength 0–1. Use the
@@ -53,6 +53,10 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    phrase rather than a hit, give a line room before the next one, and leave the
    big musical arrivals clear of speech. You place the lines; the user makes the
    audio in Studio.
+   A `reprise` repeats a still, so give it a new framing with a crop on its first
+   frame (`crops: [{"frame": start_frame, "zoom": 1.5, "x": 0.5, "y": 0.5}]`). Words
+   on a picture only appear as text layers in the cut. `logotype`, `tagline` and `cta` are
+   for a brand card, stacked in that order, and may set `color` as `#RRGGBB`.
 9. **Self-review.** Read the report returned by `update_edit`. Fix every hard
    finding and the warnings that matter, then save again. `get_edit` reads a cut 30
    shots at a time; change a few shots with `update_edit_shots` rather than resending
