@@ -1,5 +1,5 @@
 ---
-version: 2
+version: 3
 task: storyboard
 role: writer
 ---
@@ -66,9 +66,11 @@ cannot hold its shots, say so rather than quietly crossing the line.
 
 ## Output
 
-Use `update_shots` with one change per shot. It validates the whole board,
-rejects unknown fields and writes atomically. Build from the timing skeleton if
-one exists; never renumber existing IDs.
+A timing skeleton is only a starting shape. When the story needs different shots,
+send the whole board once with `write_storyboard`, which may add, remove and retime
+shots. Use `update_shots` to change named shots after that. Both validate the whole
+board, reject unknown fields and write atomically. Never renumber a shot that already
+has stills; the app refuses to drop one.
 
 ## Self-check before saving
 

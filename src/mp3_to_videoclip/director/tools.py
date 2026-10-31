@@ -309,9 +309,19 @@ TOOLS: list[dict] = [
     _tool(
         "update_shots",
         "Edit content fields of named shots. Timing and motion are refused once an edit exists. "
-        "Returns the changed IDs and the new storyboard.",
+        "It cannot add or remove shots; use write_storyboard for that. Returns the changed "
+        "shots and the board's size.",
         {"slug": {"type": "string"}, "changes": {"type": "array", "items": {"type": "object"}}},
         ["slug", "changes"],
+    ),
+    _tool(
+        "write_storyboard",
+        "Replace the whole shot list so the board has the shots its story needs, adding, "
+        "removing or retiming freely. Send every shot; together they must cover the film "
+        "exactly. Refused once a cut exists, or if it drops a shot with paid stills. "
+        "Returns the board's size and each shot's id, span and kind.",
+        {"slug": {"type": "string"}, "shots": {"type": "array", "items": {"type": "object"}}},
+        ["slug", "shots"],
     ),
     _tool(
         "create_storyboard",
@@ -522,7 +532,32 @@ def _dispatch(
 
     if name == "update_shots":
         board, changed = P.update_shots(root, arguments.get("changes") or [])
-        return {"changed": changed, "storyboard": board.model_dump()}
+        # A whole board can outgrow what a gateway carries back to the model.
+        return {
+            "changed": changed,
+            "shots": [shot.model_dump() for shot in board.shots if shot.id in changed],
+            "shot_total": len(board.shots),
+        }
+
+    if name == "write_storyboard":
+        from mp3_to_videoclip import shotkinds
+
+        board = P.write_storyboard(root, arguments.get("shots") or [])
+        return {
+            "saved": True,
+            "shot_total": len(board.shots),
+            "paid": sum(1 for shot in board.shots if shotkinds.is_paid(shot)),
+            "total_frames": board.total_frames,
+            "shots": [
+                {
+                    "id": shot.id,
+                    "start_frame": shot.start_frame,
+                    "duration_frames": shot.duration_frames,
+                    "kind": shot.kind,
+                }
+                for shot in board.shots
+            ],
+        }
 
     if name == "create_storyboard":
         seconds = arguments.get("seconds")

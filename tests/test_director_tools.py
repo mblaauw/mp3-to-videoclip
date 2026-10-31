@@ -395,8 +395,9 @@ def test_update_shots_returns_changed_ids_and_writes_a_valid_board(tmp_path):
         )
     )
     assert result["changed"] == ["s001", "s002"]
-    assert result["storyboard"]["shots"][0]["purpose"] == "A changed purpose"
-    assert result["storyboard"]["shots"][1]["camera"] == "hold"
+    assert result["shots"][0]["purpose"] == "A changed purpose"
+    assert result["shot_total"] == len(P.load_board(root).shots)
+    assert result["shots"][1]["camera"] == "hold"
     assert P.load_board(root).shots[0].purpose == "A changed purpose"
 
 
@@ -830,3 +831,81 @@ def test_the_profile_prompt_no_longer_teaches_the_writer_to_set_the_flag(tmp_pat
     ).text
     assert '"permission_confirmed": true' not in text
     assert "Do not send `permission_confirmed`" in text
+
+
+def _board_of(root, frames_per_shot):
+    """A whole board with new IDs, from one shot's valid fields."""
+    board = P.load_board(root)
+    template = board.shots[0].model_dump()
+    shots, cursor, index = [], 0, 1
+    while cursor < board.total_frames:
+        length = min(frames_per_shot, board.total_frames - cursor)
+        shots.append(
+            {**template, "id": f"n{index:03d}", "start_frame": cursor, "duration_frames": length}
+        )
+        cursor += length
+        index += 1
+    return shots
+
+
+def _write_board(tmp_path, shots):
+    return json.loads(
+        asyncio.run(
+            tools.dispatch(
+                "write_storyboard",
+                {"slug": "production", "shots": shots},
+                projects_dir=tmp_path,
+            )
+        )
+    )
+
+
+def test_write_storyboard_can_add_shots_the_skeleton_never_had(tmp_path):
+    root = make_api_project(tmp_path)
+    before = len(P.load_board(root).shots)
+    shots = _board_of(root, 6)
+    assert len(shots) > before
+    result = _write_board(tmp_path, shots)
+    assert result["shot_total"] == len(shots)
+    assert result["shots"][0]["id"] == "n001"
+    assert [shot.id for shot in P.load_board(root).shots] == [shot["id"] for shot in shots]
+
+
+def test_write_storyboard_must_cover_the_film_and_leaves_it_alone_if_not(tmp_path):
+    root = make_api_project(tmp_path)
+    before = (root / "work/storyboard.json").read_bytes()
+    assert "error" in _write_board(tmp_path, _board_of(root, 6)[:-1])
+    assert (root / "work/storyboard.json").read_bytes() == before
+
+
+def test_write_storyboard_never_drops_a_shot_with_paid_stills(tmp_path):
+    root = make_api_project(tmp_path)
+    write_json(root / "work/assets.json", {"s001": {"versions": [{"version": 1}], "selected": 1}})
+    before = (root / "work/storyboard.json").read_bytes()
+    result = _write_board(tmp_path, _board_of(root, 6))
+    assert "s001" in result["error"]
+    assert (root / "work/storyboard.json").read_bytes() == before
+
+
+def test_write_storyboard_stops_once_a_cut_owns_the_timing(tmp_path):
+    from mp3_to_videoclip import edits
+
+    root = make_api_project(tmp_path)
+    edits.seed_edit(root)
+    assert "cut" in _write_board(tmp_path, _board_of(root, 6))["error"]
+
+
+def test_a_skeleton_cuts_on_the_owners_sections(tmp_path):
+    from mp3_to_videoclip.domain import section_map
+
+    root = make_api_project(tmp_path)
+    (root / "work/storyboard.json").unlink()
+    project = P.load_project(root)
+    start = project.total_frames // 2 / project.fps
+    write_json(
+        root / section_map.FILE,
+        {"sections": [{"start": 0, "name": "One"}, {"start": start, "name": "Two"}]},
+    )
+    P.approve(root, "brief", note="test")
+    board = P.skeleton(root, 1, timing="adaptive", min_seconds=0.5, max_seconds=1.5)
+    assert round(start * project.fps) in [shot.start_frame for shot in board.shots]

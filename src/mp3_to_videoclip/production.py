@@ -925,6 +925,49 @@ def update_shots(
     return updated, changed
 
 
+@state_mutation
+def write_storyboard(
+    root: Path, shots: list[dict], *, expected_hash: str | None = None
+) -> Storyboard:
+    """Replace the whole shot list, so a board can take the shape its story needs.
+
+    This is for shaping a board, so it stops once a cut owns the timing, and it can
+    never drop a shot that already has paid stills or a paid task.
+    """
+    if not isinstance(shots, list) or not shots:
+        raise ValueError("give the whole board as a list of shots")
+    board = load_board(root)
+    require_revision(root / STAGE_FILES["storyboard"], expected_hash, value=board.model_dump())
+    from . import edits
+
+    if edits.load_edit(root, board=board) is not None:
+        raise ValueError(
+            "a cut already owns this film's timing; change its shots with update_shots"
+        )
+    ids = [shot.get("id") if isinstance(shot, dict) else None for shot in shots]
+    assets_path = root / "work/assets.json"
+    assets = read_json(assets_path) if assets_path.is_file() else {}
+    tasks_path = root / "work/tasks.json"
+    journal = read_json(tasks_path) if tasks_path.is_file() else {}
+    paid = {key for key, entry in assets.items() if entry.get("versions")} | {
+        task["shot_id"] for task in journal.values() if task.get("shot_id")
+    }
+    lost = sorted(paid - set(ids))
+    if lost:
+        raise ValueError(
+            "these shots have paid stills and must stay on the board: " + ", ".join(lost)
+        )
+    raw = board.model_dump()
+    candidate = Storyboard.model_validate({**raw, "shots": shots})
+    updated = validate_board(root, candidate)
+    from .domain import history
+
+    history.snapshot(root, "storyboard", raw)
+    write_json(root / STAGE_FILES["storyboard"], updated.model_dump())
+    _record_prompt_write(root, "storyboard")
+    return updated
+
+
 def _reference_cap(project: Project) -> int:
     """Stored-model profiles may use the current model capacity; legacy stays at four."""
     return 14 if project.image_model is not None else 4
@@ -1777,6 +1820,14 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
                     event_frames += [event.frame] + (
                         [event.end_frame] if event.end_frame is not None else []
                     )
+        # The owner's corrected sections are decisions, so shots cut on them.
+        from .domain import section_map
+
+        event_frames += [
+            round(float(item["start"]) * project.fps)
+            for item in section_map.read(root) or []
+            if float(item["start"]) > 0
+        ]
         boundaries = plan_boundaries(
             project.total_frames,
             project.fps,
