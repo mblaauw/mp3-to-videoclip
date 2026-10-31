@@ -138,3 +138,34 @@ FFmpeg and Pillow branches, which wait until these films prove the current path.
 ## Out of scope
 
 Paid video clips, parallax in the product, sound design, lip-sync, finishing any old film, and portrait versions.
+
+## Run log
+
+**Phase 1 done, 31 Oct:** parking, the painted style, voiceover engine and panel, and the true model name are committed. Voiceover hasn't
+been used live, and its panel hasn't been opened in the app. Lines are placed by time or playhead, not by dragging on the timeline as planned.
+
+**Promo so far.** 7 of 25 live turns, all on `gpt-6.1-sol`. $0.21 of images: 6 stills at about 3.5 cents. No voice spend.
+
+The paste left out the script's old timecodes and "Audio:" lines, per D2 and D4. Everything else is the owner's wording.
+
+Found by making the film, and fixed:
+
+| Found | Fix |
+| --- | --- |
+| A promo couldn't use a whole track or be instrumental | The form now reads the code table and offers both |
+| Tabbing through the brief lost typed words | Saves queue the newest value; a reply can't overwrite newer typing |
+| The Writer's 28 shots were refused: a board could never outgrow its skeleton | `write_storyboard`, refused once a cut exists or if it drops a paid shot |
+| `update_shots` returned a board too big for the gateway | It returns only the changed shots |
+| The skeleton ignored the owner's sections | It cuts on them |
+| The brief's Avoid list never reached the picture prompt | It joins the profile's list |
+
+Found, not fixed:
+
+- **References are CLI-only.** Studio can't set a character's reference image, which is probably part of why faces drift.
+- **The Director covers the next-step button** at about 1024 px wide.
+- **Tool results show as "showing 0 lines… saved to" a file path** in the Director.
+- **Section edges from analysis ran about 0.6 s late** against the bass (13.58 and 30.70 s against 13.0 and 30.0 s). The owner's sections corrected this film.
+- **Copy:** "The brief must be approved first" shows when it's approved, and "8 measured" describes owner-set sections.
+- **Image rules bind every shot,** so a rule about one object can spread. The Writer needs telling.
+
+Style check, round 2: stopped for the owner, as D8 requires.
