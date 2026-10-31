@@ -484,6 +484,9 @@ def session_path(root: Path) -> Path:
 
 
 def load_session(root: Path, role: str, model: str) -> dict[str, Any] | None:
+    # Every review starts clean: a reused session hits its image limit and can't look again.
+    if role == "critic":
+        return None
     value = read_optional(session_path(root), {})
     if not isinstance(value, dict):
         return None

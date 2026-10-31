@@ -132,3 +132,16 @@ def test_the_critique_route_reports_nothing_until_there_is_a_review(tmp_path, fi
         assert client.get(f"{base}/critique").json()["critique"]["verdict"] == "A review."
         assert client.get(f"{base}/director/model", params={"role": "critic"}).status_code == 200
         assert client.get(f"{base}/chat", params={"role": "critic"}).status_code == 200
+
+
+def test_every_review_starts_a_fresh_session(tmp_path):
+    root = make_api_project(tmp_path)
+    opencode.write_json(
+        opencode.session_path(root),
+        {
+            "critic": {"id": "ses_a", "model": "m", "agent": "critic", "warm": True},
+            "editor": {"id": "ses_b", "model": "m", "agent": "editor", "warm": True},
+        },
+    )
+    assert opencode.load_session(root, "critic", "m") is None
+    assert opencode.load_session(root, "editor", "m")["id"] == "ses_b"
