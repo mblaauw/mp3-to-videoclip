@@ -15,7 +15,7 @@ from typing import Any
 MAX_CONTEXT_MESSAGES = 60
 KEEP_RECENT_MESSAGES = 24
 SUMMARY_SNIPPET = 160
-ROLES = ("writer", "editor")
+ROLES = ("writer", "editor", "critic")
 
 
 def chat_path(root: Path) -> Path:

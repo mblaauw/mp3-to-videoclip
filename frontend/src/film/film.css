@@ -1249,3 +1249,15 @@
 .cut-against-seed {
   margin: 6px 0;
 }
+
+.critic-notes li {
+  margin-bottom: var(--s-2);
+}
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  text-decoration: underline;
+  cursor: pointer;
+}

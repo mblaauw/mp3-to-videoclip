@@ -17,7 +17,7 @@ from typing import Literal
 from ..storage import digest, read_optional
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
-Role = Literal["writer", "editor"]
+Role = Literal["writer", "editor", "critic"]
 
 STAGE_ROLE: dict[str, Role] = {
     "track": "editor",
@@ -46,6 +46,9 @@ TASKS: dict[Role, dict[str, str]] = {
         "notes": "editor/notes.md",
         "edit": "editor/edit.md",
         "post": "editor/post.md",
+    },
+    "critic": {
+        "review": "critic/review.md",
     },
 }
 
@@ -114,6 +117,8 @@ def role_for_stage(stage: str | None) -> Role:
 
 def select_task(root: Path, stage: str | None, role: Role) -> str:
     """Deterministic task choice from the stage and the artifacts already written."""
+    if role == "critic":
+        return "review"
     if stage == "track":
         return "music"
     if stage == "storyboard":
@@ -178,7 +183,7 @@ def assemble(
     style_preset: str | None = None,
     task: str | None = None,
 ) -> PromptBundle:
-    role_value: Role = role if role in ("writer", "editor") else role_for_stage(stage)
+    role_value: Role = role if role in TASKS else role_for_stage(stage)
     project = _json(root, "project.json")
     kind_value = kind or project.get("kind") or "music_video"
     style_value = style_preset if style_preset is not None else project.get("style_preset")

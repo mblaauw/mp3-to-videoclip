@@ -11,6 +11,7 @@ type Draft = {
   gateway: "opencode" | "direct";
   writer_model: string;
   editor_model: string;
+  critic_model: string;
   opencode_bin: string;
   opencode_workspace: string;
   brand_name: string;
@@ -30,6 +31,7 @@ function draftFrom(settings: Settings): Draft {
     gateway: settings.gateway === "opencode" ? "opencode" : "direct",
     writer_model: String(settings.writer_model || ""),
     editor_model: String(settings.editor_model || ""),
+    critic_model: String(settings.critic_model || ""),
     opencode_bin: String(settings.opencode_bin || "opencode"),
     opencode_workspace: String(settings.opencode_workspace || ""),
     brand_name: String(settings.brand_name || ""),
@@ -115,6 +117,7 @@ export function SettingsDialog({
       gateway: current.gateway,
       writer_model: current.writer_model.trim(),
       editor_model: current.editor_model.trim(),
+      critic_model: current.critic_model.trim(),
       opencode_bin: current.opencode_bin.trim(),
       opencode_workspace: current.opencode_workspace.trim(),
       brand_name: current.brand_name.trim(),
@@ -248,6 +251,13 @@ export function SettingsDialog({
                   <input
                     value={draft.editor_model}
                     onChange={(event) => set("editor_model", event.target.value)}
+                    placeholder="provider/model"
+                  />
+                </Field>
+                <Field label="Critic model" hint="Reviews a cut. It must be able to see pictures.">
+                  <input
+                    value={draft.critic_model}
+                    onChange={(event) => set("critic_model", event.target.value)}
                     placeholder="provider/model"
                   />
                 </Field>

@@ -9,7 +9,9 @@ import { stageLabel } from "./stages";
 import type { Stage } from "./nextStep";
 import { notifyProjectChanged } from "./projectEvents";
 
-type Role = "writer" | "editor";
+type Role = "writer" | "editor" | "critic";
+
+const ROLE_NAME: Record<Role, string> = { writer: "Writer", editor: "Editor", critic: "Critic" };
 
 type ToolItem = {
   kind: "tool";
@@ -39,9 +41,19 @@ type StreamEvent = {
 };
 
 /** Text for the composer, or with `send` a Writer job a button has already asked for. */
-export type DirectorPrompt = { text: string; at: number; send?: boolean; task?: string };
+export type DirectorPrompt = {
+  text: string;
+  at: number;
+  send?: boolean;
+  task?: string;
+  role?: Role;
+};
 
 const TOOL_LABEL: Record<string, string> = {
+  get_film_frames: "Looked at the film",
+  save_critique: "Saved the review",
+  write_storyboard: "Wrote the storyboard",
+  update_voice_lines: "Placed the voice lines",
   get_project: "Read the project",
   get_brief: "Read the story",
   get_storyboard: "Read the storyboard",
@@ -354,9 +366,10 @@ export function Director({
   const [historyFor, setHistoryFor] = useState<Role | null>(null);
   const [gateway, setGateway] = useState("opencode");
   const [canSee, setCanSee] = useState<boolean | null>(null);
-  const [models, setModels] = useState<{ writer: string; editor: string }>({
+  const [models, setModels] = useState<Record<Role, string>>({
     writer: "the configured Writer",
     editor: "the configured Editor",
+    critic: "the configured Critic",
   });
   const [writing, setWriting] = useState<Writing | null>(null);
   const [quietSeconds, setQuietSeconds] = useState(0);
@@ -413,11 +426,12 @@ export function Director({
   const sentPrompt = useRef<number | null>(null);
   useEffect(() => {
     if (!prefill?.send || sentPrompt.current === prefill.at) return;
-    if (role !== "writer") {
-      if (!busy) setRole("writer");
+    const wanted = prefill.role ?? "writer";
+    if (role !== wanted) {
+      if (!busy) setRole(wanted);
       return;
     }
-    if (busy || historyFor !== "writer") return;
+    if (busy || historyFor !== wanted) return;
     sentPrompt.current = prefill.at;
     void send(prefill.text, prefill.task);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -723,7 +737,7 @@ export function Director({
     }
   };
 
-  const model = role === "writer" ? models.writer : models.editor;
+  const model = models[role];
   const missingKey = /no llm key|llm key|model key|api key|unauthor/i.test(error || "");
 
   // Group consecutive tool calls so a turn reads: question → activity → answer.
@@ -746,7 +760,7 @@ export function Director({
         <div className="director-heading">
           <h2>Director</h2>
           <div className="director-model">
-            {role === "writer" ? "Writer" : "Editor"} · {model}
+            {ROLE_NAME[role]} · {model}
             {gateway === "direct" && <span className="director-gateway">Direct API</span>}
           </div>
           {canSee !== true && (
@@ -781,6 +795,16 @@ export function Director({
           title="Timing, cut, motion and transitions"
         >
           Editor
+        </button>
+        <button
+          type="button"
+          className={role === "critic" ? "on" : ""}
+          aria-pressed={role === "critic"}
+          disabled={busy && role !== "critic"}
+          onClick={() => setRole("critic")}
+          title="Reviews a cut against the brief; changes nothing"
+        >
+          Critic
         </button>
       </div>
       <div className="messages" aria-live="polite" ref={listRef} onScroll={onScroll}>

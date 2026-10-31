@@ -48,6 +48,21 @@ def _tool(
 # A skeleton cannot be rebuilt, and one giant shot cannot be split by update_shots.
 MAX_SKELETON_SHOT_SECONDS = 30
 
+#: What the Critic may call. It reads, looks and leaves notes; it can change nothing.
+CRITIC_TOOLS = frozenset(
+    {
+        "get_project",
+        "get_brief",
+        "get_storyboard",
+        "get_edit",
+        "get_cut_material",
+        "get_music_summary",
+        "get_images",
+        "get_film_frames",
+        "save_critique",
+    }
+)
+
 TOOLS: list[dict] = [
     _tool("get_project", "Read the project summary.", {"slug": {"type": "string"}}, ["slug"]),
     _tool("get_brief", "Read the brief.", {"slug": {"type": "string"}}, ["slug"]),
@@ -58,6 +73,28 @@ TOOLS: list[dict] = [
         "grade and report; follow next_first for the rest.",
         {"slug": {"type": "string"}, "first": {"type": "integer"}, "count": {"type": "integer"}},
         ["slug"],
+    ),
+    _tool(
+        "get_film_frames",
+        "Look at the newest render as delivered, with grade, crops and type: up to eight "
+        "film frames per call. Frames are 24 per second unless the project says otherwise.",
+        {
+            "slug": {"type": "string"},
+            "frames": {"type": "array", "items": {"type": "integer"}, "maxItems": 8},
+        },
+        ["slug", "frames"],
+    ),
+    _tool(
+        "save_critique",
+        "Save the Critic's review of the newest render: a verdict and up to twelve notes, "
+        "each with severity (must_fix, should_fix or consider), note, and optional shot_id, "
+        "frame and suggestion. Advice only; it changes nothing.",
+        {
+            "slug": {"type": "string"},
+            "verdict": {"type": "string"},
+            "notes": {"type": "array", "items": {"type": "object"}, "maxItems": 12},
+        },
+        ["slug", "verdict", "notes"],
     ),
     _tool(
         "update_edit_shots",
@@ -423,6 +460,19 @@ def _dispatch(
 
         return edits.tool_page(root, arguments.get("first") or 0, arguments.get("count") or 30)
 
+    if name == "get_film_frames":
+        return _get_film_frames(root, arguments.get("frames") or [])
+
+    if name == "save_critique":
+        from mp3_to_videoclip import critique
+
+        return critique.save(
+            root,
+            arguments.get("verdict") or "",
+            arguments.get("notes") or [],
+            P.load_project(root).fps,
+        )
+
     if name == "update_edit_shots":
         from mp3_to_videoclip import edits
 
@@ -699,6 +749,34 @@ def _get_images(root: Path, shot_ids) -> ToolResult:
     return ToolResult(text=text, images=tuple(images))
 
 
+def _get_film_frames(root: Path, frames) -> ToolResult:
+    from mp3_to_videoclip import critique
+    from mp3_to_videoclip import production as P
+
+    try:
+        value = critique.film_frames(root, frames, P.load_project(root).fps)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return ToolResult(json.dumps({"error": str(exc)}))
+    images = tuple(
+        "data:image/jpeg;base64," + base64.b64encode(item["jpeg"]).decode("ascii")
+        for item in value["frames"]
+    )
+    return ToolResult(
+        text=json.dumps(
+            {
+                "render": value["render"],
+                "cut_is_current": value["cut_is_current"],
+                "frames": [
+                    {"frame": item["frame"], "seconds": item["seconds"]} for item in value["frames"]
+                ],
+                "image_count": len(images),
+                "note": "Frames are attached in this order.",
+            }
+        ),
+        images=images,
+    )
+
+
 def _generate_images(root, arguments, runner):
     from mp3_to_videoclip import services
     from mp3_to_videoclip.domain import budget
@@ -775,3 +853,10 @@ def _render(root, arguments, runner):
 
     job_id = runner.submit("render", root.name, work, blocking=True, render_kind=kind)
     return {"job_id": job_id, "kind": kind, "status": "queued"}
+
+
+def tools_for(role: str | None) -> list[dict]:
+    """The tool list one role is offered."""
+    if role != "critic":
+        return TOOLS
+    return [tool for tool in TOOLS if tool["function"]["name"] in CRITIC_TOOLS]

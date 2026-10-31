@@ -25,6 +25,7 @@ import {
   type LookAmount,
   TRANSITION_TYPES,
 } from "./editTimeline";
+import { CriticNotes } from "./CriticNotes";
 import { SeedCut } from "./SeedCut";
 import { VoicePanel } from "./VoicePanel";
 import { releaseMouseFocus, type FilmSelection } from "./selection";
@@ -432,6 +433,7 @@ function Overview({
           {cut.against_seed && <AgainstSeed changes={cut.against_seed} />}
           <SuggestCut slug={slug} onChange={onChange} />
           {edit && <LookControls edit={edit} onChange={onChange} />}
+          <CriticNotes slug={slug} onSeek={(frame) => onSeekNote({ frame } as CutNote)} />
           {edit && (
             <div className="row-actions">
               <Button size="small" onClick={() => onSelect({ kind: "voice" })}>

@@ -371,6 +371,7 @@ export type Settings = {
   opencode_workspace?: string;
   writer_model?: string;
   editor_model?: string;
+  critic_model?: string;
   llm_model?: string;
   llm_base_url?: string;
   has_llm_api_key?: boolean;
@@ -572,6 +573,22 @@ export type VoiceLine = {
   runs_into_next: boolean;
   runs_past_end: boolean;
   takes: { version: number; source: string; seconds: number; text: string }[];
+};
+
+export type CritiqueNote = {
+  severity: "must_fix" | "should_fix" | "consider";
+  note: string;
+  suggestion?: string;
+  shot_id?: string;
+  frame?: number;
+};
+
+export type Critique = {
+  at: string;
+  render: string;
+  verdict: string;
+  notes: CritiqueNote[];
+  current: boolean;
 };
 
 export type VoiceEstimate = {
@@ -1035,11 +1052,12 @@ export const api = {
       `/api/projects/${slug}/characters/${encodeURIComponent(character)}/references/remove`,
       { method: "POST", body: JSON.stringify({ path }) },
     ),
-  directorModel: (slug: string, role: "writer" | "editor") =>
+  critique: (slug: string) => request<{ critique: Critique | null }>(`/api/projects/${slug}/critique`),
+  directorModel: (slug: string, role: "writer" | "editor" | "critic") =>
     request<{ model: string; gateway: string; can_see: boolean | null }>(
       `/api/projects/${slug}/director/model?role=${role}`,
     ),
-  chat: (slug: string, role?: "writer" | "editor") =>
+  chat: (slug: string, role?: "writer" | "editor" | "critic") =>
     request<{ messages: unknown[] }>(
       `/api/projects/${slug}/chat${role ? `?role=${role}` : ""}`,
     ),

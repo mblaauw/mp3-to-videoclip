@@ -429,7 +429,14 @@ function FilmShellContent({
 
   useEffect(() => {
     const ask = (event: Event) => {
-      const detail = (event as CustomEvent<{ text?: string; send?: boolean; task?: string }>).detail;
+      const detail = (
+        event as CustomEvent<{
+          text?: string;
+          send?: boolean;
+          task?: string;
+          role?: DirectorPrompt["role"];
+        }>
+      ).detail;
       setInspectorShot(null);
       setDirectorOpen(true);
       setDirectorPrompt({
@@ -437,6 +444,7 @@ function FilmShellContent({
         at: Date.now(),
         send: detail?.send,
         task: detail?.task,
+        role: detail?.role,
       });
     };
     window.addEventListener("studio:ask-director", ask);

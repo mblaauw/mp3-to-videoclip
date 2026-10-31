@@ -50,6 +50,7 @@ async def get_gateway(settings, projects_dir: Path) -> OpenCodeGateway:
         str(projects_dir.resolve()),
         settings.writer_model,
         settings.editor_model,
+        settings.critic_model,
     )
     gateway = GATEWAYS.get(key)
     if gateway is None:
@@ -59,6 +60,7 @@ async def get_gateway(settings, projects_dir: Path) -> OpenCodeGateway:
             projects_dir=projects_dir,
             writer_model=settings.writer_model,
             editor_model=settings.editor_model,
+            critic_model=settings.critic_model,
         )
         GATEWAYS[key] = gateway
     try:
@@ -75,12 +77,20 @@ def close_gateways() -> None:
     GATEWAYS.clear()
 
 
+def _role_model(settings, role: str) -> str:
+    return {
+        "writer": settings.writer_model,
+        "editor": settings.editor_model,
+        "critic": settings.critic_model,
+    }[role]
+
+
 def _role(payload: dict, stage: str | None) -> str:
     role = payload.get("role")
     if role is None:
         role = prompt_suite.role_for_stage(stage)
-    if role not in ("writer", "editor"):
-        raise HTTPException(status_code=400, detail="role must be writer or editor")
+    if role not in prompt_suite.TASKS:
+        raise HTTPException(status_code=400, detail="role must be writer, editor or critic")
     return role
 
 
@@ -161,14 +171,14 @@ def _context(payload: dict) -> dict | None:
 @router.get("/director/model")
 async def get_director_model(slug: str, request: Request, role: str = "writer"):
     """Who actually answers for this role, and whether it can look at a still."""
-    if role not in ("writer", "editor"):
-        raise HTTPException(status_code=400, detail="role must be writer or editor")
+    if role not in prompt_suite.TASKS:
+        raise HTTPException(status_code=400, detail="role must be writer, editor or critic")
     root = project_root(request, slug)
     settings = effective_settings()
     if settings.gateway != "opencode":
         # The direct API doesn't report what a model takes, so this stays honest.
         return {"model": settings.llm_model, "gateway": "direct", "can_see": None}
-    model = settings.writer_model if role == "writer" else settings.editor_model
+    model = _role_model(settings, role)
     try:
         gateway = await get_gateway(settings, root.parent)
         client = gateway.client()
@@ -186,7 +196,7 @@ async def get_chat(slug: str, request: Request, role: str | None = None):
     from mp3_to_videoclip.director.conversation import ROLES, load_messages
 
     if role is not None and role not in ROLES:
-        raise HTTPException(status_code=400, detail="role must be writer or editor")
+        raise HTTPException(status_code=400, detail="role must be writer, editor or critic")
     root = project_root(request, slug)
     return {"messages": load_messages(root, role)}
 
@@ -235,7 +245,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
             gateway = None
         if gateway is not None:
             client = gateway.client()
-            model = settings.writer_model if role == "writer" else settings.editor_model
+            model = _role_model(settings, role)
             try:
                 available = await client.model_available(model)
             except Exception as exc:  # noqa: BLE001 - gateway boundary

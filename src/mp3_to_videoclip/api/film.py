@@ -212,6 +212,14 @@ async def put_edit(slug: str, request: Request, payload: dict, response: Respons
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/critique")
+async def get_critique(slug: str, request: Request):
+    """The Critic's latest notes, and whether the cut has changed since."""
+    from mp3_to_videoclip import critique
+
+    return {"critique": critique.latest(project_root(request, slug))}
+
+
 @router.get("/preview")
 @read_endpoint
 def preview_input(slug: str, request: Request):

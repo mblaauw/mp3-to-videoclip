@@ -12,6 +12,8 @@ export type Writing = { tool: string; chars: number };
 const WRITING_LABEL: Record<string, string> = {
   update_brief: "the story",
   update_shots: "storyboard changes",
+  save_critique: "the Critic's notes",
+  get_film_frames: "frames of the film",
   write_storyboard: "the whole storyboard",
   update_voice_lines: "voiceover lines",
   create_storyboard: "the storyboard",
