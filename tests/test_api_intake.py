@@ -303,3 +303,17 @@ def test_intake_update_applies_style_and_window(tmp_path, monkeypatch):
         assert body["intent"]["length_seconds"] == 30
         assert body["style_preset"] == "brand-graphic-v1"
         assert body["brief"]["creative"]["look"].startswith("A designed brand-graphic frame")
+
+
+def test_a_promo_can_use_a_whole_instrumental_track(tmp_path, fake_probe):
+    with api_client(tmp_path) as client:
+        created = _upload(
+            client,
+            kind="promo",
+            music_mode="instrumental",
+            message="One thing to repeat",
+        )
+    assert created.status_code == 201, created.text
+    project = json.loads((tmp_path / created.json()["slug"] / "project.json").read_text())
+    assert project["music_mode"] == "instrumental"
+    assert project.get("audio_window") is None
