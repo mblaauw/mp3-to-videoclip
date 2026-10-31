@@ -244,6 +244,15 @@ test("crop cuts are validated like the Python model", () => {
   }
 });
 
+test("capture is optional and bounded", () => {
+  const shots = [{id: "a", image: "a.png", start_frame: 0, duration_frames: 24}];
+  assert.doesNotThrow(() => validateBaseInput({shots}, 24));
+  assert.doesNotThrow(() => validateBaseInput({shots, capture: {format: "jpeg", quality: 95}}, 24));
+  assert.throws(() => validateBaseInput({shots, capture: {format: "webp", quality: 95}}, 24), /format/);
+  assert.throws(() => validateBaseInput({shots, capture: {format: "jpeg", quality: 0}}, 24), /quality/);
+  assert.throws(() => validateBaseInput({shots, capture: "jpeg"}, 24), /capture/);
+});
+
 test("the film look is off unless asked for, and the same frame always looks the same", () => {
   assert.equal(lookState(undefined, 10, 0, 1920, 1080, 24), null);
   assert.equal(lookState({grain: 0, weave: 0, drift: 0}, 10, 0, 1920, 1080, 24), null);

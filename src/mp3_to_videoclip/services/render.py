@@ -8,6 +8,7 @@ from pathlib import Path
 
 from mp3_to_videoclip import operations
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip.remotion import WORKING_CAPTURE
 from mp3_to_videoclip.render import render as _render
 from mp3_to_videoclip.storage import file_hash, inside, read_snapshot, write_json
 
@@ -76,6 +77,7 @@ def render_base(root: Path, output: Path | None = None) -> dict:
         output,
         root / "work",
         brand=brand,
+        capture=WORKING_CAPTURE,
     )
     report["delivery_ready"] = False
     _stamp(root, output, report, "base", provenance)
@@ -217,6 +219,7 @@ def render_preview(root: Path, output: Path | None = None) -> dict:
         root / "work",
         preview_banner=True,
         brand=brand,
+        capture=WORKING_CAPTURE,
     )
     report["delivery_ready"] = False
     _stamp(root, output, report, "preview", provenance)

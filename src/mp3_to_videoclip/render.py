@@ -607,6 +607,7 @@ def render(
     preview_placeholders: tuple[str, ...] = (),
     brand: BrandPackage | None = None,
     titles: dict | None = None,
+    capture: dict | None = None,
 ) -> dict:
     """Render an approved still set to an MP4 on the project's exact timeline.
 
@@ -638,6 +639,7 @@ def render(
             preview_placeholders=preview_placeholders,
             brand=brand,
             titles=titles,
+            capture=capture,
         )
     if titles is not None:
         raise ValueError("titles in the film require the Remotion backend")

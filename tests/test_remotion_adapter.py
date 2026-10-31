@@ -572,3 +572,14 @@ def test_titles_join_the_base_pass_and_its_cache_key_only_when_given(base_cache)
     assert titled["titles"] == ["intro"]
     assert titled["input_hash"] != plain["input_hash"]
     assert len(calls) == 2, "a titled pass never reuses the untitled visual cache"
+
+
+def test_capture_joins_the_cache_key_only_when_given(base_cache):
+    _, _, calls, run = base_cache
+    run()
+    assert "capture" not in calls[-1][6]
+    run(capture=remotion.WORKING_CAPTURE)
+    assert calls[-1][6]["capture"] == {"format": "jpeg", "quality": 95}
+    assert len(calls) == 2
+    run(capture=remotion.WORKING_CAPTURE)
+    assert len(calls) == 2

@@ -23,6 +23,9 @@ ENGINE = Path(__file__).resolve().parents[2] / "renderers/remotion"
 # Seconds without any change in the renderer's progress before it counts as hung.
 STALL_SECONDS = {"rendering-frames": 120, "rendering-stills": 120}
 STALL_SECONDS_OTHER = 300
+# Previews and bases: much faster than PNG. Finals stay PNG until the owner has
+# judged a JPEG film at full screen (.opencode/tasks/render-speed.md, D1).
+WORKING_CAPTURE = {"format": "jpeg", "quality": 95}
 # The renderer's limit on stills per request.
 MAX_STILLS = 64
 
@@ -593,11 +596,13 @@ def render_base(
     preview_placeholders=(),
     brand=None,
     titles: dict | None = None,
+    capture: dict | None = None,
 ) -> dict:
     """Remotion visuals + existing atomic FFmpeg/audio/verification contracts.
 
     ``titles`` (see :func:`titles_input`) draws the planned titles in the same
-    pass; without it the request and the visual cache key are unchanged.
+    pass; without it the request and the visual cache key are unchanged. ``capture``
+    (see :data:`WORKING_CAPTURE`) is how frames leave the browser; absent means PNG.
     """
     from . import render as R
 
@@ -616,6 +621,8 @@ def render_base(
     }
     if titles is not None:
         inputs["titles"] = titles
+    if capture is not None:
+        inputs["capture"] = capture
     inputs.update(_brand_inputs(project, brand, assets))
     revision = implementation_hash()
     selected = selected_asset_root(compiled, assets)

@@ -316,6 +316,9 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
     process.stdout.write(`${JSON.stringify({...report, output: normalized.output, sidecar: sidecarPath})}\n`);
     return;
   }
+  const capture = normalized.input.capture && normalized.kind === "base"
+    ? {imageFormat: normalized.input.capture.format, jpegQuality: normalized.input.capture.quality}
+    : {imageFormat: settings.imageFormat};
   const extension = path.extname(normalized.output);
   const tempOutput = path.join(
     path.dirname(normalized.output),
@@ -335,7 +338,7 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
       composition,
       codec: settings.codec,
       outputLocation: tempOutput,
-      imageFormat: settings.imageFormat,
+      ...capture,
       pixelFormat: settings.pixelFormat,
       colorSpace: normalized.kind === "base" ? "bt709" : "default",
       proResProfile: settings.proResProfile,
@@ -387,7 +390,7 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
       composition_setup_ms: setupMs,
       render_media_ms: renderMediaMs,
       total_ms: performance.now() - totalStarted,
-      requested: {codec: settings.codec, imageFormat: settings.imageFormat,
+      requested: {codec: settings.codec, imageFormat: capture.imageFormat,
         pixelFormat: settings.pixelFormat, concurrency: normalized.concurrency},
     },
   };

@@ -213,6 +213,18 @@ export function validateTitles(titles, totalFrames) {
   return windows;
 }
 
+/** How frames leave the browser. Absent means lossless PNG. */
+export function validateCapture(capture) {
+  if (capture === null || typeof capture !== "object" || Array.isArray(capture)) {
+    fail("base input.capture must be an object");
+  }
+  if (capture.format !== "jpeg") fail(`capture format must be "jpeg", got ${JSON.stringify(capture.format)}`);
+  if (!Number.isInteger(capture.quality) || capture.quality < 1 || capture.quality > 100) {
+    fail(`capture quality must be an integer from 1 to 100, got ${JSON.stringify(capture.quality)}`);
+  }
+  return capture;
+}
+
 export function validateBaseInput(input, fps) {
   if (!Array.isArray(input.shots) || input.shots.length === 0) {
     fail("base input.shots must be a non-empty array");
@@ -254,6 +266,7 @@ export function validateBaseInput(input, fps) {
       validateSplitPanes(span.split_panes, span.id);
     }
   }
+  if (input.capture !== undefined) validateCapture(input.capture);
   const flashes = flashViolations(spans, fps);
   if (flashes.length > 0) {
     const first = flashes[0];
