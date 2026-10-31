@@ -107,6 +107,7 @@ def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
             "clean-photographic-v1",
             "product-studio-v1",
             "brand-graphic-v1",
+            "painted-comic-noir-v1",
         }
         assert {item["id"] for item in first["kinds"]} == {
             "music_video",

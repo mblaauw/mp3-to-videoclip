@@ -215,6 +215,12 @@
     repeating-linear-gradient(135deg, rgba(217, 179, 108, 0.28) 0 8px, transparent 8px 16px),
     #1c1e21;
 }
+.look-swatch.preset-painted-comic-noir-v1 {
+  background:
+    radial-gradient(45% 55% at 72% 34%, rgba(217, 179, 108, 0.55), transparent 70%),
+    radial-gradient(38% 46% at 26% 72%, rgba(126, 87, 194, 0.5), transparent 72%),
+    #101218;
+}
 .look-swatch.preset-custom {
   background:
     conic-gradient(from 45deg, #2a2c30, #3a3d42, #2a2c30, #3a3d42, #2a2c30);
