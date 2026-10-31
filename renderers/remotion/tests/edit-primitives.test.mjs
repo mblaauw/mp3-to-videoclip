@@ -19,7 +19,7 @@ import {
   validateEditShot,
   validateGrade,
 } from "../src/timing.mjs";
-import {validateBaseInput, validateRequest} from "../src/request.mjs";
+import {validateBaseInput, validateChunks, validateRequest} from "../src/request.mjs";
 
 const shot = (id, start, duration, edit = {}) => ({
   id,
@@ -242,6 +242,17 @@ test("crop cuts are validated like the Python model", () => {
   ]) {
     assert.throws(() => validateEditShot(withCrops(bad).edit, withCrops([])));
   }
+});
+
+test("chunks are ordered, inside the film and local", () => {
+  const chunk = (start, frames, output = `/tmp/c${start}.mp4`) => ({start, frames, output});
+  assert.deepEqual(validateChunks([chunk(0, 10), chunk(20, 5)], 25), [chunk(0, 10), chunk(20, 5)]);
+  assert.throws(() => validateChunks([], 25), /non-empty/);
+  assert.throws(() => validateChunks([chunk(0, 10), chunk(9, 5)], 25), /before the previous/);
+  assert.throws(() => validateChunks([chunk(20, 6)], 25), /past the film/);
+  assert.throws(() => validateChunks([chunk(0, 0)], 25), /frames/);
+  assert.throws(() => validateChunks([chunk(0, 5, "c.mp4")], 25), /absolute/);
+  assert.throws(() => validateChunks([chunk(0, 5, "/tmp/c.mov")], 25), /\.mp4/);
 });
 
 test("capture is optional and bounded", () => {

@@ -18,6 +18,10 @@
 // base     -> h264 / yuv420p / silent
 // graphics -> prores 4444 / png / yuva444p10le / muted, preserving alpha
 // stills   -> PNG frames of the Base composition into a new directory
+//
+// A base request with `chunks` renders those frame ranges as separate movies through
+// one browser. Each chunk is published as soon as it is whole, so an interrupted run
+// keeps what it finished.
 import {createHash} from "node:crypto";
 import {
   existsSync,
@@ -35,7 +39,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 
 import {bundle} from "@remotion/bundler";
-import {renderMedia, renderStill, selectComposition} from "@remotion/renderer";
+import {openBrowser, renderMedia, renderStill, selectComposition} from "@remotion/renderer";
 
 import {fail, requestSha256, resolveChrome, validateRequest} from "./src/request.mjs";
 import {createProgressWriter} from "./src/progress.mjs";
@@ -292,6 +296,15 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
 
   progress.update({phase: "selecting-composition"});
   const started = process.hrtime.bigint();
+  if (normalized.chunks) {
+    await renderChunks(progress, shared, settings, normalized, {
+      request_sha256: sha,
+      bundle_cached: bundleCached,
+      bundle_ms: bundleMs,
+      totalStarted,
+    });
+    return;
+  }
   const composition = await selectComposition({...shared, id: settings.compositionId});
   const setupMs = Number(process.hrtime.bigint() - started) / 1e6;
   let renderMediaMs;
@@ -396,6 +409,98 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
   };
   writeExclusive(sidecarPath, `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify({...report, output: normalized.output, sidecar: sidecarPath})}\n`);
+}
+
+/** Render each frame range to its own movie through one browser, publishing as it goes. */
+async function renderChunks(progress, shared, settings, normalized, facts) {
+  const capture = normalized.input.capture
+    ? {imageFormat: normalized.input.capture.format, jpegQuality: normalized.input.capture.quality}
+    : {imageFormat: settings.imageFormat};
+  const total = normalized.chunks.reduce((sum, chunk) => sum + chunk.frames, 0);
+  const report = [];
+  let finished = 0;
+  const update = (frames) =>
+    progress.update({
+      phase: "rendering-frames",
+      done: finished + frames,
+      total,
+      unit: "frames",
+      chunks_done: report.length,
+      chunks_total: normalized.chunks.length,
+    });
+  update(0);
+  const browser = await openBrowser("chrome", {
+    browserExecutable: shared.browserExecutable,
+    chromiumOptions: shared.chromiumOptions,
+    logLevel: shared.logLevel,
+  });
+  try {
+    const composition = await selectComposition({
+      ...shared,
+      puppeteerInstance: browser,
+      id: settings.compositionId,
+    });
+    for (const chunk of normalized.chunks) {
+      if (existsSync(chunk.output)) fail(`chunk ${chunk.output} already exists; refusing to overwrite`);
+      const temp = path.join(path.dirname(chunk.output), `.${path.basename(chunk.output, ".mp4")}.render-${process.pid}.mp4`);
+      const started = performance.now();
+      try {
+        await renderMedia({
+          ...shared,
+          ...capture,
+          puppeteerInstance: browser,
+          composition,
+          codec: settings.codec,
+          pixelFormat: settings.pixelFormat,
+          colorSpace: "bt709",
+          frameRange: [chunk.start, chunk.start + chunk.frames - 1],
+          outputLocation: temp,
+          muted: true,
+          enforceAudioTrack: false,
+          overwrite: false,
+          concurrency: normalized.concurrency,
+          onDownload: refuseRemoteAsset,
+          onProgress: (info) => update(Number(info?.renderedFrames ?? 0) || 0),
+        });
+        if ((statSync(temp, {throwIfNoEntry: false})?.size ?? 0) <= 0) {
+          fail(`renderer produced no frames at ${temp}`);
+        }
+        publishExclusive(temp, chunk.output, "chunk");
+      } finally {
+        rmSync(temp, {force: true});
+      }
+      finished += chunk.frames;
+      report.push({
+        output: chunk.output,
+        start: chunk.start,
+        frames: chunk.frames,
+        seconds: Number(((performance.now() - started) / 1000).toFixed(3)),
+      });
+      update(0);
+    }
+  } finally {
+    await browser.close({silent: true});
+  }
+  const sidecarPath = `${normalized.output}.render.json`;
+  const summary = {
+    frames: total,
+    width: normalized.width,
+    height: normalized.height,
+    fps: normalized.fps,
+    kind: normalized.kind,
+    request_sha256: facts.request_sha256,
+    remotion_version: remotionVersion(),
+    bundle_cached: facts.bundle_cached,
+    chunks: report,
+    diagnostics: {
+      bundle_ms: facts.bundle_ms,
+      total_ms: performance.now() - facts.totalStarted,
+      requested: {codec: settings.codec, imageFormat: capture.imageFormat,
+        pixelFormat: settings.pixelFormat, concurrency: normalized.concurrency},
+    },
+  };
+  writeExclusive(sidecarPath, `${JSON.stringify(summary, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({...summary, output: normalized.output, sidecar: sidecarPath})}\n`);
 }
 
 /** Render each requested frame to PNG in a private directory, then publish it whole. */

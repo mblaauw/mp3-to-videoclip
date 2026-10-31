@@ -145,9 +145,11 @@ def data_url(path: Path, mime: str) -> str:
     return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
 
-def request(kind: str, output: Path, asset_root: Path, canvas, fps, frames, inputs: dict) -> dict:
+def request(
+    kind: str, output: Path, asset_root: Path, canvas, fps, frames, inputs: dict, chunks=None
+) -> dict:
     """The exact renderer request object; pure, so a contract test can pin it."""
-    return {
+    body = {
         "kind": kind,
         "output": str(output.resolve()),
         "assetRoot": str(asset_root.resolve()),
@@ -160,9 +162,14 @@ def request(kind: str, output: Path, asset_root: Path, canvas, fps, frames, inpu
         ),
         "input": inputs,
     }
+    if chunks is not None:
+        body["chunks"] = chunks
+    return body
 
 
-def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, inputs: dict) -> dict:
+def invoke(
+    kind: str, output: Path, asset_root: Path, canvas, fps, frames, inputs: dict, chunks=None
+) -> dict:
     """Explicit local subprocess; never npx installs, uploads or implicit fallback.
 
     stdout/stderr are streamed to a log instead of being buffered for the whole
@@ -178,7 +185,7 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
         )
     output.parent.mkdir(parents=True, exist_ok=True)
     asset_root.mkdir(parents=True, exist_ok=True)
-    request_body = request(kind, output, asset_root, canvas, fps, frames, inputs)
+    request_body = request(kind, output, asset_root, canvas, fps, frames, inputs, chunks)
     request_path = output.with_suffix(".request.json")
     write_json(request_path, request_body)
     progress_path = output.with_name(f".{output.stem}.progress.json")
@@ -197,7 +204,10 @@ def invoke(kind: str, output: Path, asset_root: Path, canvas, fps, frames, input
     progress_path.unlink(missing_ok=True)
     if stdout is None:
         raise ValueError("Local Remotion render failed: " + stderr[-4000:])
-    if not (output.is_dir() if kind == "stills" else output.is_file()):
+    if chunks is not None:
+        if not all(Path(chunk["output"]).is_file() for chunk in chunks):
+            raise ValueError("Remotion returned without every chunk")
+    elif not (output.is_dir() if kind == "stills" else output.is_file()):
         raise ValueError("Remotion returned without an output")
     sidecar = Path(f"{output}.render.json")
     return {

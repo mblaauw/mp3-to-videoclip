@@ -143,6 +143,10 @@ export function validateRequest(request) {
     normalized.base = validateBaseInput(input, fps);
     if (normalized.base.totalFrames !== frames) fail("shot allocations must equal requested frames");
     if (kind === "stills") normalized.stills = validateStillFrames(input.still_frames, frames);
+    if (request.chunks !== undefined) {
+      if (kind !== "base") fail("only a base film renders in chunks");
+      normalized.chunks = validateChunks(request.chunks, frames);
+    }
   } else {
     normalized.part = validateGraphicsPart(input.part, frames);
     validateTitleAssets(input);
@@ -211,6 +215,25 @@ export function validateTitles(titles, totalFrames) {
     return {...part, start_frame: start};
   });
   return windows;
+}
+
+/**
+ * Frame ranges of a base film to render as separate movies: in order, not overlapping,
+ * inside the film, each with its own new local output.
+ */
+export function validateChunks(chunks, totalFrames) {
+  if (!Array.isArray(chunks) || chunks.length === 0) fail("chunks must be a non-empty array");
+  let next = 0;
+  return chunks.map((chunk, index) => {
+    const start = requireInteger(chunk?.start, `chunk ${index} start`, {min: 0});
+    const frames = requireInteger(chunk?.frames, `chunk ${index} frames`);
+    if (start < next) fail(`chunk ${index} starts before the previous chunk ends`);
+    next = start + frames;
+    if (next > totalFrames) fail(`chunk ${index} ends past the film's ${totalFrames} frames`);
+    const output = localAbsolutePath(chunk.output, `chunk ${index} output`);
+    if (path.extname(output) !== ".mp4") fail(`chunk ${index} output must end with .mp4`);
+    return {start, frames, output};
+  });
 }
 
 /** How frames leave the browser. Absent means lossless PNG. */
