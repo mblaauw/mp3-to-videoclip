@@ -968,6 +968,12 @@ def write_storyboard(
     return updated
 
 
+def _avoid_list(brief: Brief) -> list[str]:
+    """What pictures must leave out: the profile's list plus the owner's own in the intent."""
+    owner = brief.intent.avoid if brief.intent else []
+    return list(dict.fromkeys([*brief.avoid, *owner]))
+
+
 def _reference_cap(project: Project) -> int:
     """Stored-model profiles may use the current model capacity; legacy stays at four."""
     return 14 if project.image_model is not None else 4
@@ -1217,7 +1223,7 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
                 *characters,
                 creative.look if not prompt_look_first(project) else "",
                 *creative.image_rules,
-                "Avoid: " + "; ".join(brief.avoid) if brief.avoid else "",
+                "Avoid: " + "; ".join(_avoid_list(brief)) if _avoid_list(brief) else "",
             ],
         )
     )

@@ -795,3 +795,14 @@ def test_instrumental_init_and_stage_gates(tmp_path, monkeypatch):
     P.require_approval(root, "brief")
     with pytest.raises(ValueError, match="instrumental"):
         P.require_approval(root, "lyrics")
+
+
+def test_the_owners_avoid_list_reaches_the_picture_prompt(tmp_path):
+    root = make_root(tmp_path)
+    brief = read_json(root / "brief.json")
+    brief["avoid"] = ["Captions", "Alcohol"]
+    brief["intent"] = {"kind": "promo", "avoid": ["Alcohol", "Mocktails only"]}
+    write_json(root / "brief.json", brief)
+    board = P.load_board(root)
+    prompt = P.image_spec(root, board.shots[0])["positivePrompt"]
+    assert "Avoid: Captions; Alcohol; Mocktails only" in prompt
