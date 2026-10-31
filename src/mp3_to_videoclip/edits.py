@@ -324,10 +324,21 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
         return {"applicable": False, "checks": []}
     content = {shot.id: shot for shot in board.shots}
     first_five = [decision for decision in edit.shots if decision.start_frame < 5 * project.fps]
+
+    def _words_on_screen(decision) -> bool:
+        """A designed plate draws its own words; on a picture only the cut's layers show."""
+        shot = content.get(decision.shot_id)
+        return bool(decision.text) or bool(
+            shot is not None
+            and shot.text
+            and shotkinds.is_local(shot)
+            and not shotkinds.is_reprise(shot)
+        )
+
     visible = any(
         content[decision.shot_id].kind in ("product", "logo", "end_card")
         or content[decision.shot_id].product_ref
-        or content[decision.shot_id].text
+        or _words_on_screen(decision)
         for decision in first_five
         if decision.shot_id in content
     )
@@ -337,6 +348,9 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
         if content.get(decision.shot_id) is not None
         and content[decision.shot_id].kind == "end_card"
     ]
+    # A painted card with the words set over it closes a film just as well.
+    if not end_cards and edit.shots and edit.shots[-1].text:
+        end_cards = [edit.shots[-1]]
     end_ok = bool(end_cards) and all(
         decision.duration_frames >= 3 * project.fps for decision in end_cards
     )
@@ -376,6 +390,7 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
                     content[decision.shot_id].message,
                     content[decision.shot_id].purpose,
                     *content[decision.shot_id].text,
+                    *[item.text for item in decision.text],
                 ]
             )
             for decision in edit.shots

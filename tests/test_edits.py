@@ -694,3 +694,47 @@ def test_the_report_and_summary_handle_every_text_animation(tmp_path, animation)
     saved = edits.save_edit(root, values)
     assert edits.report(root, edit=saved)["counts"]["text_layers"] == 1
     assert edits.summary(root, saved)
+
+
+def _advert_checks(root, edit):
+    report = edits.report(root, edit=edit)
+    return {check["id"]: check["ok"] for check in report["ad"]["checks"]}
+
+
+def test_advert_checks_read_the_words_actually_drawn(tmp_path):
+    root = make_api_project(tmp_path)
+    project = read_json(root / "project.json")
+    project["kind"] = "advert"
+    write_json(root / "project.json", project)
+    board = read_json(root / "work/storyboard.json")
+    # Words on a picture's storyboard entry aren't drawn, so they prove nothing.
+    board["shots"][0]["text"] = ["A name"]
+    write_json(root / "work/storyboard.json", board)
+    edit = edits.seed_edit(root)
+    assert _advert_checks(root, edit)["brand_or_product_first_5s"] is False
+    assert _advert_checks(root, edit)["end_card_3s"] is False
+    values = edit.model_dump(by_alias=True)
+    first, last = values["shots"][0], values["shots"][-1]
+    first["text"] = [
+        {
+            "id": "a",
+            "text": "A name",
+            "in_frame": first["start_frame"],
+            "out_frame": first["start_frame"] + 12,
+        }
+    ]
+    last["text"] = [
+        {
+            "id": "b",
+            "style": "logotype",
+            "text": "A name",
+            "in_frame": last["start_frame"],
+            "out_frame": last["start_frame"] + 12,
+        }
+    ]
+    drawn = edits.save_edit(root, values)
+    assert _advert_checks(root, drawn)["brand_or_product_first_5s"] is True
+    # The fixture's last shot is under three seconds, so its length is still judged.
+    assert _advert_checks(root, drawn)["end_card_3s"] is (
+        drawn.shots[-1].duration_frames >= 3 * P.load_project(root).fps
+    )
