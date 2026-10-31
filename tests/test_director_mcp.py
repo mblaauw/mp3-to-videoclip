@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 
 from api_support import add_assets, make_api_project
