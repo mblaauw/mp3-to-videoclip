@@ -513,6 +513,9 @@ body {
   position: relative;
   min-width: 0;
 }
+.film-card-wrap > .film-card {
+  width: 100%;
+}
 .card-aside {
   position: absolute;
   top: var(--s-2);
