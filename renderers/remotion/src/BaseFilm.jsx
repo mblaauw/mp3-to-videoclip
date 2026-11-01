@@ -75,6 +75,9 @@ function textBox(style, width, height, color) {
   if (style === "logotype") {
     return {
       ...base,
+      // A logotype may sit over a busy picture, so it carries its own dark halo.
+      textShadow:
+        "0 2px 4px rgba(0,0,0,0.95), 0 0 22px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.75)",
       left: width * 0.06,
       right: width * 0.06,
       top: height * 0.34,
@@ -105,12 +108,12 @@ function textBox(style, width, height, color) {
       ...base,
       left: width * 0.1,
       right: width * 0.1,
-      top: height * 0.66,
+      top: height * 0.63,
       textAlign: "center",
-      fontSize: height * 0.026,
-      fontWeight: 600,
-      letterSpacing: "0.26em",
-      lineHeight: 1.4,
+      fontSize: height * 0.044,
+      fontWeight: 700,
+      letterSpacing: "0.22em",
+      lineHeight: 1.3,
       textTransform: "uppercase",
     };
   }

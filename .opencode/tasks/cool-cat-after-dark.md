@@ -235,3 +235,21 @@ Found and fixed:
 - **Dependency PRs weren't merged.** Merging was refused without the owner's go-ahead, and the failing ones' cause wasn't found (their log tails show no reason).
 - **T14:** a fresh metadata snapshot exists, `backups/projects-metadata-20261031T202316Z.zip`. An off-machine copy wasn't checked. `scripts/clean_caches.py` wasn't run for real.
 - **Slow instrumental fixture** has no live run.
+
+## Applying the Critic's notes, 1 Nov
+
+Owner: "Apply the fixes", then "approve things yourself". Claude reviewed the stills and approved the stages on that instruction. Promo final v006, advert final v002. The earlier finals are kept.
+
+| Note | Done |
+| --- | --- |
+| Door changed design between shots | A crop of s010 v4 is the master door; s009, s010, s011, s012 and s026 remade |
+| Duplicate saxophonists and DJs in the overhead | s024 v3, confirmed by the Critic. v2 had swapped this for two heroes |
+| `ENTER AFTER DARK` the smallest line | The `cta` style is larger and heavier than the tagline, in the renderer and the rebuilt Player |
+| Advert's opening title over a busy room | The `logotype` style has its own dark halo; legible, still not clean over the saxophonist |
+| Hero's smile | Tried once more, worse; s022 v3 and its prompt kept |
+
+Remaking a still can break an edit: s027's crop cut off the new sign and had to be reframed, and only looking at the frames showed it. Nothing warns about this.
+
+Scene references have no Studio control, so both door references were imported with a direct call. The advert's two new stills were again copied by hand, as new files.
+
+**The Critic's new notes, unapplied.** s022's background console operator isn't the established DJ; s015 has turquoise drinks against the amber-only brief; the advert's overhead looks flatter than its neighbours; the advert card's lettering arrives slowly. The live-turn allowance ran out (25 of 25) with that review, so **the last door stills were checked by eye only, not by the Critic.**
