@@ -62,7 +62,8 @@ def get_song_map(slug: str, request: Request):
 
 
 @router.get("/track")
-async def get_track(slug: str, request: Request):
+@read_endpoint
+def get_track(slug: str, request: Request):
     root = project_root(request, slug)
     music = read_optional(root / "work" / "music.json")
     notes = music_notes.read(root)
@@ -88,7 +89,8 @@ async def get_track(slug: str, request: Request):
 
 
 @router.get("/music-notes")
-async def get_music_notes(slug: str, request: Request):
+@read_endpoint
+def get_music_notes(slug: str, request: Request):
     return music_notes.read(project_root(request, slug))
 
 
@@ -138,7 +140,8 @@ async def setup_lyric_tools(slug: str, request: Request):
 
 
 @router.get("/lyric-draft")
-async def get_lyric_draft(slug: str, request: Request):
+@read_endpoint
+def get_lyric_draft(slug: str, request: Request):
     return lyric_tools.read_draft(project_root(request, slug))
 
 
@@ -159,7 +162,8 @@ async def run_lyric_timing(slug: str, request: Request):
 
 
 @router.get("/lyric-timing")
-async def get_lyric_timing(slug: str, request: Request):
+@read_endpoint
+def get_lyric_timing(slug: str, request: Request):
     return lyric_timing.view(project_root(request, slug))
 
 

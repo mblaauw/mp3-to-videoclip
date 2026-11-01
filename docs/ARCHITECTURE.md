@@ -253,6 +253,13 @@ hand-written types. Every API 4xx/5xx is `{detail, code}`; the frontend parses
 it into `ApiError` and maps stable codes to user-facing copy and, where there is
 one next move, an action (Open settings, Go to a stage).
 
+Views read no source bytes. `load_project` verifies the source through a hash remembered
+by path, size, mtime and inode, and the library and project views skip it altogether;
+approval, generation and render paths still hash the bytes. The library's stage words
+come from whether each decision's recorded hash still matches (`production/stage_state.py`),
+remembered in a file beside the settings until a metadata file moves. No gate reads that
+file, and opening the library writes nothing into a film's folder.
+
 The song map (`song_map.py`, cached in `work/song-map.json`) merges `music.json`,
 `music-deep.json`, the owner's section layer and the timed words into one object in film
 frames, served at `/song-map`, given to every role as `get_song_map` and summarised in

@@ -16,7 +16,8 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip import voice
 from mp3_to_videoclip.api._helpers import valid_slug
 from mp3_to_videoclip.domain import archive, budget
-from mp3_to_videoclip.storage import read_json, read_optional
+from mp3_to_videoclip.production import stage_state
+from mp3_to_videoclip.storage import inside, read_json, read_optional
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -73,19 +74,6 @@ def _has_lyrics_words(path: Path) -> bool:
 
 def _newest(paths: list[Path]) -> float:
     return max((_mtime(path) for path in paths), default=0.0)
-
-
-def _changed_since(record: dict | None, paths: list[Path]) -> bool:
-    """Cheap library signal: an artifact touched after its decision is changed."""
-    if not isinstance(record, dict) or not record.get("at"):
-        return False
-    try:
-        approved = datetime.fromisoformat(str(record["at"]))
-    except ValueError:
-        return False
-    if approved.tzinfo is None:
-        approved = approved.replace(tzinfo=UTC)
-    return _newest(paths) > approved.timestamp() + 1
 
 
 # The render inputs ``domain.exports`` fingerprints, minus the budget-bearing
@@ -150,17 +138,15 @@ def _poster_stills(root: Path, slug: str, assets: dict) -> list[str]:
 
 
 def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
-    """Cheap stage words for the library.
+    """Stage words for the library, from whether each decision's hash still matches.
 
-    This deliberately does not re-hash every gate. It uses the recorded decision
-    and artifact mtimes; the approval endpoints remain the authoritative check.
+    The answer is remembered until a file it depends on moves (see ``stage_state``);
+    the approval endpoints remain the authoritative check.
     """
     music_path = root / P.STAGE_FILES["analysis"]
     lyrics_path = root / P.STAGE_FILES["lyrics"]
     brief_path = root / P.STAGE_FILES["brief"]
     board_path = root / P.STAGE_FILES["storyboard"]
-    assets_path = root / "work" / "assets.json"
-    reviews_path = root / "work" / "reviews.json"
 
     track_ready = music_path.is_file() and (
         project.music_mode != "vocal"
@@ -168,12 +154,13 @@ def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
         or _has_lyrics_words(lyrics_path)
     )
     states: dict[str, str] = {"track": "done" if track_ready else "you"}
+    stale = stage_state.stale(root, approvals)
 
     if not brief_path.is_file():
         states["story"] = "not_ready"
     elif not isinstance(approvals.get("brief"), dict):
         states["story"] = "you"
-    elif _changed_since(approvals.get("brief"), [brief_path]):
+    elif stale.get("brief"):
         states["story"] = "changed"
     else:
         states["story"] = "done"
@@ -182,7 +169,7 @@ def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
         states["storyboard"] = "not_ready"
     elif not isinstance(approvals.get("storyboard"), dict):
         states["storyboard"] = "you"
-    elif _changed_since(approvals.get("storyboard"), [board_path]):
+    elif stale.get("storyboard"):
         states["storyboard"] = "changed"
     else:
         states["storyboard"] = "done"
@@ -190,12 +177,12 @@ def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
     if not board_path.is_file():
         states["images"] = "not_ready"
     elif isinstance(approvals.get("stills"), dict):
-        if _changed_since(approvals.get("stills"), [assets_path, reviews_path]):
+        if stale.get("stills"):
             states["images"] = "changed"
         else:
             states["images"] = "done"
     elif isinstance(approvals.get("proof"), dict):
-        if _changed_since(approvals.get("proof"), [brief_path, assets_path, reviews_path]):
+        if stale.get("proof"):
             states["images"] = "changed"
         else:
             states["images"] = "you"
@@ -233,133 +220,138 @@ def _film_audio_url(root: Path, project) -> str | None:
     return f"/api/projects/{root.name}/film-audio?v={version}" if version else None
 
 
+def _film_summary(entry: Path, parked: set[str], result: list[ProjectSummary]) -> None:
+    if not entry.is_dir() or not valid_slug(entry.name) or not (entry / "project.json").is_file():
+        return
+    if archive.is_archived(entry):
+        film = archive.read(entry)
+        poster = [
+            f"/api/projects/{film.slug}/archive/stills/{index}"
+            for index, _still in enumerate(film.stills[:4])
+        ]
+        media = [film.render] if film.render is not None else []
+        result.append(
+            ProjectSummary(
+                slug=film.slug,
+                title=film.title,
+                duration=film.duration,
+                archived=True,
+                parked=entry.name in parked,
+                render=film.render.name if film.render is not None else None,
+                still_count=len(film.stills),
+                shots=len(film.stills),
+                poster_stills=poster,
+                stage_states={
+                    stage: "done"
+                    for stage in (
+                        "track",
+                        "story",
+                        "storyboard",
+                        "images",
+                        "film",
+                    )
+                },
+                updated_at=_updated_at(entry, [*media, *film.stills]),
+            )
+        )
+        return
+    try:
+        project = P.load_project(entry, verify_source=False)
+        # Whether the audio is there costs a stat; its bytes are checked when they are used.
+        if not inside(entry, project.source).is_file():
+            raise ValueError("the source audio is missing")
+        assets_path = entry / "work" / "assets.json"
+        assets = read_json(assets_path) if assets_path.is_file() else {}
+        approvals_path = entry / "work" / "approvals.json"
+        approvals = read_json(approvals_path) if approvals_path.is_file() else {}
+        states = _stage_states(entry, project, approvals)
+        try:
+            shots = len(P.load_board(entry, verify_source=False).shots)
+        except (OSError, ValueError):
+            shots = 0
+        try:
+            remaining = budget.remaining(entry)
+        except (OSError, ValueError):
+            remaining = None
+        try:
+            signature_required = P.requires_signature(entry, project)
+        except (OSError, ValueError):
+            signature_required = None
+        try:
+            preview_required = P.effective_upstream(entry, "stills") == "preview"
+        except (OSError, ValueError):
+            preview_required = False
+        result.append(
+            ProjectSummary(
+                # Routes are folder-based; never advertise an internal slug
+                # that does not open the production the card represents.
+                slug=entry.name,
+                title=project.title,
+                duration=project.duration,
+                kind=project.kind,
+                archived=False,
+                parked=entry.name in parked,
+                still_count=sum(
+                    1
+                    for item in assets.values()
+                    if isinstance(item, dict) and item.get("selected") is not None
+                ),
+                shots=shots,
+                music_mode=project.music_mode,
+                has_analysis=(entry / P.STAGE_FILES["analysis"]).is_file(),
+                has_lyrics=_has_lyrics_words(entry / P.STAGE_FILES["lyrics"]),
+                signature_required=signature_required,
+                preview_required=preview_required,
+                poster_stills=_poster_stills(entry, entry.name, assets),
+                stage_states=states,
+                next_step=_next_step(states),
+                remaining_usd=budget.fmt(remaining) if remaining is not None else None,
+                audio_url=(
+                    f"/api/projects/{entry.name}/audio-excerpt"
+                    if project.audio_window is not None
+                    else f"/api/projects/{entry.name}/audio"
+                ),
+                film_audio_url=_film_audio_url(entry, project),
+                updated_at=_updated_at(
+                    entry,
+                    [
+                        entry / "project.json",
+                        entry / P.STAGE_FILES["brief"],
+                        entry / P.STAGE_FILES["storyboard"],
+                        assets_path,
+                        entry / "work" / "reviews.json",
+                    ],
+                ),
+            )
+        )
+    except Exception:
+        # A production the app cannot load must stay visible: silently
+        # dropping it looks exactly like data loss.
+        result.append(
+            ProjectSummary(
+                slug=entry.name,
+                title=entry.name.replace("-", " ").title(),
+                archived=False,
+                parked=entry.name in parked,
+                error=(
+                    "This production could not be loaded. Check project.json "
+                    "and its source audio before opening it."
+                ),
+            )
+        )
+
+
 @router.get("", response_model=list[ProjectSummary])
-async def list_projects(request: Request):
+def list_projects(request: Request):
     root = _projects_dir(request)
     if not root.is_dir():
         return []
     result: list[ProjectSummary] = []
     parked = parked_films.read()
+    # No read snapshot here: taking one writes a lock file, and opening the library
+    # must leave every folder as it found it, frozen films above all.
     for entry in sorted(root.iterdir()):
-        if (
-            not entry.is_dir()
-            or not valid_slug(entry.name)
-            or not (entry / "project.json").is_file()
-        ):
-            continue
-        if archive.is_archived(entry):
-            film = archive.read(entry)
-            poster = [
-                f"/api/projects/{film.slug}/archive/stills/{index}"
-                for index, _still in enumerate(film.stills[:4])
-            ]
-            media = [film.render] if film.render is not None else []
-            result.append(
-                ProjectSummary(
-                    slug=film.slug,
-                    title=film.title,
-                    duration=film.duration,
-                    archived=True,
-                    parked=entry.name in parked,
-                    render=film.render.name if film.render is not None else None,
-                    still_count=len(film.stills),
-                    shots=len(film.stills),
-                    poster_stills=poster,
-                    stage_states={
-                        stage: "done"
-                        for stage in (
-                            "track",
-                            "story",
-                            "storyboard",
-                            "images",
-                            "film",
-                        )
-                    },
-                    updated_at=_updated_at(entry, [*media, *film.stills]),
-                )
-            )
-            continue
-        try:
-            project = P.load_project(entry)
-            assets_path = entry / "work" / "assets.json"
-            assets = read_json(assets_path) if assets_path.is_file() else {}
-            approvals_path = entry / "work" / "approvals.json"
-            approvals = read_json(approvals_path) if approvals_path.is_file() else {}
-            states = _stage_states(entry, project, approvals)
-            try:
-                shots = len(P.load_board(entry).shots)
-            except (OSError, ValueError):
-                shots = 0
-            try:
-                remaining = budget.remaining(entry)
-            except (OSError, ValueError):
-                remaining = None
-            try:
-                signature_required = P.requires_signature(entry, project)
-            except (OSError, ValueError):
-                signature_required = None
-            try:
-                preview_required = P.effective_upstream(entry, "stills") == "preview"
-            except (OSError, ValueError):
-                preview_required = False
-            result.append(
-                ProjectSummary(
-                    # Routes are folder-based; never advertise an internal slug
-                    # that does not open the production the card represents.
-                    slug=entry.name,
-                    title=project.title,
-                    duration=project.duration,
-                    kind=project.kind,
-                    archived=False,
-                    parked=entry.name in parked,
-                    still_count=sum(
-                        1
-                        for item in assets.values()
-                        if isinstance(item, dict) and item.get("selected") is not None
-                    ),
-                    shots=shots,
-                    music_mode=project.music_mode,
-                    has_analysis=(entry / P.STAGE_FILES["analysis"]).is_file(),
-                    has_lyrics=_has_lyrics_words(entry / P.STAGE_FILES["lyrics"]),
-                    signature_required=signature_required,
-                    preview_required=preview_required,
-                    poster_stills=_poster_stills(entry, entry.name, assets),
-                    stage_states=states,
-                    next_step=_next_step(states),
-                    remaining_usd=budget.fmt(remaining) if remaining is not None else None,
-                    audio_url=(
-                        f"/api/projects/{entry.name}/audio-excerpt"
-                        if project.audio_window is not None
-                        else f"/api/projects/{entry.name}/audio"
-                    ),
-                    film_audio_url=_film_audio_url(entry, project),
-                    updated_at=_updated_at(
-                        entry,
-                        [
-                            entry / "project.json",
-                            entry / P.STAGE_FILES["brief"],
-                            entry / P.STAGE_FILES["storyboard"],
-                            assets_path,
-                            entry / "work" / "reviews.json",
-                        ],
-                    ),
-                )
-            )
-        except Exception:
-            # A production the app cannot load must stay visible: silently
-            # dropping it looks exactly like data loss.
-            result.append(
-                ProjectSummary(
-                    slug=entry.name,
-                    title=entry.name.replace("-", " ").title(),
-                    archived=False,
-                    parked=entry.name in parked,
-                    error=(
-                        "This production could not be loaded. Check project.json "
-                        "and its source audio before opening it."
-                    ),
-                )
-            )
+        _film_summary(entry, parked, result)
     return result
 
 
@@ -483,7 +475,7 @@ async def create_project(
 
 
 @router.get("/{slug}")
-async def get_project(slug: str, request: Request, verify: bool = False):
+def get_project(slug: str, request: Request, verify: bool = False):
     if not valid_slug(slug):
         raise HTTPException(status_code=404, detail="project not found")
     root = _projects_dir(request) / slug
@@ -501,9 +493,9 @@ async def get_project(slug: str, request: Request, verify: bool = False):
             "render": str(film.render) if film.render else None,
             "stills": [str(p) for p in film.stills],
         }
-    project = P.load_project(root)
+    project = P.load_project(root, verify_source=False)
     board_path = root / "work" / "storyboard.json"
-    board = P.load_board(root) if board_path.is_file() else None
+    board = P.load_board(root, verify_source=False) if board_path.is_file() else None
     assets_path = root / "work" / "assets.json"
     assets = read_json(assets_path) if assets_path.is_file() else {}
     approvals_path = root / "work" / "approvals.json"
