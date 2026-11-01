@@ -3,7 +3,18 @@ name: check
 on:
   push:
     branches: [main]
+    paths-ignore: &text-only
+      - "docs/**"
+      - ".opencode/**"
+      - "README.md"
+      - "AGENTS.md"
   pull_request:
+    paths-ignore: *text-only
+
+# A newer push replaces a PR's run; every commit on main keeps its own.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -25,7 +36,7 @@ jobs:
       - name: Format
         run: uv run ruff format --check .
       - name: Test
-        run: uv run pytest -q
+        run: uv run pytest -q -n auto
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
