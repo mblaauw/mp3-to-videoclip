@@ -70,7 +70,7 @@ test("reset restores each recommended choice and leaves the rest of a role alone
 });
 
 test("with nothing set up, the checklist names all four and where to fix each", () => {
-  const missing = missingForFilm({ computer: { gateway: "direct" } }, { renderer: false, ffmpeg: false });
+  const missing = missingForFilm({ roles: { writer: { provider: "openai" } } }, { renderer: false, ffmpeg: false });
   assert.deepEqual(
     missing.map((item) => [item.id, item.tab, item.field]),
     [
@@ -82,13 +82,9 @@ test("with nothing set up, the checklist names all four and where to fix each", 
   );
 });
 
-test("the OpenCode path needs no Writer key, and a ready computer needs nothing", () => {
+test("a Writer with a key and a ready computer need nothing", () => {
   const ready = { renderer: true, ffmpeg: true };
-  assert.deepEqual(missingForFilm({ computer: { gateway: "opencode" }, has_runware_key: true }, ready), []);
-  assert.deepEqual(
-    missingForFilm({ computer: { gateway: "direct" }, has_openai_compatible_key: true, has_runware_key: true }, ready),
-    [],
-  );
+  assert.deepEqual(missingForFilm({ role_keys: { writer: true }, has_runware_key: true }, ready), []);
 });
 
 test("search matches any of the words, ignoring case", () => {

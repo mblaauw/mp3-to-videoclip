@@ -130,7 +130,6 @@ def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
 
 
 def test_settings_tests_are_free_and_report_the_runware_key(monkeypatch, tmp_path):
-    from types import SimpleNamespace
 
     from mp3_to_videoclip.config import Settings
 
@@ -141,27 +140,6 @@ def test_settings_tests_are_free_and_report_the_runware_key(monkeypatch, tmp_pat
         assert missing.json()["ok"] is False
         assert "Runware key" in missing.json()["message"]
         assert client.post("/api/settings/test", json={"kind": "nope"}).status_code == 400
-
-    monkeypatch.setattr(
-        "mp3_to_videoclip.api.settings.effective_settings",
-        lambda: Settings(gateway="opencode"),
-    )
-    monkeypatch.setattr(
-        "mp3_to_videoclip.director.opencode.discover_binary",
-        lambda configured: "/fake/opencode",
-    )
-
-    def fake_run(command, capture_output=True, text=True, timeout=15):
-        if command[-1] == "--version":
-            return SimpleNamespace(returncode=0, stdout="opencode v2.0.28\n", stderr="")
-        return SimpleNamespace(returncode=0, stdout="OpenCode Go stored\n", stderr="")
-
-    monkeypatch.setattr("mp3_to_videoclip.api.settings.subprocess.run", fake_run)
-    with api_client(tmp_path) as client:
-        ready = client.post("/api/settings/test", json={"kind": "opencode"})
-        assert ready.status_code == 200
-        assert ready.json()["ok"] is True
-        assert "signed in" in ready.json()["message"]
 
 
 def test_track_read_lyrics_write_and_local_analysis(client, project, monkeypatch):
@@ -607,11 +585,14 @@ def test_director_chat_reads_and_streams(client, monkeypatch):
     )
     missing = client.post("/api/projects/production/chat", json={"message": "hi"})
     assert missing.status_code == 503
-    assert missing.json()["detail"].startswith("no LLM key")
+    assert missing.json()["code"] == "no_llm_key"
+    assert "has no key yet" in missing.json()["detail"]
 
     monkeypatch.setattr(
         "mp3_to_videoclip.api.director.effective_settings",
-        lambda: Settings(llm_api_key="test-key"),
+        lambda: Settings(
+            llm_api_key="test-key", roles={"writer": {"provider": "direct", "model": "m"}}
+        ),
     )
 
     async def fake_turn(*args, **kwargs):
@@ -630,7 +611,9 @@ def test_director_chat_reads_and_streams(client, monkeypatch):
 def test_director_chat_accepts_a_long_paste_up_to_the_bound(client, monkeypatch):
     monkeypatch.setattr(
         "mp3_to_videoclip.api.director.effective_settings",
-        lambda: Settings(llm_api_key="test-key"),
+        lambda: Settings(
+            llm_api_key="test-key", roles={"writer": {"provider": "direct", "model": "m"}}
+        ),
     )
 
     async def fake_turn(*args, **kwargs):
@@ -706,7 +689,7 @@ def test_settings_nested_patch_keeps_keys_and_never_returns_one(monkeypatch, tmp
         )
         assert saved.status_code == 200
         body = saved.json()
-        assert body["schema_version"] == 2
+        assert body["schema_version"] == 3
         assert body["roles"]["writer"] == {
             "provider": "openai",
             "model": "chosen",

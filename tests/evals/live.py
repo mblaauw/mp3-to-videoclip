@@ -23,7 +23,9 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip.config import effective_settings
 from mp3_to_videoclip.director import prompts
 from mp3_to_videoclip.director.context import build_context
-from mp3_to_videoclip.director.opencode import OpenCodeGateway, discover_binary, run_gateway_turn
+from mp3_to_videoclip.director.llm import DirectorLLM
+from mp3_to_videoclip.director.loop import run_turn
+from mp3_to_videoclip.director.routing import route_for
 from mp3_to_videoclip.domain import intake
 from mp3_to_videoclip.storage import read_json, write_json
 
@@ -99,18 +101,8 @@ def _project(projects: Path, fixture: dict) -> Path:
 
 
 async def _turn(root: Path, role: str, message: str, task: str, model: str) -> dict:
-    settings = effective_settings()
-    gateway = OpenCodeGateway(
-        binary=discover_binary(settings.opencode_bin),
-        # Its own workspace, so a run can't disturb a Studio that is open.
-        workspace=root.parent.parent / "workspace",
-        projects_dir=root.parent,
-        writer_model=settings.writer_model,
-        editor_model=settings.editor_model,
-        critic_model=settings.critic_model,
-    )
-    await gateway.start()
-    client = gateway.client()
+    route = route_for(effective_settings(), role)
+    llm = DirectorLLM(route.base_url, route.key, route.model, kind=route.kind)
     project = P.load_project(root)
     stage = "storyboard" if role == "writer" else "film"
     bundle = prompts.assemble(
@@ -122,20 +114,23 @@ async def _turn(root: Path, role: str, message: str, task: str, model: str) -> d
         + build_context(SLUG, root.parent, stage=stage, context={}, task=bundle.task)
     )
     reply, tools = "", []
-    try:
-        await client.wait_for_mcp()
-        async for event in run_gateway_turn(
-            client, root, SLUG, role, message, system, model=model, prompt_meta=bundle.meta
-        ):
-            if event.kind == "tool":
-                tools.append(event.tool)
-            elif event.kind == "text":
-                reply += event.text or ""
-            elif event.kind == "done" and (event.payload or {}).get("error"):
-                reply += "\n[error] " + str(event.payload["error"])
-    finally:
-        await client.aclose()
-        gateway.stop()
+    async for event in run_turn(
+        llm,
+        root,
+        SLUG,
+        message,
+        system,
+        projects_dir=root.parent,
+        prompt_meta=bundle.meta,
+        role=role,
+        provider=route.provider,
+    ):
+        if event.kind == "tool":
+            tools.append(event.tool)
+        elif event.kind == "text":
+            reply += event.text or ""
+        elif event.kind == "done" and (event.payload or {}).get("error"):
+            reply += "\n[error] " + str(event.payload["error"])
     return {"meta": bundle.meta, "reply": reply, "tools": tools}
 
 

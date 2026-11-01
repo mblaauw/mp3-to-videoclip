@@ -72,16 +72,16 @@ def _fake_estimate(reserve="2.00", uploads=False, tasks=3):
     }
 
 
-def test_generate_images_authorizes_before_queueing(tmp_path, monkeypatch):
+def test_generate_images_never_authorizes_and_asks_the_owner(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _project(tmp_path)
-    authorized = {}
     monkeypatch.setattr(services.generation, "estimate", lambda *a, **k: _fake_estimate())
-    monkeypatch.setattr(
-        services.generation,
-        "authorize",
-        lambda root, quote_id, **kw: authorized.update(quote_id=quote_id, **kw) or {},
-    )
+
+    def must_not(*args, **kwargs):
+        raise AssertionError("the Director authorised spending")
+
+    monkeypatch.setattr(services.generation, "authorize", must_not)
+    monkeypatch.setattr(services.generation, "run", must_not)
     runner = FakeRunner()
     result = json.loads(
         asyncio.run(
@@ -92,10 +92,9 @@ def test_generate_images_authorizes_before_queueing(tmp_path, monkeypatch):
             )
         )
     )
-    assert result["status"] == "queued"
-    assert result["job_id"] == "job-1"
-    assert authorized["quote_id"] == "quote-1"
-    assert runner.submitted == [("images", "demo")]
+    assert result["needs_owner"] is True
+    assert result["estimate"]["quote_id"] == "quote-1"
+    assert runner.submitted == []
 
 
 def test_generate_images_stops_at_the_cap(tmp_path, monkeypatch):

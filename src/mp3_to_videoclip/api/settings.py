@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
 import uuid
 from pathlib import Path
 
@@ -18,12 +17,14 @@ from mp3_to_videoclip.config import (
     merge,
     save_settings,
 )
+from mp3_to_videoclip.director.routing import route_for
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 #: Every secret in the nested shape, as a path from ``keys``.
 SECRETS = (
     ("runware",),
+    ("openai",),
     ("openai_compatible", "key"),
     ("anthropic",),
     ("gemini",),
@@ -32,10 +33,7 @@ SECRETS = (
 )
 #: Honest about what a stored choice does today; the panel shows these words.
 NOTES = {
-    "direct_path": (
-        "On the direct path one model answers for every role until per-role providers "
-        "arrive: the Direct model under Keys. Role models apply on the OpenCode path."
-    ),
+    "direct_path": "Your own endpoint: any address that speaks OpenAI's chat format.",
     "thinking": "Thinking level and the per-turn token budget are stored but not enforced yet.",
     "pictures": "New films still use each look's own model; these choices are stored for later.",
     "narrator": "The film's voiceover keeps its current voice until narration arrives.",
@@ -71,6 +69,10 @@ def _public(settings: Settings) -> dict:
     value["llm_api_key"] = ""
     value["runware_api_key"] = ""
     value["has_llm_api_key"] = bool(settings.llm_api_key)
+    # A key for whichever provider each role really uses.
+    value["role_keys"] = {
+        role: bool(route_for(settings, role).key) for role in ("writer", "editor", "critic")
+    }
     value["has_runware_api_key"] = bool(settings.runware_api_key)
     value["notes"] = NOTES
     value["style_presets"] = styles.public_presets()
@@ -112,39 +114,6 @@ def _test_runware() -> dict:
     return {"ok": True, "kind": "runware", "message": "Works"}
 
 
-def _test_opencode() -> dict:
-    from mp3_to_videoclip.director.opencode import discover_binary
-
-    settings = effective_settings()
-    binary = discover_binary(settings.opencode_bin)
-    try:
-        version = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=15)
-        auth = subprocess.run([binary, "auth", "list"], capture_output=True, text=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
-        return {
-            "ok": False,
-            "kind": "opencode",
-            "message": "OpenCode was not found on this computer.",
-        }
-    label = (version.stdout or version.stderr).strip().splitlines()
-    name = label[0] if label else "OpenCode"
-    if version.returncode != 0:
-        return {"ok": False, "kind": "opencode", "message": "OpenCode could not start."}
-    if auth.returncode != 0 or not (auth.stdout or "").strip():
-        return {
-            "ok": False,
-            "kind": "opencode",
-            "message": "OpenCode is installed but not signed in.",
-            "version": name,
-        }
-    return {
-        "ok": True,
-        "kind": "opencode",
-        "message": f"{name} · signed in",
-        "version": name,
-    }
-
-
 def _test_provider(provider: str) -> dict:
     from mp3_to_videoclip import catalog
 
@@ -172,13 +141,11 @@ async def test_settings(payload: dict):
     kind = payload.get("kind")
     if kind == "runware":
         return await asyncio.to_thread(_test_runware)
-    if kind == "opencode":
-        return await asyncio.to_thread(_test_opencode)
     if kind == "provider":
         return await asyncio.to_thread(_test_provider, str(payload.get("provider")))
     if kind == "voice":
         return _test_voice(str(payload.get("voice")))
-    raise HTTPException(status_code=400, detail="kind must be runware, opencode, provider or voice")
+    raise HTTPException(status_code=400, detail="kind must be runware, provider or voice")
 
 
 @router.get("/catalog")
@@ -208,11 +175,21 @@ def _projects_dir(request: Request) -> Path:
     return Path(getattr(request.app.state, "projects_dir", "projects"))
 
 
+def _costs(budget, projects_dir: Path) -> dict:
+    """Pictures from each journal, with the Director's model use beside them."""
+    from mp3_to_videoclip.director import usage
+
+    costs = budget.costs_across(projects_dir)
+    for film in costs["films"]:
+        film["model"] = usage.summary(projects_dir / film["slug"])
+    return costs
+
+
 @router.get("/costs")
 async def get_costs(request: Request):
     from mp3_to_videoclip import budget
 
-    return await asyncio.to_thread(budget.costs_across, _projects_dir(request))
+    return await asyncio.to_thread(_costs, budget, _projects_dir(request))
 
 
 @router.get("/caches")
@@ -259,7 +236,4 @@ async def put_settings(payload: dict):
             flat.pop(key, None)
     settings = Settings(**{**merge(current.model_dump(), patch), **flat})
     save_settings(settings)
-    from mp3_to_videoclip.api.director import close_gateways
-
-    close_gateways()
     return _public(settings)

@@ -11,7 +11,7 @@ from api_support import api_client, make_api_project
 
 from mp3_to_videoclip import critique
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip.director import opencode, prompts, tools
+from mp3_to_videoclip.director import prompts, tools
 
 
 @pytest.fixture
@@ -108,11 +108,6 @@ def test_the_critic_can_only_read_and_leave_notes(tmp_path):
     assert all(name.startswith("get_") or name == "save_critique" for name in offered), (
         "the Critic must have no tool that changes a film"
     )
-    config = opencode.gateway_config(projects_dir=tmp_path, python="/usr/bin/python3")
-    rules = config["agents"]["critic"]["permissions"]
-    assert {"action": "clipstudio_*", "resource": "*", "effect": "deny"} in rules
-    assert {"action": "clipstudio_save_critique", "resource": "*", "effect": "allow"} in rules
-    assert not any(rule["action"] == "clipstudio_update_shots" for rule in rules)
     assert len(tools.tools_for("writer")) > len(offered)
 
 
@@ -132,16 +127,3 @@ def test_the_critique_route_reports_nothing_until_there_is_a_review(tmp_path, fi
         assert client.get(f"{base}/critique").json()["critique"]["verdict"] == "A review."
         assert client.get(f"{base}/director/model", params={"role": "critic"}).status_code == 200
         assert client.get(f"{base}/chat", params={"role": "critic"}).status_code == 200
-
-
-def test_every_review_starts_a_fresh_session(tmp_path):
-    root = make_api_project(tmp_path)
-    opencode.write_json(
-        opencode.session_path(root),
-        {
-            "critic": {"id": "ses_a", "model": "m", "agent": "critic", "warm": True},
-            "editor": {"id": "ses_b", "model": "m", "agent": "editor", "warm": True},
-        },
-    )
-    assert opencode.load_session(root, "critic", "m") is None
-    assert opencode.load_session(root, "editor", "m")["id"] == "ses_b"

@@ -3,14 +3,16 @@
 Saved keys are plain text in this file, which only the owner can read. Every value
 has a neutral default so a fresh clone boots.
 
-Schema 2 is nested by what a value is for. The old flat names stay readable as
-properties, so a caller never has to know the difference, and an old file or a flat
-keyword is accepted by moving each value to its new home.
+Nested by what a value is for. The old flat names stay readable as properties, so a caller
+never has to know the difference, and an old file or a flat keyword is accepted by moving
+each value to its new home. Schema 3 retired the OpenCode gateway: its settings are ignored,
+and a file that ran on the direct path keeps the one model that really answered it.
 """
 
 from __future__ import annotations
 
 import copy
+import logging
 import os
 import shutil
 import tomllib
@@ -21,7 +23,9 @@ import tomli_w
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-SCHEMA_VERSION = 2
+logger = logging.getLogger(__name__)
+
+SCHEMA_VERSION = 3
 Thinking = Literal["off", "low", "medium", "high"]
 
 
@@ -73,6 +77,7 @@ class DirectEndpoint(BaseModel):
 
 class Keys(BaseModel):
     runware: str = ""
+    openai: str = ""
     openai_compatible: DirectEndpoint = DirectEndpoint()
     anthropic: str = ""
     gemini: str = ""
@@ -103,9 +108,6 @@ class NewFilms(BaseModel):
 
 
 class Computer(BaseModel):
-    opencode_bin: str = "opencode"
-    opencode_workspace: str = ""
-    gateway: Literal["opencode", "direct"] = "direct"
     #: Browsers per render; 0 lets the app choose from the cores and free memory.
     render_workers: int = Field(default=0, ge=0, le=8)
 
@@ -113,9 +115,6 @@ class Computer(BaseModel):
 #: Where each name of the flat schema 1 file lives now.
 FLAT: dict[str, tuple[str, ...]] = {
     "runware_api_key": ("keys", "runware"),
-    "gateway": ("computer", "gateway"),
-    "opencode_bin": ("computer", "opencode_bin"),
-    "opencode_workspace": ("computer", "opencode_workspace"),
     "llm_base_url": ("keys", "openai_compatible", "base_url"),
     "llm_api_key": ("keys", "openai_compatible", "key"),
     "llm_model": ("keys", "openai_compatible", "model"),
@@ -175,14 +174,6 @@ class Settings(BaseModel):
         return self.keys.runware
 
     @property
-    def gateway(self) -> str:
-        return self.computer.gateway
-
-    @property
-    def opencode_bin(self) -> str:
-        return self.computer.opencode_bin
-
-    @property
     def writer_model(self) -> str:
         return self.roles.writer.qualified
 
@@ -193,10 +184,6 @@ class Settings(BaseModel):
     @property
     def critic_model(self) -> str:
         return self.roles.critic.qualified
-
-    @property
-    def opencode_workspace(self) -> str:
-        return self.computer.opencode_workspace
 
     @property
     def llm_base_url(self) -> str:
@@ -236,6 +223,33 @@ def _read(path: Path) -> dict:
         return tomllib.load(handle)
 
 
+def _file_version(data: dict) -> int:
+    return data.get("schema_version", 1)
+
+
+def _retire_gateway(values: dict) -> dict:
+    """What a file from before schema 3 meant by its models.
+
+    On the direct path the role names were never used: one model answered everything, so
+    that model is kept. On the OpenCode path the role names were real, so they are kept too,
+    and a role without a key for its provider says so rather than quietly becoming another.
+    """
+    nested = values.get("computer") if isinstance(values.get("computer"), dict) else {}
+    gateway = values.get("gateway") or nested.get("gateway") or "direct"
+    if gateway != "direct":
+        logger.info("the OpenCode gateway is retired; each role now uses its provider's key")
+        return values
+    endpoint = (values.get("keys") or {}).get("openai_compatible") or {}
+    model = values.get("llm_model") or endpoint.get("model") or DirectEndpoint().model
+    moved = {
+        role: {**(values.get("roles") or {}).get(role, {}), "provider": "direct", "model": model}
+        for role in ("writer", "editor", "critic")
+    }
+    # The flat names lie over the nested ones, so they can't be left to undo this.
+    kept = {k: v for k, v in values.items() if k not in FLAT_ROLES}
+    return {**kept, "roles": {**(values.get("roles") or {}), **moved}}
+
+
 def load_settings() -> Settings:
     path = settings_path()
     if not path.is_file():
@@ -244,13 +258,18 @@ def load_settings() -> Settings:
             llm_api_key=os.environ.get("OPENAI_API_KEY", ""),
         )
     data = _read(path)
-    return Settings(**(data if "schema_version" in data else data.get("settings", {})))
+    version = _file_version(data)
+    values = data if version >= 2 else data.get("settings", {})
+    return Settings(**(_retire_gateway(values) if version < SCHEMA_VERSION else values))
 
 
 def _keep_old_file(path: Path) -> None:
-    """Copy a schema 1 file aside once, before the first save replaces it."""
-    backup = path.with_name(path.name + ".v1.bak")
-    if backup.exists() or not path.is_file() or "schema_version" in _read(path):
+    """Copy an older file aside once per version, before the first save replaces it."""
+    if not path.is_file():
+        return
+    version = _file_version(_read(path))
+    backup = path.with_name(f"{path.name}.v{version}.bak")
+    if version >= SCHEMA_VERSION or backup.exists():
         return
     shutil.copy2(path, backup)
     os.chmod(backup, 0o600)
@@ -285,6 +304,7 @@ def effective_settings() -> Settings:
     env = EnvSettings()
     keys = settings.keys
     keys.runware = keys.runware or env.project_veil_runware_api
+    keys.openai = keys.openai or env.openai_api_key
     keys.openai_compatible.key = keys.openai_compatible.key or env.openai_api_key
     keys.anthropic = keys.anthropic or env.anthropic_api_key
     keys.gemini = keys.gemini or env.gemini_api_key

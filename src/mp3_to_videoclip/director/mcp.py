@@ -1,8 +1,9 @@
 """MCP stdio bridge for the Studio director tools.
 
-OpenCode launches this module as a local MCP server. It exposes the safe,
-non-paid director tools and keeps the production boundary: every call names a
-slug that must resolve to a project directly under ``--projects-dir``.
+For outside agents: your own OpenCode, Claude Code or a script. The Studio doesn't use
+this; its Director calls the tools directly. It exposes the safe, non-paid director tools
+and keeps the production boundary: every call names a slug that must resolve to a project
+directly under ``--projects-dir``.
 
 Transport is newline-delimited JSON-RPC (the MCP stdio convention). Nothing is
 written to stdout except protocol messages.
@@ -24,7 +25,7 @@ PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"name": "clipstudio", "version": "0.1"}
 
 # Paid and job-starting tools stay out of the Writer/Editor surface until the
-# Studio's authorization UI owns them. ``ask_user`` is OpenCode's own question
+# Studio's authorization UI owns them. ``ask_user`` is the host's own question
 # flow, not an MCP tool.
 EXCLUDED = {
     "generate_images",

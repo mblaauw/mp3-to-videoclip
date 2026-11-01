@@ -353,68 +353,35 @@ their bytes read-only, so no filesystem path is exposed. `GET /budget` reports
 `committed_usd`; the budget popover reads the current cap before posting a
 top-up as the new cap.
 
-## Director gateway
+## Director adapter
 
-The Writer/Editor gateway is an app-owned OpenCode v2 process, not the user's
-shared OpenCode service. `director/opencode.py` starts `opencode serve` on a
-free loopback port with a per-launch `OPENCODE_SERVER_PASSWORD` (Basic user
-`opencode`), checks `GET /api/info` and refuses anything outside 2.1.4–2.1.x.
-The 2.0.x line fails GPT-6.1 Sol with an auto-compaction error. On macOS the
-gateway prefers the desktop app's CLI when `opencode` on PATH is older. It runs
-from a dedicated workspace, so this repository's `AGENTS.md` and prompt files
-never enter the agent prompt.
+`director/llm.py` is one interface over every provider; `director/providers/` holds the wire
+formats (OpenAI-compatible, Anthropic, Gemini), each yielding the same events. Each role has its
+own provider and model in Settings, and `director/routing.py` turns that into an address and a
+key. A role with no key for its provider is refused by name: nothing swaps to another model to
+find a key that works.
 
-The workspace config defines two primary agents, `writer` and `editor`, with
-models from Settings. On 2.1.x a blanket `*` deny is a hard deny that overrides
-later allows, so the built-in actions are denied one by one; `clipstudio_*` is
-allowed last. A fresh session snapshots its tool catalog, so the gateway waits
-for the MCP server and creates a discardable warm-up session before the real
-one. Without that warm-up the first Writer can see no Studio tools.
+Earlier history reaches a model as what was asked and what was said; a logged tool result has lost
+the call it answered, and the snapshot rebuilt each turn is the current state. Reasoning written
+between tool calls is logged and survives compaction. A turn stops at 40 tool calls, which the
+owner can extend with *Keep going*, or when the same call fails twice with the same arguments. A
+Critic starts with no history every time.
 
-The `clipstudio` MCP server is
-`python -m mp3_to_videoclip.director.mcp --projects-dir <absolute projects>`,
-using newline-delimited JSON with the legacy protocol. It exposes the safe
-director tools and withholds paid jobs (`generate_images`, `transcribe_lyrics`)
-and renders. `get_images` returns MCP image content, not base64 in text.
+`work/model-usage.jsonl` records what each turn used, apart from the money journal on purpose: the
+journal's contract is a reservation before a request and a cost the provider reports, and a model
+call has neither. A cost is a catalogue estimate, or unknown; never zero. It is not admitted against
+a film's cap. The Director never authorises spending: `generate_images` prices a batch and the owner
+buys it with the button that puts in the conversation.
 
-A Studio turn opens `/api/event` before prompting, filters the global stream by
-`sessionID`, maps `session.text.delta` / tool events / `session.execution.*` to
-the existing `TurnEvent` shape, and persists text-only history in
-`work/chat.jsonl`. Stop is the HTTP stream closing: the turn interrupts the
-OpenCode session and keeps the partial text. The session is reused per
-production and role while its model fingerprint matches; a primary agent's
-model is **not** applied at session creation, so the gateway sets the session
-model explicitly.
+`director/mcp.py` remains for outside agents (your own OpenCode, Claude Code, a script), over the
+same tools with the paid ones excluded. The Studio does not use it.
 
-Silence is bounded on both paths. The direct stream ends a turn after 180 s with no
-chunk (`IDLE_LIMIT`, waiting for the first response included), and any chunk counts,
-so tool-call arguments that are still arriving are never cut off. The gateway uses
-the same limit, 300 s while a tool call's arguments are open because its events say
-nothing until they are complete, and keeps the 900 s limit on a whole turn. Only this
-session's events count there, not heartbeats or other sessions. Either way the turn
-ends with a `done` event carrying a plain `error` and `stalled`, and tool calls
-only run once complete, so nothing half-written is applied. `progress` events tell the
-Director what is being written, and after 60 s with nothing new it offers Stop.
-
-Known v2.1.4 limits: the event stream ignores `Last-Event-ID`, so a reconnect
-must refetch `/api/session/{id}/message`; interrupt ends the step as
-`finish: "error"` plus `session.execution.interrupted`; and a model missing from
-`GET /api/model` is rejected before a turn starts rather than falling back to a
-free catalog model.
-
-The live probe on 2026-10-25 passed on 2.1.4 with `openai/gpt-6.1-sol` and
-`opencode-go/deepseek-v4.1-flash`. Each role called `clipstudio_get_project`,
-`clipstudio_get_images` (two selected stills) and its write tool; no built-in
-tool ran. The Writer used 2,932 input / 118 output tokens, the Editor 3,957 /
-250 and reported $0.00078. The script still refuses to spend unless authorized:
-
-```sh
-PROBE_ALLOW_SPEND=1 uv run python scripts/probe_opencode.py \
-  --project <writable-copy-of-a-production> --yes
-```
-
-It refuses production folders. Use `--opencode-bin` when the supported CLI is
-not the one on PATH.
+**Migration from the OpenCode gateway.** It is retired. `gateway`, `opencode_bin` and
+`opencode_workspace` are ignored on load, and the first save keeps the old file as
+`settings.toml.v<n>.bak`. A file on the direct path keeps the one model that really answered it, as
+provider `direct`. A file on the gateway keeps its role models, which now need that provider's own
+key in Settings, because logins stored inside OpenCode can't be used. `llm_*` still means your own
+endpoint; an OpenCode Go key saved there still counts for OpenCode Go.
 
 ## Layout
 

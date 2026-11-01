@@ -143,7 +143,7 @@ default, and says what is missing to make a film. It is stored in
 `~/.config/mp3-to-videoclip/settings.toml`; a key can come from the environment instead
 (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENCODE_API_KEY`,
 `ELEVENLABS_API_KEY`). An older file is read as it is, and the first save keeps it as
-`settings.toml.v1.bak`.
+`settings.toml.v<n>.bak`. Each Director role uses its own provider's key.
 
 Approvals, reviews and spending are content-bound: bytes, prompt inputs and
 quote scopes are hashed, so changing an artifact invalidates its approval instead

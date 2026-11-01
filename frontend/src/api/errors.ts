@@ -6,7 +6,7 @@ export type ErrorEnvelope = {
 };
 
 const COPY: Record<string, string> = {
-  no_llm_key: "The director has no model key. Add one in Settings.",
+  no_llm_key: "This role's provider has no key yet. Add one in Settings, or choose another model.",
   director_unavailable: "The director is not available right now.",
   director_model_unavailable: "That director model is not available. Choose another in Settings.",
   internal_error: "Something went wrong. Details are in the log.",

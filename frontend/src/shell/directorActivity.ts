@@ -29,7 +29,7 @@ function clock(seconds: number): string {
   return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
 }
 
-/** The gateway names its tools `clipstudio_update_brief`. */
+/** Older conversations name their tools `clipstudio_update_brief`. */
 function bareTool(tool: string): string {
   return tool.replace(/^clipstudio_/, "");
 }

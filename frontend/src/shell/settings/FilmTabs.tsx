@@ -58,32 +58,6 @@ const TOOLS: [string, string][] = [
   ["ffprobe", "ffprobe"],
 ];
 
-function OpenCodeTest() {
-  const { settled } = usePanel();
-  const [word, setWord] = useState<{ ok: boolean; message: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  return (
-    <span className="settings-row">
-      <Button
-        size="small"
-        disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          setWord(null);
-          void settled()
-            .then(() => api.testSettings("opencode"))
-            .then(setWord)
-            .catch((caught) => setWord({ ok: false, message: String(caught) }))
-            .finally(() => setBusy(false));
-        }}
-      >
-        {busy ? "Checking…" : "Test OpenCode"}
-      </Button>
-      {word && <span className={word.ok ? "settings-good" : "settings-bad"}>{word.message}</span>}
-    </span>
-  );
-}
-
 function CacheRow({ cache, onCleared }: { cache: SettingsCache; onCleared: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -192,23 +166,6 @@ export function ComputerTab() {
           <output className={catalog.depth_tools.ready ? "settings-good" : "settings-muted"}>
             {catalog.depth_tools.ready ? "Ready" : "Not set up"}
           </output>
-        </Row>
-      </Section>
-      <Section title="Director path">
-        <ChoiceRow
-          path="computer.gateway"
-          label="Path"
-          hint="OpenCode runs the program on this computer; Direct calls the direct endpoint."
-          options={[
-            { value: "opencode", label: "OpenCode" },
-            { value: "direct", label: "Direct" },
-          ]}
-          free={false}
-        />
-        <TextRow path="computer.opencode_bin" label="OpenCode path" hint="Leave as “opencode” to use the one on this computer." />
-        <TextRow path="computer.opencode_workspace" label="OpenCode workspace" hint="Optional; a folder the path may use." />
-        <Row label="Check OpenCode">
-          <OpenCodeTest />
         </Row>
       </Section>
       <Section title="Rendering">

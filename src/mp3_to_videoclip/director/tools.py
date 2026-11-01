@@ -396,7 +396,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "generate_images",
-        "Start a paid image batch for the selected shots. Checks the production budget first.",
+        "Price a paid image batch for the selected shots. It buys nothing: the owner buys it "
+        "with the button this puts in the conversation.",
         {
             "slug": {"type": "string"},
             "shot_ids": {"type": "array", "items": {"type": "string"}},
@@ -618,7 +619,7 @@ def _dispatch(
     if name == "update_shots":
         before = P.out_of_date_stills(root)
         board, changed = P.update_shots(root, arguments.get("changes") or [])
-        # A whole board can outgrow what a gateway carries back to the model.
+        # A whole board can outgrow what a client carries back to the model.
         return _with_still_cost(
             root,
             before,
@@ -831,22 +832,15 @@ def _generate_images(root, arguments, runner):
             "needs_confirmation": "reference images will be uploaded; confirm in the Images stage",
             "estimate": estimate,
         }
-    if runner is None:
-        return {"error": "job runner unavailable; cannot queue a paid batch"}
-
-    services.generation.authorize(
-        root,
-        estimate["quote_id"],
-        note=arguments.get("note") or "confirmed in director chat",
-    )
-
-    import asyncio
-
-    async def work():
-        return await asyncio.to_thread(services.generation.run, root, estimate["quote_id"])
-
-    job_id = runner.submit("images", root.name, work, blocking=True)
-    return {"job_id": job_id, "estimate": estimate, "status": "queued"}
+    # The Director asks; spending is the owner's click on this price.
+    return {
+        "needs_owner": True,
+        "estimate": estimate,
+        "message": (
+            f"{estimate['tasks']} stills, up to ${estimate['reserve_usd']}. "
+            "The owner buys them with the button in this conversation."
+        ),
+    }
 
 
 def _transcribe(root, arguments, runner):

@@ -29,13 +29,10 @@ ffmpeg_path = ""
 """
 EFFECTIVE = {
     "runware_api_key": "rw-secret",
-    "gateway": "opencode",
-    "opencode_bin": "/opt/opencode",
     "writer_model": "openai/gpt-6.1-sol",
     "editor_model": "openrouter/deep/seek",
     # A file without this name got the default, and still does.
     "critic_model": "openai/gpt-6.1-sol",
-    "opencode_workspace": "/work",
     "llm_base_url": "https://example.test/v1",
     "llm_api_key": "llm-secret",
     "llm_model": "bare-model",
@@ -67,14 +64,11 @@ def test_an_old_file_loads_to_the_same_values(path):
 
 
 def test_a_fresh_install_keeps_todays_defaults(path):
-    assert _effective(config.Settings()) | {"gateway": "x"} == {
+    assert _effective(config.Settings()) == {
         "runware_api_key": "",
-        "gateway": "x",
-        "opencode_bin": "opencode",
         "writer_model": "openai/gpt-6.1-sol",
         "editor_model": "opencode-go/deepseek-v4.1-flash",
         "critic_model": "openai/gpt-6.1-sol",
-        "opencode_workspace": "",
         "llm_base_url": "https://opencode.ai/inference/go/openai/v1",
         "llm_api_key": "",
         "llm_model": "deepseek-v4.1-flash",
@@ -83,7 +77,6 @@ def test_a_fresh_install_keeps_todays_defaults(path):
         "default_budget_usd": 5.0,
         "image_reserve_usd": 0.05,
     }
-    assert config.Settings().gateway == "direct"
 
 
 def test_the_first_save_keeps_the_old_file_once_and_private(path):
@@ -111,7 +104,7 @@ def test_a_save_round_trip_is_byte_stable_and_private(path):
     first = path.read_bytes()
     config.save_settings(config.load_settings())
     assert path.read_bytes() == first
-    assert tomllib.loads(first.decode())["schema_version"] == 2
+    assert tomllib.loads(first.decode())["schema_version"] == 3
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
@@ -140,3 +133,60 @@ def test_the_file_wins_over_the_environment(path, monkeypatch):
     effective = config.effective_settings()
     assert effective.keys.elevenlabs == "env-eleven"
     assert effective.keys.anthropic == "file-anthropic"
+
+
+V1_DIRECT = """[settings]
+gateway = "direct"
+writer_model = "openai/never-used"
+editor_model = "opencode-go/never-used-either"
+llm_model = "the-one-that-answered"
+llm_api_key = "k"
+"""
+
+
+def test_a_file_on_the_direct_path_keeps_the_model_that_really_answered(path):
+    path.write_text(V1_DIRECT)
+    loaded = config.load_settings()
+    for role in (loaded.roles.writer, loaded.roles.editor, loaded.roles.critic):
+        assert (role.provider, role.model) == ("direct", "the-one-that-answered")
+    assert loaded.llm_api_key == "k"
+
+
+def test_a_file_on_the_gateway_keeps_its_role_models_and_ignores_the_rest(path):
+    path.write_text(V1)
+    loaded = config.load_settings()
+    assert loaded.writer_model == "openai/gpt-6.1-sol"
+    assert not hasattr(loaded.computer, "gateway")
+    assert not hasattr(loaded.computer, "opencode_bin")
+
+
+def test_a_schema_2_file_moves_too_and_is_kept_aside_once(path):
+    old = """schema_version = 2
+
+[computer]
+gateway = "direct"
+
+[keys.openai_compatible]
+key = "k"
+model = "flash"
+
+[roles.writer]
+provider = "openai"
+model = "never-used"
+thinking = "high"
+"""
+    path.write_text(old)
+    loaded = config.load_settings()
+    assert (loaded.roles.writer.provider, loaded.roles.writer.model) == ("direct", "flash")
+    assert loaded.roles.writer.thinking == "high"
+    config.save_settings(loaded)
+    assert path.with_name("settings.toml.v2.bak").read_text() == old
+    again = config.load_settings()
+    assert (again.roles.writer.provider, again.roles.writer.model) == ("direct", "flash")
+    config.save_settings(again)
+    assert config.load_settings().roles.writer.provider == "direct"
+
+
+def test_a_schema_3_file_is_not_moved_again(path):
+    config.save_settings(config.Settings(roles={"writer": {"provider": "anthropic", "model": "m"}}))
+    assert config.load_settings().roles.writer.provider == "anthropic"

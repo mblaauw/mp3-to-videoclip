@@ -7,7 +7,8 @@ import { patchAt, type CatalogProvider } from "./settingsModel";
 
 /** Where each provider's key sits in the settings. */
 const KEY_PATH: Record<string, string> = {
-  openai: "keys.openai_compatible.key",
+  openai: "keys.openai",
+  direct: "keys.openai_compatible.key",
   "opencode-go": "keys.opencode_go",
   anthropic: "keys.anthropic",
   gemini: "keys.gemini",
@@ -117,7 +118,8 @@ function KeyRow({
 export function KeysTab() {
   const { catalog, settings } = usePanel();
   const has: Record<string, boolean> = {
-    openai: settings.has_openai_compatible_key === true,
+    openai: settings.has_openai_key === true,
+    direct: settings.has_openai_compatible_key === true,
     "opencode-go": settings.has_opencode_go_key === true,
     anthropic: settings.has_anthropic_key === true,
     gemini: settings.has_gemini_key === true,
@@ -135,9 +137,9 @@ export function KeysTab() {
           <KeyRow key={item.id} id={item.id} label={item.label} stored={has[item.id]} />
         ))}
       </Section>
-      <Section title="The direct endpoint" note={catalog.notes.direct_path}>
-        <TextRow path="keys.openai_compatible.base_url" label="Direct address" placeholder="https://…/v1" />
-        <TextRow path="keys.openai_compatible.model" label="Direct model" hint="The one model that answers on the direct path." />
+      <Section title="Your own endpoint" note={catalog.notes.direct_path}>
+        <TextRow path="keys.openai_compatible.base_url" label="Address" placeholder="https://…/v1" />
+        <TextRow path="keys.openai_compatible.model" label="A model it offers" hint="Used when a role names this endpoint with no model of its own." />
       </Section>
     </>
   );

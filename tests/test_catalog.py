@@ -55,7 +55,7 @@ def test_a_refresh_adds_listed_models_without_a_price(cache):
             200, json={"data": [{"id": "gpt-6.1-sol"}, {"id": "new-model", "price": "1"}]}
         )
 
-    settings = Settings(llm_api_key="k", llm_base_url="https://example.test/v1")
+    settings = Settings(keys={"openai": "k"})
     report = catalog.refresh("openai", settings, client=_client(handler))
     assert report["added"] == ["new-model"]
     assert report["listed"] == 2
@@ -169,3 +169,21 @@ def test_a_rejected_key_says_so_and_never_repeats_it():
 def test_an_unknown_provider_is_refused():
     with pytest.raises(ValueError):
         catalog.test_provider("nope", Settings(), client=_client(_no_network))
+
+
+def test_a_provider_with_no_list_says_a_key_cant_be_checked_for_free():
+    # OpenCode Go answers 404 here, which is not a failure of the key.
+    settings = Settings(keys={"opencode_go": "s3"})
+    result = catalog.test_provider(
+        "opencode-go", settings, client=_client(lambda request: httpx.Response(404))
+    )
+    assert result["ok"] is False
+    assert "can't check a key for free" in result["message"]
+
+
+def test_an_opencode_go_key_saved_as_the_endpoint_counts_for_opencode_go():
+    settings = Settings(llm_api_key="k")
+    view = catalog.public_view(settings)
+    rows = {row["id"]: row["ready"]["key"] for row in view["providers"]}
+    assert rows["opencode-go"] is True
+    assert rows["openai"] is False

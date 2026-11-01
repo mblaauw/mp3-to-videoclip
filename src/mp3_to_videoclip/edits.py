@@ -1230,7 +1230,7 @@ def tool_page(root: Path, first: int = 0, count: int = TOOL_PAGE_SHOTS) -> dict:
     """The cut for a model, a page of shots at a time.
 
     A whole cut with its report outgrows what a tool result can carry on a longer
-    film, and a gateway may truncate it to something the model can't read.
+    film, and a client may truncate it to something the model can't read.
     """
     edit = load_edit(root)
     if edit is None:

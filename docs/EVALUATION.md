@@ -68,7 +68,7 @@ uv run python -m tests.evals.live --fixture advert-30s --role writer --authorize
 
 ### Baseline, 31 Oct 2026
 
-The first live runs, all on `gpt-6.1-sol` through OpenCode. They set the mark for later prompt
+The first live runs, all on `gpt-6.1-sol` through the OpenCode gateway, since retired. They set the mark for later prompt
 changes, and they are thin: one run each, two of three fixtures. The slow instrumental wasn't run.
 
 | Fixture | Role | Automatic checks | What a reader sees |

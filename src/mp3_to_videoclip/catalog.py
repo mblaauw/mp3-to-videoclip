@@ -23,6 +23,7 @@ from .storage import write_json
 
 STATIC = Path(__file__).with_name("catalog.toml")
 CACHE_ENV = "MP3_TO_VIDEOCLIP_CATALOG_CACHE"
+OPENAI_URL = "https://api.openai.com/v1"
 OPENCODE_GO_URL = "https://opencode.ai/inference/go/openai/v1"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/models"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -55,6 +56,8 @@ class Model(BaseModel):
     label: str = ""
     capabilities: list[Capability] = []
     price: Price | None = None
+    #: A text model's second rate: ``price`` is per 1k in and this per 1k out.
+    price_out: Price | None = None
     price_note: str = ""
     price_source: str = ""
     price_checked: str = ""
@@ -126,6 +129,7 @@ def load() -> Catalog:
                 continue
             # A list is not a price list: only the static file may state a price.
             model.price = None
+            model.price_out = None
             catalog.models.append(model)
             known[(provider.id, model.id)] = model
         for entry in _cached(provider.id, "voices"):
@@ -141,6 +145,10 @@ def load() -> Catalog:
 
 
 def provider_key(settings: Settings, provider: Provider) -> str:
+    if provider.id == "opencode-go":
+        from .director.routing import opencode_go_key
+
+        return opencode_go_key(settings)
     value = settings
     for part in provider.key_setting.split("."):
         value = getattr(value, part)
@@ -245,6 +253,8 @@ def _listing(
     if provider.kind == "runware":
         return {"models": _runware_models(catalog, client)}
     key = _require_key(settings, provider)
+    if provider.id == "openai":
+        return {"models": _bearer_models(OPENAI_URL, key, client)}
     if provider.kind == "openai-compatible":
         url = settings.keys.openai_compatible.base_url
         return {"models": _bearer_models(url, key, client)}
@@ -339,6 +349,9 @@ def _test_runware(key: str, client: httpx.Client) -> tuple[bool, str]:
 def _test_failure(exc: ProviderError) -> str:
     if exc.code == "invalidApiKey":
         return "Rejected"
+    if exc.status == 404:
+        # OpenCode Go has no model list. Only a real, charged call could check its key.
+        return "This provider can't check a key for free. It's tried on first use."
     if exc.code == "network_error":
         return "Could not reach the provider. Check the network."
     return f"Could not verify the key ({exc.code})."
