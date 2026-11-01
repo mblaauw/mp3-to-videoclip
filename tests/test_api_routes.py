@@ -684,3 +684,171 @@ def test_intake_keeps_a_custom_look_when_no_preset_is_selected(client, project):
     assert saved.status_code == 200, saved.text
     assert saved.json()["style_preset"] is None
     assert read_json(project / "brief.json")["creative"]["look"] == before
+
+
+def test_settings_nested_patch_keeps_keys_and_never_returns_one(monkeypatch, tmp_path):
+    path = tmp_path / "settings.toml"
+    monkeypatch.setattr("mp3_to_videoclip.config.settings_path", lambda: path)
+    monkeypatch.setattr("mp3_to_videoclip.api.settings.effective_settings", load_settings)
+    monkeypatch.setenv("MP3_TO_VIDEOCLIP_CATALOG_CACHE", str(tmp_path / "catalog"))
+    with api_client(tmp_path) as client:
+        saved = client.put(
+            "/api/settings",
+            json={
+                "keys": {
+                    "runware": "rw-s3cret",
+                    "elevenlabs": "el-s3cret",
+                    "openai_compatible": {"key": "llm-s3cret", "base_url": "https://x.test/v1"},
+                },
+                "roles": {"writer": {"model": "chosen"}},
+                "schema_version": 99,
+            },
+        )
+        assert saved.status_code == 200
+        body = saved.json()
+        assert body["schema_version"] == 2
+        assert body["roles"]["writer"] == {
+            "provider": "openai",
+            "model": "chosen",
+            "thinking": "medium",
+            "max_tokens_per_turn": 0,
+        }
+        assert body["writer_model"] == "openai/chosen"
+        assert body["has_runware_key"] is body["has_elevenlabs_key"] is True
+        assert body["has_openai_compatible_key"] is True
+        assert body["has_gemini_key"] is False
+        assert body["notes"]["direct_path"]
+        for response in (
+            saved,
+            client.get("/api/settings"),
+            client.get("/api/settings/catalog"),
+        ):
+            assert "s3cret" not in response.text
+
+        # Empty means keep, for a nested key as for a flat one.
+        client.put(
+            "/api/settings",
+            json={"keys": {"runware": "", "openai_compatible": {"key": "", "model": "m"}}},
+        )
+        loaded = load_settings()
+        assert loaded.keys.runware == "rw-s3cret"
+        assert loaded.llm_api_key == "llm-s3cret"
+        assert loaded.llm_model == "m"
+        assert client.put("/api/settings", json={"new_films": {"fps": 0}}).status_code == 400
+
+
+def test_settings_catalog_says_what_each_entry_needs(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "mp3_to_videoclip.api.settings.effective_settings",
+        lambda: Settings(runware_api_key="rw-s3cret"),
+    )
+    monkeypatch.setenv("MP3_TO_VIDEOCLIP_CATALOG_CACHE", str(tmp_path / "catalog"))
+    with api_client(tmp_path) as client:
+        response = client.get("/api/settings/catalog")
+    body = response.json()
+    rows = {row["id"]: row for row in body["providers"]}
+    assert rows["runware"]["ready"]["key"] is True
+    assert rows["runware"]["ready"]["reachable"] is None
+    assert rows["runware"]["ready"]["unlocks"] == ["pictures", "clips", "voices"]
+    assert rows["openai"]["ready"]["key"] is False
+    assert "elevenlabs" not in rows
+    assert "renderer" in body["computer"]
+
+
+def test_settings_provider_and_voice_tests_spend_nothing(monkeypatch, tmp_path):
+    monkeypatch.setattr("mp3_to_videoclip.api.settings.effective_settings", lambda: Settings())
+    monkeypatch.setenv("MP3_TO_VIDEOCLIP_CATALOG_CACHE", str(tmp_path / "catalog"))
+    with api_client(tmp_path) as client:
+        tested = client.post("/api/settings/test", json={"kind": "provider", "provider": "runware"})
+        assert tested.json()["message"] == "Add a Runware key first."
+        voice = client.post(
+            "/api/settings/test", json={"kind": "voice", "voice": "English_Magnetic_Male_2"}
+        )
+        assert voice.json()["ok"] is False
+        assert "no free sample" in voice.json()["message"]
+        unknown = client.post("/api/settings/test", json={"kind": "voice", "voice": "nope"})
+        assert unknown.status_code == 400
+        bad = client.post("/api/settings/catalog/refresh", json={"provider": "nope"})
+        assert bad.status_code == 400
+
+
+def test_settings_costs_sum_every_film_by_kind(tmp_path):
+    def journal(name: str, tasks: dict) -> None:
+        path = tmp_path / name / "work/tasks.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(tasks))
+
+    journal(
+        "one",
+        {
+            "a": {"kind": "images", "status": "ready", "cost_usd": "0.03"},
+            "b": {"kind": "images", "status": "submitted", "reserve_usd": "0.05"},
+            "c": {"kind": "voice", "status": "ready", "cost_usd": "0.10"},
+        },
+    )
+    journal("two", {"d": {"kind": "images", "status": "ready", "cost_usd": "0.01"}, "e": {}})
+    (tmp_path / "broken/work").mkdir(parents=True)
+    (tmp_path / "broken/work/tasks.json").write_text(json.dumps({"x": {"cost_usd": "not money"}}))
+    with api_client(tmp_path) as client:
+        before = {p: p.read_bytes() for p in tmp_path.rglob("tasks.json")}
+        body = client.get("/api/settings/costs").json()
+        assert before == {p: p.read_bytes() for p in tmp_path.rglob("tasks.json")}
+    assert body["spent_usd"] == "0.14"
+    assert body["reserved_usd"] == "0.05"
+    assert body["unpriced"] == 1
+    assert body["by_kind"] == [
+        {"kind": "images", "spent_usd": "0.04", "reserved_usd": "0.05"},
+        {"kind": "other", "spent_usd": "0", "reserved_usd": "0"},
+        {"kind": "voice", "spent_usd": "0.10", "reserved_usd": "0"},
+    ]
+    films = {film["slug"]: film for film in body["films"]}
+    assert films["broken"]["unreadable"] is True
+    assert films["one"]["spent_usd"] == "0.13"
+
+
+def test_settings_caches_list_and_refuse_what_is_not_listed(tmp_path, project):
+    chunk = project / "work/remotion-chunks/c.mp4"
+    chunk.parent.mkdir(parents=True)
+    chunk.write_bytes(b"x")
+    with api_client(tmp_path) as client:
+        rows = client.get("/api/settings/caches").json()["caches"]
+        assert next(row for row in rows if row["name"] == "remotion_chunks")["folders"] == 1
+        refused = client.post("/api/settings/caches/clear", json={"name": "work"})
+        assert refused.status_code == 400
+        assert chunk.exists()
+        cleared = client.post("/api/settings/caches/clear", json={"name": "remotion_chunks"})
+        assert cleared.json()["removed"] == 1
+    assert not chunk.exists()
+
+
+def test_a_settings_save_leaves_every_approval_alone(monkeypatch, tmp_path, project):
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.production.project import STAGE_FILES
+
+    path = tmp_path / "settings.toml"
+    monkeypatch.setattr("mp3_to_videoclip.config.settings_path", lambda: path)
+    monkeypatch.setattr("mp3_to_videoclip.api.settings.effective_settings", load_settings)
+
+    def state():
+        hashes = {}
+        for stage in STAGE_FILES:
+            try:
+                hashes[stage] = P.stage_hash(project, stage)
+            except (FileNotFoundError, ValueError):
+                hashes[stage] = None
+        return hashes, (project / "work/approvals.json").read_bytes()
+
+    before = state()
+    with api_client(tmp_path) as client:
+        assert (
+            client.put(
+                "/api/settings",
+                json={
+                    "roles": {"writer": {"provider": "anthropic", "model": "other"}},
+                    "new_films": {"brand": {"name": "New"}},
+                    "voices": {"default_voice": "other"},
+                },
+            ).status_code
+            == 200
+        )
+    assert state() == before

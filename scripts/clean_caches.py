@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Show, and only with --yes remove, render caches the app can rebuild.
 
-Dry by default, and only the owner runs it for real. It removes nothing but two kinds of
-folder: the old compositor's frame cache and finished render chunks. Stills, source audio,
+Dry by default, and only the owner runs it for real. It removes nothing but the folders on
+the one list in ``caches.py``, which the Settings panel uses too. Stills, source audio,
 renders, voice takes, approvals and the journal are never touched.
 
     uv run python scripts/clean_caches.py
@@ -15,21 +15,13 @@ import argparse
 import shutil
 from pathlib import Path
 
-CACHES = ("work/graphics/cache", "work/remotion-chunks")
-
-
-def size_of(path: Path) -> int:
-    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+from mp3_to_videoclip import caches
 
 
 def find_caches(projects: Path) -> list[tuple[Path, int]]:
-    found = []
-    for root in sorted(item for item in projects.iterdir() if item.is_dir()):
-        for relative in CACHES:
-            path = root / relative
-            if path.is_dir() and not path.is_symlink():
-                found.append((path, size_of(path)))
-    return found
+    return sorted(
+        found for cache in caches.PRODUCTION_CACHES for found in caches.find(projects, cache)
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

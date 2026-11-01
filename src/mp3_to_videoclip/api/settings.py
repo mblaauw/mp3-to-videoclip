@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import uuid
+from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from mp3_to_videoclip.config import (
     FLAT,
@@ -144,6 +145,28 @@ def _test_opencode() -> dict:
     }
 
 
+def _test_provider(provider: str) -> dict:
+    from mp3_to_videoclip import catalog
+
+    return catalog.test_provider(provider, effective_settings())
+
+
+def _test_voice(voice_id: str) -> dict:
+    """A sample only when it is free: a provider's preview. Nothing is bought here."""
+    from mp3_to_videoclip import catalog
+
+    voice = next((item for item in catalog.load().voices if item.id == voice_id), None)
+    if voice is None:
+        raise ValueError(f"unknown voice {voice_id}")
+    if voice.preview_url:
+        return {"ok": True, "kind": "voice", "preview_url": voice.preview_url, "message": "Free"}
+    return {
+        "ok": False,
+        "kind": "voice",
+        "message": "This voice has no free sample from its provider.",
+    }
+
+
 @router.post("/test")
 async def test_settings(payload: dict):
     kind = payload.get("kind")
@@ -151,7 +174,54 @@ async def test_settings(payload: dict):
         return await asyncio.to_thread(_test_runware)
     if kind == "opencode":
         return await asyncio.to_thread(_test_opencode)
-    raise HTTPException(status_code=400, detail="kind must be runware or opencode")
+    if kind == "provider":
+        return await asyncio.to_thread(_test_provider, str(payload.get("provider")))
+    if kind == "voice":
+        return _test_voice(str(payload.get("voice")))
+    raise HTTPException(status_code=400, detail="kind must be runware, opencode, provider or voice")
+
+
+@router.get("/catalog")
+async def get_catalog():
+    from mp3_to_videoclip import catalog, setup
+
+    view = await asyncio.to_thread(catalog.public_view, effective_settings())
+    return {**view, "computer": setup.status(), "notes": NOTES}
+
+
+@router.post("/catalog/refresh")
+async def refresh_catalog(payload: dict):
+    """Only ever on the owner's click, and only through free listing calls."""
+    from mp3_to_videoclip import catalog
+
+    provider = str(payload.get("provider"))
+    return await asyncio.to_thread(catalog.refresh, provider, effective_settings())
+
+
+def _projects_dir(request: Request) -> Path:
+    return Path(getattr(request.app.state, "projects_dir", "projects"))
+
+
+@router.get("/costs")
+async def get_costs(request: Request):
+    from mp3_to_videoclip import budget
+
+    return await asyncio.to_thread(budget.costs_across, _projects_dir(request))
+
+
+@router.get("/caches")
+async def get_caches(request: Request):
+    from mp3_to_videoclip import caches
+
+    return {"caches": await asyncio.to_thread(caches.listing, _projects_dir(request))}
+
+
+@router.post("/caches/clear")
+async def clear_cache(request: Request, payload: dict):
+    from mp3_to_videoclip import caches
+
+    name = str(payload.get("name"))
+    return await asyncio.to_thread(caches.clear, _projects_dir(request), name)
 
 
 def _without_empty_secrets(keys: dict) -> dict:

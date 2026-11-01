@@ -26,6 +26,7 @@ def _film(tmp_path):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"data")
+    (root / "project.json").write_text('{"schema_version": 3}')
     return root
 
 

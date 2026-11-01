@@ -7,7 +7,9 @@ anything: the phase record owns its decisions and the rework is complete.
 ## Rules
 
 - `projects/`, `backups/` and `archive/` are never deleted or rewritten in place.
-  Productions are gitignored; the metadata snapshot is their rollback.
+  Productions are gitignored; the metadata snapshot is their rollback. One written
+  exception: `caches.py` may clear the derived folders it lists, which fail closed
+  and rebuild.
 - Source audio and generated stills are immutable. A new image is a new version.
 - No paid provider call in tests, and no live call without the owner's explicit
   authorization. Money logic lives in the task journal — keep it strict.
