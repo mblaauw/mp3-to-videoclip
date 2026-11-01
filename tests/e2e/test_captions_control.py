@@ -34,3 +34,14 @@ def test_choosing_captions_draws_them_and_off_removes_them(page: Page, studio):
     assert sum(len(shot.text) for shot in edits.load_edit(studio.root).shots) == 2
     control.get_by_label("Captions").select_option(label="Off")
     expect(control).to_contain_text("0 on the film")
+
+
+def test_the_player_loads_the_films_embedded_typeface(page: Page, studio):
+    studio.approve("brief", "storyboard")
+    edit = edits.seed_edit(studio.root)
+    grade = edit.grade.model_copy(update={"typeface": "fraunces"})
+    edits.save_edit(studio.root, edit.model_copy(update={"grade": grade}))
+    page.goto(studio.film("film"))
+    page.wait_for_function(
+        "[...document.fonts].some((face) => face.family.includes('Fraunces') && face.status === 'loaded')"
+    )

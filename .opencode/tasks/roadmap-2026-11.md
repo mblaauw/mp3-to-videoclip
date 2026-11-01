@@ -225,3 +225,24 @@ The plans were written on `c1414a3`, before the Cool Cat After Dark run merged. 
 - **Effort:** the phase summaries add up to about 120 working days, not 16 weeks. The table above is older than the summaries; the summaries are nearer.
 
 Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both are decisions, and `api/voice.py` follows the same contract. `cutNotes.ts` needs six missing codes, adding `text_not_drawn` and `reprise_uncropped`. The browser tests run as their own CI job and stay out of the plain `pytest` run.
+
+## Where the roadmap stands, 1 Nov 2026
+
+Merged: A (#69), H (#73, #74), B and D (#75). C-1 and C-2 are in the PR after #75, with debt
+from those phases. Next in the final order: E-1.
+
+Differences from the plans, where the plan was wrong or could not hold:
+
+- **H:** `llm_model` keeps its own setting. Runware's refresh re-reads public schemas, because
+  model search is not documented as free. A voice sample plays only a free preview.
+- **B:** a film whose owner named its sections keeps them. A full section targets one cut a bar,
+  not 2.5, because cuts land on bar lines.
+- **D:** library state lives beside the settings and the listing takes no read snapshot, so
+  opening the library writes nothing into a film. The 0.999 parity number cannot be met:
+  full-size renders do not repeat exactly even with one browser.
+- **C:** the type face lives in `grade.typeface`. Upscaling uses Real-ESRGAN at a published
+  $0.0006. No paid batch and no real depth run have happened; both need the owner.
+
+Still open by decision: the OpenAI major version waits for E-1, whose adapter replaces that code.
+The narrator voice in Settings is not used until Phase I; `voice.py` keeps its own default.
+`_final_state` keeps its mtime check. Parts of C not yet done: C-3 and C-4.

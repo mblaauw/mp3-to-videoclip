@@ -67,12 +67,23 @@ function SplitPanes({panes, layout, width, height}) {
   );
 }
 
-/** Embedded faces as `data:` URLs from the caller; the render waits until they load. */
+/** Embedded faces as `data:` URLs from the caller; a render waits until they load. */
 function useTypefaces(typefaces) {
   const entries = Object.values(typefaces ?? {});
+  const names = entries.map((face) => face.family).join("|");
   const [handle] = useState(() => (entries.length ? delayRender("embedded typefaces") : null));
   useEffect(() => {
-    if (!entries.length) return undefined;
+    let released = handle === null;
+    const release = () => {
+      if (!released) {
+        released = true;
+        continueRender(handle);
+      }
+    };
+    if (!names) {
+      release();
+      return undefined;
+    }
     const style = document.createElement("style");
     style.textContent = entries
       .map(
@@ -81,20 +92,13 @@ function useTypefaces(typefaces) {
       )
       .join("");
     document.head.appendChild(style);
-    let released = false;
-    const release = () => {
-      if (!released) {
-        released = true;
-        continueRender(handle);
-      }
-    };
     Promise.all(entries.map((face) => document.fonts?.load?.(`700 100px '${face.family}'`)))
       .then(release)
       .catch(release);
     return () => style.remove();
-    // The faces never change within one render; they arrive once with the input.
+    // Keyed on the names: the bytes behind a name never change within a session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handle]);
+  }, [names, handle]);
 }
 
 function fontStack(family) {

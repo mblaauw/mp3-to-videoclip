@@ -521,6 +521,7 @@ export type PreviewInput = {
   preview_placeholders: string[];
   stale_shots: string[];
   brand_plate?: string | null;
+  typefaces?: Record<string, { family: string; src: string }>;
   brand_duration_frames?: number;
   grade?: import("./baseFilm").Grade | null;
   /** Planned titles, or null with a note when this film has none to show yet. */

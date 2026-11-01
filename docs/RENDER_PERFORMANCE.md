@@ -1,6 +1,16 @@
 # Local renderer diagnostics and benchmark
 
 
+## Phase C-1 and C-2, 1 Nov 2026
+
+Half-size preview of Tree of Love, cold, 4 browsers, one run each on Remotion 4.0.539: 1 min
+45 s with no look (2 min 3 s before the upgrade, so this row varies by a good 15%). With every
+shot's depth layers at 1.0: 1 min 43 s, so three pictures per shot cost nothing measurable.
+Those layers took 11 s and 203 MB for 38 stills, from a stand-in map, not the real model.
+
+The advert at 1 browser, half size: no grain 49.6 s, grain 0.5 on the 1024 px tile 49.3 s. It
+repeats exactly from one render to the next. A flat-sky frame has not been judged at full screen.
+
 ## Phase D benchmark, 1 Nov 2026
 
 Measured on a scratch copy of Tree of Love (38 shots, 5,749 frames, 1080p24) on an 8-core
@@ -32,9 +42,10 @@ this one film, without five look-heavy frames.
 **Parity.** The 0.999 SSIM the plan asked of 4 browsers against 1 cannot be met on this film,
 because the same setup does not repeat itself: two 1-browser renders of the first four shots
 score 0.9956 Y, and 4 browsers against 1 scores 0.9952 on those frames. No frame fell below
-0.987, and none was reported broken. The advert does repeat exactly (SSIM 1.0), so the source
-is something in Tree of Love's look, which was not traced further. Frame counts and packet
-timing match.
+0.987, and none was reported broken. It is not the film or its look: Tree of Love sets no look,
+and the advert, with grain on, repeats exactly at half size (SSIM 1.0) but scores 0.989 Y when
+rendered twice at full size. So the difference comes with full-size rendering. Why was not
+traced. Frame counts and packet timing match.
 
 A half-size frame was compared by eye with the final at two points, one of them all text: same
 layout and proportions, with the preview banner added. A preview with one still missing played,

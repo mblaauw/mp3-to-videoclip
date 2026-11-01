@@ -76,3 +76,13 @@ def test_a_missing_renderer_shows_its_card_above_the_viewer(page: Page, studio):
     card = page.locator(".card.setup")
     expect(card).to_be_visible()
     assert card.bounding_box()["height"] > 60
+
+
+def test_the_picture_gets_its_share_of_a_short_tablet(page: Page, studio):
+    studio.approve("brief", "storyboard")
+    page.set_viewport_size({"width": 1024, "height": 700})
+    page.goto(studio.film("film"))
+    viewer = page.locator(".film-viewer").first
+    expect(viewer).to_be_visible()
+    box = viewer.bounding_box()
+    assert box["height"] >= 250, f"the viewer is only {box['height']} px tall"
