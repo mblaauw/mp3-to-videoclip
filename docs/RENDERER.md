@@ -157,8 +157,9 @@ Chrome and is recorded in the report; it is off by default.
 
 `depth.py` estimates a still's depth in a private environment (Depth Anything V2 Small,
 Apache-2.0, at a pinned revision), set up only on the owner's click. `work/depth/<still
-sha>-<tools>/` holds three feathered layers; far is the whole still, so moving the others
-never shows a hole. `grade.look.depth` turns it on for a film and `depth: false` keeps one
+sha>-<tools>-v<n>/` holds three feathered layers. Far covers the frame, so moving the others
+never shows a hole, and behind each nearer layer the picture is replaced by the pixels
+around it, so what a move uncovers is background and not the subject's edge a second time. `grade.look.depth` turns it on for a film and `depth: false` keeps one
 shot flat. A film with depth refuses to render a still without layers rather than draw it
 flat without saying so; the Player plays such a shot flat, because it is only a preview.
 

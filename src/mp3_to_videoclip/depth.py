@@ -33,6 +33,8 @@ WORKER = Path(__file__).with_name("depth_tools_worker.py")
 MID_FROM, NEAR_FROM = 0.40, 0.70
 #: The soft edge of a layer, as a share of the still's short side.
 FEATHER = 0.006
+#: Bumped when the layers change, so old sets are not reused.
+LAYER_VERSION = 3
 LAYERS = ("far", "mid", "near")
 
 
@@ -137,7 +139,8 @@ def depth_map(still: Path) -> Path:
 
 
 def _layer_dir(root: Path, still: Path) -> Path:
-    return Path(root) / "work" / "depth" / f"{file_hash(still)}-{model_key()}"
+    name = f"{file_hash(still)}-{model_key()}-v{LAYER_VERSION}"
+    return Path(root) / "work" / "depth" / name
 
 
 def layer_set(root: Path, still: Path) -> dict | None:
@@ -159,8 +162,24 @@ def _band(depth: np.ndarray, share: float, radius: float) -> Image.Image:
     return mask.filter(ImageFilter.GaussianBlur(radius))
 
 
+def _behind(picture: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """The picture with what a nearer layer covers replaced by the nearest pixels around it.
+
+    A layer that moves uncovers what is behind it. If that were the same subject again, its
+    edge would show twice; this way it uncovers background. Only pixels inside the nearer
+    layer's shape change, so nothing that is always on screen does, and only a thin rim of
+    them is ever seen.
+    """
+    from scipy import ndimage
+
+    if not mask.any() or mask.all():
+        return picture
+    nearest = ndimage.distance_transform_edt(mask, return_distances=False, return_indices=True)
+    return picture[nearest[0], nearest[1]]
+
+
 def make_layers(root: Path, still: Path, depth: Path) -> dict:
-    """Cut a still into its layers. Far is the whole still, so nothing shows through."""
+    """Cut a still into its layers. Far covers the frame, so nothing shows through."""
     existing = layer_set(root, still)
     if existing is not None:
         return existing
@@ -168,9 +187,14 @@ def make_layers(root: Path, still: Path, depth: Path) -> dict:
     grey = Image.open(depth).convert("L").resize(image.size, Image.Resampling.BICUBIC)
     values = np.asarray(grey, dtype=np.float32)
     radius = max(1.0, FEATHER * min(image.size))
+    pixels = np.asarray(image)
+    mid_from = np.quantile(values, MID_FROM)
+    near_from = np.quantile(values, NEAR_FROM)
+    far = Image.fromarray(_behind(pixels, values >= mid_from), mode="RGB")
+    mid = Image.fromarray(_behind(pixels, values >= near_from), mode="RGB")
     layers = {
-        "far": image.convert("RGBA"),
-        "mid": Image.merge("RGBA", (*image.split(), _band(values, MID_FROM, radius))),
+        "far": far.convert("RGBA"),
+        "mid": Image.merge("RGBA", (*mid.split(), _band(values, MID_FROM, radius))),
         "near": Image.merge("RGBA", (*image.split(), _band(values, NEAR_FROM, radius))),
     }
     folder = _layer_dir(root, still)

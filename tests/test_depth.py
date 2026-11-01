@@ -34,7 +34,37 @@ def tools(tmp_path, monkeypatch):
     monkeypatch.setenv("STUDIO_DEPTH_TOOLS", str(tmp_path / "tools"))
 
 
-def test_three_layers_far_is_the_whole_still_and_near_is_only_what_is_near(tmp_path):
+def test_what_a_near_layer_uncovers_is_background_not_the_subject_again(tmp_path):
+    root = tmp_path / "film"
+    still = root / "assets/s001/v001.png"
+    still.parent.mkdir(parents=True)
+    # A red subject on the right, nearer than a blue background on the left.
+    picture = np.zeros((90, 160, 3), dtype=np.uint8)
+    picture[:, :80] = (0, 0, 200)
+    picture[:, 80:] = (200, 0, 0)
+    Image.fromarray(picture).save(still)
+    # Depth rises slowly across the background, then the subject stands well forward.
+    values = np.zeros((90, 160), dtype=np.uint8)
+    values[:, :80] = np.linspace(0, 100, 80).astype(np.uint8)
+    values[:, 80:] = 255
+    Image.fromarray(values, mode="L").save(tmp_path / "ramp.png")
+    layers = depth.make_layers(root, still, tmp_path / "ramp.png")
+    far = np.asarray(Image.open(layers["folder"] / "far.png"))
+    near = np.asarray(Image.open(layers["folder"] / "near.png"))
+    middle = np.asarray(Image.open(layers["folder"] / "mid.png"))
+    # The subject's rim, in the far layer, is background: no second edge to see.
+    assert far[45, 80 + 1, 2] > 150 and far[45, 80 + 1, 0] < 50
+    assert middle[45, 81, 2] > 150 and middle[45, 81, 0] < 50
+    # And what is always on screen is untouched, right up to the edge.
+    edge = int(np.argmax(values[45] >= np.quantile(values, depth.MID_FROM)))
+    assert 0 < edge < 80
+    assert np.array_equal(far[45, :edge, :3], picture[45, :edge])
+    assert (far[..., 3] == 255).all()
+    # The near layer keeps the subject's true pixels.
+    assert near[45, 150, 0] > 150
+
+
+def test_three_layers_far_covers_the_frame_and_near_is_only_what_is_near(tmp_path):
     root = tmp_path / "film"
     still = _still(root / "assets/s001/v001.jpg")
     layers = depth.make_layers(root, still, _map(tmp_path / "d.png"))

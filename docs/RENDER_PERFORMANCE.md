@@ -6,7 +6,17 @@
 Half-size preview of Tree of Love, cold, 4 browsers, one run each on Remotion 4.0.539: 1 min
 45 s with no look (2 min 3 s before the upgrade, so this row varies by a good 15%). With every
 shot's depth layers at 1.0: 1 min 43 s, so three pictures per shot cost nothing measurable.
-Those layers took 11 s and 203 MB for 38 stills, from a stand-in map, not the real model.
+Those layers took 11 s and 203 MB for 38 stills, from a stand-in map.
+
+With the real model (Depth Anything V2 Small on this Mac's CPU), 38 stills took 114 s the first
+time, about 3 s each, and the maps are reused after that. The environment is about 800 MB. A
+preview at depth 0.3, 0.6 and 1.0 took 1:43, 1:50 and 1:49, with no broken frames, against 1:41
+flat. It doubles the file: 34 MB flat, 68 MB at 1.0, because holds now move.
+
+Looking at it found a real fault. A far layer holding the whole still shows a moved subject's
+edge twice: a rim on hands, doubled hair, a ghost on stone. Behind each nearer layer the picture
+is now replaced by the pixels around it, only inside that layer's shape. At 4× zoom and full
+strength a soft rim on a hand remains. Whether it reads at normal size is for the owner's eye.
 
 The advert at 1 browser, half size: no grain 49.6 s, grain 0.5 on the 1024 px tile 49.3 s. It
 repeats exactly from one render to the next. A flat-sky frame has not been judged at full screen.
