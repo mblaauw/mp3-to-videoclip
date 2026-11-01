@@ -162,6 +162,8 @@ async def estimate_images(slug: str, request: Request, payload: dict):
         scope=payload.get("scope", "stills"),
         reserve=str(payload.get("reserve_usd", "0.05")),
         regenerate=bool(payload.get("regenerate")),
+        edit_from=payload.get("edit_from"),
+        edit_note=str(payload.get("edit_note") or ""),
     )
     if not estimate["tasks"]:
         raise HTTPException(
@@ -283,6 +285,70 @@ def get_depth_layer(slug: str, key: str, layer: str, request: Request):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="no such layer")
     return FileResponse(path, media_type="image/png")
+
+
+@router.get("/sheets")
+def get_sheets(slug: str, request: Request):
+    from mp3_to_videoclip import sheets
+
+    return {"sheets": sheets.view(project_root(request, slug))}
+
+
+@router.post("/sheets/generate")
+async def generate_sheet(slug: str, request: Request, payload: dict):
+    """The owner's click on the shown price: authorize exactly that quote, then run it."""
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    quote_id = payload.get("quote_id")
+    if not quote_id:
+        raise HTTPException(status_code=400, detail="estimate the sheet first")
+    try:
+        quote = services.generation.quote(root, quote_id)
+    except FileNotFoundError as exc:
+        raise ApiError(
+            404, "That quote is no longer there. Estimate again.", "quote_missing"
+        ) from exc
+    if quote.get("kind") != "sheet":
+        raise HTTPException(status_code=400, detail="this quote is not for a sheet")
+    decision = _decisions(root, quote["reserve_total_usd"])
+    if not decision["ok"]:
+        return {"needs_budget": True, "decision": decision, "budget": _budget_card(root)}
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+    services.generation.authorize(
+        root, quote_id, note=payload.get("note") or "user confirmed in Studio"
+    )
+
+    async def work():
+        return await asyncio.to_thread(services.generation.run_sheet, root, quote_id)
+
+    job_id = runner.submit("images", slug, work, blocking=True)
+    return {"job_id": job_id, "quote_id": quote_id, "reserve_usd": quote["reserve_total_usd"]}
+
+
+@router.post("/sheets/{entry_id}/estimate")
+async def estimate_sheet(slug: str, entry_id: str, request: Request):
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    estimate = services.generation.estimate_sheet(root, entry_id)
+    # Still before a price is shown: nothing can be bought without the key.
+    runware_api_key()
+    return {"estimate": estimate, "decision": _decisions(root, estimate["reserve_usd"])}
+
+
+@router.post("/sheets/{entry_id}/use")
+async def use_sheet(slug: str, entry_id: str, request: Request, payload: dict):
+    """The owner's click. The brief changes, so the story asks to be approved again."""
+    from mp3_to_videoclip import sheets
+
+    root = project_root(request, slug)
+    try:
+        return sheets.use_as_reference(root, entry_id, int(payload.get("version"))).model_dump()
+    except (OSError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/images/upscale/estimate")

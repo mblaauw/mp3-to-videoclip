@@ -133,8 +133,10 @@ def select_task(root: Path, stage: str | None, role: Role) -> str:
     if stage == "images":
         assets = _json(root, "work/assets.json")
         has_selected = any(
-            isinstance(entry, dict) and entry.get("selected") is not None
-            for entry in assets.values()
+            isinstance(entry, dict)
+            and entry.get("selected") is not None
+            and not key.startswith("sheet:")
+            for key, entry in assets.items()
         )
         return "review" if has_selected else "prompts"
     if stage == "story":

@@ -218,6 +218,7 @@ def record_asset(
     *,
     derived_from: dict | None = None,
     derivation: dict | None = None,
+    edit_of: int | None = None,
 ):
     root = root.resolve()
     path = Path(path).resolve()
@@ -236,6 +237,8 @@ def record_asset(
     if derived_from is not None:
         value["derived_from"] = derived_from
         value["derivation"] = derivation
+    if edit_of is not None:
+        value["edit_of"] = edit_of
     if existing and existing != value:
         raise ValueError("cannot overwrite a prior image version")
     if not existing:

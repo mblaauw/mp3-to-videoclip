@@ -138,6 +138,7 @@ def write_storyboard(
     paid = {key for key, entry in assets.items() if entry.get("versions")} | {
         task["shot_id"] for task in journal.values() if task.get("shot_id")
     }
+    paid = {key for key in paid if not key.startswith("sheet:")}
     lost = sorted(paid - set(ids))
     if lost:
         raise ValueError(

@@ -38,6 +38,7 @@ export function PaidCard({
           ×
         </button>
       </header>
+      {quote.estimate.edit_unavailable && <p className="hint">{quote.estimate.edit_unavailable}</p>}
       {needsBudget ? (
         <p>
           This needs ${quote.estimate.reserve_usd}; ${roomText} is left in the budget. Add
