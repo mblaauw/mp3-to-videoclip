@@ -1,3 +1,4 @@
+import { useProjectChanged } from "./shell/projectEvents";
 import { useEffect, useState } from "react";
 import { api, type ArtifactName, type RatingSummary } from "./api";
 
@@ -49,6 +50,10 @@ export function ArtifactRating({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [changes, setChanges] = useState(0);
+
+  // A skeleton or a save can make the artifact appear while this is on screen.
+  useProjectChanged(slug, () => setChanges((value) => value + 1));
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +75,7 @@ export function ArtifactRating({
     return () => {
       cancelled = true;
     };
-  }, [slug, artifact]);
+  }, [slug, artifact, changes]);
 
   useEffect(() => {
     if (!saved) return;
@@ -111,8 +116,8 @@ export function ArtifactRating({
   }
   if (!summary.available) {
     return (
-      <span className="rating-pending" title={`No ${LABELS[artifact]} yet`}>
-        Rate · no {LABELS[artifact]} yet
+      <span className="rating-pending">
+        Rate it once the {LABELS[artifact]} exists
       </span>
     );
   }

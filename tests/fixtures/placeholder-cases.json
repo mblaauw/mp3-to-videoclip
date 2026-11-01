@@ -1,0 +1,13 @@
+[
+  ["TODO: approved story purpose", true],
+  ["TODO: compose this shot", true],
+  ["todo", true],
+  ["  TBD - later", true],
+  ["placeholder", true],
+  ["PLACEHOLDER: x", true],
+  ["todo el mundo baila", false],
+  ["Todos juntos", false],
+  ["A shot with a todo in it", false],
+  ["placeholders everywhere", false],
+  ["", false]
+]

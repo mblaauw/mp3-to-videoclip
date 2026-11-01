@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from api_support import api_client, make_api_project
 from fastapi.testclient import TestClient
@@ -9,6 +12,8 @@ from fastapi.testclient import TestClient
 from mp3_to_videoclip.api.errors import engine_error
 from mp3_to_videoclip.app import create_app
 from mp3_to_videoclip.config import Settings
+from mp3_to_videoclip.models import Shot
+from mp3_to_videoclip.production import has_placeholders
 from mp3_to_videoclip.providers import MissingProviderKey, ProviderError
 from mp3_to_videoclip.storage import ProjectBusy, RevisionConflict
 
@@ -173,3 +178,17 @@ def test_storyboard_reports_unfinished_shots(tmp_path):
     with api_client(tmp_path) as client:
         body = client.get("/api/projects/production/storyboard").json()
     assert isinstance(body["placeholder_shot_ids"], list)
+
+
+def test_the_screen_and_the_engine_share_placeholder_cases():
+    cases = json.loads((Path(__file__).parent / "fixtures/placeholder-cases.json").read_text())
+    for value, expected in cases:
+        shot = Shot(
+            id="s001",
+            start_frame=0,
+            duration_frames=24,
+            purpose="job",
+            image_prompt="a picture",
+            message=value,
+        )
+        assert has_placeholders(shot) is expected, value

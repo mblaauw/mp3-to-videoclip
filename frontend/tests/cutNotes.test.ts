@@ -35,3 +35,20 @@ test("an unknown finding still says something and keeps no engine ids", () => {
   );
   assert.equal(note.title, "Section 3: needs a look");
 });
+
+test("every report code reads as a sentence, and moves have names", () => {
+  const cases: [string, string, RegExp][] = [
+    ["travel_repetition", "3 push_in moves in a row with the same travel, 1.00 to 1.10", /push-in repeats/],
+    ["long_static_shot", "s009 stays still for 8.5s", /still for 8\.5 seconds/],
+    ["crop_soft", "s009 crops in to 1.60x; a still this size may look soft", /may look soft/],
+    ["section_no_feel", "section section-3 has no written feel", /no feel written/],
+    ["text_not_drawn", "s009 has words on the storyboard, but they only show", /not on screen/],
+    ["reprise_uncropped", "s009 repeats a still with no new framing; give it a crop", /no new framing/],
+    ["motion_repetition", "three push_in moves in a row", /third push-in in a row/],
+  ];
+  for (const [code, message, expected] of cases) {
+    const note = describeNote({ code, message, shot_id: "s009" } as never, 0, context);
+    assert.match(note.title, expected, code);
+    assert.doesNotMatch(note.title, /_/, code);
+  }
+});

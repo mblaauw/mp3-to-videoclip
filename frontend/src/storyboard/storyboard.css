@@ -394,3 +394,17 @@
     width: 100%;
   }
 }
+
+.needs-pill {
+  display: inline-block;
+  padding: 1px var(--s-2);
+  border: 1px solid var(--warn);
+  border-radius: 999px;
+  color: var(--warn);
+  font-size: var(--t-12);
+}
+.board-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}

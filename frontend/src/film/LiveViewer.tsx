@@ -1,3 +1,4 @@
+import { describeTitlesNote } from "./titleNotes";
 import {
   Suspense,
   lazy,
@@ -167,7 +168,7 @@ export function LiveViewer({
                 Show titles
               </label>
             ) : (
-              live?.titlesNote && <span className="hint">{live.titlesNote}</span>
+              live?.titlesNote && <TitlesNote raw={live.titlesNote} />
             )}
             <button type="button" className="film-full-btn" onClick={() => onFull(true)} title="Full view (F)">
               Full view
@@ -175,5 +176,20 @@ export function LiveViewer({
           </div>
       )}
     </section>
+  );
+}
+
+function TitlesNote({ raw }: { raw: string }) {
+  const note = describeTitlesNote(raw);
+  return (
+    <span className="hint">
+      {note.title} {note.reason}
+      {note.details && (
+        <details>
+          <summary>Details</summary>
+          {note.details}
+        </details>
+      )}
+    </span>
   );
 }

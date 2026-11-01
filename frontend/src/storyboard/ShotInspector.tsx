@@ -1,3 +1,4 @@
+import { EMPTY_PROMPT, EMPTY_PURPOSE, shown } from "./placeholders";
 import { useEffect, useRef, useState } from "react";
 import {
   api,
@@ -335,9 +336,10 @@ export function ShotInspector({
           <AutoTextarea
             minRows={2}
             maxRows={8}
-            value={current.purpose}
+            value={shown(current.purpose)}
             maxLength={400}
-            onChange={(event) => change("purpose", event.target.value)}
+            placeholder="Needs a job: what is this shot for?"
+            onChange={(event) => change("purpose", event.target.value || EMPTY_PURPOSE)}
             onBlur={() => void save()}
           />
         </label>
@@ -380,8 +382,8 @@ export function ShotInspector({
                 className="prompt-text"
                 minRows={4}
                 maxRows={16}
-                value={current.image_prompt || ""}
-                onChange={(event) => change("image_prompt", event.target.value)}
+                value={shown(current.image_prompt)}
+                onChange={(event) => change("image_prompt", event.target.value || EMPTY_PROMPT)}
                 onBlur={() => void save()}
                 placeholder="Describe the decisive still"
               />
