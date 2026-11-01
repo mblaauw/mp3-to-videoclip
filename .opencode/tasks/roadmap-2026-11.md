@@ -211,3 +211,17 @@ A, H, B, D, C-1, C-2, E-1, E-2, F-1, I-1, I-2, C-3, E-3, I-3, C-4, I-4, F-2, F-3
 with G-3's resource store before I-1 and the rest of G behind everything. The two
 numbers that matter: about 16 weeks of work in total, and the first narrative film
 plays in the Player about nine weeks in.
+
+## Corrections after PR #66, 1 Nov 2026
+
+The plans were written on `c1414a3`, before the Cool Cat After Dark run merged. Where they disagree, this section wins until the plan is next touched.
+
+- **The Critic exists** (`critique.py`, `critic_model`, `director/prompts/critic/`). There are 14 flat settings, not 13. Phase H shows the Critic as a working role, not a greyed row. Phase E's "the Critic as a third role" is no longer out of scope.
+- **Retiring the gateway includes the Critic.** Its frame review, tool allow-list and fresh sessions run through OpenCode today; the direct adapter must carry them before E-1 retires anything.
+- **Evaluation has a live runner** (`tests/evals/live.py`) and a baseline in `docs/EVALUATION.md`.
+- **Voice exists** (`voice.py`, `EditVoice`, `api/voice.py`, a Film panel). Phase I builds on it or says how `narration.py` relates to it.
+- **Cache clearing:** `scripts/clean_caches.py` covers `work/graphics/cache`, which Phase H's list leaves out. There is one allowlist.
+- **Text styles** `logotype`, `tagline`, `cta` and the `fade_in` animation exist; Phases C and F start from them.
+- **Effort:** the phase summaries add up to about 120 working days, not 16 weeks. The table above is older than the summaries; the summaries are nearer.
+
+Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both are decisions, and `api/voice.py` follows the same contract. `cutNotes.ts` needs six missing codes, adding `text_not_drawn` and `reprise_uncropped`. The browser tests run as their own CI job and stay out of the plain `pytest` run.
