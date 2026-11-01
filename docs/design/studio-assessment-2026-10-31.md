@@ -565,6 +565,11 @@ review evidence.
 | 6 | Should the Director be allowed to authorise spend within the cap, as the direct path allows today? | No. Every paid batch asks, with the price. |
 | 7 | Order of phases? | A, B, D, C, E, F, G. A and B are small and change how the app feels most. |
 
+**Owner's answer, 1 November 2026:** as recommended on all seven. Two more
+areas were added the same day and are specified in Part 2 below: a real settings
+panel, and narrative films led by a voice rather than a song. With them the order
+becomes A, H, B, D, C, E, I, F, G; H is small and I depends on parts of C and E.
+
 ## Method and evidence
 
 - UX: 97 screenshots and per-step console and HTTP logs under the session
@@ -580,3 +585,277 @@ review evidence.
 
 Nothing under `projects/`, `backups/` or `archive/` was present in the clone or
 touched. No tracked file other than this document was changed.
+
+---
+
+# Part 2. Expansion: settings, and films led by a voice
+
+Added 1 November 2026 at the owner's request. Two new areas: the settings panel
+becomes the place where every model, voice and default is chosen; and a fourth
+production kind makes narrative films where narration leads, music is optional,
+and the pictures may be painted scenes, period plates or animated clips.
+
+Two worked examples set the bar. **The Museum of Tomorrow**: a curator in the year
+2300 explains objects from our century, sometimes wrong, sometimes funny, sometimes
+touching. Pilot "The Last House Key", 2:00, five beats: hook 0:00–0:08, world
+0:08–0:35, develop 0:35–1:15, reveal 1:15–1:45, payoff 1:45–2:00. **One Place, 500
+Years**: cinematic time travel through a single street corner. Nothing here
+produces those films; it makes the tool able to.
+
+## What the research found
+
+- **Runware already covers voice and video.** The provider the money journal is
+  built around exposes `videoInference` for text-to-video, image-to-video and
+  video-to-video (Kling, and since June 2026 Google's Gemini Omni Flash, which
+  animates a still into a scene) and audio inference for speech (MiniMax speech
+  with named narrator voices, Alibaba Qwen TTS that designs a voice from a text
+  description), music, sound effects and text-to-audio. One key, one client, one
+  journal. `providers.py:301-307` already accepts any `*Inference` task type.
+- **Word timing is available.** ElevenLabs returns per-character start and end
+  times with each synthesis (`/v1/text-to-speech/{voice}/with-timestamps`), which
+  gives word times directly. Where a provider gives none, the app's own alignment
+  path (Parakeet in `lyric_tools.py`) can align narration to its known text the
+  way it aligns sung lines today.
+- **A free local voice exists.** Kokoro (82M parameters, Apache 2.0) runs on CPU
+  fast enough for drafts and has no cloning; Chatterbox (MIT) clones from a short
+  sample. Neither gives word times, so both pair with local alignment.
+- **Image-to-video is a per-shot purchase.** Clips cost by the second and vary
+  between runs, so they fit the still model exactly: a journaled, versioned,
+  immutable asset chosen by the owner per shot, with the still kept as fallback.
+
+Sources: [Runware video inference](https://runware.ai/docs/en/video-inference/introduction),
+[Runware audio inference](https://runware.ai/docs/audio-inference/introduction),
+[Runware Gemini Omni Flash announcement](https://natlawreview.com/press-releases/runware-launches-developer-api-access-google-deepminds-gemini-omni-flash),
+[runware-cli speech examples](https://pkg.go.dev/github.com/runware/runware-cli@v0.14.0),
+[ElevenLabs convert with timestamps](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps),
+[open-source TTS guide 2026](https://tts.ai/blog/open-source-text-to-speech-guide-2026/).
+Licences and timestamp support must be checked against each model's own
+repository before adoption, as the lyric tools record already does.
+
+## Phase H. A settings panel that chooses everything (three to four days)
+
+Today the dialog (`shell/SettingsDialog.tsx`) is five stacked sections with free
+text fields for model ids, one gateway select, two masked keys, two unlabeled
+name inputs and a tools list. `config.py` holds thirteen flat keys. It cannot name
+a voice, a video model, an image model per look, a critic, a price, or what a
+missing key blocks.
+
+### H1. A provider and model catalogue in the engine
+
+- New `catalog.py`: providers (`openai-compatible`, `anthropic`, `gemini`,
+  `opencode-go`, `runware`, `elevenlabs`, `local`) each with models tagged by
+  capability (`text`, `vision`, `image`, `video`, `speech`, `music`, `upscale`),
+  a unit price where published, context and output limits, and a recommended
+  flag. Static defaults ship in `catalog.toml`; a provider that can list models
+  (OpenCode `GET /api/model`, Runware model search, ElevenLabs voices) refreshes
+  the list on demand into `~/.cache/mp3-to-videoclip/catalog/`, never silently.
+- `GET /api/settings/catalog` serves it with each entry's "ready" state: key
+  present, model reachable, tool installed. `POST /api/settings/test` grows one
+  test per provider and one per voice (a 5-word sample at the shown price).
+
+### H2. Settings by role, not by key
+
+Replace the flat keys with sections the owner thinks in:
+
+| Section | Fields | Control |
+| --- | --- | --- |
+| Roles | Writer, Editor, Critic (future), Narrator | Provider and model dropdowns from the catalogue, a thinking or temperature level, a per-turn token budget, allowed tools |
+| Voices | Default narrator voice per language; favourites | Provider → voice dropdown with *Play sample*; design-a-voice prompt where the provider supports it |
+| Pictures | Image model per look preset, video model, upscaler, reserve per still, reserve per clip-second | Dropdowns filtered by capability; prices shown next to each |
+| Keys | One row per provider | Masked field, *Test*, status word, and "unlocks: pictures, clips, voices" |
+| New films start with | Kind, length, aspect, fps, look, budget, signature package on or off, credit roles | Dropdowns and a toggle; the brand kit (names, logo, palette, font) moves here from the two literals in `config.py:33-34` |
+| This computer | Renderer, FFmpeg, Node, Chrome, lyric tools, local voice; cache sizes with *Clear* | Status dots with install buttons; the render review found caches are never cleaned |
+| Costs | Spend by film and by kind (stills, clips, speech, model tokens); the price table | Read-only totals from the journals; editable prices |
+
+Layout: a left tab rail instead of one long scroll, a search box, a "What is
+missing to make a film" checklist at the top that links to the field, per-field
+*Saved* state, and a *Reset to recommended* per section. Every model field is a
+dropdown with a free-text escape ("Other…") so a new model id never blocks the
+owner. Settings keep writing one TOML; the schema version in the file lets old
+files load with defaults.
+
+### H3. Honesty rules for settings
+
+- Changing a role's model never changes an approval: prompts record the model in
+  `work/prompt-current.json` already; keep that and show it in the Director header.
+- Changing the narrator voice after takes exist marks the takes stale, like a
+  prompt change marks a still stale.
+- A price in the table is a reservation input, not a bill; the provider's reported
+  cost remains the journal's truth.
+
+## Phase I. Narrative films: the voice is the spine (five to seven weeks)
+
+### The one architectural change
+
+Everything downstream of intake assumes a recording exists first: `intake.py:87`
+refuses anything but an MP3, `project.source` is `media/song.mp3`,
+`source_duration` fixes the film's length, analysis measures it, the spine draws
+it, the Player and every render use it. The excerpt mechanism in `audio.py` already
+shows the way out: analysis, Player, preview and final all read a **derived WAV**
+under `work/audio/`, never the source.
+
+For a narrative film the derived WAV is **built, not cut**: narration takes in
+script order, pauses between lines, an optional music bed, optional ambience,
+mixed with ducking and fades into `work/audio/soundtrack.wav`, keyed by the hash of
+its inputs. The film's duration is the soundtrack's duration. Once that file
+exists, every existing engine path works unchanged: the spine shows the narration
+waveform, the Player plays it, chunks render against it, the final muxes it. The
+song stops being the spine; the soundtrack is.
+
+### I1. Kind, project and artifacts
+
+- `Kind` gains `"narrative"` (label "Story film"). `kinds.py` profile: lengths 60,
+  90, 120, 180, 300 s; structures (speculative documentary, place across time,
+  essay, fable, explainer, found footage); shot mix "painted scenes, plates,
+  clips, date and title cards"; text density "dates, names, one closing line";
+  pacing "follows the narration; a hold is earned by the sentence";
+  `signature_required=False`; default style `painted-documentary-v1`.
+- `Project` gains `spine: Literal["song", "soundtrack"]` (default `song`, serialised
+  only when set so hashes hold) and `music_mode` gains `"narration-led"`.
+  `source` becomes optional for `spine == "soundtrack"`; an MP3 supplied at intake
+  is the music bed, not the clock. `source_duration` is set when the soundtrack is
+  first built and updated on every rebuild, through one engine function, never by
+  a handler.
+- New artifacts, all content-bound and journaled like their existing cousins:
+
+```text
+work/script.json           narration lines: id, text, beat, target_seconds, pause_after, direction
+work/narration/<line>/     takes per line: versioned, immutable, provider, voice, model, sha256, input_hash
+work/narration-timing.json word and line times per kept take (provider alignment or local)
+work/soundtrack.json       the mix: order, pauses, bed path and gain, ducking, fades, ambience
+work/audio/soundtrack.wav  the derived clock, keyed by every input above
+work/beats.json            the structure's timed beats (hook, world, develop, reveal, payoff)
+```
+
+- Approvals gain two stages: `script` (the words) before `voice` (the kept takes,
+  bound to their bytes), then storyboard as today. A re-recorded line changes the
+  soundtrack hash and therefore the preview, stills and titles approvals, exactly
+  as a cut change does now.
+
+### I2. Narration: voices as a journaled purchase
+
+- New `narration.py` on the pattern of `generation.py`: quote a line or a batch
+  (characters × provider price), authorise, write the task UUID before the request,
+  recover by UUID, never resubmit, keep an unknown cost reserved. Runware speech
+  goes through the existing client; ElevenLabs, OpenAI and a local Kokoro runner
+  are adapters behind one `Voice` interface in `voices.py`. The free local voice is
+  the draft path, so a whole film can be heard at $0 before any paid take.
+- Word timing: provider alignment where returned; otherwise local alignment of the
+  take against its own text through the existing `lyric_tools` path (extended to
+  CPU, as Phase F3 requires). Lines without timing stay untimed; nothing is guessed.
+- Takes are reviewed like stills: a Takes lightbox per line with *Keep*, *Redo* and
+  a direction field ("slower, wry, land on 'privacy'") the Writer turns into
+  provider settings where the provider supports them. Several takes per line can be
+  kept and compared.
+- Voice casting lives in Story: pick a voice from the catalogue, hear one line of
+  the real script, lock it. The voice id and its settings bind into the brief hash.
+
+### I3. Script, structure and the Writer
+
+- New Writer tasks `script_narrative` and `narration_pass`, and a `structures/`
+  prompt directory with timed beat templates the Writer fills: the five-beat 2:00
+  (hook 8 s, world 27 s, develop 40 s, reveal 30 s, payoff 15 s), place across time
+  (one framing, N eras, a constant and a change per era), essay, fable. A template
+  gives each beat a time budget; the script task writes lines whose length fits it
+  at a stated reading rate (about 2.3 words per second for a measured narrator,
+  adjustable per voice) and the report checks the budget against the real takes.
+- The truth rules extend rather than bend: fictional facts are allowed when the
+  brief declares the world fictional, and the Writer marks every invented claim as
+  such in the script's `claims` list so a documentary-looking film never passes off
+  an invention by accident. Real places and dates in "One Place, 500 Years" are
+  checked against the owner's supplied facts like advert claims are today.
+- Storyboard binds shots to lines (`line_ids`), not to seconds: the Writer boards
+  "what we see while this is said", the planner derives frames from the kept
+  takes. A reveal beat gets the "hold on the image after the sentence ends" rule;
+  a hook beat gets "image before the first word".
+- The creative profile gains `narrator` (persona, era, attitude, what they get
+  wrong) and, for place films, `place` (anchor description, fixed camera, reference
+  image) with `eras[]` (year, state, palette, light, what persists, what changed).
+
+### I4. Pictures for narrative films
+
+- Shot kinds gain `plate` (an uploaded period or archival image with a camera
+  move, free), `era` (a generated variant of the place anchor for one era, paid,
+  compiled with the anchor's reference image and a fixed framing so the corner
+  stays the corner), `document` (a prop close-up), `date_card` and `title_card`
+  (local plates with the year or the title, free). `is_paid` stays the only
+  paid-or-local decision.
+- Style presets: `painted-documentary-v1` (museum light, matte-painting depth,
+  the house look for speculative documentary), `archival-v1` (period photographic
+  and film textures chosen per era, grain and colour per decade),
+  `illustrated-v1` (cel, paper cut-out, ink; the "animation" look for stills),
+  `future-museum-v1` as a worked example. Each with image rules in its header as
+  today.
+- Consistency across eras depends on Phase E5 (character sheet and scene plate as
+  references, edit mode for redos, per-shot seeds). For a place film the anchor
+  plate is generated first and approved as the style check; every era shot takes
+  it as a reference with "keep the camera, the horizon and the building line".
+
+### I5. Clips: animation as a journaled asset version
+
+- Image-to-video through Runware `videoInference` as a new asset type on a shot:
+  a clip version beside the still versions, immutable, journaled by UUID, priced
+  per second, with the still kept as fallback. The owner chooses per shot, with
+  the price shown; the Writer may propose which shots earn motion and why.
+- `BaseFilm` gains a clip layer (`OffthreadVideo` in the MP4, `<Video>` in the
+  Player) inside the same span, camera and grade pipeline; the chunk key includes
+  the clip hash; a clip shorter than its shot holds its last frame or loops by
+  rule, never stretches. The Player and MP4 stay one composition.
+- Draft motion without spend comes from Phase C2 depth parallax, which is also
+  the right default for "painted scenes" that should breathe but not act.
+
+### I6. Mix, delivery and captions
+
+- The mux gains a mixer: narration first, bed ducked under speech
+  (`sidechaincompress`), ambience per section, fades, loudness normalised to
+  −16 LUFS for voice content with the measured values in the report. Promo and
+  advert can opt in to the same mixer for a voice-over line.
+- Captions from `narration-timing.json`: burned-in for sound-off platforms as an
+  edit text style (`caption`), plus SRT and VTT sidecars from Phase F2.
+- A narrative film needs no signature; Phase F1 (titles as a preset, 0 to 5 s
+  opening, end card, portrait) is a prerequisite.
+
+### I7. The Studio for narrative films
+
+- New film: kind "Story film" needs no MP3. Fields: title, length, structure
+  template, genre line, narrator voice (from Settings default), optional music bed,
+  budget.
+- Stage one becomes **Script** instead of Track: the beat sheet with time budgets
+  on the left, the lines on the right, voice casting, *Hear a draft* (free local
+  voice), *Record with <voice> · $0.12*, takes with Keep and Redo, the narration
+  waveform on the spine with the line under the playhead. The other four stages
+  keep their names; Storyboard groups shots by beat and by line, Images shows
+  takes and clips beside stills, Film's timeline shows the narration under the
+  waveform and the bed as a quiet second lane.
+- The Director's roles stay Writer and Editor; the Writer gets the script and
+  narration tasks, the Editor gets narration-led cut rules: cut on sentence ends,
+  lead the image by half a second on a reveal, never cut mid-word, keep the bed
+  below the voice.
+
+### Dependencies and order inside Phase I
+
+1. I1 soundtrack spine and artifacts, with a local free voice, so a whole film can
+   be drafted and previewed at $0 (two weeks). Done when a 2:00 five-beat film
+   plays in the Player from a script and a local voice with no song.
+2. I2 paid voices and takes, I3 Writer tasks and structures (two weeks). Done when
+   the Writer fills the five-beat template for "The Last House Key", takes are
+   journaled and the report shows each beat's budget against the real takes.
+3. I4 pictures and I6 mix and captions (one to two weeks). Done when a place film
+   shows one corner across five eras with the anchor as reference, the bed ducks
+   under the voice and captions render from the timing file.
+4. I5 clips (one week), after Phase C5 lands the asset version model.
+5. I7 screens throughout, one PR per step.
+
+### Decisions for the owner, Part 2
+
+| # | Question | Recommendation |
+| --- | --- | --- |
+| 8 | Should the narrative kind be one kind with structure templates, or several kinds (documentary, place film, essay)? | One kind, `narrative`, with templates. Kinds decide money and signature rules; templates decide shape. |
+| 9 | Where does timing live when a line is re-recorded and gets longer? | Shots bind to lines; the planner re-derives frames from the kept takes and the edit keeps joins by line. A report line says what moved. |
+| 10 | Which voice path first? | Local Kokoro for drafts at $0, Runware speech as the first paid voice because it needs no new key, ElevenLabs second for alignment and quality. |
+| 11 | Clips before or after depth parallax? | After. Parallax gives every painted scene motion for free; clips are a per-shot purchase on top. |
+| 12 | May the Writer invent facts in a fictional documentary? | Yes, when the brief declares the world fictional, and every invented claim is listed in the script as invented. |
+
+Evidence for this part: the four provider searches above, the intake and model
+code cited, and the first-cut and track-listening records that already contain the
+alignment and asset-version patterns this reuses.
