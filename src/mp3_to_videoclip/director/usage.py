@@ -47,6 +47,17 @@ def record(
         handle.write(json.dumps(entry) + "\n")
 
 
+def rows(root: Path) -> list[dict]:
+    path = Path(root) / FILE
+    found = []
+    for line in path.read_text().splitlines() if path.is_file() else []:
+        try:
+            found.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return found
+
+
 def summary(root: Path) -> dict:
     """A film's totals. ``unpriced_turns`` says how much of it the dollars don't cover."""
     path = Path(root) / FILE

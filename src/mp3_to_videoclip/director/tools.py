@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mp3_to_videoclip.storage import inside, read_json, read_optional
+from mp3_to_videoclip.storage import file_hash, inside, read_json, read_optional
 
 MAX_TOOL_IMAGES = 8
 THUMBNAIL_PIXELS = 512
@@ -60,6 +60,7 @@ CRITIC_TOOLS = frozenset(
         "get_song_map",
         "get_images",
         "get_film_frames",
+        "get_preview_frames",
         "save_critique",
     }
 )
@@ -274,6 +275,62 @@ TOOLS: list[dict] = [
             },
         },
         ["slug", "shot_ids"],
+    ),
+    _tool(
+        "propose_alternatives",
+        "Offer the owner two or three versions of one field and let them choose. Nothing is "
+        "written. Use it when the choice is theirs; then stop and wait.",
+        {
+            "slug": {"type": "string"},
+            "target": {"type": "string", "description": "Such as shots.s004.image_prompt."},
+            "options": {"type": "array", "items": {"type": "string"}, "maxItems": 3},
+        },
+        ["slug", "target", "options"],
+    ),
+    _tool(
+        "batch_update_prompts",
+        "Change many shots' image prompts as one change, validated as a whole board.",
+        {
+            "slug": {"type": "string"},
+            "changes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}, "image_prompt": {"type": "string"}},
+                    "required": ["id", "image_prompt"],
+                },
+            },
+        },
+        ["slug", "changes"],
+    ),
+    _tool(
+        "describe_images",
+        "One or two plain sentences per still, from your vision model; cached per still.",
+        {
+            "slug": {"type": "string"},
+            "shot_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
+        },
+        ["slug", "shot_ids"],
+    ),
+    _tool(
+        "compare_versions",
+        "Two versions of one shot as thumbnails, with what differed in how they were made.",
+        {
+            "slug": {"type": "string"},
+            "shot_id": {"type": "string"},
+            "a": {"type": "integer"},
+            "b": {"type": "integer"},
+        },
+        ["slug", "shot_id", "a", "b"],
+    ),
+    _tool(
+        "get_preview_frames",
+        "Frames of the latest preview at the given seconds, as thumbnails.",
+        {
+            "slug": {"type": "string"},
+            "seconds": {"type": "array", "items": {"type": "number"}, "maxItems": 8},
+        },
+        ["slug", "seconds"],
     ),
     _tool(
         "get_script",
@@ -523,15 +580,175 @@ def _root(slug: str, projects_dir: Path | None = None) -> Path:
     return (projects_dir or Path("projects")) / slug
 
 
+#: A schema's words are for a reader; past this they only cost tokens on every turn.
+MAX_SCHEMA_DESCRIPTION = 120
+
+
+def _lean_schema(schema: dict) -> dict:
+    """A model's JSON schema with its references inlined and its titles and long notes gone."""
+    defs = schema.get("$defs", {})
+
+    def walk(node):
+        if isinstance(node, list):
+            return [walk(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+        if "$ref" in node:
+            return walk(defs[node["$ref"].rsplit("/", 1)[-1]])
+        kept = {}
+        for key, value in node.items():
+            # The server validates these; a model only needs the shape and the choices.
+            if key in ("title", "$defs", "default", "maxLength", "minLength", "pattern", "maxItems", "minItems"):  # fmt: skip
+                continue
+            if key == "description" and len(str(value)) > MAX_SCHEMA_DESCRIPTION:
+                continue
+            kept[key] = (
+                walk(value) if key != "properties" else {k: walk(v) for k, v in value.items()}
+            )
+        return kept
+
+    return walk(schema)
+
+
+def _typed_tools() -> None:
+    """The tools a model writes the cut and the board with, typed from the contract."""
+    from mp3_to_videoclip import edits
+    from mp3_to_videoclip.models import EditDecisionList, EditShot, Shot
+
+    shot = _lean_schema(Shot.model_json_schema())
+    shot["properties"] = {
+        key: value for key, value in shot["properties"].items() if key not in edits.EDIT_OWNED
+    }
+    shot["required"] = ["id"]
+    edit_shot = _lean_schema(EditShot.model_json_schema())
+    edit_shot["properties"] = {
+        key: value
+        for key, value in edit_shot["properties"].items()
+        if key in {*edits.EDITABLE_SHOT_FIELDS, "shot_id"}
+    }
+    edit_shot["required"] = ["shot_id"]
+    cut = _lean_schema(EditDecisionList.model_json_schema())
+    # The whole cut's items are what update_edit_shots already spells out in full.
+    cut["properties"]["shots"]["items"] = {
+        "type": "object",
+        "description": "shot_id, start_frame, duration_frames and the fields of update_edit_shots",
+    }
+    cut["properties"]["grade"] = {"type": "object", "description": "preset, strength, look, typeface"}  # fmt: skip
+    cut["properties"]["sections"] = {"type": "array", "items": {"type": "object"}}
+    cut["properties"]["voice"] = {"type": "array", "items": {"type": "object"}}
+    for tool in TOOLS:
+        function = tool["function"]
+        properties = function["parameters"]["properties"]
+        if function["name"] == "update_shots":
+            properties["changes"] = {"type": "array", "items": shot}
+        elif function["name"] == "update_edit_shots":
+            properties["shots"] = {"type": "array", "items": edit_shot}
+        elif function["name"] == "update_edit":
+            properties["edit"] = cut
+
+
+def _with_reasons() -> None:
+    """Every write says why, in the owner's hearing."""
+    from .decisions import MAX_REASON, WRITE_TOOLS
+
+    for tool in TOOLS:
+        function = tool["function"]
+        if function["name"] in WRITE_TOOLS:
+            function["parameters"]["properties"]["reason"] = {
+                "type": "string",
+                "maxLength": MAX_REASON,
+                "description": "Why, in one plain sentence the owner would understand.",
+            }
+            function["parameters"]["required"] = [*function["parameters"]["required"], "reason"]
+
+
+_typed_tools()
+_with_reasons()
+#: Past this a result is cut down to what changed; the artifact is one get_ call away.
+MAX_WRITE_RESULT = 2000
+
+
+def _recorded_write(
+    root: Path,
+    name: str,
+    arguments: dict[str, Any],
+    run,
+    *,
+    role: str | None,
+    turn_id: str | None,
+    prompt_hash: str | None,
+    require_reason: bool,
+) -> Any:
+    from . import decisions
+
+    reason = str(arguments.get("reason") or "").strip()
+    if require_reason and not reason:
+        raise ValueError("say why in reason, in one plain sentence; nothing was changed")
+    if len(reason) > decisions.MAX_REASON:
+        raise ValueError(f"keep the reason to {decisions.MAX_REASON} characters")
+    before = decisions.snapshot(root, name)
+    value = run()
+    changes = decisions.diff(before, decisions.snapshot(root, name))
+    identifier = decisions.record(
+        root,
+        turn_id=turn_id,
+        role=role,
+        tool=name,
+        reason=reason,
+        changes=changes,
+        prompt_hash=prompt_hash,
+    )
+    fields = sorted(changes)
+    if isinstance(value, dict):
+        extra = {"changed_fields": fields, "reason": reason, "decision_id": identifier}
+        if require_reason and len(json.dumps(value, ensure_ascii=False)) > MAX_WRITE_RESULT:
+            kept = {
+                key: item
+                for key, item in value.items()
+                if isinstance(item, (int, float, bool))
+                or item is None
+                or (isinstance(item, str) and len(item) <= 200)
+            }
+            return {**kept, **extra, "note": "The whole artifact is one get_ call away."}
+        return {**value, **extra}
+    return value
+
+
 async def dispatch(
     name: str,
     arguments: dict[str, Any],
     runner=None,
     projects_dir: Path | None = None,
+    *,
+    role: str | None = None,
+    turn_id: str | None = None,
+    prompt_hash: str | None = None,
+    require_reason: bool = False,
 ) -> str | ToolResult:
-    """Dispatch a tool call. Returns JSON text or a text+images result."""
+    """Dispatch a tool call. Returns JSON text or a text+images result.
+
+    A real turn passes ``require_reason``; a write without one changes nothing.
+    """
+    from .decisions import WRITE_TOOLS
+
     try:
-        value = _dispatch(name, arguments, runner, projects_dir)
+        if name == "describe_images":
+            value = await _describe_images(
+                _root(arguments["slug"], projects_dir), arguments.get("shot_ids") or [], role
+            )
+        elif name in WRITE_TOOLS:
+            value = _recorded_write(
+                _root(arguments["slug"], projects_dir),
+                name,
+                arguments,
+                lambda: _dispatch(name, arguments, runner, projects_dir),
+                role=role,
+                turn_id=turn_id,
+                prompt_hash=prompt_hash,
+                require_reason=require_reason,
+            )
+        else:
+            value = _dispatch(name, arguments, runner, projects_dir)
         if isinstance(value, ToolResult):
             return value
         return json.dumps(value, ensure_ascii=False)
@@ -674,6 +891,18 @@ def _dispatch(
 
     if name in ("get_script", "write_script", "update_lines", "get_narration"):
         return _script_tool(root, name, arguments)
+
+    if name == "propose_alternatives":
+        return _propose(arguments)
+
+    if name == "batch_update_prompts":
+        return _batch_prompts(root, arguments.get("changes") or [])
+
+    if name == "compare_versions":
+        return _compare_versions(root, arguments)
+
+    if name == "get_preview_frames":
+        return _preview_frames(root, arguments.get("seconds") or [])
 
     if name == "update_brief":
         patch = arguments.get("patch") or {}
@@ -818,6 +1047,127 @@ def _thumbnail(path: Path) -> tuple[str, int, int]:
         image.save(buffer, format="JPEG", quality=88, optimize=True)
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}", width, height
+
+
+def _propose(arguments: dict) -> dict:
+    """Two or three versions of one field, written nowhere: the owner chooses one."""
+    options = arguments.get("options") or []
+    if not 2 <= len(options) <= 3 or not all(isinstance(o, str) and o.strip() for o in options):
+        raise ValueError("offer two or three options, each as text")
+    if not str(arguments.get("target") or "").strip():
+        raise ValueError("say which field these are options for")
+    return {
+        "target": arguments["target"],
+        "options": options,
+        "note": "Nothing was written. Stop here and let the owner choose.",
+    }
+
+
+def _batch_prompts(root: Path, changes: list) -> dict:
+    """Many shots' prompts as one change, validated as a whole board."""
+    from mp3_to_videoclip import production as P
+
+    if not isinstance(changes, list) or not changes:
+        raise ValueError("name at least one shot")
+    extra = [c for c in changes if not isinstance(c, dict) or set(c) != {"id", "image_prompt"}]
+    if extra:
+        raise ValueError("each change is exactly an id and an image_prompt")
+    board, changed = P.update_shots(root, changes)
+    return {"changed": changed, "shot_total": len(board.shots)}
+
+
+def _version_spec(root: Path, shot_id: str, version: int) -> tuple[dict, dict]:
+    assets = read_optional(root / "work/assets.json", {})
+    take = next(
+        (v for v in (assets.get(shot_id) or {}).get("versions", []) if v["version"] == version),
+        None,
+    )
+    if take is None:
+        raise ValueError(f"shot {shot_id} has no version {version}")
+    task = read_optional(root / "work/tasks.json", {}).get(take.get("task_id")) or {}
+    request = task.get("request") or {}
+    return take, {
+        "prompt": request.get("positivePrompt"),
+        "seed": request.get("seed"),
+        "references": [ref.get("path") for ref in task.get("references", [])],
+        "input_hash": take.get("input_hash"),
+    }
+
+
+def _compare_versions(root: Path, arguments: dict) -> ToolResult:
+    from .decisions import diff
+
+    shot_id = str(arguments.get("shot_id"))
+    first, second = arguments.get("a"), arguments.get("b")
+    take_a, spec_a = _version_spec(root, shot_id, first)
+    take_b, spec_b = _version_spec(root, shot_id, second)
+    images = [_thumbnail(inside(root, take["path"]))[0] for take in (take_a, take_b)]
+    changes = {field: {"a": a, "b": b} for field, (a, b) in diff(spec_a, spec_b).items()}
+    text = json.dumps({"shot_id": shot_id, "a": first, "b": second, "differences": changes})
+    return ToolResult(text=text, images=tuple(images))
+
+
+def _preview_frames(root: Path, seconds: list) -> ToolResult:
+    """Frames of the latest preview, for an Editor who wants to look at the film itself."""
+    import subprocess
+    import tempfile
+
+    from mp3_to_videoclip.audio import _ffmpeg
+
+    if not isinstance(seconds, list) or not seconds or len(seconds) > MAX_TOOL_IMAGES:
+        raise ValueError(f"ask for one to {MAX_TOOL_IMAGES} moments, in seconds")
+    previews = sorted((root / "previews").glob("*.mp4"), key=lambda path: path.stat().st_mtime)
+    if not previews:
+        raise ValueError("there is no preview yet")
+    images = []
+    with tempfile.TemporaryDirectory(prefix="preview-frames-") as folder:
+        for index, moment in enumerate(seconds):
+            target = Path(folder) / f"{index}.jpg"
+            subprocess.run(
+                [
+                    _ffmpeg(),
+                    "-nostdin",
+                    "-v",
+                    "error",
+                    "-ss",
+                    str(float(moment)),
+                    "-i",
+                    str(previews[-1]),
+                    "-frames:v",
+                    "1",
+                    str(target),
+                ],  # fmt: skip
+                capture_output=True,
+                check=True,
+            )
+            images.append(_thumbnail(target)[0])
+    text = json.dumps(
+        {"preview": previews[-1].name, "seconds": seconds, "image_count": len(images)}
+    )
+    return ToolResult(text=text, images=tuple(images))
+
+
+async def _describe_images(root: Path, shot_ids: list, role: str | None) -> dict:
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.config import effective_settings
+
+    from . import captions
+    from .routing import route_for
+
+    if not isinstance(shot_ids, list) or not shot_ids or len(shot_ids) > MAX_TOOL_IMAGES:
+        raise ValueError(f"ask for one to {MAX_TOOL_IMAGES} stills")
+    who = role if role in ("writer", "editor", "critic") else "writer"
+    route = route_for(effective_settings(), who)
+    if not route.key:
+        raise ValueError(f"the {who} has no key for {route.model}")
+    rows = []
+    for shot_id in shot_ids:
+        resolved = P.resolved_assets(root, [shot_id])[0]
+        path = Path(resolved.image)
+        rows.append(
+            await captions.describe(root, route, shot_id, file_hash(path), _thumbnail(path)[0], who)
+        )
+    return {"captions": rows}
 
 
 def _script_tool(root: Path, name: str, arguments: dict) -> dict:

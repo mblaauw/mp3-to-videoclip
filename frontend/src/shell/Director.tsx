@@ -269,6 +269,40 @@ function BuyStills({ slug, estimate }: { slug: string; estimate: { quote_id: str
   );
 }
 
+/** What a write changed, field by field, read when someone opens the details. */
+function BeforeAfter({ slug, id }: { slug: string; id: string }) {
+  const [fields, setFields] = useState<Record<string, { before: unknown; after: unknown }> | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.decision(slug, id).then(
+      (value) => {
+        if (live) setFields(value.before_after);
+      },
+      () => {
+        if (live) setFields(null);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [slug, id]);
+  if (!fields) return null;
+  return (
+    <>
+      <span>Before and after</span>
+      {Object.entries(fields).map(([field, change]) => (
+        <pre key={field}>
+          {field}
+          {"\n- "}
+          {JSON.stringify(change.before)}
+          {"\n+ "}
+          {JSON.stringify(change.after)}
+        </pre>
+      ))}
+    </>
+  );
+}
+
 function ToolRow({
   item,
   slug,
@@ -295,6 +329,34 @@ function ToolRow({
           {args && <span className="tool-args">{args}</span>}
         </div>
         {!reading && <p className="tool-summary">{summary}</p>}
+        {typeof data?.reason === "string" && data.reason && (
+          <p className="tool-reason">{data.reason}</p>
+        )}
+        {Array.isArray(data?.changed_fields) && data.changed_fields.length > 0 && (
+          <p className="tool-fields">{(data.changed_fields as string[]).slice(0, 6).join(", ")}</p>
+        )}
+        {item.tool === "propose_alternatives" && !failed && !item.past && (
+          <div className="tool-options" role="group" aria-label="Choose one">
+            {((data?.options as string[]) || []).map((option, index) => (
+              <Button
+                key={option}
+                size="small"
+                variant="quiet"
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent("studio:ask-director", {
+                      detail: {
+                        text: `Use option ${index + 1} for ${String(data?.target)}: ${option}\nReason: owner chose option ${index + 1}.`,
+                      },
+                    }),
+                  )
+                }
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+        )}
         {(item.args || item.result) && (
           <details className="tool-detail">
             <summary>Details</summary>
@@ -309,6 +371,9 @@ function ToolRow({
                 <span>Result</span>
                 <pre>{item.result.slice(0, 6000)}</pre>
               </>
+            )}
+            {typeof data?.decision_id === "string" && (
+              <BeforeAfter slug={slug} id={data.decision_id} />
             )}
           </details>
         )}
@@ -420,7 +485,13 @@ export function Director({
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
   const [error, setError] = useState<string | null>(null);
-  const [role, setRole] = useState<Role>(defaultRole);
+  const [role, setRoleOnly] = useState<Role>(defaultRole);
+  /** Everyone's messages in order, to read. The roles' own threads stay as they are. */
+  const [both, setBoth] = useState(false);
+  const setRole = (next: Role) => {
+    setBoth(false);
+    setRoleOnly(next);
+  };
   const [historyFor, setHistoryFor] = useState<Role | null>(null);
   // Undefined until the answer arrives, so nothing warns about a model not asked about yet.
   const [canSee, setCanSee] = useState<boolean | null | undefined>(undefined);
@@ -510,7 +581,7 @@ export function Director({
     let live = true;
     setHistoryFor(null);
     api
-      .chat(slug, role)
+      .chat(slug, both ? undefined : role)
       .then((data) => {
         if (!live) return;
         const restored: ChatItem[] = [];
@@ -550,7 +621,7 @@ export function Director({
     return () => {
       live = false;
     };
-  }, [slug, role]);
+  }, [slug, role, both]);
 
   const scrollToEnd = useCallback((smooth = false) => {
     const element = listRef.current;
@@ -651,6 +722,7 @@ export function Director({
   };
 
   const send = async (override?: string, task?: string, keepGoing = false) => {
+    if (both) setBoth(false);
     setLimit(null);
     const message = (override ?? text).trim();
     if (!message || busy) return;
@@ -883,6 +955,16 @@ export function Director({
           title="Reviews a cut against the brief; changes nothing"
         >
           Critic
+        </button>
+        <button
+          type="button"
+          className={both ? "on" : ""}
+          aria-pressed={both}
+          disabled={busy}
+          onClick={() => setBoth(true)}
+          title="Everyone's messages in order, to read"
+        >
+          Both
         </button>
       </div>
       <div className="messages" aria-live="polite" ref={listRef} onScroll={onScroll}>

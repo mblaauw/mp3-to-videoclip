@@ -105,6 +105,7 @@ def compact_messages(
     *,
     max_messages: int = MAX_CONTEXT_MESSAGES,
     keep: int = KEEP_RECENT_MESSAGES,
+    recorded_reasons: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Return a bounded prompt and a summary of the dropped history.
 
@@ -147,4 +148,6 @@ def compact_messages(
     ]
     if reasons:
         summary += " Reasoning along the way: " + " | ".join(reasons[-KEEP_REASONS:]) + "."
+    if recorded_reasons:
+        summary += " Why the latest changes were made: " + " | ".join(recorded_reasons) + "."
     return recent, summary

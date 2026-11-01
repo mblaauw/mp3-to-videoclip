@@ -18,7 +18,7 @@ from uuid import uuid4
 
 from openai import APIError
 
-from . import pricing, usage
+from . import decisions, pricing, usage
 from .conversation import append_message, compact_messages, history_for_model, load_messages
 from .llm import (
     DirectorLLM,
@@ -63,7 +63,7 @@ async def run_turn(
 ) -> AsyncIterator[TurnEvent]:
     # A Critic reads with fresh eyes every time, as its own session always did.
     history = [] if role == "critic" else load_messages(root, role)
-    messages, summary = compact_messages(history)
+    messages, summary = compact_messages(history, recorded_reasons=decisions.recent_reasons(root))
     messages = history_for_model(messages)
     if summary:
         system = (system + "\n\n" + summary).strip()
@@ -208,7 +208,16 @@ async def run_turn(
             if role == "critic" and tc.name not in CRITIC_TOOLS:
                 tool_result = json.dumps({"error": "the Critic changes nothing; use your notes"})
             else:
-                tool_result = await dispatch(tc.name, args, runner, projects_dir)
+                tool_result = await dispatch(
+                    tc.name,
+                    args,
+                    runner,
+                    projects_dir,
+                    role=role,
+                    turn_id=turn_id,
+                    prompt_hash=(prompt_meta or {}).get("hash"),
+                    require_reason=True,
+                )
             if isinstance(tool_result, ToolResult):
                 result_text = tool_result.text
                 images = tool_result.images

@@ -38,6 +38,7 @@ class ScriptedLLM:
             return
         name, arguments = self.steps[self.index]
         self.index += 1
+        arguments = {**arguments, "reason": "scripted probe"}
         call = ToolCall(id=f"probe-{self.index}", name=name, arguments=json.dumps(arguments))
         yield call
         yield TurnResult(text="", tool_calls=[call])
