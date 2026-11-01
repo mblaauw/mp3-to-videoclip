@@ -122,7 +122,7 @@ export function LiveViewer({
             )}
           </div>
         ) : (
-          <p className="empty">{liveError ?? "No storyboard yet."}</p>
+          <p className="empty">{liveError ?? "This film has no storyboard yet."}</p>
         )}
       </div>
       {full ? (

@@ -16,7 +16,7 @@ import type { Stage } from "../shell/nextStep";
 import { usePlayerControls } from "../spine/player";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { toast } from "../toast";
-import { Button, ErrorState, LoadingState } from "../ui";
+import { Button, EmptyState, ErrorState, LoadingState } from "../ui";
 
 type FilmTab = "cut" | "list" | "files";
 
@@ -261,6 +261,13 @@ export function FilmStage({
       <RendererSetup onReady={setRendererReady} />
       {!loaded ? (
         <LoadingState>Reading the film, its gates and the cut…</LoadingState>
+      ) : !film.hasBoard ? (
+        <EmptyState
+          title="This film has no storyboard yet"
+          action={<Button onClick={() => onNavigate("storyboard")}>Go to Storyboard</Button>}
+        >
+          The cut is made from the storyboard's shots.
+        </EmptyState>
       ) : tab === "cut" ? (
         <LiveViewer film={film} full={full} onFull={onFull} tabs={tabs} status={status} />
       ) : tab === "list" ? (

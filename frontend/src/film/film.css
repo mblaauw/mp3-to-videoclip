@@ -413,6 +413,13 @@
   display: flex;
   flex-direction: column;
 }
+/* The renderer card sits above the viewer; a column flex would otherwise squash it away. */
+.film-work > .card.setup {
+  flex: none;
+  max-height: 40vh;
+  margin: var(--s-3);
+  overflow: auto;
+}
 .film-notice {
   max-width: 260px;
   margin: 0;
