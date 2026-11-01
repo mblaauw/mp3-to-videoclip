@@ -115,8 +115,9 @@ def _can_see(route: Route) -> bool | None:
     """Whether the catalogue knows this model takes pictures. Unknown stays unknown."""
     from mp3_to_videoclip import catalog
 
+    maker = route.listed_under or route.provider
     known = next(
-        (m for m in catalog.load().models if m.id == route.model and m.provider == route.provider),
+        (m for m in catalog.load().models if m.id == route.model and m.provider == maker),
         None,
     )
     return None if known is None or not known.capabilities else "vision" in known.capabilities

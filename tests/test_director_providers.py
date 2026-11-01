@@ -370,10 +370,26 @@ def test_each_role_routes_to_its_own_provider_and_key():
     assert routing.route_for(settings, "critic").key == "g"
 
 
-def test_a_key_saved_for_opencode_go_is_never_sent_to_openai():
+def test_with_no_openai_key_an_openai_model_goes_through_opencode_go():
     settings = Settings(llm_api_key="go-key", writer_model="openai/gpt-6.1-sol")
     writer = routing.route_for(settings, "writer")
-    assert (writer.provider, writer.key) == ("openai", "")
+    assert (writer.provider, writer.key, writer.base_url, writer.model) == (
+        "opencode-go",
+        "go-key",
+        routing.OPENCODE_GO_URL,
+        "gpt-6.1-sol",
+    )
+    assert writer.listed_under == "openai"
+
+
+def test_an_openai_key_goes_to_openai_and_a_go_key_never_does():
+    both = Settings(keys={"openai": "o", "opencode_go": "c"}, writer_model="openai/gpt-6.1-sol")
+    writer = routing.route_for(both, "writer")
+    assert (writer.provider, writer.key, writer.base_url) == ("openai", "o", routing.OPENAI_URL)
+    neither = Settings(writer_model="openai/gpt-6.1-sol")
+    assert routing.route_for(neither, "writer").key == ""
+    assert routing.route_for(neither, "writer").provider == "openai"
+    settings = Settings(llm_api_key="go-key", writer_model="openai/gpt-6.1-sol")
     editor = routing.route_for(settings, "editor")
     assert (editor.provider, editor.key, editor.base_url) == (
         "opencode-go",

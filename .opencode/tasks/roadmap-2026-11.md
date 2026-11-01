@@ -269,6 +269,8 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   moves only with the renderer revision, as it does for any renderer change. `title-v1` was rendered
   at 16:9 and 9:16 and looked at.
 
+- **After I-2, the owner's word:** an OpenAI model with no OpenAI key goes through OpenCode Go, under
+  the same bare id. That reverses E-1's refusal. No real call has proved OpenCode Go accepts that id.
 - **G-3 store:** subscribers and `useResource` landed, and the Script stage and Spine read through
   them. `request` already shared fetches through `resources.read`, so `FilmShell`, `Images`,
   `useFilmData` and `useStoryData` still make their own `Promise.allSettled` over that shared store;

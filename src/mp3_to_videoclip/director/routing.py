@@ -26,6 +26,8 @@ class Route:
     base_url: str | None
     key: str
     model: str
+    #: The catalogue's name for this model's maker, when another provider carries it.
+    listed_under: str = ""
 
     @property
     def label(self) -> str:
@@ -45,6 +47,13 @@ def route_for(settings: Settings, role: str) -> Route:
     provider = chosen.provider or "direct"
     keys = settings.keys
     if provider == "openai":
+        # With no OpenAI key of its own, an OpenAI model goes through OpenCode Go, whose key
+        # only ever goes to OpenCode Go's address. The same model answers either way.
+        go_key = opencode_go_key(settings)
+        if not keys.openai and go_key:
+            return Route(
+                "opencode-go", "openai-compatible", OPENCODE_GO_URL, go_key, chosen.model, "openai"
+            )
         return Route(provider, "openai-compatible", OPENAI_URL, keys.openai, chosen.model)
     if provider == "opencode-go":
         key = opencode_go_key(settings)
