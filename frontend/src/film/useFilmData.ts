@@ -17,7 +17,7 @@ import type { BaseFilmInput } from "../baseFilm";
 import { filmFiles, selectFilm } from "../filmFiles";
 import { useJobs, useProjectJobs } from "../jobs/store";
 import { notifyProjectChanged, useProjectChanged } from "../shell/projectEvents";
-import { SHOW_EDIT_FILE } from "../shell/SettingsDialog";
+import { SHOW_EDIT_FILE } from "../shell/editFile";
 import { deliveryWorkflow } from "./deliveryWorkflow";
 
 export type LiveState = {

@@ -4,7 +4,7 @@ import { OPEN_SETTINGS } from "./api/errorAction";
 import { ArchiveShell, FilmShell, LibraryShell } from "./shell/FilmShell";
 import { goArchive, goFilm, goLibrary, useHashRoute } from "./shell/route";
 import { notifyProjectChanged, PROJECT_CHANGED } from "./shell/projectEvents";
-import { SettingsDialog } from "./shell/SettingsDialog";
+import { SettingsPanel } from "./shell/settings/SettingsPanel";
 import { ToastTray } from "./ToastTray";
 
 export function App() {
@@ -49,7 +49,7 @@ export function App() {
   };
 
   const dialog = settingsOpen ? (
-    <SettingsDialog
+    <SettingsPanel
       onClose={() => setSettingsOpen(false)}
       onSaved={() => {
         void refresh();

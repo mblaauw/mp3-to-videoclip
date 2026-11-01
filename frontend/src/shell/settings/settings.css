@@ -1,0 +1,312 @@
+/* The settings panel: a tab rail, one column of fields, a save word beside each. */
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: var(--s-4);
+  background: rgba(10, 11, 13, 0.66);
+  backdrop-filter: blur(2px);
+}
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(980px, 100%);
+  height: min(88vh, 900px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  background: var(--panel);
+  box-shadow: var(--float);
+}
+.settings-panel > header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+.settings-panel h2 {
+  margin: 0;
+  font-size: var(--t-20);
+  font-weight: var(--w-bold);
+}
+.settings-search {
+  flex: 1;
+  min-width: 0;
+  max-width: 340px;
+  margin-left: auto;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+.settings-columns {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  min-height: 0;
+}
+.settings-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-3);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+.settings-rail button {
+  padding: var(--s-2) var(--s-3);
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-rail button:hover {
+  background: var(--raised);
+  color: var(--ink);
+}
+.settings-rail button[aria-current="page"] {
+  background: var(--gold-wash);
+  color: var(--gold-strong);
+}
+.settings-body {
+  min-width: 0;
+  padding: var(--s-4) var(--s-5);
+  overflow-y: auto;
+}
+.settings-loading {
+  padding: var(--s-5);
+  color: var(--muted);
+}
+.settings-missing {
+  margin-bottom: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--gold);
+  border-radius: var(--r-picture);
+  background: var(--gold-wash);
+}
+.settings-missing h3 {
+  margin: 0 0 var(--s-2);
+  font-size: var(--t-14);
+}
+.settings-missing ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-missing button {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--gold-strong);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.settings-section {
+  margin-bottom: var(--s-5);
+}
+.settings-section:not(:has(.settings-field, .settings-costs)) {
+  display: none;
+}
+.settings-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+}
+.settings-section h3 {
+  margin: 0;
+  font-size: var(--t-16);
+  font-weight: var(--w-bold);
+}
+.settings-note {
+  margin: 0 0 var(--s-3);
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: var(--s-3) var(--s-4);
+  align-items: start;
+}
+.settings-role {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: inherit;
+  gap: inherit;
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line-soft);
+}
+.settings-role:not(:has(.settings-field)) {
+  display: none;
+}
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.settings-field > label {
+  font-size: var(--t-12);
+  font-weight: var(--w-medium);
+}
+.settings-field > em {
+  color: var(--muted);
+  font-size: var(--t-12);
+  font-style: normal;
+}
+.settings-field input:not([type="checkbox"]),
+.settings-field select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+.settings-field input:focus,
+.settings-field select:focus,
+.settings-search:focus {
+  border-color: var(--gold);
+  outline: none;
+}
+.settings-other {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.settings-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--t-12);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.settings-price,
+.settings-size {
+  color: var(--muted);
+  font-size: var(--t-12);
+  font-variant-numeric: tabular-nums;
+}
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.settings-row audio {
+  width: 100%;
+}
+.settings-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.settings-chips button {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--t-12);
+  cursor: pointer;
+}
+.settings-chips button[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold-strong);
+}
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.settings-good {
+  color: var(--sage);
+  font-size: var(--t-12);
+}
+.settings-bad {
+  color: var(--red);
+  font-size: var(--t-12);
+}
+.settings-muted {
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.settings-costs {
+  grid-column: 1 / -1;
+}
+.settings-costs p {
+  margin: 0 0 var(--s-3);
+}
+.settings-costs table {
+  width: 100%;
+  margin-bottom: var(--s-3);
+  border-collapse: collapse;
+  font-size: var(--t-12);
+  font-variant-numeric: tabular-nums;
+}
+.settings-costs caption {
+  padding-bottom: 4px;
+  color: var(--muted);
+  text-align: left;
+}
+.settings-costs th {
+  font-weight: var(--w-regular);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.settings-costs td {
+  text-align: right;
+}
+.settings-costs th,
+.settings-costs td {
+  padding: 3px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+@media (max-width: 700px) {
+  .settings-backdrop {
+    padding: 0;
+  }
+  .settings-panel {
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+  .settings-columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .settings-rail {
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+  }
+  .settings-rail button {
+    flex: none;
+  }
+  .settings-body {
+    padding: var(--s-3) var(--s-4);
+  }
+}
