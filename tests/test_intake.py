@@ -60,7 +60,9 @@ def test_create_from_upload_writes_a_guided_schema_three_project(tmp_path, fake_
 
     assert flow.guided(root) is True
     assert (root / "brief.json").is_file()
-    assert (root / "brand.json").is_file()
+    # A portrait film from a fresh install gets short titles, which need no brand file.
+    assert not (root / "brand.json").is_file()
+    assert (root / "work/graphics-spec.json").is_file()
     assert (root / "work/events.json").is_file()
     assert (root / "work/approvals.json").read_text().strip() == "{}"
     assert (root / "work/tasks.json").read_text().strip() == "{}"

@@ -86,8 +86,8 @@ class Keys(BaseModel):
 
 
 class Brand(BaseModel):
-    name: str = "MAHA KALA"
-    partner: str = "VJDJ69"
+    name: str = ""
+    partner: str = ""
     logo: str = ""
     palette: list[str] = []
     font: str = ""

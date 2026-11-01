@@ -210,11 +210,16 @@ def quote_images(
                 raise ValueError(f"shot {shot.id} has no version {edits[shot.id]} to edit")
             if source_limit is not None and len(spec["references"]) + 1 > source_limit:
                 raise ValueError(f"shot {shot.id} has no room for the still as a reference")
-        if edit_source is None and shot.id not in edits and not regenerate and any(
-            v["input_hash"] == input_hash
-            and inside(root, v["path"]).is_file()
-            and file_hash(inside(root, v["path"])) == v["sha256"]
-            for v in versions
+        if (
+            edit_source is None
+            and shot.id not in edits
+            and not regenerate
+            and any(
+                v["input_hash"] == input_hash
+                and inside(root, v["path"]).is_file()
+                and file_hash(inside(root, v["path"])) == v["sha256"]
+                for v in versions
+            )
         ):
             continue
         if any(
@@ -222,12 +227,16 @@ def quote_images(
             for t in journal.values()
         ):
             raise ValueError(f"shot {shot.id} has an unresolved task; recover it first")
-        if not regenerate and shot.id not in edits and any(
-            t.get("shot_id") == shot.id
-            and t.get("input_hash") == input_hash
-            and t["status"] == "ready"
-            and not asset_intact(root, t)
-            for t in journal.values()
+        if (
+            not regenerate
+            and shot.id not in edits
+            and any(
+                t.get("shot_id") == shot.id
+                and t.get("input_hash") == input_hash
+                and t["status"] == "ready"
+                and not asset_intact(root, t)
+                for t in journal.values()
+            )
         ):
             raise ValueError(
                 f"shot {shot.id} has a lost/changed asset; recover it instead of rebilling"
@@ -532,7 +541,9 @@ def finish_image(root: Path, task_uuid: str, result: dict, client: RunwareClient
         task.update(status="result", result=result, cost_usd=cost, cost_basis="provider reported")
         journal[task_uuid] = task
         write_json(root / "work/tasks.json", journal)  # Billed cost BEFORE download.
-    relative = task.get("relative") or f"assets/{task['shot_id']}/v{task['version']:03d}-{task_uuid}.jpg"
+    relative = (
+        task.get("relative") or f"assets/{task['shot_id']}/v{task['version']:03d}-{task_uuid}.jpg"
+    )
     path = inside(root, relative)
     expected_hash = task.get("sha256")
     if path.exists() and expected_hash and file_hash(path) != expected_hash:
@@ -807,7 +818,9 @@ def generate(root: Path, quote_id: str, client=None, *, concurrency: int = 1):
         spec = effective_image_spec(image_spec(root, shot), quote["model"])
         request = task["request"]
         controls = image_controls(spec, quote["model"])
-        worded = _worded(spec, schema["components"]["schemas"]["RequestBody"]["items"]["properties"])
+        worded = _worded(
+            spec, schema["components"]["schemas"]["RequestBody"]["items"]["properties"]
+        )
         expected = worded["positivePrompt"]
         expected_references = spec["references"]
         if task.get("edit_of") is not None:

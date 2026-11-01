@@ -72,8 +72,8 @@ def test_a_fresh_install_keeps_todays_defaults(path):
         "llm_base_url": "https://opencode.ai/inference/go/openai/v1",
         "llm_api_key": "",
         "llm_model": "deepseek-v4.1-flash",
-        "brand_name": "MAHA KALA",
-        "brand_partner": "VJDJ69",
+        "brand_name": "",
+        "brand_partner": "",
         "default_budget_usd": 5.0,
         "image_reserve_usd": 0.05,
     }

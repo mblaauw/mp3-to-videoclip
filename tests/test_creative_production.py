@@ -756,7 +756,7 @@ def test_instrumental_init_and_stage_gates(tmp_path, monkeypatch):
     project = P.init_project(root, source, "instrumental", music_mode="instrumental")
     # Brandless fixture: this test covers instrumental music gates, and the default
     # identity intro is intentionally longer than the two-second test source.
-    (root / "brand.json").unlink()
+    (root / "brand.json").unlink(missing_ok=True)
     # Signature approval is a separate gate; this fixture exercises instrumental
     # music gates only, so keep the required signature from blocking brief approval.
     stored = json.loads((root / "project.json").read_text())

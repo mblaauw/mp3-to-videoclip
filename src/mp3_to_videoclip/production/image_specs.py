@@ -190,7 +190,11 @@ def creative_profile_version(brief: Brief) -> str:
             "look": creative.look,
             "image_rules": creative.image_rules,
             "avoid": brief.avoid,
-            **({"sections": [s.model_dump() for s in creative.sections]} if creative.sections else {}),
+            **(
+                {"sections": [s.model_dump() for s in creative.sections]}
+                if creative.sections
+                else {}
+            ),
         }
     )
 
@@ -203,7 +207,9 @@ def _section_look(project: Project, creative: CreativeProfile, shot: Shot) -> st
     for section in creative.sections:
         if section.start <= at < section.end:
             lens = f"; lens {section.lens}" if section.lens else ""
-            return f"Section look: palette {', '.join(section.palette)}; light {section.light}{lens}"
+            return (
+                f"Section look: palette {', '.join(section.palette)}; light {section.light}{lens}"
+            )
     return ""
 
 

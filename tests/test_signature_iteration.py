@@ -112,7 +112,7 @@ def test_default_style_cannot_be_summarized_but_explicit_custom_look_is_allowed(
 def test_new_title_and_signature_draft_are_not_source_filename(tmp_path):
     source = synth_source(tmp_path)
     root = tmp_path / "the-last-light"
-    result = init(root, source, "--title", "The Last Light")
+    result = init(root, source, "--title", "The Last Light", "--titles", "joint-v1")
     assert result["title"] == "The Last Light" and result["source_filename"] == source.name
     assert result["prompt_version"] == 3 and result["signature_required"] is True
     spec = read_json(root / signature.SPEC)

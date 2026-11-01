@@ -281,7 +281,10 @@ def use_as_reference(root: Path, entry_id: str, version: int) -> Brief:
         root,
         {
             "creative": {
-                "references": [*[r.model_dump() for r in creative.references], reference.model_dump()],
+                "references": [
+                    *[r.model_dump() for r in creative.references],
+                    reference.model_dump(),
+                ],
                 "scenes": scenes,
             }
         },

@@ -54,7 +54,7 @@ KINDS: dict[Kind, KindProfile] = {
         shot_mix="Mostly generated scenes; a few title or lyric cards",
         text_density="Rare: title and selected lyric hits only",
         pacing="Follows the song's sections; holds are earned by the music",
-        opening_closing="25 s opening + 40 s credits (editable settings default)",
+        opening_closing="Opening and end card from the brand kit; the 25/40 package is one option",
         signature_required=True,
         style_presets=(
             "photographic-painted-v2",

@@ -63,6 +63,7 @@ def parser() -> argparse.ArgumentParser:
         help="Film title, separate from source filename; choose the folder/slug from this title",
     )
     init.add_argument("--aspect", choices=["16:9", "9:16"], default="16:9")
+    init.add_argument("--titles", choices=["joint-v1", "title-v1", "none"])
     init.add_argument("--fps", type=int, choices=[24, 30], default=24)
 
     init.add_argument(
@@ -400,6 +401,7 @@ def execute(args):
             image_seed=args.image_seed,
             style=args.style,
             style_preset=args.style_preset,
+            titles=args.titles,
             native_size=native_size,
             title=args.title,
             kind=args.kind,

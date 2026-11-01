@@ -192,7 +192,9 @@ def _story_on_song(root: Path, project) -> list[str]:
                 continue
             first = timeline.frame_number(start, project.fps)
             last = min(timeline.frame_number(end, project.fps), project.total_frames)
-            lines.append(f"- {start:.2f}-{end:.2f}s (frames {first}-{last}): {_clip(item['text'], PASSAGE_LIMIT)}")
+            lines.append(
+                f"- {start:.2f}-{end:.2f}s (frames {first}-{last}): {_clip(item['text'], PASSAGE_LIMIT)}"
+            )
             placed += 1
     except Exception as exc:  # noqa: BLE001
         return [

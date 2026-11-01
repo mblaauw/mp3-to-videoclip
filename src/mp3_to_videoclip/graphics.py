@@ -537,13 +537,22 @@ def load_spec(root: Path, path: Path | None = None) -> dict:
     ):
         if key not in spec:
             raise ComposeError(f"graphics spec is missing {key}")
-    if not (5 <= float(spec["intro_seconds"]) <= 30):
-        raise ComposeError("intro_seconds must be between 5 and 30")
-    if not (5 <= float(spec["credits_tail_seconds"]) <= 60):
-        raise ComposeError("credits_tail_seconds must be between 5 and 60")
-    for key in ("names", "title"):
-        if not spec["intro"].get(key):
-            raise ComposeError(f"intro needs {key}")
+    short = spec.get("package") == "title-v1"
+    if short:
+        from .signature import check_short_titles
+
+        try:
+            check_short_titles(spec)
+        except ValueError as exc:
+            raise ComposeError(str(exc)) from exc
+    else:
+        if not (5 <= float(spec["intro_seconds"]) <= 30):
+            raise ComposeError("intro_seconds must be between 5 and 30")
+        if not (5 <= float(spec["credits_tail_seconds"]) <= 60):
+            raise ComposeError("credits_tail_seconds must be between 5 and 60")
+        for key in ("names", "title"):
+            if not spec["intro"].get(key):
+                raise ComposeError(f"intro needs {key}")
     subtitle = spec["intro"].get("subtitle")
     if subtitle is not None and not isinstance(subtitle, str):
         raise ComposeError("intro subtitle must be a string")
@@ -554,7 +563,7 @@ def load_spec(root: Path, path: Path | None = None) -> dict:
             raise ComposeError(f"caption {cap.get('id')} needs style caption|sfx and text")
         if cap["style"] == "sfx" and ("x" not in cap or "y" not in cap):
             raise ComposeError(f"sfx caption {cap['id']} needs x and y")
-    if not spec["credits"].get("cards") or not spec["credits"].get("lockup"):
+    if not short and (not spec["credits"].get("cards") or not spec["credits"].get("lockup")):
         raise ComposeError("credits need cards and a lockup line")
     if resolve_design(spec) == DESIGN_JOINT:
         _adopt_brand_identity(spec, Path(root))
@@ -2259,7 +2268,12 @@ def _preflight_samples(spec: dict, parts, fps: int, total: int, times) -> list[d
             seen.add(frame)
             samples.append({"frame": frame, "phase": None, "requested_seconds": number})
         return samples
-    for phase in intro_phase_samples(float(spec["intro_seconds"]), resolve_design(spec)):
+    phases = (
+        []
+        if spec.get("package") == "title-v1"
+        else intro_phase_samples(float(spec["intro_seconds"]), resolve_design(spec))
+    )
+    for phase in phases:
         frame = frame_number(phase["sample_seconds"], fps)
         if frame in seen:
             continue
