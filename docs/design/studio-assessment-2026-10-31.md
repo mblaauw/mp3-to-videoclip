@@ -856,6 +856,26 @@ work/beats.json            the structure's timed beats (hook, world, develop, re
 | 11 | Clips before or after depth parallax? | After. Parallax gives every painted scene motion for free; clips are a per-shot purchase on top. |
 | 12 | May the Writer invent facts in a fictional documentary? | Yes, when the brief declares the world fictional, and every invented claim is listed in the script as invented. |
 
+**Owner's answer, 1 November 2026:** as recommended on 8, 9, 11 and 12. On 10:
+no local voice. Runware is the only provider for now; the narrator is MiniMax
+speech through Runware with `English_Magnetic_Male_2` as the default voice.
+ElevenLabs is scaffolded as an adapter behind the same `Voice` interface and
+appears in the catalogue only when an ElevenLabs key is present in the settings
+file or the environment (the owner keeps keys in `~/.zshsecrets`, which the
+launcher inherits like `OPENAI_API_KEY` today). Without a free voice, the $0
+draft path becomes a **read-rate estimate**: line durations computed from word
+count at the voice's measured rate, so the beat budgets, the storyboard and a
+silent Player preview exist before the first paid take.
+
 Evidence for this part: the four provider searches above, the intake and model
 code cited, and the first-cut and track-listening records that already contain the
 alignment and asset-version patterns this reuses.
+
+## Implementation plans
+
+Every phase has a plan in `.opencode/tasks/` in the repository's own format, with
+the code evidence, the tasks one commit each, acceptance and risks:
+`plan-a-blocked-states.md`, `plan-h-settings.md`, `plan-b-musical.md`,
+`plan-d-fast.md`, `plan-c-move.md`, `plan-e-director.md`, `plan-i-narrative.md`,
+`plan-f-open.md`, `plan-g-debt.md`. The index with order and dependencies is
+`.opencode/tasks/roadmap-2026-11.md`.
