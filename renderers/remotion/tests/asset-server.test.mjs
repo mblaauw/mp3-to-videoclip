@@ -65,13 +65,13 @@ test("two servers never share a port", async () => {
 test("every still gets a source, including panes, and the input is not changed", () => {
   const input = {
     preview_banner: false,
-    shots: [{id: "a", image: "x y.jpg"}, {id: "b", image: "b.png", panes: [{image: "p.jpg"}, {crop: {}}]}],
+    shots: [{id: "a", image: "x y.jpg"}, {id: "b", image: "b.png", split_panes: [{image: "p.jpg"}, {crop: {}}]}],
   };
   const before = JSON.stringify(input);
   const served = withServedAssets(input, "http://127.0.0.1:9");
   assert.equal(served.shots[0].src, "http://127.0.0.1:9/x%20y.jpg");
-  assert.equal(served.shots[1].panes[0].src, "http://127.0.0.1:9/p.jpg");
-  assert.equal(served.shots[1].panes[1].src, undefined);
+  assert.equal(served.shots[1].split_panes[0].src, "http://127.0.0.1:9/p.jpg");
+  assert.equal(served.shots[1].split_panes[1].src, undefined);
   assert.equal(served.preview_banner, false);
   assert.equal(JSON.stringify(input), before);
 });

@@ -79,7 +79,7 @@ export function withServedAssets(input, url) {
     ...input,
     shots: (input.shots ?? []).map((shot) => ({
       ...withSource(shot, url),
-      ...(shot.panes ? {panes: shot.panes.map((pane) => withSource(pane, url))} : {}),
+      ...(shot.split_panes ? {split_panes: shot.split_panes.map((pane) => withSource(pane, url))} : {}),
     })),
   };
 }

@@ -269,3 +269,18 @@ def test_the_report_names_cuts_off_the_grid_and_just_after_it(tmp_path):
         earlier.duration_frames -= offset
         middle.start_frame -= offset
         middle.duration_frames += offset
+
+
+def test_every_section_gets_its_target_where_rounding_and_flooring_disagree(tmp_path):
+    root = _film(tmp_path)
+    _grid(root)
+    music = read_json(root / "work/music.json")
+    # 18.5625 s is frame 445.5: it rounds up to 446 and floors to 445.
+    music["sections"][0]["end"] = 18.5625
+    music["sections"][1]["start"] = 18.5625
+    write_json(root / "work/music.json", music)
+    material = edits.cut_material(root)
+    assert all(section["target_per_10s"] for section in material["sections"])
+    assert all(section["energy_word"] for section in material["sections"])
+    suggested = EditDecisionList.model_validate(first_cut.suggest(root)["edit"])
+    assert all(section.density_per_10s > 0 for section in suggested.sections)

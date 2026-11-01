@@ -1055,7 +1055,8 @@ def cut_material(root: Path) -> dict:
     fps = project.fps
     frame = lambda seconds: round(float(seconds) * fps)  # noqa: E731
     song = song_map(root)
-    words = {item["start_frame"]: item for item in song.get("sections", [])}
+    # By the time they were measured at: this list rounds to frames, the song map floors.
+    words = {item["start"]: item for item in song.get("sections", [])}
     music = section_map.apply(root, read_optional(root / "work" / "music.json")) or {}
     sections = [
         {
@@ -1063,14 +1064,12 @@ def cut_material(root: Path) -> dict:
             "start_frame": frame(item["start"]),
             "end_frame": frame(item["end"]),
             "energy": round(float(item.get("energy") or 0), 2),
+            "energy_word": words.get(round(float(item["start"]), 3), {}).get("energy_word"),
+            "target_per_10s": words.get(round(float(item["start"]), 3), {}).get("target_per_10s"),
         }
         for index, item in enumerate(music.get("sections") or [])
         if isinstance(item, dict)
     ]
-    for section in sections:
-        heard = words.get(section["start_frame"]) or {}
-        section["energy_word"] = heard.get("energy_word")
-        section["target_per_10s"] = heard.get("target_per_10s")
     lines = [
         {"frame": frame(line["start"]), "text": line["text"], "source": line["source"]}
         for line in lyric_timing.view(root)["lines"]
