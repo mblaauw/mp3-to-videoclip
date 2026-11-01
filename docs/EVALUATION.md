@@ -106,3 +106,17 @@ later artifact write leaves the old rating visible but marks it stale.
   authorization and a writable production copy.
 - A prompt edit ships only when it does not lower the fixture pass rate and the
   owner prefers the side-by-side output.
+
+## Creative checks
+
+`tests/evals/lexicon.py` counts stock images per thousand words over treatments, shots and prompts,
+and the variety of a board as bits of entropy across framing, kind and scene. Both are on every run's
+row, and a run past either line fails `--strict`. `tests/evals/reference.py` writes one scripted run per
+fixture into `tests/evals/runs/reference-*`, which are committed so each page has a baseline at $0. They
+show the checks working, not good writing.
+
+`--judge provider/model --allow-spend` scores real runs against the anchored rubric in
+`tests/evals/judge.py`, and keeps the score and its token use in that run's `meta.json`. `judge.blind_pair`
+compares two runs of one fixture, shuffled, showing neither hash nor model. Nothing here runs without those
+flags, and no judge has been run yet.
+
