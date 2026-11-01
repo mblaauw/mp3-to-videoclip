@@ -649,11 +649,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@media (max-width: 1180px) {
-  .next-bar.compact .next-say > span:not(.ui-dot) {
-    white-space: normal;
-  }
-}
 .next-bar.compact .next-actions {
   flex: none;
 }
@@ -1102,7 +1097,7 @@
     grid-row: 4;
   }
   .shell.on-film {
-    grid-template-rows: auto minmax(160px, 1fr) auto auto;
+    grid-template-rows: max-content minmax(160px, 1fr) auto auto;
   }
 }
 
@@ -1123,10 +1118,14 @@
   .shell:not(.on-film):has(.next-bar.compact) {
     grid-template-rows: auto minmax(0, 1fr) var(--spine-h);
   }
+  /* Two rows: the stages, then the next step. A wrapped row can't size its own grid track. */
   .shell .topbar:has(.next-bar.compact) {
     flex-wrap: wrap;
-    height: auto;
-    min-height: var(--topbar-h);
+    align-content: flex-start;
+    height: 112px;
+  }
+  .shell .topbar:has(.next-bar.compact) .stepper {
+    height: 56px;
   }
   .next-bar.compact {
     order: 5;
@@ -1171,6 +1170,12 @@
   /* The stage says its state in words, not only by the colour of a dot. */
   .shell:has(.next-bar.compact) .step[aria-current] .step-state {
     display: inline;
+  }
+  .shell .topbar:has(.next-bar.compact) {
+    height: auto;
+  }
+  .shell .topbar:has(.next-bar.compact) .stepper {
+    height: 48px;
   }
   /* One line under the top bar: the sentence stays, the reason gives way to the picture. */
   .next-bar.compact .next-say > span:not(.ui-dot) {
