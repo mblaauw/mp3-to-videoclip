@@ -405,7 +405,12 @@ export type Settings = {
     brand: { name: string; partner: string; logo: string; palette: string[]; font: string };
   };
   prices: Record<string, string>;
-  computer: { gateway: "opencode" | "direct"; opencode_bin: string; opencode_workspace: string };
+  computer: {
+    gateway: "opencode" | "direct";
+    opencode_bin: string;
+    opencode_workspace: string;
+    render_workers: number;
+  };
   notes: Record<string, string>;
   gateway?: "opencode" | "direct";
   opencode_bin?: string;

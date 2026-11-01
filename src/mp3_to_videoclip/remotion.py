@@ -433,12 +433,17 @@ def _free_memory() -> int | None:
 
 def render_workers(pending: int) -> int:
     """How many browsers to run at once: never more than there are chunks to render."""
+    from .config import load_settings
+
     chosen = os.environ.get(WORKERS_ENV)
+    saved = load_settings().computer.render_workers
     if chosen:
         try:
             count = int(chosen)
         except ValueError:
             raise ValueError(f"{WORKERS_ENV} must be a whole number") from None
+    elif saved:
+        count = saved
     else:
         count = min(MAX_WORKERS, (os.cpu_count() or 2) // 2)
         free = _free_memory()

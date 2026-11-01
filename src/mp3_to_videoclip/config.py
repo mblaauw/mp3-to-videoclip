@@ -104,6 +104,8 @@ class Computer(BaseModel):
     opencode_bin: str = "opencode"
     opencode_workspace: str = ""
     gateway: Literal["opencode", "direct"] = "direct"
+    #: Browsers per render; 0 lets the app choose from the cores and free memory.
+    render_workers: int = Field(default=0, ge=0, le=8)
 
 
 #: Where each name of the flat schema 1 file lives now.

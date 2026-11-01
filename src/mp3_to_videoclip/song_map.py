@@ -105,7 +105,7 @@ def _numbers(items: Any, key: str = "time") -> list[float]:
     return values
 
 
-def _bands(values: list[float]) -> list[str]:
+def bands(values: list[float]) -> list[str]:
     """Each value against the song's own range, never an absolute."""
     if not values:
         return []
@@ -171,8 +171,8 @@ def _build(root: Path, project) -> dict[str, Any]:
     _, base_source = base_sections(root, music)
     source = "section-map.json" if section_map.read(root) is not None else base_source
     items = [item for item in applied.get("sections") or [] if isinstance(item, dict)]
-    bands = _bands([float(item.get("energy") or 0) for item in items])
-    targets = pacing.density_plan(bands, beats_per_bar, float(bpm) if bpm else None)
+    words_by_energy = bands([float(item.get("energy") or 0) for item in items])
+    targets = pacing.density_plan(words_by_energy, beats_per_bar, float(bpm) if bpm else None)
     sections = []
     for index, item in enumerate(items):
         start, end = float(item["start"]), float(item["end"])
@@ -185,7 +185,7 @@ def _build(root: Path, project) -> dict[str, Any]:
                 "start_frame": frame(start),
                 "end_frame": min(frame(end), last),
                 "energy": round(float(item.get("energy") or 0), 3),
-                "energy_word": bands[index],
+                "energy_word": words_by_energy[index],
                 "target_per_10s": targets[index],
                 "first_line": first["text"] if first else None,
                 "first_line_frame": frame(first["start"]) if first else None,

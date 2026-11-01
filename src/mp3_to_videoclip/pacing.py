@@ -256,8 +256,9 @@ def snap_joins(
     return result
 
 
-#: Cuts per bar for each energy word, and per 10 s when no bar was measured.
-_CUTS_PER_BAR = {"quiet": 0.5, "middle": 1.0, "full": 2.5}
+#: Cuts per bar for each energy word, and per 10 s when no bar was measured. A full
+#: section tops out at one a bar, because that is what cutting on bar lines can reach.
+_CUTS_PER_BAR = {"quiet": 0.25, "middle": 0.5, "full": 1.0}
 _CUTS_PER_10S = {"quiet": 1.5, "middle": 3.0, "full": 5.0}
 #: The shortest shot a density may ask for.
 _MIN_CUT_SECONDS = 1.5

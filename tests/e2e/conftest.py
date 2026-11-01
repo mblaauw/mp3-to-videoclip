@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import socket
 import sys
 import threading
@@ -81,3 +82,18 @@ def stays_local(page, studio):
     page.on("request", note)
     yield
     assert outside == []
+
+
+@pytest.fixture(scope="session")
+def browser(launch_browser):
+    """No browser on this computer is a skip here and a failure in CI, where one must exist."""
+    from playwright.sync_api import Error
+
+    try:
+        opened = launch_browser()
+    except Error as exc:
+        if os.environ.get("CI"):
+            raise
+        pytest.skip(f"no browser to run these in: {str(exc).splitlines()[0]}")
+    yield opened
+    opened.close()

@@ -157,8 +157,9 @@ def test_music_json_and_every_stage_hash_hold(tmp_path):
 
 
 def test_density_follows_energy_and_the_bar_and_respects_the_shortest_shot():
-    assert pacing.density_plan(["quiet", "middle", "full"], 4, 60.0) == [1.25, 2.5, 6.25]
-    assert pacing.density_plan(["full"], 4, 120.0) == [6.67]
+    assert pacing.density_plan(["quiet", "middle", "full"], 4, 60.0) == [0.62, 1.25, 2.5]
+    assert pacing.density_plan(["full"], 4, 120.0) == [5.0]
+    assert pacing.density_plan(["full"], 2, 180.0) == [6.67]
     assert pacing.density_plan(["quiet", "full"], None, None) == [1.5, 5.0]
 
 

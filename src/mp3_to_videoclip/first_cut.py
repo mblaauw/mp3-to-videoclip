@@ -25,12 +25,12 @@ from .models import (
     EditTransition,
 )
 from .pacing import grid_tiers, snap_joins, split_points
+from .song_map import bands as energy_bands
 
 # Frames a cut leads a sung line by, so the picture is there as the word lands.
 LINE_LEAD = 2
 MIN_SHOT_SECONDS = 1.5
 REACH_SECONDS = 1.5
-QUIET, FULL = 0.34, 0.67
 TRAVEL = {"quiet": 0.03, "middle": 0.06, "full": 0.1}
 MAX_HOLD_SECONDS = 6.0
 PUNCH = 1.05
@@ -39,18 +39,6 @@ DISSOLVE_FRAMES = 12
 DETAIL_ZOOM = 1.25
 GRID_LEAD = 1
 MAX_CROPS = 16
-
-
-def _bands(sections: list[dict]) -> dict[int, str]:
-    """Each section's loudness against the song's own range, never an absolute."""
-    values = [section["energy"] for section in sections]
-    low, high = (min(values), max(values)) if values else (0.0, 1.0)
-    span = (high - low) or 1.0
-    bands = {}
-    for index, section in enumerate(sections):
-        share = (section["energy"] - low) / span
-        bands[index] = "quiet" if share < QUIET else "full" if share >= FULL else "middle"
-    return bands
 
 
 def _section_at(sections: list[dict], frame: int) -> int:
@@ -132,7 +120,7 @@ def suggest(root: Path) -> dict[str, Any]:
     current = load_edit(root, board=board) or seed_edit_preview(root)
     material = cut_material(root)
     sections = material["sections"]
-    bands = _bands(sections)
+    bands = dict(enumerate(energy_bands([section["energy"] for section in sections])))
     total = board.total_frames
 
     joins = [shot.start_frame for shot in current.shots[1:]]
