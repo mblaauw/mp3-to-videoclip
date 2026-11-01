@@ -65,6 +65,10 @@ for a different organisation. No licence key or font file belongs in git.
   captions follow the edit's timing), and `Film.jsx` draws them with
   `Titles.jsx` over `BaseFilm`. FFmpeg muxes the original audio once. Output is
   H264/yuv420p/AAC/faststart.
+- A spec with `package: "title-v1"` plans a `title` window (0 to 5 s) and an `end_card`
+  window (0 to 10 s) instead. `title_assets` needs no filmstrip mark for it, the logo may
+  be null, and text keeps clear of the edges by `timing.titleInsets`: 5 % in landscape,
+  12 % top and bottom in portrait. A spec with no `package` is `joint-v1`, byte for byte.
 - The titles review renders stills of that same composition (`stills` request
   kind, Remotion `renderStill`) at every opening phase and the middle of every
   other window. It needs no base movie. Renderer source, locked dependencies,

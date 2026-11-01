@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -11,7 +13,7 @@ from utils_image_schema import image_schema, jpeg_at
 from mp3_to_videoclip import budget, sheets
 from mp3_to_videoclip import generation as G
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip.director import prompts
+from mp3_to_videoclip.director import prompts, tools
 from mp3_to_videoclip.director.context import build_context
 from mp3_to_videoclip.storage import file_hash, read_json
 
@@ -168,3 +170,20 @@ def test_sheets_never_count_as_stills(film):
     assert prompts.select_task(film, "images", "writer") == "prompts"
     assert sheets.view(film)["ana"] == {"kind": "character", "version": 1, "current": True}
     assert "sheet:ana: the sheet" in build_context(film.name, film.parent, task="prompts")
+
+
+def test_the_writer_can_look_at_a_sheet_a_reference_and_a_character(film):
+    _bought(film)
+    sheets.use_as_reference(film, "ana", 1)
+    reference = read_json(film / "brief.json")["creative"]["references"][0]["id"]
+    result = asyncio.run(
+        tools.dispatch(
+            "get_images",
+            {"slug": film.name, "shot_ids": ["sheet:ana", "character:ana", reference, "sheet:ben"]},
+            projects_dir=film.parent,
+        )
+    )
+    payload = json.loads(result.text)
+    assert payload["image_count"] == 3
+    assert [item["id"] for item in payload["images"]] == ["sheet:ana", "character:ana", reference]
+    assert "sheet:ben" in payload["errors"][0]
