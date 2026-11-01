@@ -98,6 +98,8 @@ def selected_asset_root(compiled: list[dict], assets: Path) -> Path:
     manifest = {}
     for shot in compiled:
         entries = [shot, *shot.get("split_panes", [])]
+        depth = shot.get("depth") or {}
+        entries += [{"image": depth[layer]} for layer in ("far", "mid", "near") if layer in depth]
         for entry in entries:
             name = entry["image"]
             sha = entry.get("image_sha256", name.split(".", 1)[0])
@@ -738,11 +740,30 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
     separate from the render/subprocess path so the MP4 payload can be tested
     against the same shape the Player receives.
     """
+    from . import depth, shotkinds
+
     compiled = []
     root = Path(workdir).resolve().parent
+    without_depth = []
     for rs in shots:
         name, sha = _stage_asset(Path(rs.image), assets)
         entry = {**rs.shot.model_dump(), "image": name, "image_sha256": sha}
+        look = rs.grade.look if rs.grade is not None else None
+        if (
+            look is not None
+            and look.depth > 0
+            and not (rs.edit is not None and rs.edit.depth is False)
+            and not (rs.shot.asset_shot_id is None and shotkinds.is_local(rs.shot))
+        ):
+            layers = depth.layer_set(root, Path(rs.image))
+            if layers is None:
+                without_depth.append(rs.shot.id)
+            else:
+                staged = {
+                    layer: _stage_asset(layers["folder"] / f"{layer}.png", assets)[0]
+                    for layer in depth.LAYERS
+                }
+                entry["depth"] = {**staged, "model": layers["model"]}
         if rs.edit is not None:
             entry["edit"] = rs.edit.model_dump(by_alias=True)
         if rs.grade is not None:
@@ -771,6 +792,11 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
             if panes:
                 entry["split_panes"] = panes
         compiled.append(entry)
+    if without_depth:
+        # Never a silently flat shot in a film that asked for depth.
+        raise ValueError(
+            f"run depth for {len(without_depth)} stills first: {', '.join(without_depth[:8])}"
+        )
     return compiled
 
 

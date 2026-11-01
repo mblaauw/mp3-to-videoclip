@@ -78,13 +78,14 @@ export type EditShot = {
   accents: EditAccent[];
   text: EditText[];
   crops?: EditCrop[];
+  depth?: boolean | null;
 };
 
 export type Grade = {
   preset: "neutral" | "warm-night" | "clean-day" | "monochrome" | "vivid" | "film-fade";
   strength: number;
   overrides?: PreviewShot["post_effects"];
-  look?: { grain: number; weave: number; drift: number } | null;
+  look?: { grain: number; weave: number; drift: number; depth?: number } | null;
   typeface?: "inter" | "fraunces" | "bebas" | null;
 };
 

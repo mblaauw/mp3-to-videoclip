@@ -935,12 +935,16 @@ class EditShot(Model):
     accents: list[EditAccent] = Field(default_factory=list, max_length=8)
     text: list[EditText] = Field(default_factory=list, max_length=MAX_SHOT_TEXT)
     crops: list[EditCrop] = Field(default_factory=list, max_length=16)
+    #: False keeps this shot flat in a film with depth: a card, a face filling the frame.
+    depth: bool | None = None
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
         value = handler(self)
         if value.get("split_layout") is None:
             value.pop("split_layout", None)
+        if value.get("depth") is None:
+            value.pop("depth", None)
         # Absent when unused, so a cut without crop cuts hashes as it always has.
         if not value.get("crops"):
             value.pop("crops", None)
@@ -1017,6 +1021,15 @@ class FilmLook(Model):
     grain: float = Field(default=0, ge=0, le=1)
     weave: float = Field(default=0, ge=0, le=1)
     drift: float = Field(default=0, ge=0, le=1)
+    depth: float = Field(default=0, ge=0, le=1)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        # Absent when off, so a film without depth hashes as it always has.
+        if not value.get("depth"):
+            value.pop("depth", None)
+        return value
 
 
 class Grade(Model):

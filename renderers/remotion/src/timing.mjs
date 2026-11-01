@@ -641,6 +641,14 @@ export function validateEditCrops(crops, start, duration, id) {
   }
 }
 
+export function validateDepthLayers(depth, label) {
+  if (depth === undefined || depth === null) return;
+  if (typeof depth !== "object" || Array.isArray(depth)) fail(`${label} depth must be an object`);
+  for (const layer of ["far", "mid", "near"]) {
+    if (typeof depth[layer] !== "string" || !depth[layer]) fail(`${label} depth needs a ${layer} layer`);
+  }
+}
+
 export function validateEditShot(value, shot) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail(`shot ${shot.id} edit must be an object`);
@@ -691,7 +699,7 @@ export function validateGrade(value) {
     if (typeof value.look !== "object" || Array.isArray(value.look)) {
       fail("grade.look must be an object");
     }
-    for (const key of ["grain", "weave", "drift"]) {
+    for (const key of ["grain", "weave", "drift", "depth"]) {
       const amount = requireNumber(value.look[key] ?? 0, `grade.look.${key}`);
       if (amount < 0 || amount > 1) fail(`grade.look.${key} must be between 0 and 1`);
     }
@@ -857,6 +865,47 @@ export function lookState(look, localFrame, shotId, width, height, fps) {
       `rotate(${GRAIN_TURNS[Math.floor(frameNoise(frame, seed + 5) * 4) % 4]}deg) ` +
       `scaleX(${frameNoise(frame, seed + 6) < 0.5 ? -1 : 1})`,
     grainSpan: Math.ceil(Math.hypot(width, height)),
+  };
+}
+
+const PARALLAX_SHARE = 0.012;
+const PARALLAX_LAYERS = {far: 0, mid: 0.5, near: 1};
+
+/**
+ * How each depth layer moves at one frame of a shot, or null when depth is off. A
+ * push-in becomes a dolly (the near layer grows more than the far), a pan an orbit
+ * (layers slide against each other), and anything else a slow breath. The far layer
+ * stays put, so the camera's own move is all it has. Pure, seeded by the shot's id.
+ */
+export function parallaxState(depth, motion, localFrame, duration, shotId, width, height, fps) {
+  const amount = Number(depth ?? 0);
+  if (amount <= 0) return null;
+  const reach = amount * PARALLAX_SHARE * Math.min(width, height);
+  const seed = shotSeed(shotId);
+  const phase = ((seed % 1000) / 1000) * 2 * Math.PI;
+  const progress = Math.min(Math.max(localFrame / Math.max(duration - 1, 1), 0), 1);
+  const seconds = localFrame / fps;
+  const type = motion ?? "hold";
+  const place = (share) => {
+    const pixels = reach * share;
+    if (type === "push_in" || type === "pull_back") {
+      const grow = type === "push_in" ? progress : 1 - progress;
+      return {x: 0, y: 0, scale: 1 + ((2 * pixels) / Math.min(width, height)) * grow};
+    }
+    if (type === "pan_left" || type === "pan_right") {
+      const sign = type === "pan_right" ? -1 : 1;
+      return {x: sign * pixels * (progress * 2 - 1), y: 0, scale: 1};
+    }
+    return {
+      x: pixels * Math.sin((2 * Math.PI * seconds) / 9 + phase),
+      y: pixels * 0.6 * Math.sin((2 * Math.PI * seconds) / 13 + phase * 2),
+      scale: 1,
+    };
+  };
+  return {
+    far: place(PARALLAX_LAYERS.far),
+    mid: place(PARALLAX_LAYERS.mid),
+    near: place(PARALLAX_LAYERS.near),
   };
 }
 

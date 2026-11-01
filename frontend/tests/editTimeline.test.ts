@@ -154,3 +154,8 @@ test("a look with every amount at zero is no look at all", () => {
   assert.equal(setGradePreset(on, "vivid").grade.look?.grain, 0.4);
 });
 
+test("depth on its own keeps the look, and off removes it", () => {
+  const on = setLookAmount(cropEdit(), "depth", 0.5);
+  assert.equal(on.grade.look?.depth, 0.5);
+  assert.equal("look" in setLookAmount(on, "depth", 0).grade, false);
+});

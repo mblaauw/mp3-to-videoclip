@@ -231,6 +231,60 @@ async def generate_images(slug: str, request: Request, payload: dict):
     }
 
 
+@router.get("/depth")
+def get_depth(slug: str, request: Request):
+    from mp3_to_videoclip import depth
+
+    return depth.coverage(project_root(request, slug))
+
+
+def _depth_job(request: Request, slug: str, work_fn) -> dict:
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+
+    async def work():
+        return await asyncio.to_thread(work_fn)
+
+    return {"job_id": runner.submit("depth", slug, work, blocking=True)}
+
+
+@router.post("/depth/setup")
+async def setup_depth(slug: str, request: Request):
+    """On the owner's click: downloads the tools and the model. Nothing is charged."""
+    from mp3_to_videoclip import depth
+
+    project_root(request, slug)
+    state = depth.status()
+    if not state["supported"]:
+        raise HTTPException(status_code=400, detail=state["reason"])
+    return _depth_job(request, slug, depth.install)
+
+
+@router.post("/depth/run")
+async def run_depth(slug: str, request: Request):
+    from mp3_to_videoclip import depth
+
+    root = project_root(request, slug)
+    if not depth.status()["ready"]:
+        raise ApiError(409, "Set up the depth tools first.", "depth_tools_missing")
+    return _depth_job(request, slug, lambda: depth.run(root))
+
+
+@router.get("/depth/{key}/{layer}")
+def get_depth_layer(slug: str, key: str, layer: str, request: Request):
+    """One layer for the Player, named by the still and the tools that made it."""
+    from mp3_to_videoclip import depth
+
+    root = project_root(request, slug)
+    if layer not in depth.LAYERS or not key.replace("-", "").isalnum():
+        raise HTTPException(status_code=404, detail="no such layer")
+    path = inside(root, f"work/depth/{key}/{layer}.png")
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no such layer")
+    return FileResponse(path, media_type="image/png")
+
+
 @router.post("/images/upscale/estimate")
 async def estimate_upscale(slug: str, request: Request, payload: dict):
     from mp3_to_videoclip import services

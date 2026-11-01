@@ -13,6 +13,7 @@ import {
   postEffectsStyle,
   transitionName,
   validateEditShot,
+  validateDepthLayers,
   validateGrade,
   validateGraphicsPart,
   validateSplitPanes,
@@ -285,6 +286,7 @@ export function validateBaseInput(input, fps) {
     if (span.edit !== undefined && span.edit !== null) {
       validateEditShot(span.edit, span);
     }
+    validateDepthLayers(span.depth, `shot ${span.id}`);
     if (span.grade !== undefined && span.grade !== null) {
       validateGrade(span.grade);
     }

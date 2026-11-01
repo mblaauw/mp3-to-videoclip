@@ -742,6 +742,13 @@ export type SettingsTest = {
   preview_url?: string;
 };
 
+export type DepthCoverage = {
+  stills: number;
+  with_depth: number;
+  shots: string[];
+  tools: { supported: boolean; reason: string | null; ready: boolean; download_gb: number };
+};
+
 export type SettingsCache = {
   name: string;
   label: string;
@@ -1022,6 +1029,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ mode }),
     }),
+  depthCoverage: (slug: string) => request<DepthCoverage>(`/api/projects/${slug}/depth`),
+  setupDepth: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/depth/setup`, { method: "POST" }),
+  runDepth: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/depth/run`, { method: "POST" }),
   estimateUpscale: (slug: string, shotIds: string[]) =>
     request<{
       estimate: { quote_id: string; tasks: number; reserve_usd: string };

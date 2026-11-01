@@ -152,3 +152,19 @@ dip, flash or crop cut, and report them as `expected`. A final's chunks live in 
 named by its own keys: a killed final resumes from it and any failure it survives clears
 it, except broken frames, which keep it as evidence. `STUDIO_RENDER_GL` passes a GL mode to
 Chrome and is recorded in the report; it is off by default.
+
+## Depth, sharper stills and embedded type
+
+`depth.py` estimates a still's depth in a private environment (Depth Anything V2 Small,
+Apache-2.0, at a pinned revision), set up only on the owner's click. `work/depth/<still
+sha>-<tools>/` holds three feathered layers; far is the whole still, so moving the others
+never shows a hole. `grade.look.depth` turns it on for a film and `depth: false` keeps one
+shot flat. A film with depth refuses to render a still without layers rather than draw it
+flat without saying so; the Player plays such a shot flat, because it is only a preview.
+
+A sharper still (`upscale.py`) is a journaled 2× version of a selected still with the same
+`input_hash`, so the renderer simply stages whichever is selected.
+
+`renderers/remotion/fonts/` holds Inter, Fraunces and Bebas Neue (OFL, latin subsets).
+`grade.typeface` and a titles spec's `typeface` name one. A character outside the subset falls
+back to the system stack. The renderer revision hashes these files, never this computer's fonts.

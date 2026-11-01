@@ -295,6 +295,16 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
   });
   const {fps} = useVideoConfig();
   const look = timing.lookState(span.grade?.look, localFrame, span.id, width, height, fps);
+  const parallax = timing.parallaxState(
+    span.grade?.look?.depth,
+    span.edit?.motion?.type,
+    localFrame,
+    span.duration_frames,
+    span.id,
+    width,
+    height,
+    fps,
+  );
   const panes = Array.isArray(span.split_panes) ? span.split_panes : [];
   const splitLayout = span.edit?.split_layout ?? "row";
   return (
@@ -330,6 +340,22 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
             // A missing selected still keeps its allocation and shows the same
             // placeholder marking as a preview render, without loading a file.
             <AbsoluteFill style={{backgroundColor: "#101014"}} />
+          ) : parallax && span.depth ? (
+            ["far", "mid", "near"].map((layer) => (
+              <Img
+                key={layer}
+                src={span.depth.src?.[layer] ?? staticFile(span.depth[layer])}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  display: "block",
+                  transform: `translate(${parallax[layer].x.toFixed(3)}px, ${parallax[layer].y.toFixed(3)}px) scale(${parallax[layer].scale.toFixed(5)})`,
+                }}
+              />
+            ))
           ) : (
             <Img
               src={span.src ?? staticFile(span.image)}

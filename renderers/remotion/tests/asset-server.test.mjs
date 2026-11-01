@@ -62,6 +62,14 @@ test("two servers never share a port", async () => {
   }
 });
 
+test("depth layers get sources too, and a shot without them gets none", () => {
+  const input = {shots: [{id: "a", image: "a.jpg", depth: {far: "f.png", mid: "m.png", near: "n.png", model: "x"}}, {id: "b", image: "b.jpg"}]};
+  const served = withServedAssets(input, "http://127.0.0.1:9");
+  assert.equal(served.shots[0].depth.src.near, "http://127.0.0.1:9/n.png");
+  assert.equal(served.shots[0].depth.far, "f.png");
+  assert.equal(served.shots[1].depth, undefined);
+});
+
 test("every still gets a source, including panes, and the input is not changed", () => {
   const input = {
     preview_banner: false,

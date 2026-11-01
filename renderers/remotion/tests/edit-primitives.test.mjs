@@ -15,6 +15,8 @@ import {
   flashViolations,
   gradeStyle,
   lookState,
+  parallaxState,
+  validateDepthLayers,
   splitLayout,
   textAnimationStyle,
   validateEditShot,
@@ -329,4 +331,46 @@ test("the grain is a large tile, turned and mirrored per frame, the same on any 
   }
   assert.equal(seen.size, 8);
   assert.deepEqual(lookState(look, 7, "s001", 1920, 1080, 24), lookState(look, 7, "s001", 1920, 1080, 24));
+});
+
+test("parallax is off at zero, and the far layer never moves", () => {
+  assert.equal(parallaxState(0, "push_in", 10, 100, "s001", 1920, 1080, 24), null);
+  assert.equal(parallaxState(undefined, "hold", 10, 100, "s001", 1920, 1080, 24), null);
+  for (const motion of ["hold", "push_in", "pull_back", "pan_left", "pan_right"]) {
+    const state = parallaxState(1, motion, 40, 100, "s001", 1920, 1080, 24);
+    assert.equal(Math.abs(state.far.x), 0, motion);
+    assert.equal(state.far.scale, 1, motion);
+  }
+});
+
+test("a push-in is a dolly: the near layer grows more than the mid, from nothing", () => {
+  const start = parallaxState(1, "push_in", 0, 100, "s001", 1920, 1080, 24);
+  assert.equal(start.near.scale, 1);
+  const end = parallaxState(1, "push_in", 99, 100, "s001", 1920, 1080, 24);
+  assert.ok(end.near.scale > end.mid.scale && end.mid.scale > end.far.scale);
+  assert.ok(end.near.scale < 1.03, "small by design");
+});
+
+test("a pan slides the layers against each other, and each stays within its amplitude", () => {
+  const state = parallaxState(0.5, "pan_right", 0, 100, "s001", 1920, 1080, 24);
+  assert.ok(Math.abs(state.near.x) > Math.abs(state.mid.x));
+  assert.ok(Math.abs(state.near.x) <= 0.5 * 0.012 * 1080 + 1e-6);
+});
+
+test("parallax is the same on any machine and differs between shots", () => {
+  const one = parallaxState(1, "hold", 30, 100, "s001", 1920, 1080, 24);
+  assert.deepEqual(one, parallaxState(1, "hold", 30, 100, "s001", 1920, 1080, 24));
+  assert.notDeepEqual(one, parallaxState(1, "hold", 30, 100, "s002", 1920, 1080, 24));
+});
+
+test("a depth amount is validated with the rest of the look", () => {
+  assert.doesNotThrow(() => validateGrade({look: {depth: 0.5}}));
+  assert.throws(() => validateGrade({look: {depth: 2}}));
+  assert.throws(() => validateGrade({typeface: "comic"}));
+});
+
+test("a depth entry needs all three layers", () => {
+  assert.doesNotThrow(() => validateDepthLayers({far: "a", mid: "b", near: "c"}, "s"));
+  assert.doesNotThrow(() => validateDepthLayers(undefined, "s"));
+  assert.throws(() => validateDepthLayers({far: "a", mid: "b"}, "s"));
 });
