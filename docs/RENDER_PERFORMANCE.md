@@ -1,5 +1,45 @@
 # Local renderer diagnostics and benchmark
 
+
+## Phase D benchmark, 1 Nov 2026
+
+Measured on a scratch copy of Tree of Love (38 shots, 5,749 frames, 1080p24) on an 8-core
+Mac with 16 GB, one run each rather than the two the plan asked for. Every row is local and
+free.
+
+| Row | Before | Measured | Target |
+| --- | --- | --- | --- |
+| Full base, cold, 1 browser | 7 min 16 s | 7 min 3 s | Baseline |
+| Full base, cold, 2 browsers | | 4 min 16 s | |
+| Full base, cold, 4 browsers | | 3 min 37 s | Under 3 min, **missed** |
+| Half-size preview, cold, 4 browsers | | 2 min 3 s | Under 1 min 30 s, **missed** |
+| One shot's camera changed, base | 34 s | 14 s | Under 20 s |
+| One shot's camera changed, preview | | 12 s | Under 20 s |
+| Frame counting per render | about 12 s | 0.1 s, against 9.9 s decoded | Under 1 s |
+| Chrome memory at 4 browsers, peak total | | about 6.5 GB | Reported |
+| Library, all 6 real films, first listing | | 246 ms | Under 300 ms |
+| Library, later listings | | 14 ms | Under 300 ms |
+| Project view | | 2 ms | Under 300 ms |
+| Deep pass on the 4-minute song | | 2.5 s | Under 60 s |
+
+Not measured as its own row: the bundle phase after choosing a new still. The key no longer
+holds stills and the renderer tests prove it, but no timing was taken.
+
+**GPU raster stays off.** On the advert at 1 browser, half size: software 49.2 s, `angle`
+49.1 s, SSIM 1.0. That is no gain against the 1.3× the decision asked for. It was measured on
+this one film, without five look-heavy frames.
+
+**Parity.** The 0.999 SSIM the plan asked of 4 browsers against 1 cannot be met on this film,
+because the same setup does not repeat itself: two 1-browser renders of the first four shots
+score 0.9956 Y, and 4 browsers against 1 scores 0.9952 on those frames. No frame fell below
+0.987, and none was reported broken. The advert does repeat exactly (SSIM 1.0), so the source
+is something in Tree of Love's look, which was not traced further. Frame counts and packet
+timing match.
+
+A half-size frame was compared by eye with the final at two points, one of them all text: same
+layout and proportions, with the preview banner added. A preview with one still missing played,
+named the shot, and could not be approved. No killed-final retry was run outside the tests.
+
 ## How a base film renders now (31 October 2026)
 
 A base, preview or final renders **one chunk per shot** through one browser with one tab, and joins them

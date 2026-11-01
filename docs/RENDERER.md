@@ -141,7 +141,9 @@ or stalling ends the rest and names itself; nothing retries silently.
 `--serve-assets` loads stills from a loopback server for that one run, so the bundle holds
 code only and a new still never rebundles. The server answers this computer alone and
 refuses anything outside the selected directory. The request body and its hash do not
-change, because the sources are added at run time.
+change, because the sources are added at run time. The bundle comes from a second such
+server, because Remotion serving a folder itself takes the first free port from 3000 per
+chunk and several renderers would reach each other's servers.
 
 Previews render at 960×540 (540×960 portrait); bases and finals are untouched, so a preview
 shares no chunks with a base. A preview labels any shot whose still is missing or stale

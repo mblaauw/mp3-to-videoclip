@@ -1,13 +1,24 @@
-// A loopback file server for the stills of one render, so the bundle holds code only
-// and choosing a new still never rebundles. It serves one directory of immutable,
-// content-addressed files, to this computer alone, and nothing outside that directory.
+// A loopback file server for one render: the stills, so the bundle holds code only and a
+// new still never rebundles, and the bundle, on a port no other renderer can be using.
+// It serves one directory of immutable files, to this computer alone, and nothing outside.
 import {createHash} from "node:crypto";
 import {createReadStream, lstatSync, readdirSync, readFileSync, realpathSync} from "node:fs";
 import {createServer} from "node:http";
 import path from "node:path";
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
-const TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"};
+const TYPES = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json",
+  ".map": "application/json",
+  ".woff2": "font/woff2",
+};
 
 /** The real file a URL path names inside `root`, or null for anything else. */
 export function servedFile(root, urlPath) {

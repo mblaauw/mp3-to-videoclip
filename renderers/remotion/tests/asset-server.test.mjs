@@ -38,6 +38,30 @@ test("the server answers on loopback with the file, and refuses the rest", async
   }
 });
 
+test("a bundle's nested files are served with their types", async () => {
+  const root = folder();
+  mkdirSync(path.join(root, "public"));
+  writeFileSync(path.join(root, "index.html"), "<html>");
+  writeFileSync(path.join(root, "public", "bundle.js"), "code");
+  const served = await startAssetServer(root);
+  try {
+    assert.equal((await fetch(`${served.url}/index.html`)).headers.get("content-type"), "text/html; charset=utf-8");
+    assert.equal(await (await fetch(`${served.url}/public/bundle.js`)).text(), "code");
+  } finally {
+    await served.close();
+  }
+});
+
+test("two servers never share a port", async () => {
+  const [one, two] = await Promise.all([startAssetServer(folder()), startAssetServer(folder())]);
+  try {
+    assert.notEqual(one.url, two.url);
+  } finally {
+    await one.close();
+    await two.close();
+  }
+});
+
 test("every still gets a source, including panes, and the input is not changed", () => {
   const input = {
     preview_banner: false,

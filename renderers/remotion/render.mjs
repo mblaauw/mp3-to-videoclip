@@ -273,13 +273,18 @@ async function render(progress, {requestPath, cacheRoot, benchmarkProfile, serve
     return;
   }
   const served = serveAssets ? await startAssetServer(normalized.assetRoot) : null;
+  // Handed a folder, Remotion serves it on the first free port from 3000 for each chunk, and
+  // several renderers then reach each other's servers. Handed a URL, it visits that.
+  const bundleServer = serveAssets ? await startAssetServer(serveUrl) : null;
   try {
     await renderWith(progress, {
-      request, normalized, settings, chrome, sha, serveUrl, bundleCached, bundleMs, served, gl,
+      request, normalized, settings, chrome, sha, bundleCached, bundleMs, served, gl,
+      serveUrl: bundleServer?.url ?? serveUrl,
       benchmarkOptions, benchmarkProfile, diagnostics, totalStarted,
     });
   } finally {
     await served?.close();
+    await bundleServer?.close();
   }
 }
 
