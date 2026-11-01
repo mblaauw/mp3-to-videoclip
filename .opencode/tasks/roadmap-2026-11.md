@@ -169,5 +169,45 @@ components split, stylesheets into the token system, ESLint. Decisions: the pilo
 production becomes an archive; delete rather than move the FFmpeg renderer; refuse
 a final whose titles review came from the old compositor; inert version fields.
 
-**D · fast** and **F · open it up**: plans in progress; summaries follow when they
-land.
+**D · fast** (two PRs, about 9 days). D-1 renderer: packet counts from the join's
+own listing instead of decoding the film twice, the failed-final store cleaned and
+resumable by its key, a frame scan that skips suspects inside planned dip, flash
+and crop windows with one reused browser for confirmation, K parallel render
+workers (cores ÷ 2, at most 4, a memory guard, the machine lock taken once),
+previews at 960×540 with placeholder plates passed through, a renderer-owned
+loopback asset server so the bundle key is code-only and a new still never
+rebundles, GPU raster behind a flag that stays off until measured. D-2 backend: a
+source hash cached by path, size, mtime and inode, views that never verify the
+source, every GET under a read snapshot in the thread pool, and
+`work/stage-state.json` written by approve so the library reads exact state and
+the one-second slack goes. A benchmark protocol on a scratch copy of Tree of Love
+sets targets: a full base under three minutes at K=4, a half-size preview under
+ninety seconds, one changed shot under twenty seconds, a new still with no
+rebundle under a second, the library under 300 ms with zero source bytes read.
+Decisions: worker count and memory guard; a failed final resumes only from its own
+store; GPU raster gated on 1.3× and SSIM 0.999; previews at 960×540 only; the
+loopback asset server; where the stage-state file lives and who writes it.
+
+**F · open it up** (three PRs, about 2.5 weeks). F-1 titles as packages:
+`signature.PACKAGES` with `joint-v1` byte-identical when no package is set,
+`title-v1` with a 0 to 5 s title and a 0 to 10 s end card, and `none`; the planner
+allows zero intro and zero cards; new films record the brand from Settings so the
+two name literals become legacy-only; title and end-card parts with portrait
+layouts; New film offers the three title choices and 9:16 again. F-2 delivery:
+`delivery.py` sidecars (poster, contact sheet, chapters from edit sections, SRT and
+VTT) that never rewrite a final; a 2 s GOP through the existing FFmpeg hook; 48 kHz
+and two-pass loudness with measured values for promo and advert only; a q90 final
+capture as a named choice with PNG the default; vertical and square variants from
+the same cut with an anchor-based reframe and a Player toggle. F-3 portability: CPU
+lyric timing tried in a two-day box with a documented refusal as the fallback, a
+doctor line on the Library, a 50 MB streamed upload. Decisions: what the short
+opening shows; end card and none allowed; the owner's default stays joint 25/40
+through the brand kit; loudness −14 LUFS opt-in for promo and advert; PNG finals
+with a q90 option; do not pin the headless shell; the boxed CPU lyric path; 50 MB.
+
+## Final order
+
+A, H, B, D, C-1, C-2, E-1, E-2, F-1, I-1, I-2, C-3, E-3, I-3, C-4, I-4, F-2, F-3,
+with G-3's resource store before I-1 and the rest of G behind everything. The two
+numbers that matter: about 16 weeks of work in total, and the first narrative film
+plays in the Player about nine weeks in.
