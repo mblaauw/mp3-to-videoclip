@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {validateStillFrames, validateTitles} from "../src/request.mjs";
-import {titleWindowAt} from "../src/timing.mjs";
+import {GRAPHICS_KINDS, graphicsAlpha, graphicsFadeSeconds, titleInsets, titleWindowAt} from "../src/timing.mjs";
 
 const windows = [
   {kind: "intro", id: "intro", start_frame: 0, frames: 600},
@@ -81,4 +81,36 @@ test("review stills are unique ascending frames inside the film", () => {
   assert.throws(() => validateStillFrames([300, 300], 5755), /unique and in ascending order/);
   assert.throws(() => validateStillFrames([5755], 5755), /past the film/);
   assert.throws(() => validateStillFrames([1.5], 5755), /integer/);
+});
+
+test("short titles fade once, in and out, within their window", () => {
+  assert.ok(GRAPHICS_KINDS.includes("title") && GRAPHICS_KINDS.includes("end_card"));
+  assert.equal(graphicsFadeSeconds("title", 3), 0.5);
+  assert.equal(graphicsFadeSeconds("end_card", 1), 0.25);
+  assert.equal(graphicsAlpha("title", 0, 3), 0);
+  assert.equal(graphicsAlpha("title", 1.5, 3), 1);
+  assert.equal(graphicsAlpha("title", 3, 3), 0);
+  assert.equal(graphicsFadeSeconds("card", 8), 0.5);
+});
+
+test("a portrait frame keeps text further from its top and bottom", () => {
+  assert.deepEqual(titleInsets(1920, 1080), {x: 96, top: 54, bottom: 54});
+  const portrait = titleInsets(1080, 1920);
+  assert.equal(Math.round(portrait.top), 230);
+  assert.equal(Math.round(portrait.bottom), 230);
+  assert.equal(Math.round(portrait.x), 86);
+});
+
+test("only short titles may go without a mark", () => {
+  const short = {
+    spec: {package: "title-v1", intro: {title: "Film"}, end_card: {lockup: "A", lines: []}},
+    logo: null,
+    font: null,
+    windows: [
+      {kind: "title", id: "title", start_frame: 0, frames: 72},
+      {kind: "end_card", id: "end_card", start_frame: 360, frames: 120},
+    ],
+  };
+  assert.equal(validateTitles(short, 480).length, 2);
+  assert.throws(() => validateTitles({...short, spec: {...short.spec, package: undefined}}, 480), /logo/);
 });

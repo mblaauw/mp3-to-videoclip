@@ -581,6 +581,113 @@ function CaptionPart({part, palette, family, t, seconds}) {
   );
 }
 
+/** The film's title and an optional line: one fade, sized to the frame's short side. */
+function ShortTitlePart({intro, palette, family, t, seconds}) {
+  const {width, height} = useVideoConfig();
+  const alpha = timing.graphicsAlpha("title", t, seconds);
+  const rgb = hexToRgb(palette.night, [12, 12, 13]);
+  const unit = Math.min(width, height);
+  const insets = timing.titleInsets(width, height);
+  const middle = insets.top + (height - insets.top - insets.bottom) / 2;
+  return (
+    <AbsoluteFill style={{opacity: alpha}}>
+      <AbsoluteFill style={{background: softBand(rgb, 0.45)}} />
+      <Fitted
+        top={intro.line ? middle - unit * 0.03 : middle}
+        size={unit * 0.085}
+        colour={palette.ink}
+        weight={800}
+        insets={insets}
+        family={family}
+      >
+        {intro.title}
+      </Fitted>
+      {intro.line ? (
+        <Fitted
+          top={middle + unit * 0.055}
+          size={unit * 0.03}
+          colour={palette.accent}
+          weight={500}
+          insets={insets}
+          family={family}
+        >
+          {intro.line}
+        </Fitted>
+      ) : null}
+    </AbsoluteFill>
+  );
+}
+
+/** The closing lockup or logo with up to four lines beneath it. */
+function EndCardPart({card, palette, logo, family, t, seconds}) {
+  const {width, height} = useVideoConfig();
+  const alpha = timing.graphicsAlpha("end_card", t, seconds);
+  const rgb = hexToRgb(palette.night, [12, 12, 13]);
+  const unit = Math.min(width, height);
+  const insets = timing.titleInsets(width, height);
+  const lines = card?.lines ?? [];
+  const middle = insets.top + (height - insets.top - insets.bottom) / 2;
+  const blockHeight = lines.length * unit * 0.05;
+  const lockupTop = middle - blockHeight / 2 - unit * 0.05;
+  return (
+    <AbsoluteFill style={{opacity: alpha}}>
+      <AbsoluteFill style={{background: softBand(rgb, 0.72)}} />
+      {logo ? (
+        <IdentityMark src={logo} height={unit * 0.12} top={lockupTop - unit * 0.1} centre alpha={1} />
+      ) : null}
+      {card?.lockup ? (
+        <Fitted
+          top={lockupTop + (logo ? unit * 0.05 : 0)}
+          size={unit * 0.04}
+          colour={palette.ink}
+          weight={700}
+          insets={insets}
+          family={family}
+        >
+          {card.lockup}
+        </Fitted>
+      ) : null}
+      {lines.map((line, index) => (
+        <Fitted
+          key={line}
+          top={middle - blockHeight / 2 + unit * 0.035 + index * unit * 0.05}
+          size={unit * 0.028}
+          colour={palette.secondary ?? palette.ink}
+          weight={500}
+          insets={insets}
+          family={family}
+        >
+          {line}
+        </Fitted>
+      ))}
+    </AbsoluteFill>
+  );
+}
+
+/** A centred line that wraps inside the insets and never runs off a tall frame. */
+function Fitted({top, size, colour, weight, insets, family, children}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top,
+        left: insets.x,
+        right: insets.x,
+        transform: "translateY(-50%)",
+        textAlign: "center",
+        color: colour,
+        fontFamily: family ?? DEFAULT_FONT_STACK,
+        fontSize: size,
+        fontWeight: weight,
+        lineHeight: 1.1,
+        overflowWrap: "anywhere",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /**
  * One title element on its own local clock: frame 0 is the window's first frame.
  * `input` carries the spec, palette, logo and font; `family` is the loaded face.
@@ -601,6 +708,21 @@ function TitlePart({input, part, family}) {
     const resolvedPart = part.kind === "card" ? {...part, card:part.card ?? spec?.credits?.cards?.[part.index ?? 0]} : part;
     return <CompactGraphics part={resolvedPart} spec={spec} intro={intro} palette={palette}
       logo={logo} family={resolvedFamily}/>;
+  }
+  if (part.kind === "title") {
+    return <ShortTitlePart intro={intro} palette={palette} family={resolvedFamily} t={t} seconds={seconds} />;
+  }
+  if (part.kind === "end_card") {
+    return (
+      <EndCardPart
+        card={spec.end_card}
+        palette={palette}
+        logo={logo}
+        family={resolvedFamily}
+        t={t}
+        seconds={seconds}
+      />
+    );
   }
   if (part.kind === "intro") {
     return (

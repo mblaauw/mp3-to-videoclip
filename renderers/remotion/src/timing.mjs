@@ -1050,7 +1050,7 @@ export function flashViolations(spans, fps) {
 // --------------------------------------------------------------------------- //
 // graphics timing (mirrors graphics.py joint-v1)
 // --------------------------------------------------------------------------- //
-export const GRAPHICS_KINDS = ["intro", "identity", "card", "lockup", "caption"];
+export const GRAPHICS_KINDS = ["intro", "identity", "card", "lockup", "caption", "title", "end_card"];
 export const CAPTION_STYLES = ["caption"];
 
 /**
@@ -1123,7 +1123,15 @@ export function graphicsFade(localSeconds, seconds, fade) {
 export function graphicsFadeSeconds(kind, seconds) {
   if (kind === "identity") return Math.min(0.6, seconds / 4);
   if (kind === "caption") return Math.min(MIN_CAPTION_GAP, seconds / 4);
+  if (kind === "title" || kind === "end_card") return Math.min(0.5, seconds / 4);
   return 0.5;
+}
+
+/** Where short titles keep clear of the edges: 5 % in landscape, 12 % top and bottom in portrait. */
+export function titleInsets(width, height) {
+  return height > width
+    ? {x: width * 0.08, top: height * 0.12, bottom: height * 0.12}
+    : {x: width * 0.05, top: height * 0.05, bottom: height * 0.05};
 }
 
 export function graphicsAlpha(kind, localSeconds, seconds) {
