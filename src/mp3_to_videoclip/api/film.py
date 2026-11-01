@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root, valid_slug
+from mp3_to_videoclip.api.errors import ApiError
 from mp3_to_videoclip.domain import archive
 from mp3_to_videoclip.read_snapshots import read_endpoint
 from mp3_to_videoclip.storage import digest, inside, read_json, read_optional
@@ -174,6 +175,39 @@ async def suggest_edit(slug: str, request: Request):
 
     root = project_root(request, slug)
     return await asyncio.to_thread(first_cut.suggest, root)
+
+
+@router.post("/edit/captions")
+async def set_captions(slug: str, request: Request, payload: dict):
+    """Choose which timed lines are drawn. Saved like any other change to the cut."""
+    from mp3_to_videoclip import edits
+
+    root = project_root(request, slug)
+    counts = edits.apply_captions(
+        root,
+        payload.get("indexes"),
+        mode=payload.get("mode"),
+        expected_hash=request.headers.get("if-match"),
+    )
+    return {**edits.summary(root, edits.load_edit(root)), **counts}
+
+
+@router.get("/captions.{kind}")
+async def get_captions(slug: str, request: Request, kind: str):
+    """Every timed line, whichever are drawn. Nothing is written."""
+    from mp3_to_videoclip import captions
+    from mp3_to_videoclip import production as P
+
+    if kind not in ("srt", "vtt"):
+        raise HTTPException(status_code=404, detail="captions come as srt or vtt")
+    root = project_root(request, slug)
+    project = P.load_project(root, verify_source=False)
+    lines = captions.timed_lines(root, project.fps, round(project.duration * project.fps))
+    if not lines:
+        raise ApiError(404, "No lines are timed on the song yet.", "no_timed_lines")
+    make = captions.srt if kind == "srt" else captions.vtt
+    media = "application/x-subrip" if kind == "srt" else "text/vtt"
+    return Response(make(lines, project.fps), media_type=media)
 
 
 @router.put("/edit")

@@ -88,6 +88,12 @@ export function describeNote(finding: EditFinding, index: number, context: Conte
     case "reading_time":
     case "text_reading_time":
       return note(`${place}: on-screen text may be too quick to read`, text);
+    case "off_grid":
+      return note(`${place}: cuts away from the beat`, "A full passage lands harder on a downbeat. Move these joins, or keep them if the drift is the point.");
+    case "late_cut":
+      return note(`${place}: cuts just after the beat`, "The picture arrives after the hit. A frame or two earlier reads as on time.");
+    case "caption_overlap":
+      return note(`${shot?.shot_id ?? place}: two lines of text at once`, "Shorten the first line so the second starts clear of it.");
     default:
       return note(`${place}: ${text.replace(/section section-\d+\s*/g, "")}`, "");
   }

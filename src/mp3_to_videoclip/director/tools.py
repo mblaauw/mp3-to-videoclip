@@ -139,6 +139,17 @@ TOOLS: list[dict] = [
         ["slug"],
     ),
     _tool(
+        "set_captions",
+        "Choose which timed sung lines are drawn as captions: mode off, all or named, or a "
+        "list of line indexes. Saves the cut. SRT and VTT always carry every timed line.",
+        {
+            "slug": {"type": "string"},
+            "mode": {"type": "string", "enum": ["off", "all", "named"]},
+            "indexes": {"type": "array", "items": {"type": "integer"}},
+        },
+        ["slug"],
+    ),
+    _tool(
         "get_song_map",
         "Read the song map in film frames: tempo with its octave rival, key, bars, downbeats, "
         "beats, sections with energy words, density targets and first sung lines, and changes.",
@@ -501,6 +512,11 @@ def _dispatch(
 
         edit = edits.save_edit(root, arguments.get("edit") or {})
         return {"saved": True, "report": edits._tool_report(edits.report(root, edit=edit))}
+
+    if name == "set_captions":
+        from mp3_to_videoclip import edits
+
+        return edits.apply_captions(root, arguments.get("indexes"), mode=arguments.get("mode"))
 
     if name == "get_song_map":
         from mp3_to_videoclip import song_map

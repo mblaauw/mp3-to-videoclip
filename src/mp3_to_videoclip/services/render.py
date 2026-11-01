@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mp3_to_videoclip import operations
+from mp3_to_videoclip import captions, operations
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.remotion import WORKING_CAPTURE
 from mp3_to_videoclip.render import render as _render
@@ -125,6 +125,7 @@ def _render_titled_final(
     )
     report["delivery_ready"] = True
     report["graphics_review_method"] = review["method"]
+    report["captions"] = captions.sidecars_for(root, output, project)
     _stamp(root, output, report, "final", inputs["provenance"])
     _write_report(output, report)
     return report
@@ -172,6 +173,7 @@ def render_final(root: Path, output: Path | None = None) -> dict:
         report["delivery_ready"] = True
         # compose already checked frames, identical audio and faststart.
         report["verified"] = True
+        report["captions"] = captions.sidecars_for(root, Path(report["output"]), project)
         # The compositor versions an occupied destination. Its returned path is
         # authoritative; never certify or overwrite the old movie's sidecar.
         _stamp(root, Path(report["output"]), report, "final", provenance)
@@ -195,6 +197,7 @@ def render_final(root: Path, output: Path | None = None) -> dict:
         brand=brand,
     )
     report["delivery_ready"] = True
+    report["captions"] = captions.sidecars_for(root, output, project)
     _stamp(root, output, report, "final", provenance)
     _write_report(output, report)
     return report
