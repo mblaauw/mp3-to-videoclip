@@ -1313,11 +1313,14 @@ def title_assets(spec: dict, palette: dict) -> dict:
     """The spec, palette, logo and font every title element is drawn from."""
     from .branding import filmstrip_svg
 
-    if spec.get("intro", {}).get("mark", {}).get("kind") != "filmstrip":
+    short = spec.get("package") == "title-v1"
+    if not short and spec.get("intro", {}).get("mark", {}).get("kind") != "filmstrip":
         raise ValueError("Remotion identity currently requires the explicit filmstrip mark")
     colours = {key: "#" + "".join(f"{v:02x}" for v in val[:3]) for key, val in palette.items()}
     logo = (
-        "data:image/svg+xml;base64,"
+        spec.get("logo")
+        if short
+        else "data:image/svg+xml;base64,"
         + base64.b64encode(filmstrip_svg(colours["accent"]).encode()).decode()
     )
     return {

@@ -585,3 +585,33 @@
     display: none;
   }
 }
+
+.colour-script {
+  display: flex;
+  gap: 2px;
+}
+.colour-script-part {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.colour-script-swatches {
+  display: flex;
+  min-height: 24px;
+}
+.colour-script-swatches span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.make-sheet {
+  grid-column: 1 / -1;
+}
+.make-sheet img {
+  display: block;
+  max-width: 220px;
+  max-height: 124px;
+  margin-bottom: 6px;
+}

@@ -79,6 +79,7 @@ def init_project(
     fade_in=0.0,
     fade_out=0.0,
     intent=None,
+    titles=None,
 ) -> Project:
     # An empty directory is a reservation made by intake: the caller owns it and
     # must clean it up on failure. A directory with any entry is an existing
@@ -102,6 +103,7 @@ def init_project(
         fade_out=fade_out,
     )
     duration = window.duration if window is not None else source_duration
+    package = _titles_package(titles, kind, aspect, duration)
     width, height = (1920, 1080) if aspect == "16:9" else (1080, 1920)
     style_preset = style_preset or None
     if style is not None and not style.strip():
@@ -177,8 +179,8 @@ def init_project(
         height=height,
         music_mode=music_mode,
         workflow_version=2,
-        prompt_version=2,
-        signature_required=profile.signature_required,
+        prompt_version=3,
+        signature_required=package != "none",
         source_filename=source.name,
         renderer_backend="remotion",
         image_model=selected_model,
@@ -199,8 +201,10 @@ def init_project(
     write_json(root / "work/tasks.json", {})
     _record_starting_look(root)
     init_events(root)
-    if profile.signature_required:
+    if package == "joint-v1":
         _init_signature(root, project)
+    elif package == "title-v1":
+        _init_short_titles(root, project)
     flow.mark(root)
     return project
 
@@ -267,6 +271,44 @@ def _record_starting_look(root: Path) -> None:
         write_json(root / STARTING_LOOK, {"depth": amount})
 
 
+def _titles_package(titles, kind: str, aspect: str, duration: float) -> str:
+    """What was asked for, or what the kit says when nothing was. Only a choice can be refused."""
+    from ..config import load_settings
+    from ..signature import PACKAGES, default_package, require_package
+
+    if titles is not None:
+        # A song too short for the signature is told so where it always was: at the
+        # story's approval, or by the Studio when the film is created.
+        require_package(titles, aspect)
+        return titles
+    package = default_package(load_settings(), kind)
+    chosen = PACKAGES[package]
+    fits = aspect in chosen.aspects and duration >= chosen.min_duration
+    return package if fits else "title-v1"
+
+
+def _init_short_titles(root: Path, project: Project) -> None:
+    """A title and an end card from the brand kit, at any shape and length."""
+    from ..config import load_settings
+    from ..signature import PRESET_FACES, draft_spec, film_brand, logo_data
+
+    kit = load_settings().new_films.brand
+    spec = draft_spec(
+        project.title,
+        film_brand(kit.name, kit.partner),
+        PRESET_FACES.get(project.style_preset or ""),
+        package="title-v1",
+    )
+    logo = logo_data(kit.logo)
+    if logo:
+        spec["logo"] = logo
+        spec["credits_tail_seconds"] = float(spec["credits_tail_seconds"]) or 5.0
+    if project.duration < float(spec["intro_seconds"]) + float(spec["credits_tail_seconds"]):
+        spec["credits_tail_seconds"] = 0.0
+        spec["intro_seconds"] = min(3.0, project.duration / 3)
+    write_json(root / "work/graphics-spec.json", spec)
+
+
 def _init_signature(root: Path, project: Project) -> None:
     """The music-video signature package; other kinds never inherit it."""
     from ..config import load_settings
@@ -303,6 +345,7 @@ def apply_intake(
     intent: dict | None = None,
     style_preset: str | None = None,
     audio_window: dict | None = None,
+    prompt_version: int | None = None,
 ) -> dict:
     """Apply the Story intake card as one validated change.
 
@@ -315,6 +358,11 @@ def apply_intake(
     previous_window = project.audio_window
     if audio_window is not None:
         project, analysis_needed = _apply_window(root, project, audio_window)
+    if prompt_version is not None:
+        # One way only: a film moved to the newer prompt has marked its stills out of date.
+        if prompt_version != 3 or project.prompt_version not in (2, 3):
+            raise ValueError("this film cannot move to that image prompt")
+        project = project.model_copy(update={"prompt_version": 3})
     if style_preset is not None:
         if style_preset == "":
             # An explicit empty value detaches the film from a preset and keeps

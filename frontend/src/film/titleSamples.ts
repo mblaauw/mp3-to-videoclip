@@ -28,6 +28,8 @@ export function sampleTitle(
     name = `Opening${phase ? `: ${PHASES[phase] ?? phase.replace(/_/g, " ")}` : ""}`;
   } else if (window?.kind === "identity") name = "Partnership card";
   else if (window?.kind === "lockup") name = "Closing signature";
+  else if (window?.kind === "title") name = "Title";
+  else if (window?.kind === "end_card") name = "End card";
   else if (window?.kind === "card" && window.card) {
     name = window.card[0][0] + window.card[0].slice(1).toLowerCase();
   } else if (window?.kind === "caption") name = "Caption";

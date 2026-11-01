@@ -1,5 +1,5 @@
 ---
-version: 3
+version: 4
 task: storyboard
 role: writer
 ---
@@ -48,11 +48,21 @@ uses an uploaded `asset`.
 ## Timing and coverage
 
 Grow shots from story beats, not from a target count. Cover every frame exactly
-and keep IDs stable. Vary scale: a detail, a medium, a wide and a close-up should
-each do different work. Give each music section its own visual idea. Reuse a
-strong still as a `reprise` instead of buying another image. Text cards read at
-about 0.3 s per word plus one second and stay at seven words or fewer. A split
-or card is a shot in its own right, not a free overlay.
+and keep IDs stable. Reuse a strong still as a `reprise` instead of buying another
+image. Text cards read at about 0.3 s per word plus one second and stay at seven
+words or fewer.
+
+## Craft digest
+
+Choose one motif. Plant it in the first section, transform it in the middle, pay it
+off in the last chorus, and mark those shots in `purpose`. Give every section one
+palette and one light, chosen before its shots. A verse states, a chorus returns
+larger, the last chorus holds the largest image, a bridge turns the meaning, an
+outro leaves one thing behind. Vary the shots: a detail, a wide, a medium and a
+close-up each do different work, and two neighbours never share scale and subject
+unless the repetition is the point. Draw what a lyric does to the person, never the
+noun in the line. At 9:16, keep the subject in the centre third with headroom for
+text.
 
 ## The story on the song
 
@@ -76,8 +86,6 @@ has stills; the app refuses to drop one.
 
 - Does every shot change information, scale, place, time, light, relationship or
   meaning? Merge the ones that do not.
-- Do neighbours avoid the same framing and subject unless the repetition is the
-  point?
 - Is there at least one designed or reused shot where the kind allows it, so the
   film is not wall-to-wall generated stills?
 - Do the shots of every timed passage stay inside that passage's frames?

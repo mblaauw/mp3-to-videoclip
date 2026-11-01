@@ -8,12 +8,16 @@ import {
 
 export type PaidScope = "proof" | "stills";
 
+/** Correct a kept still in place of making it again from nothing. */
+export type PaidEdit = { edit_from: Record<string, number>; edit_note: string };
+
 /** A batch held back because some of its shots have used their correction. */
 export type NewRound = {
   used: string[];
   ids: string[];
   scope: PaidScope;
   regenerate: boolean;
+  edit?: PaidEdit;
 };
 
 export type PaidQuote = {
@@ -84,7 +88,7 @@ export function usePaidImages(
   );
 
   const request = useCallback(
-    async (ids: string[], scope: PaidScope, regenerate = false) => {
+    async (ids: string[], scope: PaidScope, regenerate = false, edit?: PaidEdit) => {
       if (!ids.length || busy) return;
       setBusy(true);
       setQuote(null);
@@ -97,9 +101,10 @@ export function usePaidImages(
           reserve_usd: reserve,
           scope,
           regenerate,
+          ...edit,
         });
         if (response.needs_new_round?.length) {
-          setNewRound({ used: response.needs_new_round, ids, scope, regenerate });
+          setNewRound({ used: response.needs_new_round, ids, scope, regenerate, edit });
           return;
         }
         if (!response.estimate || !response.decision) {
@@ -114,7 +119,11 @@ export function usePaidImages(
           scope,
           regenerate,
         };
-        if (response.decision.needs_budget || response.estimate.uploads_required) {
+        if (
+          response.decision.needs_budget ||
+          response.estimate.uploads_required ||
+          response.estimate.edit_unavailable
+        ) {
           setQuote(next);
           return;
         }
@@ -160,7 +169,7 @@ export function usePaidImages(
   const startNewRound = useCallback(
     async (note: string) => {
       if (!newRound || busy) return;
-      const { used, ids, scope, regenerate } = newRound;
+      const { used, ids, scope, regenerate, edit } = newRound;
       setBusy(true);
       setError(null);
       try {
@@ -172,7 +181,7 @@ export function usePaidImages(
         setBusy(false);
       }
       setNewRound(null);
-      await request(ids, scope, regenerate);
+      await request(ids, scope, regenerate, edit);
     },
     [busy, newRound, request, slug],
   );

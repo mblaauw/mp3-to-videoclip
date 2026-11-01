@@ -153,6 +153,13 @@ at false; only `PATCH /brief`, the Characters card's route, passes `owner=True`.
 A Writer learns who is waiting from `owner_must_confirm` in those tools' results,
 the project snapshot and the refusal itself, and asks the owner.
 
+`shared/craft.md` loads for the writing tasks, and storyboard and profile carry a digest of
+it inside the budget. New films use prompt version 3: subject before look, a look per section,
+`brief.avoid` in `negativePrompt` where the live schema has it, and a seed per shot. Version 2
+films keep every hash until the owner switches on Story's Look card, which marks their stills out
+of date. `sheets.py` buys character sheets and scene plates through the journal; binding one is the
+owner's click and asks for the story to be approved again.
+
 ## Evaluation and ratings
 
 Three frozen fixtures and their automatic checks live in `tests/evals/`. The

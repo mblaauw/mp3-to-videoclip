@@ -26,8 +26,8 @@ def test_a_new_film_uses_the_brand_settings():
     assert spec["brand"] == {"name": "SOLO ACT", "partner": ""}
 
 
-def test_the_original_pair_leaves_a_film_spec_as_it_was():
-    assert signature.film_brand("MAHA KALA", "VJDJ69") is None
+def test_a_new_film_records_its_kit_and_an_old_spec_keeps_the_original_pair():
+    assert signature.film_brand("Maha Kala", "VJDJ69") == {"name": "MAHA KALA", "partner": "VJDJ69"}
     assert signature.film_brand("", "anyone") is None
     assert "brand" not in signature.draft_spec("Song")
     assert signature.draft_spec("Song")["intro"]["names"] == signature.NAMES

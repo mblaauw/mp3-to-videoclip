@@ -318,8 +318,20 @@ export type Brief = {
     scenes?: { id: string; description?: string; reference_ids?: string[] }[];
     arc?: { phase?: string; intention?: string }[];
     profile_version?: number;
+    sections?: LookSection[];
   } | null;
 };
+
+export type LookSection = {
+  id: string;
+  start: number;
+  end: number;
+  palette: string[];
+  light: string;
+  lens?: string;
+};
+
+export type SheetRow = { kind: "character" | "scene"; version: number | null; current: boolean };
 
 export type ImageVersion = {
   version: number;
@@ -423,6 +435,7 @@ export type Settings = {
   image_reserve_usd?: number;
   style_presets?: StylePreset[];
   kinds?: KindProfile[];
+  default_titles?: Record<string, string>;
   shot_kinds?: {
     id: ShotKind;
     label: string;
@@ -817,6 +830,7 @@ export type ImageEstimate = {
   cap_usd: string | null;
   uploads_required: boolean;
   shot_ids: string[];
+  edit_unavailable?: string | null;
 };
 
 export type ImageEstimateResponse = {
@@ -876,6 +890,7 @@ export const api = {
     meta: {
       title: string;
       aspect: string;
+      titles?: string;
       music_mode: string;
       budget: string;
       kind: string;
@@ -899,6 +914,7 @@ export const api = {
       kind: meta.kind,
     });
     if (meta.style_preset) params.set("style_preset", meta.style_preset);
+    if (meta.titles) params.set("titles", meta.titles);
     if (meta.kind !== "music_video") {
       params.set("objective", meta.objective || "");
       params.set("message", meta.message || "");
@@ -936,7 +952,12 @@ export const api = {
   intake: (slug: string) => request<IntakePayload>(`/api/projects/${slug}/intake`),
   updateIntake: (
     slug: string,
-    body: { intent?: Intent; style_preset?: string; audio_window?: AudioWindow | null },
+    body: {
+      intent?: Intent;
+      style_preset?: string;
+      audio_window?: AudioWindow | null;
+      prompt_version?: number;
+    },
   ) =>
     request<IntakePayload>(`/api/projects/${slug}/intake`, {
       method: "PUT",
@@ -1035,6 +1056,23 @@ export const api = {
     request<{ job_id: string }>(`/api/projects/${slug}/depth/setup`, { method: "POST" }),
   runDepth: (slug: string) =>
     request<{ job_id: string }>(`/api/projects/${slug}/depth/run`, { method: "POST" }),
+  sheets: (slug: string) =>
+    request<{ sheets: Record<string, SheetRow> }>(`/api/projects/${slug}/sheets`),
+  estimateSheet: (slug: string, entryId: string) =>
+    request<{
+      estimate: { quote_id: string; reserve_usd: string };
+      decision: { ok: boolean };
+    }>(`/api/projects/${slug}/sheets/${entryId}/estimate`, { method: "POST" }),
+  generateSheet: (slug: string, quoteId: string) =>
+    request<{ job_id?: string; needs_budget?: boolean }>(`/api/projects/${slug}/sheets/generate`, {
+      method: "POST",
+      body: JSON.stringify({ quote_id: quoteId }),
+    }),
+  useSheet: (slug: string, entryId: string, version: number) =>
+    request<Brief>(`/api/projects/${slug}/sheets/${entryId}/use`, {
+      method: "POST",
+      body: JSON.stringify({ version }),
+    }),
   estimateUpscale: (slug: string, shotIds: string[]) =>
     request<{
       estimate: { quote_id: string; tasks: number; reserve_usd: string };
@@ -1253,7 +1291,14 @@ export const api = {
     }),
   imageEstimate: (
     slug: string,
-    body: { shot_ids: string[]; reserve_usd: string; scope: string; regenerate: boolean },
+    body: {
+      shot_ids: string[];
+      reserve_usd: string;
+      scope: string;
+      regenerate: boolean;
+      edit_from?: Record<string, number>;
+      edit_note?: string;
+    },
   ) =>
     request<ImageEstimateResponse>(`/api/projects/${slug}/images/estimate`, {
       method: "POST",

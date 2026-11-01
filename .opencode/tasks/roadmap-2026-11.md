@@ -228,8 +228,9 @@ Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both a
 
 ## Where the roadmap stands, 1 Nov 2026
 
-Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76).
-E-1 is in the PR after #76. Next in the final order: E-2.
+Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76),
+E-1 (#77). E-2 and F-1 are in the PR after #77. Next in the final order: I-1, which needs G-3's
+resource store first.
 
 Differences from the plans, where the plan was wrong or could not hold:
 
@@ -253,3 +254,17 @@ Still open by decision: the OpenAI major version; E-1 still uses that SDK's stre
 call has proven the adapter.
 The narrator voice in Settings is not used until Phase I; `voice.py` keeps its own default.
 `_final_state` keeps its mtime check. Parts of C not yet done: C-3 and C-4.
+
+- **E-2:** a per-shot seed is reduced to 31 bits, because the image models' schemas stop there.
+  Today's models have no separate edit input, so an edit sends the rejected still as the first
+  reference image; a model without reference images says so and makes the still again. Section
+  looks are refused on a version 2 film, so a look that its prompt never shows cannot mark stills
+  out of date. The colour script sits on the World tab's profile, not on the Spine. Sheets, plates
+  and edits are proved with fake clients only: the $0.50 live acceptance needs its own authorisation.
+  So do the eval reference runs, whose pages all change with the new prompt hashes.
+- **F-1:** the new parts are `ShortTitlePart` and `EndCardPart`, since `TitlePart` already names the
+  dispatcher. A joint package on a song too short for it is refused when the Studio creates the
+  film, and otherwise at the story's approval as before. Only an SVG logo can be drawn. On a scratch
+  copy of Tree of Love all 38 image specs, the brief and stage hashes match main; the titles hash
+  moves only with the renderer revision, as it does for any renderer change. `title-v1` was rendered
+  at 16:9 and 9:16 and looked at.

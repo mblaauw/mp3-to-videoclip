@@ -125,11 +125,18 @@ def _song(root: Path) -> list[str]:
 #: Writer tasks that write words against the song, so they need the sung lines in front of them.
 LYRIC_TASKS = frozenset({"concepts", "script_mv", "script_ad", "import", "storyboard"})
 TREATMENT_LIMIT = 4000
+PASSAGE_LIMIT = 1200
+
+
+def _writes(task: str | None) -> bool:
+    from mp3_to_videoclip.director.prompts import TASKS
+
+    return task in TASKS["writer"]
 
 
 def _treatment(text: str | None, task: str | None) -> str:
     """Whole where the task writes from it, with a cap that protects the budget."""
-    if task not in LYRIC_TASKS:
+    if not _writes(task):
         return _clip(text, 420)
     clipped = _clip(text, TREATMENT_LIMIT)
     return clipped + (" (cut at 4,000 characters)" if clipped.endswith("…") else "")
@@ -151,6 +158,24 @@ def _sung_lines(root: Path) -> list[str]:
     return lines
 
 
+def _pictures(brief, assets: dict) -> list[str]:
+    """What the model can look at before it writes a prompt, under the ids get_images takes."""
+    rows = []
+    creative = brief.creative
+    for reference in creative.references if creative else []:
+        rows.append(f"- {reference.id} ({reference.kind}): {_clip(reference.description, 160)}")
+    for character in brief.characters:
+        if character.references:
+            rows.append(
+                f"- character:{character.id}: {len(character.references)} reference image(s) "
+                f"of {_clip(character.identity or character.description, 90)}"
+            )
+    for key, entry in assets.items():
+        if key.startswith("sheet:") and isinstance(entry, dict) and entry.get("selected"):
+            rows.append(f"- {key}: the sheet or plate made for it, version {entry['selected']}")
+    return ["## Pictures to look at with get_images", *rows] if rows else []
+
+
 def _story_on_song(root: Path, project) -> list[str]:
     """When each passage plays, for the board. Evidence only: no approval reads this."""
     from mp3_to_videoclip import story_beats, timeline
@@ -163,11 +188,13 @@ def _story_on_song(root: Path, project) -> list[str]:
             start, end = item["start"], item["end"]
             # A time past the film is left over from another excerpt, so it is no time at all.
             if start is None or end is None or end > project.duration + 0.5:
-                lines.append(f"- not on the song: {_clip(item['text'])}")
+                lines.append(f"- not on the song: {_clip(item['text'], PASSAGE_LIMIT)}")
                 continue
             first = timeline.frame_number(start, project.fps)
             last = min(timeline.frame_number(end, project.fps), project.total_frames)
-            lines.append(f"- {start:.2f}-{end:.2f}s (frames {first}-{last}): {_clip(item['text'])}")
+            lines.append(
+                f"- {start:.2f}-{end:.2f}s (frames {first}-{last}): {_clip(item['text'], PASSAGE_LIMIT)}"
+            )
             placed += 1
     except Exception as exc:  # noqa: BLE001
         return [
@@ -282,7 +309,10 @@ def build_context(
             sung = _sung_lines(root)
             if sung:
                 lines.extend([*sung, ""])
-        if task == "storyboard":
+        if _writes(task):
+            pictures = _pictures(brief, assets)
+            if pictures:
+                lines.extend([*pictures, ""])
             lines.extend(_story_on_song(root, project))
             lines.append("")
         if board is None:

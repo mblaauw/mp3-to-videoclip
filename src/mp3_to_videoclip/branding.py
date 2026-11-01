@@ -34,6 +34,18 @@ BRAND_RENDER_VERSION = "brand-plate-v2"
 MARKS = ("open-frame", "cutline", "monogram", "joint", "filmstrip")
 
 
+#: Near-black, off-white, a white accent and a grey: for a film with no kit of its own.
+NEUTRAL = BrandPackage(
+    id="neutral",
+    mark="open-frame",
+    plate=False,
+    foreground="#F4F4F2",
+    accent="#FFFFFF",
+    background="#0C0C0D",
+    secondary="#8A8A8C",
+)
+
+
 def filmstrip_svg(accent: str = "#D4AE6A") -> str:
     """Transparent gold filmstrip with negative monogram/perforations.
 

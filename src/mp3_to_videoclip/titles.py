@@ -50,16 +50,21 @@ def plan_titles(
     the spec's captions must all be absolute. ``total`` is the film's frame count.
     """
     total = math.ceil(duration * fps)
-    intro_frames = max(1, round(float(spec["intro_seconds"]) * fps))
+    short = spec.get("package") == "title-v1"
+    # A short package may have no opening at all; the signature always has one.
+    intro_frames = round(float(spec["intro_seconds"]) * fps) if short else max(1, round(float(spec["intro_seconds"]) * fps))  # fmt: skip
     credits_tail = float(spec["credits_tail_seconds"])
     lockup_seconds = float(spec["lockup_seconds"])
     credits_start = duration - credits_tail
-    windows = [_window("intro", "intro", 0, intro_frames)]
+    if short:
+        windows = [_window("title", "title", 0, intro_frames)] if intro_frames else []
+    else:
+        windows = [_window("intro", "intro", 0, intro_frames)]
 
     planned = list(captions) if captions is not None else list(spec["captions"])
     for cap in sorted(planned, key=lambda c: float(c["start"])):
         start, end = float(cap["start"]), float(cap["end"])
-        if start < intro_frames / fps + MIN_CAPTION_GAP:
+        if intro_frames and start < intro_frames / fps + MIN_CAPTION_GAP:
             raise TitleError(f"caption {cap['id']} starts inside the intro window")
         if end > credits_start - MIN_CAPTION_GAP:
             raise TitleError(f"caption {cap['id']} overlaps the credits window")
@@ -72,6 +77,12 @@ def plan_titles(
                 caption=dict(cap),
             )
         )
+
+    if short:
+        end_frames = round(credits_tail * fps)
+        if end_frames:
+            windows.append(_window("end_card", "end_card", total - end_frames, end_frames))
+        return _in_order(windows), total
 
     cards = spec["credits"]["cards"]
     if not cards:
@@ -99,13 +110,17 @@ def plan_titles(
     lock_frames = max(1, total - cursor)
     windows.append(_window("lockup", "lockup", cursor, lock_frames))
 
+    if cursor + lock_frames > total + 2:
+        raise TitleError("credits extend past the end of the music")
+    return _in_order(windows), total
+
+
+def _in_order(windows: list[dict]) -> list[dict]:
     windows.sort(key=lambda window: window["start_frame"])
     for a, b in zip(windows, windows[1:], strict=False):
         if b["start_frame"] < a["start_frame"] + a["frames"]:
             raise TitleError(f"overlay window {b['id']} overlaps {a['id']}")
-    if cursor + lock_frames > total + 2:
-        raise TitleError("credits extend past the end of the music")
-    return windows, total
+    return windows
 
 
 def resolve_titles(spec: Mapping, board: Storyboard | None, fps: int) -> list[dict]:

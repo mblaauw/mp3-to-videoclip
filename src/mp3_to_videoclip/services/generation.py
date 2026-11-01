@@ -19,6 +19,8 @@ def estimate(
     scope: str = "stills",
     reserve: str = "0.05",
     regenerate: bool = False,
+    edit_from: dict[str, int] | None = None,
+    edit_note: str = "",
 ) -> dict:
     """Quote the selected shots at live schema/pricing; saves the quote."""
     from mp3_to_videoclip import production as P
@@ -45,7 +47,15 @@ def estimate(
         if owner not in normalized:
             normalized.append(owner)
     with project_lock(root):
-        quote = G.quote_images(root, scope, reserve, ids=normalized, regenerate=regenerate)
+        quote = G.quote_images(
+            root,
+            scope,
+            reserve,
+            ids=normalized,
+            regenerate=regenerate,
+            edit_from=edit_from,
+            edit_note=edit_note,
+        )
     return {
         "quote_id": quote["id"],
         "scope": quote["scope"],
@@ -54,6 +64,7 @@ def estimate(
         "cap_usd": quote.get("cap_usd"),
         "uploads_required": G.quote_uploads_required(quote),
         "shot_ids": [task["shot_id"] for task in quote["tasks"]],
+        "edit_unavailable": quote.get("edit_unavailable"),
     }
 
 
@@ -95,6 +106,30 @@ def run(root: Path, quote_id: str, *, concurrency: int = 1) -> dict:
 
     with project_lock(root):
         return G.generate(root, quote_id, concurrency=concurrency)
+
+
+def estimate_sheet(root: Path, entry_id: str, *, reserve: str = "0.05") -> dict:
+    """Quote a character sheet or scene plate; saves the quote and spends nothing."""
+    from mp3_to_videoclip import sheets
+    from mp3_to_videoclip.storage import project_lock
+
+    with project_lock(root):
+        quote = sheets.quote_sheet(root, entry_id, reserve=reserve)
+    return {
+        "quote_id": quote["id"],
+        "tasks": len(quote["tasks"]),
+        "reserve_usd": quote["reserve_total_usd"],
+        "model": quote["model"],
+    }
+
+
+def run_sheet(root: Path, quote_id: str) -> dict:
+    """Execute an authorized quote exactly once; never resubmits."""
+    from mp3_to_videoclip import sheets
+    from mp3_to_videoclip.storage import project_lock
+
+    with project_lock(root):
+        return sheets.generate_sheet(root, quote_id)
 
 
 def estimate_upscale(root: Path, shot_ids: list[str], *, reserve: str | None = None) -> dict:

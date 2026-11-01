@@ -34,8 +34,9 @@ yet (transcription, listening, backups, signing, maintenance). Start with
   music. Your words are only sorted, never rewritten; concepts compare as beats on
   the song, and the story reads against the song with the still at that moment.
 - Three production kinds (music video, promo, advert) with a kind-specific
-  intake, `brief.intent`, selectable style presets and a kind-based signature
-  package (`music_video` keeps the 25/40 opening and credits).
+  intake, `brief.intent` and selectable style presets. Titles are a package chosen
+  per film: the 25/40 signature, a short title and end card at either shape, or
+  none. The brand kit sets the default; a kit with no name starts on short titles.
 - Promo/advert excerpt windows with waveform handles and fades. The source MP3 is
   untouched; analysis, the Player and every render use the derived excerpt.
 - A measured waveform under the storyboard; drag a boundary (or use the arrow

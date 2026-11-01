@@ -129,7 +129,7 @@ def test_new_production_prefills_style_and_credits_from_siblings(tmp_path):
     write_json(older / "work/graphics-spec.json", spec)
 
     new = projects / "new"
-    init(new, synth_source(tmp_path), "--music-mode", "instrumental")
+    init(new, synth_source(tmp_path), "--music-mode", "instrumental", "--titles", "joint-v1")
     assert P.load_brief(new).creative.look == "CUSTOM-LOOK from the last film"
     # A prefilled custom look must not claim the approved default preset, or the
     # new brief could never be approved.

@@ -114,7 +114,7 @@ class Project(Model):
     image_settings: ImageSettings | None = None
     image_seed: int | None = Field(default=None, ge=0, le=2147483647, strict=True)
     style_preset: str | None = None
-    prompt_version: Literal[2] | None = None
+    prompt_version: Literal[2, 3] | None = None
     signature_required: bool | None = Field(default=None, strict=True)
     source_filename: str | None = None
     renderer_backend: Literal["ffmpeg", "remotion"] | None = None
@@ -255,7 +255,7 @@ class Character(Model):
 
 class VisualReference(Model):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
-    kind: Literal["style", "location", "prop"]
+    kind: Literal["style", "location", "prop", "sheet"]
     description: str = Field(min_length=1)
     path: str = Field(min_length=1)
     permission_confirmed: bool = False
@@ -272,6 +272,23 @@ class VisualBeat(Model):
     intention: str = Field(min_length=1)
 
 
+class LookSection(Model):
+    """One section's colour and light, for the films whose look moves with the song."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    palette: list[str] = Field(min_length=1, max_length=6)
+    light: str = Field(min_length=1)
+    lens: str = ""
+
+    @model_validator(mode="after")
+    def in_order(self):
+        if self.end <= self.start:
+            raise ValueError("a look section must end after it starts")
+        return self
+
+
 class CreativeProfile(Model):
     """Global appearance only; story/locations are not repeated into every image."""
 
@@ -284,9 +301,15 @@ class CreativeProfile(Model):
     global_reference_ids: list[str] = Field(default_factory=list)
     proof_shot_ids: list[str] = Field(default_factory=list, max_length=3)
     profile_version: int = Field(default=0, ge=0)
+    sections: list[LookSection] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_ids(self):
+        if len({s.id for s in self.sections}) != len(self.sections):
+            raise ValueError("look section IDs must be unique")
+        for before, after in zip(self.sections, self.sections[1:], strict=False):
+            if after.start < before.end:
+                raise ValueError("look sections must be in order and must not overlap")
         for values in (self.scenes, self.references):
             if len({v.id for v in values}) != len(values):
                 raise ValueError("scene/reference IDs must be unique")
@@ -303,6 +326,8 @@ class CreativeProfile(Model):
         value = handler(self)
         if not value.get("profile_version"):
             value.pop("profile_version", None)
+        if not value.get("sections"):
+            value.pop("sections", None)
         return value
 
 

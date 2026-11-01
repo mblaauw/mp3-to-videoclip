@@ -7,6 +7,7 @@ from ..models import (
     Brief,
     Character,
     CreativeProfile,
+    LookSection,
     Scene,
     Treatments,
     VisualBeat,
@@ -152,6 +153,7 @@ def set_creative_profile(
     image_rules: list,
     avoid: list,
     look: str,
+    sections: list | None = None,
 ) -> Brief:
     """Create or replace the film's structured cast, places, rules and look.
 
@@ -173,6 +175,21 @@ def set_creative_profile(
         arc_values = [VisualBeat.model_validate(value) for value in arc]
     except ValueError as exc:
         raise ValueError(f"creative profile is invalid: {exc}") from exc
+
+    project = load_project(root)
+    section_update = {}
+    if sections is not None:
+        if sections and project.prompt_version != 3:
+            raise ValueError(
+                "section looks need the newer image prompt; switch it on Story's Look card first"
+            )
+        try:
+            section_values = [LookSection.model_validate(value) for value in sections]
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"creative profile is invalid: {exc}") from exc
+        if section_values and section_values[-1].end > project.duration + 0.5:
+            raise ValueError("a look section runs past the end of the film")
+        section_update = {"sections": section_values}
 
     character_ids = [value.id for value in character_values]
     if len(set(character_ids)) != len(character_ids):
@@ -197,7 +214,6 @@ def set_creative_profile(
     look_text = look.strip()
     if not look_text:
         raise ValueError("define creative.look before creating the profile")
-    project = load_project(root)
     guarded = styles.protected_preset(project.style_preset)
     if guarded is not None:
         problem = styles.core_problem(project.style_preset, look_text)
@@ -234,6 +250,7 @@ def set_creative_profile(
                     "arc": arc_values,
                     "scenes": scene_values,
                     "profile_version": 1,
+                    **section_update,
                 }
             ),
         }

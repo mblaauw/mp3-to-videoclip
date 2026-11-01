@@ -1,5 +1,9 @@
-import type { Brief } from "../api";
+import { useCallback, useEffect, useState } from "react";
+import { api, type Brief, type SheetRow } from "../api";
+import { useProjectChanged } from "../shell/projectEvents";
 import { Button } from "../ui";
+import { ColourScript } from "./ColourScript";
+import { MakeSheet } from "./MakeSheet";
 
 export const PROFILE_PROMPT =
   "Read the treatment and script with get_brief. Build the film's creative profile with " +
@@ -9,12 +13,22 @@ export const PROFILE_PROMPT =
   "or places in direction or look, and do not repeat identity or wardrobe in shot prompts.";
 
 export function ProfileCard({
+  slug,
   brief,
   onAsk,
+  onBriefChange,
 }: {
+  slug: string;
   brief: Brief;
   onAsk: (text: string) => void;
+  onBriefChange: (brief: Brief) => void;
 }) {
+  const [sheets, setSheets] = useState<Record<string, SheetRow>>({});
+  const loadSheets = useCallback(() => {
+    api.sheets(slug).then((value) => setSheets(value.sheets), () => setSheets({}));
+  }, [slug]);
+  useEffect(loadSheets, [loadSheets]);
+  useProjectChanged(slug, loadSheets);
   const creative = brief.creative;
   const characters = brief.characters || [];
   const scenes = creative?.scenes || [];
@@ -58,6 +72,18 @@ export function ProfileCard({
                     <b>{character.id}</b>
                     <span>{character.identity || character.description || "No identity"}</span>
                     {states.length > 0 && <em>{states.join(" · ")}</em>}
+                    <MakeSheet
+                      slug={slug}
+                      entryId={character.id}
+                      label="Make a character sheet"
+                      row={sheets[character.id]}
+                      blocked={
+                        character.permission_confirmed
+                          ? null
+                          : "Confirm permission on the Characters card first."
+                      }
+                      onBriefChange={onBriefChange}
+                    />
                   </div>
                 );
               })}
@@ -71,10 +97,20 @@ export function ProfileCard({
                 <div className="profile-row" key={scene.id}>
                   <b>{scene.id}</b>
                   <span>{scene.description || "No description"}</span>
+                  <MakeSheet
+                    slug={slug}
+                    entryId={scene.id}
+                    label="Make a plate"
+                    row={sheets[scene.id]}
+                    blocked={null}
+                    onBriefChange={onBriefChange}
+                  />
                 </div>
               ))}
             </div>
           )}
+
+          <ColourScript sections={creative?.sections || []} />
 
           {rules.length > 0 && (
             <div className="chips">

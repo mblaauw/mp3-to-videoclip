@@ -324,7 +324,7 @@ def approve(
         _require_reference_permissions(brief)
         if creative_workflow(project) and brief.creative is None:
             raise ValueError("the creative workflow requires a creative profile")
-        if project.prompt_version == 2:
+        if project.prompt_version in (2, 3):
             if not brief.treatment.strip():
                 raise ValueError("write the treatment before approving the story")
             if not brief.creative.look.strip():

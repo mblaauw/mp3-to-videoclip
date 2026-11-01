@@ -189,9 +189,12 @@ def test_writer_tasks_see_the_sung_lines_and_the_whole_treatment(tmp_path):
     assert "- 1:05 (tapped) First line" in concepts
     assert "- Second line" in concepts
     assert ("word " * 299).strip() in concepts
-    other = build_context(root.name, tmp_path, task="profile")
-    assert "## Sung lines" not in other
-    assert ("word " * 299).strip() not in other
+    profile = build_context(root.name, tmp_path, task="profile")
+    assert "## Sung lines" not in profile
+    assert ("word " * 299).strip() in profile
+    editor = build_context(root.name, tmp_path, task="notes")
+    assert "## Sung lines" not in editor
+    assert ("word " * 299).strip() not in editor
     assert json.dumps(concepts)
 
 

@@ -179,10 +179,12 @@ export function validateTitleAssets(input) {
   if (input.spec === null || typeof input.spec !== "object") {
     fail("graphics input.spec must be the resolved graphics spec object");
   }
-  if (typeof input.logo !== "string" || !input.logo.startsWith("data:image/svg+xml;base64,")) {
+  // Only short titles may go without a mark.
+  const noLogo = input.spec.package === "title-v1" && input.logo == null;
+  if (!noLogo && (typeof input.logo !== "string" || !input.logo.startsWith("data:image/svg+xml;base64,"))) {
     fail("graphics logo must be an embedded local SVG, never a remote URL or black-background raster");
   }
-  const svg = Buffer.from(input.logo.split(",")[1], "base64").toString("utf8");
+  const svg = noLogo ? "" : Buffer.from(input.logo.split(",")[1], "base64").toString("utf8");
   if (/<script|<foreignObject|\bhref\s*=|https?:\/\//i.test(svg.replace('xmlns="http://www.w3.org/2000/svg"', ''))) {
     fail("SVG logo must not load external resources or scripts");
   }

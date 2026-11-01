@@ -122,6 +122,7 @@ from .intake import (
 from .project import (
     STAGE_FILES,
     UPSTREAM,
+    compile_order,
     creative_workflow,
     film_audio,
     load_project,
@@ -213,6 +214,7 @@ __all__ = [
     "probe",
     "profiles",
     "project_payload",
+    "compile_order",
     "prompt_look_first",
     "proof_ids",
     "re",

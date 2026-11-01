@@ -181,6 +181,7 @@ async def update_intake(slug: str, request: Request, payload: dict, response: Re
         intent=payload.get("intent"),
         style_preset=payload.get("style_preset"),
         audio_window=payload.get("audio_window"),
+        prompt_version=payload.get("prompt_version"),
     )
     value = _intake_payload(root, analysis_needed=result["analysis_needed"])
     response.headers["ETag"] = f'"{digest(value["brief"])}"'

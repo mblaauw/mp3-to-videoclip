@@ -76,6 +76,7 @@ def create_from_upload(
     window_start: float = 0.0,
     fade_in: float = 0.0,
     fade_out: float = 0.0,
+    titles: str | None = None,
 ) -> dict:
     """Copy, probe and migrate one MP3 into a new production folder."""
     title = title.strip()
@@ -141,9 +142,14 @@ def create_from_upload(
                 window_start=window_start,
                 fade_in=fade_in,
                 fade_out=fade_out,
+                titles=titles,
             )
         except (RuntimeError, OSError, json.JSONDecodeError) as exc:
             raise ValueError("the file is not a readable MP3") from exc
+        if titles is not None:
+            from mp3_to_videoclip.signature import require_package
+
+            require_package(titles, aspect, P.load_project(root).duration)
         migrate(root)
         app_budget.add_budget(root, cap, "initial production budget")
     except BaseException:

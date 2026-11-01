@@ -267,7 +267,7 @@ function storyStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
       actions: [{ label: "Edit brief", target: "brief", kind: "primary" }],
     };
   }
-  if (project.prompt_version === 2 && (project.profile_version ?? 0) < 1) {
+  if ((project.prompt_version ?? 0) >= 2 && (project.profile_version ?? 0) < 1) {
     if (project.has_model_key === false) {
       return {
         tone: "you",

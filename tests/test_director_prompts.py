@@ -7,6 +7,7 @@ from pathlib import Path
 
 from api_support import make_api_project
 
+from mp3_to_videoclip import styles
 from mp3_to_videoclip.api.director import _system_prompt
 from mp3_to_videoclip.director import prompts
 from mp3_to_videoclip.storage import read_json, write_json
@@ -86,11 +87,27 @@ def test_your_own_story_needs_no_concept_and_a_new_film_needs_one(tmp_path):
     assert prompts.select_task(root, "story", "writer") == "script_mv"
 
 
+ALL_STYLES = tuple(preset["id"] for preset in styles.public_presets())
+
+
+def test_craft_is_loaded_where_the_writing_happens_and_nowhere_else(tmp_path):
+    root = make_api_project(tmp_path)
+    assert len((prompts.PROMPTS / "shared/craft.md").read_text().split()) <= 380
+    assert len(ALL_STYLES) == 5
+    for role, tasks in prompts.TASKS.items():
+        for task in tasks:
+            bundle = prompts.assemble(root, "story", role=role, task=task)
+            loaded = {item["path"] for item in bundle.meta["files"]}
+            assert ("shared/craft.md" in loaded) == (task in prompts.CRAFT_TASKS), task
+            if task in ("storyboard", "profile"):
+                assert "## Craft digest" in bundle.text
+
+
 def test_every_writer_task_is_under_the_word_budget(tmp_path):
     root = make_api_project(tmp_path)
     for task in prompts.TASKS["writer"]:
         for kind in ("music_video", "promo", "advert"):
-            for style in ("photographic-painted-v2", "clean-photographic-v1"):
+            for style in ALL_STYLES:
                 bundle = prompts.assemble(
                     root,
                     "story",
@@ -225,7 +242,7 @@ def test_stored_versions_are_json_metadata(tmp_path):
 def test_the_storyboard_prompt_asks_for_shots_inside_each_passage(tmp_path):
     root = make_api_project(tmp_path)
     bundle = _bundle(root, "storyboard")
-    assert {"path": "writer/storyboard.md", "version": 3} in bundle.meta["files"]
+    assert {"path": "writer/storyboard.md", "version": 4} in bundle.meta["files"]
     assert "Keep each timed\npassage's shots inside its frames" in bundle.text
     assert 'marked "not on the song" has no time' in bundle.text
 

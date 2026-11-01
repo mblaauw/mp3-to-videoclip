@@ -121,7 +121,7 @@ def _poster_stills(root: Path, slug: str, assets: dict) -> list[str]:
     """First four selected stills, addressed through the image route."""
     result: list[str] = []
     for owner, entry in assets.items():
-        if not isinstance(entry, dict):
+        if not isinstance(entry, dict) or owner.startswith("sheet:"):
             continue
         chosen = next(
             (v for v in entry.get("versions", []) if v.get("version") == entry.get("selected")),
@@ -293,8 +293,10 @@ def _film_summary(entry: Path, parked: set[str], result: list[ProjectSummary]) -
                 parked=entry.name in parked,
                 still_count=sum(
                     1
-                    for item in assets.values()
-                    if isinstance(item, dict) and item.get("selected") is not None
+                    for key, item in assets.items()
+                    if isinstance(item, dict)
+                    and item.get("selected") is not None
+                    and not key.startswith("sheet:")
                 ),
                 shots=shots,
                 music_mode=project.music_mode,
@@ -387,6 +389,7 @@ async def create_project(
     window_start: float = 0.0,
     fade_in: float = 0.0,
     fade_out: float = 1.5,
+    titles: Literal["joint-v1", "title-v1", "none"] | None = None,
 ):
     """Upload one MP3, create a schema 3 production and queue local analysis."""
     from mp3_to_videoclip import services
@@ -448,6 +451,7 @@ async def create_project(
             window_start=window_start if kind != "music_video" else 0.0,
             fade_in=fade_in if kind != "music_video" else 0.0,
             fade_out=fade_out if kind != "music_video" else 0.0,
+            titles=titles,
         )
 
     root = created["root"]
@@ -519,8 +523,10 @@ def get_project(slug: str, request: Request, verify: bool = False):
         "shots": len(board.shots) if board is not None else 0,
         "stills": sum(
             1
-            for entry in assets.values()
-            if isinstance(entry, dict) and entry.get("selected") is not None
+            for key, entry in assets.items()
+            if isinstance(entry, dict)
+            and entry.get("selected") is not None
+            and not key.startswith("sheet:")
         ),
         "approvals": sorted(approvals) if isinstance(approvals, dict) else [],
     }

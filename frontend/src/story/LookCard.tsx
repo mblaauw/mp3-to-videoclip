@@ -38,6 +38,7 @@ export function LookCard({
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [movingPrompt, setMovingPrompt] = useState(false);
   const timer = useRef<number | null>(null);
   const lastSaved = useRef(brief.creative?.look || "");
   const draftBase = useRef<Brief | null>(null);
@@ -123,6 +124,21 @@ export function LookCard({
     }
   };
 
+  const useNewerPrompt = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      onIntakeChange(await api.updateIntake(slug, { prompt_version: 3 }));
+      setMovingPrompt(false);
+      flash();
+      notifyProjectChanged();
+    } catch (caught) {
+      setError(draftError(caught));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <section className="stage-block look-card">
       <h2>
@@ -168,6 +184,24 @@ export function LookCard({
           ))}
         </div>
       )}
+      {intake.prompt_version === 2 &&
+        (movingPrompt ? (
+          <div className="row-actions">
+            <p className="hint">
+              Every still of this film goes out of date, and the story needs approving again.
+            </p>
+            <Button size="small" disabled={saving} onClick={() => void useNewerPrompt()}>
+              Mark them out of date and switch
+            </Button>
+            <Button size="small" variant="quiet" onClick={() => setMovingPrompt(false)}>
+              Keep this prompt
+            </Button>
+          </div>
+        ) : (
+          <Button size="small" variant="quiet" onClick={() => setMovingPrompt(true)}>
+            Use the newer image prompt
+          </Button>
+        ))}
       {error && <p className="error">{error}</p>}
       {!preset && (
         <Button size="small" variant="quiet" onClick={() => void save()}>

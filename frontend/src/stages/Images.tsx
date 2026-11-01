@@ -349,7 +349,7 @@ export function ImagesStage({
     setError(null);
   };
 
-  const submitRedo = async (shot: ImageShot, remake: boolean) => {
+  const submitRedo = async (shot: ImageShot, remake: boolean, edit = false) => {
     if (shot.local || shot.selected === null) return;
     setWorking(shot.id);
     setError(null);
@@ -366,6 +366,14 @@ export function ImagesStage({
       setRedoOpen(null);
       setActiveId(null);
       setRedoNote("");
+      if (edit) {
+        // The prompt stays as it is: the note goes to the model with the still itself.
+        await paid.request([shot.id], proofIds.includes(shot.id) ? "proof" : "stills", true, {
+          edit_from: { [shot.id]: shot.selected },
+          edit_note: redoNote.trim(),
+        });
+        return;
+      }
       window.dispatchEvent(
         new CustomEvent("studio:ask-director", {
           detail: {
@@ -847,6 +855,19 @@ export function ImagesStage({
                         onClick={() => void submitRedo(current, true)}
                       >
                         Remake · ${reserve}
+                      </Button>
+                      <Button
+                        size="small"
+                        disabled={
+                          working === current.id ||
+                          paid.busy ||
+                          imageJobs.length > 0 ||
+                          !redoNote.trim()
+                        }
+                        title={redoNote.trim() ? undefined : "Say what should change first"}
+                        onClick={() => void submitRedo(current, true, true)}
+                      >
+                        Edit this one · ${reserve}
                       </Button>
                       <Button
                         size="small"

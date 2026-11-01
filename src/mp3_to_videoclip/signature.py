@@ -1,5 +1,7 @@
 """The existing local graphics pipeline, required for newly versioned films only."""
 
+import base64
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import operations
@@ -39,11 +41,63 @@ def _identity(brand: dict | None) -> tuple[str, str, str]:
 
 
 def film_brand(name: str, partner: str) -> dict | None:
-    """What a new film records for these settings; None for the original pair or no name."""
+    """What a new film records for these settings; None when the kit has no name yet."""
     brand = {"name": name.strip().upper(), "partner": partner.strip().upper()}
-    if not brand["name"] or _identity(brand)[0] == NAMES:
+    return brand if brand["name"] else None
+
+
+@dataclass(frozen=True)
+class Package:
+    """How a film opens and closes. A spec with no ``package`` key is ``joint-v1``."""
+
+    id: str
+    label: str
+    aspects: tuple[str, ...]
+    min_duration: float
+
+
+PACKAGES = {
+    "joint-v1": Package("joint-v1", "25/40 signature", ("16:9",), 65.0),
+    "title-v1": Package("title-v1", "Short title and end card", ("16:9", "9:16"), 0.0),
+    "none": Package("none", "None", ("16:9", "9:16"), 0.0),
+}
+TITLE_MAX_SECONDS = 5.0
+END_CARD_MAX_SECONDS = 10.0
+END_CARD_MAX_LINES = 4
+
+
+def package_of(spec) -> str:
+    package = spec.get("package", "joint-v1")
+    if package not in ("joint-v1", "title-v1"):
+        raise ValueError(f"unknown titles package {package!r}")
+    return package
+
+
+def default_package(settings, kind: str) -> str:
+    """A music video opens and closes as the brand kit says; other kinds choose to."""
+    films = settings.new_films
+    if kind != "music_video" or not films.signature_package:
+        return "none"
+    return "joint-v1" if films.brand.name.strip() else "title-v1"
+
+
+def require_package(package: str, aspect: str, duration: float | None = None) -> None:
+    """Refuse a package this film cannot have, before anything is created."""
+    chosen = PACKAGES.get(package)
+    if chosen is None:
+        raise ValueError(f"unknown titles package {package!r}")
+    if aspect not in chosen.aspects:
+        raise ValueError(f"{chosen.label} is made for {chosen.aspects[0]}; choose short titles or none")  # fmt: skip
+    if duration is not None and duration < chosen.min_duration:
+        raise ValueError(f"{chosen.label} needs a film of at least {chosen.min_duration:.0f} s")
+
+
+def logo_data(path: str) -> str | None:
+    """The brand kit's logo as embedded bytes. Only an SVG on this computer can be drawn."""
+    logo = Path(path).expanduser() if path.strip() else None
+    if logo is None or logo.suffix.lower() != ".svg" or not logo.is_file():
         return None
-    return brand
+    return "data:image/svg+xml;base64," + base64.b64encode(logo.read_bytes()).decode()
 
 
 #: Each look's face for a new film. Every face is selectable afterwards.
@@ -56,8 +110,15 @@ PRESET_FACES = {
 }
 
 
-def draft_spec(title: str, brand: dict | None = None, typeface: str | None = None) -> dict:
+def draft_spec(
+    title: str,
+    brand: dict | None = None,
+    typeface: str | None = None,
+    package: str = "joint-v1",
+) -> dict:
     """Never invent credits. Empty cards deliberately block brief approval."""
+    if package == "title-v1":
+        return _draft_short_titles(title, brand, typeface)
     names, _, production_line = _identity(brand)
     spec = {
         "version": 1,
@@ -82,6 +143,62 @@ def draft_spec(title: str, brand: dict | None = None, typeface: str | None = Non
     if typeface:
         spec["typeface"] = typeface
     return spec
+
+
+def _draft_short_titles(title: str, brand: dict | None, typeface: str | None) -> dict:
+    """A title and an end card. With nothing to close on yet, the film has no end card."""
+    from .branding import NEUTRAL
+
+    spec = {
+        "version": 1,
+        "package": "title-v1",
+        "renderer": "remotion",
+        "demo": False,
+        "credit_roles_confirmed": True,
+        "intro_seconds": 3.0,
+        "credits_tail_seconds": 5.0 if brand else 0.0,
+        "lockup_seconds": 0.0,
+        "intro": {"title": title, "line": ""},
+        "captions": [],
+        "credits": {"cards": [], "lockup": ""},
+        "end_card": {"lockup": _identity(brand)[2] if brand else "", "lines": []},
+        "palette": {
+            "night": NEUTRAL.background,
+            "ink": NEUTRAL.foreground,
+            "accent": NEUTRAL.accent,
+            "secondary": NEUTRAL.secondary,
+        },
+    }
+    if brand:
+        spec["brand"] = brand
+    if typeface:
+        spec["typeface"] = typeface
+    return spec
+
+
+def check_short_titles(spec: dict) -> None:
+    """The ``title-v1`` rules, on their own terms."""
+    opening, tail = float(spec["intro_seconds"]), float(spec["credits_tail_seconds"])
+    if not 0 <= opening <= TITLE_MAX_SECONDS:
+        raise ValueError(f"the title holds for at most {TITLE_MAX_SECONDS:.0f} seconds")
+    if not 0 <= tail <= END_CARD_MAX_SECONDS:
+        raise ValueError(f"the end card holds for at most {END_CARD_MAX_SECONDS:.0f} seconds")
+    if opening == 0 and tail == 0:
+        raise ValueError("a film with neither a title nor an end card has no titles; choose none")
+    if opening > 0 and not str(spec["intro"].get("title") or "").strip():
+        raise ValueError("the opening needs a title")
+    card = spec.get("end_card")
+    if not isinstance(card, dict):
+        raise ValueError("short titles need an end_card")
+    lines = card.get("lines", [])
+    if (
+        not isinstance(lines, list)
+        or len(lines) > END_CARD_MAX_LINES
+        or not all(isinstance(line, str) and line.strip() for line in lines)
+    ):
+        raise ValueError(f"an end card has at most {END_CARD_MAX_LINES} lines of text")
+    if tail > 0 and not (lines or str(card.get("lockup") or "").strip() or spec.get("logo")):
+        raise ValueError("the end card has nothing on it; add a line or set its length to zero")
 
 
 def _valid_cards(cards) -> list | None:
@@ -127,6 +244,13 @@ def credits_template(projects_dir: Path) -> list | None:
 def validate_spec(root: Path, project) -> dict:
     from .graphics import load_spec
 
+    if package_of(read_optional(root / SPEC, {})) == "title-v1":
+        spec = load_spec(root)
+        if float(spec["intro_seconds"]) > 0 and spec["intro"]["title"].casefold() != project.title.casefold():  # fmt: skip
+            raise ValueError("graphics title must match the film title, not the MP3 filename")
+        if float(spec["intro_seconds"]) + float(spec["credits_tail_seconds"]) > project.duration:
+            raise ValueError("the title and the end card are longer than the film")
+        return spec
     if project.aspect != "16:9":
         raise ValueError(
             "the required signature compositor supports 16:9 only; resolve portrait graphics before brief approval or production spending"
@@ -194,6 +318,11 @@ def save_credits(root: Path, cards, *, use_as_template: bool = False) -> list:
         spec["credits"]["cards"] = normalized
         spec["credit_roles_confirmed"] = True
         spec.pop("warning", None)
+        if package_of(spec) == "title-v1":
+            if len(normalized) > END_CARD_MAX_LINES:
+                raise ValueError(f"an end card has at most {END_CARD_MAX_LINES} lines of text")
+            spec["end_card"]["lines"] = [f"{role}: {name}" for role, name in normalized]
+            spec["credits_tail_seconds"] = float(spec["credits_tail_seconds"]) or 5.0
         write_json(root / SPEC, spec)
         if use_as_template:
             write_json(root / "work/credits-template.json", {"cards": normalized})

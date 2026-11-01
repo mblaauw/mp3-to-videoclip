@@ -108,6 +108,21 @@ def effective_image_spec(spec: dict, model: str) -> dict:
     }
 
 
+def _worded(spec: dict, props: dict) -> dict:
+    """The prompt fields of a request. What to avoid goes to the model's own field if it has one."""
+    avoid = spec.get("avoid")
+    if not avoid or "negativePrompt" not in props:
+        return {"positivePrompt": spec["positivePrompt"]}
+    return {
+        "positivePrompt": spec["positivePrompt"].removesuffix("\nAvoid: " + "; ".join(avoid)),
+        "negativePrompt": "; ".join(avoid),
+    }
+
+
+def edit_prompt(spec_prompt: str, note: str) -> str:
+    return f"Edit the first supplied image, keeping everything else. {note.strip()}\n{spec_prompt}"
+
+
 def quote_images(
     root: Path,
     scope: str,
@@ -116,6 +131,8 @@ def quote_images(
     ids: list[str] | None = None,
     regenerate=False,
     client=None,
+    edit_from: dict[str, int] | None = None,
+    edit_note: str = "",
 ) -> dict:
     require_approval(root, "storyboard")
     board = load_board(root)
@@ -168,6 +185,16 @@ def quote_images(
     assets = read_json(root / "work/assets.json")
     journal = read_json(root / "work/tasks.json")
     tasks = []
+    edits = edit_from or {}
+    if edits and not edit_note.strip():
+        raise ValueError("say what should change in the still")
+    # A model that takes reference images can take the still it is correcting as one.
+    source_limit = (
+        ((props.get("inputs") or {}).get("properties") or {})
+        .get("referenceImages", {})
+        .get("maxItems")
+    )
+    can_edit = "referenceImages" in ((props.get("inputs") or {}).get("properties") or {})
     for shot in board.shots:
         if shot.id not in chosen or not shotkinds.is_paid(shot):
             continue
@@ -176,11 +203,23 @@ def quote_images(
         spec = effective_image_spec(image_spec(root, shot), model)
         input_hash = digest(spec)
         versions = assets.get(shot.id, {}).get("versions", [])
-        if not regenerate and any(
-            v["input_hash"] == input_hash
-            and inside(root, v["path"]).is_file()
-            and file_hash(inside(root, v["path"])) == v["sha256"]
-            for v in versions
+        edit_source = None
+        if can_edit and shot.id in edits:
+            edit_source = next((v for v in versions if v["version"] == edits[shot.id]), None)
+            if edit_source is None:
+                raise ValueError(f"shot {shot.id} has no version {edits[shot.id]} to edit")
+            if source_limit is not None and len(spec["references"]) + 1 > source_limit:
+                raise ValueError(f"shot {shot.id} has no room for the still as a reference")
+        if (
+            edit_source is None
+            and shot.id not in edits
+            and not regenerate
+            and any(
+                v["input_hash"] == input_hash
+                and inside(root, v["path"]).is_file()
+                and file_hash(inside(root, v["path"])) == v["sha256"]
+                for v in versions
+            )
         ):
             continue
         if any(
@@ -188,12 +227,16 @@ def quote_images(
             for t in journal.values()
         ):
             raise ValueError(f"shot {shot.id} has an unresolved task; recover it first")
-        if not regenerate and any(
-            t.get("shot_id") == shot.id
-            and t.get("input_hash") == input_hash
-            and t["status"] == "ready"
-            and not asset_intact(root, t)
-            for t in journal.values()
+        if (
+            not regenerate
+            and shot.id not in edits
+            and any(
+                t.get("shot_id") == shot.id
+                and t.get("input_hash") == input_hash
+                and t["status"] == "ready"
+                and not asset_intact(root, t)
+                for t in journal.values()
+            )
         ):
             raise ValueError(
                 f"shot {shot.id} has a lost/changed asset; recover it instead of rebilling"
@@ -211,7 +254,7 @@ def quote_images(
             "taskType": "imageInference",
             "taskUUID": task_uuid,
             "model": info["x-air-id"],
-            "positivePrompt": spec["positivePrompt"],
+            **_worded(spec, props),
             "width": spec["size"][0],
             "height": spec["size"][1],
             "numberResults": 1,
@@ -221,11 +264,18 @@ def quote_images(
             "includeCost": True,
             **image_controls(spec, model),
         }
+        references = spec["references"]
+        edit_fields = {}
+        if edit_source is not None:
+            request["positivePrompt"] = edit_prompt(request["positivePrompt"], edit_note)
+            references = [
+                {"path": edit_source["path"], "sha256": edit_source["sha256"]},
+                *references,
+            ]
+            edit_fields = {"edit_of": edit_source["version"], "edit_note": edit_note.strip()}
         validation_request = dict(request)
-        if spec["references"]:
-            validation_request["inputs"] = {
-                "referenceImages": [str(uuid4()) for _ in spec["references"]]
-            }
+        if references:
+            validation_request["inputs"] = {"referenceImages": [str(uuid4()) for _ in references]}
         validate_request(schema, validation_request)
         tasks.append(
             {
@@ -233,10 +283,11 @@ def quote_images(
                 "shot_id": shot.id,
                 "version": version,
                 "input_hash": input_hash,
-                "references": spec["references"],
+                "references": references,
                 "request": request,
                 "reserve_usd": str(allowance),
                 "retry_cycle": budget.correction_cycle(root, shot.id),
+                **edit_fields,
             }
         )
     if not tasks:
@@ -255,6 +306,11 @@ def quote_images(
             "reserve_total_usd": str(allowance * len(tasks)),
             "published_pricing": info.get("x-pricing"),
             "warning": "Published examples are not an exact quote. Actual compute cost can exceed reservations; subsequent calls will stop.",
+            **(
+                {"edit_unavailable": f"{model} cannot edit a still, so this makes it again."}
+                if edits and not can_edit
+                else {}
+            ),
         },
     )
 
@@ -428,8 +484,11 @@ def begin_task(root: Path, quote: dict, task: dict, *, kind=None, admitted=()):
             for entry in journal.values()
         ):
             raise ValueError("a conflicting task/version was submitted; recover or requote")
-    if (kind or quote["kind"]) == "upscale":
-        from .upscale import check_before_spend
+    if (kind or quote["kind"]) in ("upscale", "sheet"):
+        if (kind or quote["kind"]) == "upscale":
+            from .upscale import check_before_spend
+        else:
+            from .sheets import check_before_spend
 
         check_before_spend(root, task)
         if any(
@@ -482,7 +541,9 @@ def finish_image(root: Path, task_uuid: str, result: dict, client: RunwareClient
         task.update(status="result", result=result, cost_usd=cost, cost_basis="provider reported")
         journal[task_uuid] = task
         write_json(root / "work/tasks.json", journal)  # Billed cost BEFORE download.
-    relative = f"assets/{task['shot_id']}/v{task['version']:03d}-{task_uuid}.jpg"
+    relative = (
+        task.get("relative") or f"assets/{task['shot_id']}/v{task['version']:03d}-{task_uuid}.jpg"
+    )
     path = inside(root, relative)
     expected_hash = task.get("sha256")
     if path.exists() and expected_hash and file_hash(path) != expected_hash:
@@ -517,6 +578,7 @@ def finish_image(root: Path, task_uuid: str, result: dict, client: RunwareClient
             task_uuid,
             derived_from=task.get("derived_from"),
             derivation=task.get("derivation"),
+            edit_of=task.get("edit_of"),
         )
         current.update(status="ready", path=relative, sha256=file_hash(path), completed_at=now())
         write_json(root / "work/tasks.json", journal)
@@ -529,6 +591,8 @@ def _replace_outdated_selection(root: Path, task: dict) -> None:
 
     An alternative from the same prompt never takes over: that choice is the owner's.
     """
+    if task.get("kind") == "sheet":
+        return
     assets = read_json(root / "work/assets.json")
     entry = assets[task["shot_id"]]
     selected = next(
@@ -754,12 +818,21 @@ def generate(root: Path, quote_id: str, client=None, *, concurrency: int = 1):
         spec = effective_image_spec(image_spec(root, shot), quote["model"])
         request = task["request"]
         controls = image_controls(spec, quote["model"])
+        worded = _worded(
+            spec, schema["components"]["schemas"]["RequestBody"]["items"]["properties"]
+        )
+        expected = worded["positivePrompt"]
+        expected_references = spec["references"]
+        if task.get("edit_of") is not None:
+            expected = edit_prompt(expected, task["edit_note"])
+            expected_references = task["references"][:1] + spec["references"]
         if (
             request.get("taskUUID") != task["uuid"]
-            or request.get("positivePrompt") != spec["positivePrompt"]
+            or request.get("positivePrompt") != expected
+            or request.get("negativePrompt") != worded.get("negativePrompt")
             or [request.get("width"), request.get("height")] != spec["size"]
             or request.get("model") != schema["info"]["x-air-id"]
-            or task["references"] != spec["references"]
+            or task["references"] != expected_references
             or any(request.get(key) != controls.get(key) for key in ("settings", "seed"))
         ):
             raise ValueError("quote request no longer matches its approved shot specification")
@@ -809,7 +882,7 @@ def recover(root: Path, task_uuid: str, client=None):
         from .transcription import recover_runware
 
         return recover_runware(root, task_uuid, client)
-    if not task or task["kind"] not in ("images", "upscale"):
+    if not task or task["kind"] not in ("images", "upscale", "sheet"):
         raise ValueError("unknown image task; transcription has no automatic recovery endpoint")
     if task["status"] == "ready" and asset_intact(root, task):
         # Ready journal bytes can outlive an interrupted asset-index publication.
@@ -823,6 +896,7 @@ def recover(root: Path, task_uuid: str, client=None):
             task_uuid,
             derived_from=task.get("derived_from"),
             derivation=task.get("derivation"),
+            edit_of=task.get("edit_of"),
         )
         return True
     if task["status"] == "resolved":
