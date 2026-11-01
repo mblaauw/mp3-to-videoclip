@@ -20,6 +20,13 @@ export function NewFilmsTab() {
         <ChoiceRow path="new_films.kind" label="Kind" options={kinds} free={false} />
         <NumberRow path="new_films.length_s" label="Length in seconds" hint="0 means the whole track, where the kind allows it." />
         <ChoiceRow path="new_films.look" label="Look" options={looks} free={false} />
+        <NumberRow
+          path="new_films.depth"
+          label="Depth"
+          hint="0 to 1. Only where the depth tools are set up; 0 starts flat. A film's look can change it."
+          max="1"
+          step="0.1"
+        />
         <NumberRow path="new_films.budget_usd" label="Budget" hint="A starting cap in US dollars; you can raise it later." step="0.01" />
         <ChoiceRow
           path="new_films.aspect"
@@ -178,6 +185,14 @@ export function ComputerTab() {
             {lyric.ready ? "Ready" : "Not set up"}
           </output>
         </Row>
+        <Row
+          label="Depth tools"
+          hint={catalog.depth_tools.reason ?? `Set up from a film's look. About ${catalog.depth_tools.download_gb} GB.`}
+        >
+          <output className={catalog.depth_tools.ready ? "settings-good" : "settings-muted"}>
+            {catalog.depth_tools.ready ? "Ready" : "Not set up"}
+          </output>
+        </Row>
       </Section>
       <Section title="Director path">
         <ChoiceRow
@@ -195,6 +210,14 @@ export function ComputerTab() {
         <Row label="Check OpenCode">
           <OpenCodeTest />
         </Row>
+      </Section>
+      <Section title="Rendering">
+        <NumberRow
+          path="computer.render_workers"
+          label="Browsers per render"
+          hint="0 chooses from this computer's cores and free memory, at most 4. Each takes about 1.5 GB."
+          max="8"
+        />
       </Section>
       <Section
         title="Caches"

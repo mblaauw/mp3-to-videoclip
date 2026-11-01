@@ -1,6 +1,6 @@
 import { shotCaption } from "../storyboard/placeholders";
 import { useEffect, useState } from "react";
-import { api, type CutSummary, type EditPayload, type EditSuggestion } from "../api";
+import { api, type CutSummary, type DepthCoverage, type EditPayload, type EditSuggestion } from "../api";
 import { ArtifactRating } from "../ArtifactRating";
 import type { EditMotion, EditTransition, Grade } from "../baseFilm";
 import { JobBanner } from "../jobs/JobBanner";
@@ -234,7 +234,49 @@ const LOOK_AMOUNTS: { key: LookAmount; label: string }[] = [
   { key: "grain", label: "Grain" },
   { key: "weave", label: "Gate weave" },
   { key: "drift", label: "Handheld drift" },
+  { key: "depth", label: "Depth" },
 ];
+
+/** Which stills have their layers, and the way to make the rest. Local and free. */
+function DepthStatus({ slug }: { slug: string }) {
+  const [state, setState] = useState<DepthCoverage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const load = () => {
+    api.depthCoverage(slug).then(setState, () => undefined);
+  };
+  useEffect(load, [slug]);
+  if (!state) return null;
+  const missing = state.stills - state.with_depth;
+  const start = (job: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    job()
+      .then(load)
+      .catch((caught) => setError(String(caught)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="depth-status">
+      <p className="hint">
+        {state.with_depth} of {state.stills} stills have depth.
+      </p>
+      {missing > 0 &&
+        (state.tools.ready ? (
+          <Button size="small" disabled={busy} onClick={() => start(() => api.runDepth(slug))}>
+            {busy ? "Starting…" : "Make the rest"}
+          </Button>
+        ) : state.tools.supported ? (
+          <Button size="small" disabled={busy} onClick={() => start(() => api.setupDepth(slug))}>
+            {busy ? "Starting…" : `Set up depth (about ${state.tools.download_gb} GB, free)`}
+          </Button>
+        ) : (
+          <p className="hint">{state.tools.reason}</p>
+        ))}
+      {error && <ErrorState what="making depth" error={error} compact />}
+    </div>
+  );
+}
 
 function LookAmountField({
   edit,
@@ -270,7 +312,7 @@ function LookAmountField({
   );
 }
 
-function LookControls({ edit, onChange }: { edit: EditPayload; onChange: PanelEdit }) {
+function LookControls({ slug, edit, onChange }: { slug: string; edit: EditPayload; onChange: PanelEdit }) {
   return (
     <details className="panel-notes film-look">
       <summary>Colour and film look</summary>
@@ -289,6 +331,22 @@ function LookControls({ edit, onChange }: { edit: EditPayload; onChange: PanelEd
       {LOOK_AMOUNTS.map((amount) => (
         <LookAmountField key={amount.key} edit={edit} amount={amount} onChange={onChange} />
       ))}
+      {(edit.grade.look?.depth ?? 0) > 0 && <DepthStatus slug={slug} />}
+      <label className="look-amount">
+        Typeface{" "}
+        <select
+          value={edit.grade.typeface ?? ""}
+          onChange={(event) => {
+            const typeface = (event.target.value || null) as Grade["typeface"];
+            void onChange({ ...edit, grade: { ...edit.grade, typeface } }, "the typeface");
+          }}
+        >
+          <option value="">This computer's default</option>
+          <option value="inter">Inter</option>
+          <option value="fraunces">Fraunces</option>
+          <option value="bebas">Bebas Neue</option>
+        </select>
+      </label>
       <p className="hint">Text and titles stay crisp above the look.</p>
     </details>
   );
@@ -482,7 +540,7 @@ function Overview({
           {cut.against_seed && <AgainstSeed changes={cut.against_seed} />}
           <SuggestCut slug={slug} onChange={onChange} />
           <Captions slug={slug} edit={edit} />
-          {edit && <LookControls edit={edit} onChange={onChange} />}
+          {edit && <LookControls slug={slug} edit={edit} onChange={onChange} />}
           <CriticNotes slug={slug} onSeek={(frame) => onSeekNote({ frame } as CutNote)} />
           {edit && (
             <div className="row-actions">
@@ -734,6 +792,28 @@ function ShotPanel({
             ))}
           </div>
           <CropCuts edit={edit} id={id} fps={fps} onChange={onChange} />
+          {(edit.grade.look?.depth ?? 0) > 0 && (
+            <label className="settings-check">
+              <input
+                type="checkbox"
+                checked={edit.shots.find((shot) => shot.shot_id === id)?.depth === false}
+                onChange={(event) =>
+                  void onChange(
+                    {
+                      ...edit,
+                      shots: edit.shots.map((shot) =>
+                        shot.shot_id === id
+                          ? { ...shot, depth: event.target.checked ? false : null }
+                          : shot,
+                      ),
+                    },
+                    "this shot's depth",
+                  )
+                }
+              />{" "}
+              Keep this shot flat
+            </label>
+          )}
         </div>
       ) : (
         <p className="hint">Make a first cut to change the camera move here.</p>

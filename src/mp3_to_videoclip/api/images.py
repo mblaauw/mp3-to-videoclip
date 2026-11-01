@@ -231,6 +231,121 @@ async def generate_images(slug: str, request: Request, payload: dict):
     }
 
 
+@router.get("/depth")
+def get_depth(slug: str, request: Request):
+    from mp3_to_videoclip import depth
+
+    return depth.coverage(project_root(request, slug))
+
+
+def _depth_job(request: Request, slug: str, work_fn) -> dict:
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+
+    async def work():
+        return await asyncio.to_thread(work_fn)
+
+    return {"job_id": runner.submit("depth", slug, work, blocking=True)}
+
+
+@router.post("/depth/setup")
+async def setup_depth(slug: str, request: Request):
+    """On the owner's click: downloads the tools and the model. Nothing is charged."""
+    from mp3_to_videoclip import depth
+
+    project_root(request, slug)
+    state = depth.status()
+    if not state["supported"]:
+        raise HTTPException(status_code=400, detail=state["reason"])
+    return _depth_job(request, slug, depth.install)
+
+
+@router.post("/depth/run")
+async def run_depth(slug: str, request: Request):
+    from mp3_to_videoclip import depth
+
+    root = project_root(request, slug)
+    if not depth.status()["ready"]:
+        raise ApiError(409, "Set up the depth tools first.", "depth_tools_missing")
+    return _depth_job(request, slug, lambda: depth.run(root))
+
+
+@router.get("/depth/{key}/{layer}")
+def get_depth_layer(slug: str, key: str, layer: str, request: Request):
+    """One layer for the Player, named by the still and the tools that made it."""
+    from mp3_to_videoclip import depth
+
+    root = project_root(request, slug)
+    if layer not in depth.LAYERS or not key.replace("-", "").isalnum():
+        raise HTTPException(status_code=404, detail="no such layer")
+    path = inside(root, f"work/depth/{key}/{layer}.png")
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no such layer")
+    return FileResponse(path, media_type="image/png")
+
+
+@router.post("/images/upscale/estimate")
+async def estimate_upscale(slug: str, request: Request, payload: dict):
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    shot_ids = payload.get("shot_ids") or []
+    if not shot_ids:
+        raise HTTPException(status_code=400, detail="select at least one still")
+    estimate = services.generation.estimate_upscale(
+        root, shot_ids, reserve=payload.get("reserve_usd")
+    )
+    # Still before a price is shown: nothing can be bought without the key.
+    runware_api_key()
+    return {
+        "estimate": estimate,
+        "decision": _decisions(root, estimate["reserve_usd"]),
+        "budget": _budget_card(root),
+    }
+
+
+@router.post("/images/upscale")
+async def generate_upscale(slug: str, request: Request, payload: dict):
+    """The owner's click on the shown price: authorize exactly that quote, then run it."""
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    quote_id = payload.get("quote_id")
+    if not quote_id:
+        raise HTTPException(status_code=400, detail="estimate the selection first")
+    try:
+        quote = services.generation.quote(root, quote_id)
+    except FileNotFoundError as exc:
+        raise ApiError(
+            404, "That quote is no longer there. Estimate again.", "quote_missing"
+        ) from exc
+    if quote.get("kind") != "upscale":
+        raise HTTPException(status_code=400, detail="this quote is not for sharper stills")
+    decision = _decisions(root, quote["reserve_total_usd"])
+    if not decision["ok"]:
+        return {"needs_budget": True, "decision": decision, "budget": _budget_card(root)}
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+    services.generation.authorize(
+        root, quote_id, note=payload.get("note") or "user confirmed in Studio"
+    )
+
+    async def work():
+        return await asyncio.to_thread(services.generation.run_upscale, root, quote_id)
+
+    job_id = runner.submit("images", slug, work, blocking=True)
+    return {
+        "job_id": job_id,
+        "quote_id": quote_id,
+        "reserve_usd": quote["reserve_total_usd"],
+        "tasks": len(quote["tasks"]),
+        "status": "queued",
+        "budget": _budget_card(root),
+    }
+
+
 @router.post("/images/select")
 async def select_version(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)

@@ -56,6 +56,7 @@ export type Catalog = {
   voices: CatalogVoice[];
   computer: Record<string, boolean>;
   lyric_tools: { supported: boolean; reason: string | null; ready: boolean; download_gb: number };
+  depth_tools: { supported: boolean; reason: string | null; ready: boolean; download_gb: number };
   notes: Record<string, string>;
 };
 

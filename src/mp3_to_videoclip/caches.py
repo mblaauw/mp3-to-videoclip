@@ -42,6 +42,24 @@ PRODUCTION_CACHES = (
         "work/remotion-assets",
     ),
     Cache(
+        "remotion_selections",
+        "Stills chosen for each render",
+        "Copied again from the film's own stills at the next render.",
+        "work/remotion-asset-selections",
+    ),
+    Cache(
+        "preview_plates",
+        "Stand-ins for missing stills",
+        "Drawn again whenever a preview needs one.",
+        "work/preview-plates",
+    ),
+    Cache(
+        "depth_layers",
+        "Depth layers",
+        "Made again for free, on this computer, if a film with depth needs them.",
+        "work/depth",
+    ),
+    Cache(
         "graphics_cache",
         "Old compositor frames",
         "Drawn again only if an old film is rendered with the old compositor.",

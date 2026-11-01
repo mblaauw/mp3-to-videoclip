@@ -208,7 +208,17 @@ def select_asset(root: Path, shot_id: str, version: int):
 
 
 @state_mutation
-def record_asset(root: Path, shot_id: str, version: int, path: Path, input_hash: str, task_id: str):
+def record_asset(
+    root: Path,
+    shot_id: str,
+    version: int,
+    path: Path,
+    input_hash: str,
+    task_id: str,
+    *,
+    derived_from: dict | None = None,
+    derivation: dict | None = None,
+):
     root = root.resolve()
     path = Path(path).resolve()
     index = root / "work/assets.json"
@@ -222,6 +232,10 @@ def record_asset(root: Path, shot_id: str, version: int, path: Path, input_hash:
         "input_hash": input_hash,
         "task_id": task_id,
     }
+    # Only a derived version says so, so every other index keeps its exact bytes.
+    if derived_from is not None:
+        value["derived_from"] = derived_from
+        value["derivation"] = derivation
     if existing and existing != value:
         raise ValueError("cannot overwrite a prior image version")
     if not existing:

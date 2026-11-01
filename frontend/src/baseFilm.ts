@@ -78,13 +78,15 @@ export type EditShot = {
   accents: EditAccent[];
   text: EditText[];
   crops?: EditCrop[];
+  depth?: boolean | null;
 };
 
 export type Grade = {
   preset: "neutral" | "warm-night" | "clean-day" | "monochrome" | "vivid" | "film-fade";
   strength: number;
   overrides?: PreviewShot["post_effects"];
-  look?: { grain: number; weave: number; drift: number } | null;
+  look?: { grain: number; weave: number; drift: number; depth?: number } | null;
+  typeface?: "inter" | "fraunces" | "bebas" | null;
 };
 
 export type SplitPane = {
@@ -141,6 +143,7 @@ export type BaseFilmInput = {
   shots: PreviewShot[];
   preview_banner?: boolean;
   preview_placeholders?: string[];
+  typefaces?: Record<string, { family: string; src: string }>;
   brand_plate?: string | null;
   brand_duration_frames?: number;
   titles?: TitlesInput | null;

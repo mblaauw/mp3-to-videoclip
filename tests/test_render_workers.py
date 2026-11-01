@@ -197,3 +197,14 @@ def test_a_glitch_beside_a_planned_window_is_still_looked_at(tmp_path, monkeypat
     with pytest.raises(RuntimeError):
         remotion.check_movies([(_spiked(tmp_path, 30), 0)], None, (96, 54), 24, 48, inputs)
     assert asked == [30]
+
+
+def test_a_saved_worker_count_applies_and_the_environment_still_wins(tmp_path, monkeypatch):
+    from mp3_to_videoclip import config
+
+    monkeypatch.delenv(remotion.WORKERS_ENV, raising=False)
+    config.save_settings(config.Settings(computer={"render_workers": 3}))
+    assert remotion.render_workers(100) == 3
+    assert remotion.render_workers(2) == 2
+    monkeypatch.setenv(remotion.WORKERS_ENV, "1")
+    assert remotion.render_workers(100) == 1

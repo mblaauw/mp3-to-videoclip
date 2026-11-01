@@ -113,6 +113,12 @@ class ScriptedStub(StubClient):
         spec = self.outcomes[uuid]
         if spec.get("delay"):
             time.sleep(spec["delay"])
+        if spec.get("after"):
+            # Finish only once another task is in flight, however slow the machine is.
+            deadline = time.monotonic() + 10
+            while spec["after"] not in self.submissions and time.monotonic() < deadline:
+                time.sleep(0.005)
+            time.sleep(0.05)
         if spec.get("error"):
             raise ProviderError("network_error")
         if spec.get("pending"):
@@ -243,7 +249,7 @@ def test_worker_error_drains_inflight_and_persists_the_known_result(production):
     quote = quote_and_authorize(production, planner)
     uuids = [task["uuid"] for task in quote["tasks"]]
     outcomes = {
-        uuids[0]: {"cost": 0.001, "delay": 0.05},
+        uuids[0]: {"cost": 0.001, "after": uuids[1]},
         uuids[1]: {"error": True},
     }
     client = ScriptedStub(production, outcomes)

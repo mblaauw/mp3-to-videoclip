@@ -1100,6 +1100,12 @@
     grid-template-rows: max-content minmax(160px, 1fr) auto auto;
   }
 }
+/* A landscape tablet is short: the picture comes first and the panel scrolls. */
+@media (min-width: 701px) and (max-width: 1180px) and (max-height: 820px) {
+  .film-side {
+    max-height: 18dvh;
+  }
+}
 
 @media (max-width: 1180px) {
   .film-line-hint {

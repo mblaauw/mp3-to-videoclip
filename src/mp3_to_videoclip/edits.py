@@ -21,6 +21,7 @@ from .models import (
     EditSection,
     EditShot,
     EditTransition,
+    FilmLook,
     Grade,
     Project,
     RenderShot,
@@ -131,6 +132,8 @@ SAME_TRAVEL_RUN = 4
 SOFT_CROP_ZOOM = 1.4
 LONG_STATIC_SECONDS = 12.0
 GRID_TOLERANCE_FRAMES = 3
+SOFT_PUSH_SCALE = 1.15
+SOFT_PUSH_SOURCE = 1.2
 UNREVIEWED_FEELS = ("unreviewed", "section", "")
 
 
@@ -791,6 +794,7 @@ def report(
                     }
                 )
 
+    warnings.extend(_soft_push_findings(root, edit, project))
     warnings.extend(_grid_findings(root, edit, windows))
     warnings.extend(_caption_findings(edit))
 
@@ -924,6 +928,34 @@ def _seed_motion(shot) -> EditMotion:
     return EditMotion(type="pan_right", **{"from": 1.08, "to": 1.08}, reason=reason)
 
 
+def _soft_push_findings(root: Path, edit: EditDecisionList, project: Project) -> list[dict]:
+    """A push-in past this is where a sharper still pays for itself."""
+    assets = read_optional(root / "work/assets.json")
+    if not isinstance(assets, dict):
+        return []
+    findings = []
+    for shot in edit.shots:
+        peak = max(shot.motion.from_scale or 1.0, shot.motion.to_scale or 1.0)
+        if peak <= SOFT_PUSH_SCALE:
+            continue
+        entry = assets.get(shot.shot_id)
+        if not isinstance(entry, dict) or entry.get("selected") is None:
+            continue
+        chosen = next(
+            (v for v in entry.get("versions", []) if v.get("version") == entry["selected"]), {}
+        )
+        factor = (chosen.get("derivation") or {}).get("factor", 1)
+        if project.image_size[0] * factor < SOFT_PUSH_SOURCE * project.width:
+            findings.append(
+                {
+                    "code": "soft_push_in",
+                    "shot_id": shot.shot_id,
+                    "message": f"shot {shot.shot_id} pushes in to {peak:.2f} on a small still",
+                }
+            )
+    return findings
+
+
 def _grid_findings(root: Path, edit: EditDecisionList, windows: list) -> list[dict]:
     """Cuts in a full section that miss the grid, or land just after a hit, by section."""
     from .song_map import song_map
@@ -1055,7 +1087,8 @@ def cut_material(root: Path) -> dict:
     fps = project.fps
     frame = lambda seconds: round(float(seconds) * fps)  # noqa: E731
     song = song_map(root)
-    words = {item["start_frame"]: item for item in song.get("sections", [])}
+    # By the time they were measured at: this list rounds to frames, the song map floors.
+    words = {item["start"]: item for item in song.get("sections", [])}
     music = section_map.apply(root, read_optional(root / "work" / "music.json")) or {}
     sections = [
         {
@@ -1063,14 +1096,12 @@ def cut_material(root: Path) -> dict:
             "start_frame": frame(item["start"]),
             "end_frame": frame(item["end"]),
             "energy": round(float(item.get("energy") or 0), 2),
+            "energy_word": words.get(round(float(item["start"]), 3), {}).get("energy_word"),
+            "target_per_10s": words.get(round(float(item["start"]), 3), {}).get("target_per_10s"),
         }
         for index, item in enumerate(music.get("sections") or [])
         if isinstance(item, dict)
     ]
-    for section in sections:
-        heard = words.get(section["start_frame"]) or {}
-        section["energy_word"] = heard.get("energy_word")
-        section["target_per_10s"] = heard.get("target_per_10s")
     lines = [
         {"frame": frame(line["start"]), "text": line["text"], "source": line["source"]}
         for line in lyric_timing.view(root)["lines"]
@@ -1104,6 +1135,15 @@ def cut_material(root: Path) -> dict:
     }
 
 
+def _starting_grade(root: Path) -> Grade:
+    """A new film's first grade. Only a film recorded at intake starts with a look."""
+    from .production.intake import STARTING_LOOK
+
+    start = read_optional(root / STARTING_LOOK)
+    amount = start.get("depth") if isinstance(start, dict) else None
+    return Grade(look=FilmLook(depth=amount)) if amount else Grade()
+
+
 def seed_edit_preview(root: Path) -> EditDecisionList:
     """The cut seeding would write, without writing it."""
     from . import production as P
@@ -1135,7 +1175,7 @@ def seed_edit_preview(root: Path) -> EditDecisionList:
     edit = EditDecisionList(
         sections=sections,
         shots=shots,
-        grade=Grade(),
+        grade=_starting_grade(root),
         notes="Seeded from the storyboard; timing, motion and joins are now edit-owned.",
     )
     edit.check_board(board)

@@ -14,7 +14,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip import shotkinds, voice
 from mp3_to_videoclip.branding import pack_hash, render_brand_plate
 from mp3_to_videoclip.read_snapshots import read_operation
-from mp3_to_videoclip.remotion import data_url
+from mp3_to_videoclip.remotion import data_url, typefaces_input
 from mp3_to_videoclip.storage import digest, inside, read_json
 
 MISSING_IMAGE = "missing-still.jpg"
@@ -55,6 +55,22 @@ def _pane_payload(root: Path, slug: str, assets: dict, pane, source) -> dict:
 
 
 @read_operation
+def _player_depth(root, slug, value, still, edit_shot, grade) -> None:
+    """The layers when this film has depth; a shot without them plays flat in the Player."""
+    from mp3_to_videoclip import depth
+
+    if not ((grade or {}).get("look") or {}).get("depth"):
+        return
+    if edit_shot is not None and edit_shot.depth is False:
+        return
+    layers = depth.layer_set(root, still)
+    if layers is None:
+        return
+    base = f"/api/projects/{slug}/depth/{layers['folder'].name}"
+    names = {layer: f"{layer}.png" for layer in depth.LAYERS}
+    value["depth"] = {**names, "src": {layer: f"{base}/{layer}" for layer in depth.LAYERS}}
+
+
 def player_input(root: Path, slug: str) -> dict:
     from mp3_to_videoclip import edits
 
@@ -122,6 +138,7 @@ def player_input(root: Path, slug: str) -> dict:
             path = inside(root, chosen["path"])
             value["image"] = path.name
             value["src"] = f"/api/projects/{slug}/images/{owner}/{chosen['version']}"
+            _player_depth(root, slug, value, path, decisions.get(shot.id), grade)
             value["still_current"] = chosen.get("input_hash") == digest(P.image_spec(root, shot))
             if not value["still_current"]:
                 stale.append(shot.id)
@@ -161,6 +178,8 @@ def player_input(root: Path, slug: str) -> dict:
             render_brand_plate(brand, project, plate)
         payload["brand_plate"] = data_url(plate, "image/png")
         payload["brand_duration_frames"] = round(brand.duration_seconds * project.fps)
+    if grade and grade.get("typeface"):
+        payload["typefaces"] = typefaces_input([grade["typeface"]])
     payload["titles"], payload["titles_note"] = _titles(root, project)
     return payload
 

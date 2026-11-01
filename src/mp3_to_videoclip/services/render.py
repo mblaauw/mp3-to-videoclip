@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mp3_to_videoclip import captions, operations
+from mp3_to_videoclip import captions, depth, operations
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.remotion import WORKING_CAPTURE
 from mp3_to_videoclip.render import render as _render
@@ -60,6 +60,7 @@ def _stamp(root: Path, output: Path, report: dict, kind: str, provenance: dict) 
 def render_base(root: Path, output: Path | None = None) -> dict:
     """Render the selected stills without graphics; this is never delivery."""
     P.require_approval(root, "stills")
+    depth.ensure_for_render(root)
     project = P.load_project(root)
     directory = root / "renders"
     directory.mkdir(parents=True, exist_ok=True)
@@ -147,6 +148,7 @@ def render_final(root: Path, output: Path | None = None) -> dict:
     """Render delivery: compose approved graphics over the reviewed base."""
     # The full-stills decision is the last human gate before a delivery render.
     P.require_approval(root, "stills")
+    depth.ensure_for_render(root)
     project = P.load_project(root)
     directory = root / "renders"
     directory.mkdir(parents=True, exist_ok=True)
@@ -214,6 +216,7 @@ def render_preview(root: Path, output: Path | None = None) -> dict:
     directory = root / "previews"
     directory.mkdir(parents=True, exist_ok=True)
     output = output or _next_output(directory, f"{project.slug}-preview")
+    depth.ensure_for_render(root)
     with read_snapshot(root):
         project = P.load_project(root)
         shots, placeholders = P.preview_assets(root)

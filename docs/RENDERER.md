@@ -152,3 +152,23 @@ dip, flash or crop cut, and report them as `expected`. A final's chunks live in 
 named by its own keys: a killed final resumes from it and any failure it survives clears
 it, except broken frames, which keep it as evidence. `STUDIO_RENDER_GL` passes a GL mode to
 Chrome and is recorded in the report; it is off by default.
+
+## Depth, sharper stills and embedded type
+
+`depth.py` estimates a still's depth in a private environment (Depth Anything V2 Small,
+Apache-2.0, at a pinned revision), set up only on the owner's click. `work/depth/<still
+sha>-<tools>-v<n>/` holds three feathered layers. Far covers the frame, so moving the others
+never shows a hole, and behind each nearer layer the picture is replaced by the pixels
+around it, so what a move uncovers is background and not the subject's edge a second time. `grade.look.depth` turns it on for a film and `depth: false` keeps one
+shot flat. A render makes any missing layers itself where the tools are set up, and otherwise refuses
+rather than draw a still flat without saying so; a preview's stand-in plate and the Player stay
+flat. A new film starts at `new_films.depth` (0.6, the owner's choice from the real comparison)
+only where the tools are set up, recorded at intake in `work/starting-look.json`, so an existing
+film stays off.
+
+A sharper still (`upscale.py`) is a journaled 2× version of a selected still with the same
+`input_hash`, so the renderer simply stages whichever is selected.
+
+`renderers/remotion/fonts/` holds Inter, Fraunces and Bebas Neue (OFL, latin subsets).
+`grade.typeface` and a titles spec's `typeface` name one. A character outside the subset falls
+back to the system stack. The renderer revision hashes these files, never this computer's fonts.

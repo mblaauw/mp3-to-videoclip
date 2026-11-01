@@ -76,3 +76,18 @@ def test_a_missing_renderer_shows_its_card_above_the_viewer(page: Page, studio):
     card = page.locator(".card.setup")
     expect(card).to_be_visible()
     assert card.bounding_box()["height"] > 60
+
+
+def test_the_picture_gets_its_share_of_a_short_tablet(page: Page, studio):
+    studio.approve("brief", "storyboard")
+    # With the renderer present, as on any film being worked on: CI's browser job has none.
+    tools = dict.fromkeys(
+        ("node", "npm", "chrome", "ffmpeg", "ffprobe", "renderer", "frontend"), True
+    )
+    page.route("**/api/setup", lambda route: route.fulfill(json=tools))
+    page.set_viewport_size({"width": 1024, "height": 700})
+    page.goto(studio.film("film"))
+    # The page lays out in steps as the film loads, so wait for the height it settles at.
+    page.wait_for_function(
+        "(document.querySelector('.film-viewer')?.getBoundingClientRect().height ?? 0) >= 250"
+    )

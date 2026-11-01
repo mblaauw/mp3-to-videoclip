@@ -95,6 +95,8 @@ class NewFilms(BaseModel):
     fps: int = Field(default=24, ge=1)
     look: str = ""
     budget_usd: float = Field(default=5.0, ge=0)
+    #: How much depth a new film starts with, where the depth tools are set up.
+    depth: float = Field(default=0.6, ge=0, le=1)
     signature_package: bool = True
     credit_roles: list[str] = ["director", "music", "visuals"]
     brand: Brand = Brand()
@@ -104,6 +106,8 @@ class Computer(BaseModel):
     opencode_bin: str = "opencode"
     opencode_workspace: str = ""
     gateway: Literal["opencode", "direct"] = "direct"
+    #: Browsers per render; 0 lets the app choose from the cores and free memory.
+    render_workers: int = Field(default=0, ge=0, le=8)
 
 
 #: Where each name of the flat schema 1 file lives now.

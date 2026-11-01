@@ -163,7 +163,7 @@ export function setEditMotion(
   };
 }
 
-export type LookAmount = "grain" | "weave" | "drift";
+export type LookAmount = "grain" | "weave" | "drift" | "depth";
 
 export function setGradePreset(edit: EditPayload, preset: Grade["preset"]): EditPayload {
   return { ...edit, grade: { ...edit.grade, preset } };
@@ -175,7 +175,7 @@ export function setLookAmount(edit: EditPayload, key: LookAmount, amount: number
   const { look: _dropped, ...rest } = edit.grade;
   return {
     ...edit,
-    grade: look.grain || look.weave || look.drift ? { ...rest, look } : rest,
+    grade: look.grain || look.weave || look.drift || look.depth ? { ...rest, look } : rest,
   };
 }
 

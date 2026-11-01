@@ -31,6 +31,7 @@ const catalog = {
   ],
   computer: {},
   lyric_tools: { supported: true, reason: null, ready: false, download_gb: 3 },
+  depth_tools: { supported: true, reason: null, ready: false, download_gb: 1.5 },
   notes: {},
 } as Catalog;
 

@@ -325,6 +325,8 @@ export type ImageVersion = {
   path: string;
   sha256: string;
   input_hash: string;
+  derived_from?: { version: number; sha256: string };
+  derivation?: { kind: string; model: string; factor: number };
 };
 
 export type ImageReview = {
@@ -398,12 +400,18 @@ export type Settings = {
     fps: number;
     look: string;
     budget_usd: number;
+    depth: number;
     signature_package: boolean;
     credit_roles: string[];
     brand: { name: string; partner: string; logo: string; palette: string[]; font: string };
   };
   prices: Record<string, string>;
-  computer: { gateway: "opencode" | "direct"; opencode_bin: string; opencode_workspace: string };
+  computer: {
+    gateway: "opencode" | "direct";
+    opencode_bin: string;
+    opencode_workspace: string;
+    render_workers: number;
+  };
   notes: Record<string, string>;
   gateway?: "opencode" | "direct";
   opencode_bin?: string;
@@ -514,6 +522,7 @@ export type PreviewInput = {
   preview_placeholders: string[];
   stale_shots: string[];
   brand_plate?: string | null;
+  typefaces?: Record<string, { family: string; src: string }>;
   brand_duration_frames?: number;
   grade?: import("./baseFilm").Grade | null;
   /** Planned titles, or null with a note when this film has none to show yet. */
@@ -738,6 +747,13 @@ export type SettingsTest = {
   message: string;
   version?: string;
   preview_url?: string;
+};
+
+export type DepthCoverage = {
+  stills: number;
+  with_depth: number;
+  shots: string[];
+  tools: { supported: boolean; reason: string | null; ready: boolean; download_gb: number };
 };
 
 export type SettingsCache = {
@@ -1019,6 +1035,24 @@ export const api = {
     request<{ captions: number; timed_lines: number }>(`/api/projects/${slug}/edit/captions`, {
       method: "POST",
       body: JSON.stringify({ mode }),
+    }),
+  depthCoverage: (slug: string) => request<DepthCoverage>(`/api/projects/${slug}/depth`),
+  setupDepth: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/depth/setup`, { method: "POST" }),
+  runDepth: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/depth/run`, { method: "POST" }),
+  estimateUpscale: (slug: string, shotIds: string[]) =>
+    request<{
+      estimate: { quote_id: string; tasks: number; reserve_usd: string };
+      decision: { ok: boolean };
+    }>(`/api/projects/${slug}/images/upscale/estimate`, {
+      method: "POST",
+      body: JSON.stringify({ shot_ids: shotIds }),
+    }),
+  generateUpscale: (slug: string, quoteId: string) =>
+    request<{ job_id?: string; needs_budget?: boolean }>(`/api/projects/${slug}/images/upscale`, {
+      method: "POST",
+      body: JSON.stringify({ quote_id: quoteId }),
     }),
   suggestEdit: (slug: string) =>
     request<EditSuggestion>(`/api/projects/${slug}/edit/suggest`, {

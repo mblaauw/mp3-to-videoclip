@@ -35,6 +35,7 @@ def test_it_loads_with_no_cache_and_no_network():
         "critic": "gpt-6.1-sol",
         "editor": "deepseek-v4.1-flash",
         "pictures": "google-nano-banana-2-1",
+        "upscaler": "real-esrgan",
         "narrator": "minimax-speech-2-8",
     }
     assert next(v for v in loaded.voices if v.recommended).id == "English_Magnetic_Male_2"

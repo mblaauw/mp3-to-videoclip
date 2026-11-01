@@ -183,13 +183,14 @@ async def test_settings(payload: dict):
 
 @router.get("/catalog")
 async def get_catalog():
-    from mp3_to_videoclip import catalog, lyric_tools, setup
+    from mp3_to_videoclip import catalog, depth, lyric_tools, setup
 
     view = await asyncio.to_thread(catalog.public_view, effective_settings())
     return {
         **view,
         "computer": setup.status(),
         "lyric_tools": lyric_tools.status(),
+        "depth_tools": depth.status(),
         "notes": NOTES,
     }
 

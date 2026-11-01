@@ -41,6 +41,29 @@ WORKERS_ENV = "STUDIO_RENDER_WORKERS"
 GL_ENV = "STUDIO_RENDER_GL"
 
 
+# The faces a film can be set in, embedded from these bytes so no computer's fonts matter.
+FONTS = ENGINE / "fonts"
+TYPEFACES = {
+    "inter": ("Inter", "Inter.woff2"),
+    "fraunces": ("Fraunces", "Fraunces.woff2"),
+    "bebas": ("Bebas Neue", "BebasNeue.woff2"),
+}
+
+
+def typeface_url(name: str) -> str:
+    if name not in TYPEFACES:
+        raise ValueError(f"unknown typeface {name}")
+    return data_url(FONTS / TYPEFACES[name][1], "font/woff2")
+
+
+def typefaces_input(names) -> dict:
+    """The embedded faces a list of shots uses, by name."""
+    return {
+        name: {"family": TYPEFACES[name][0], "src": typeface_url(name)}
+        for name in sorted({name for name in names if name})
+    }
+
+
 class AssetCacheCorruption(ValueError):
     """An immutable cached asset differs from its content-addressed name."""
 
@@ -75,6 +98,8 @@ def selected_asset_root(compiled: list[dict], assets: Path) -> Path:
     manifest = {}
     for shot in compiled:
         entries = [shot, *shot.get("split_panes", [])]
+        depth = shot.get("depth") or {}
+        entries += [{"image": depth[layer]} for layer in ("far", "mid", "near") if layer in depth]
         for entry in entries:
             name = entry["image"]
             sha = entry.get("image_sha256", name.split(".", 1)[0])
@@ -122,26 +147,26 @@ def visual_identity(project: Project, inputs: dict, revision: str) -> str:
 
 
 def implementation_hash() -> str:
-    """Bind renderer code, locked dependencies and font bytes; never the browser.
+    """Bind renderer code, locked dependencies and the embedded fonts; never the browser.
 
     A browser security update changes produced bytes only if the renderer source
     changes, so hashing the desktop binary would revoke a reviewed preview for no
     content reason. Local Node and Chrome are checked when a render starts, not
     when an approval is compared.
     """
-    from .graphics import resolve_font
-
     names = ["package.json", "package-lock.json", "render.mjs"]
-    paths = [ENGINE / n for n in names] + sorted((ENGINE / "src").glob("*"))
+    paths = (
+        [ENGINE / n for n in names]
+        + sorted((ENGINE / "src").glob("*"))
+        + sorted(FONTS.glob("*.woff2"))
+    )
     missing = [str(p) for p in paths if not p.is_file()]
     if missing or not (ENGINE / "src/index.jsx").is_file():
         raise ValueError(f"Remotion source bundle incomplete: {missing}")
-    font = resolve_font()[0]
     return digest(
         {
             "files": {str(p.relative_to(ENGINE)): file_hash(p) for p in paths},
             "adapter": file_hash(Path(__file__)),
-            "font": file_hash(font),
         }
     )
 
@@ -408,12 +433,17 @@ def _free_memory() -> int | None:
 
 def render_workers(pending: int) -> int:
     """How many browsers to run at once: never more than there are chunks to render."""
+    from .config import load_settings
+
     chosen = os.environ.get(WORKERS_ENV)
+    saved = load_settings().computer.render_workers
     if chosen:
         try:
             count = int(chosen)
         except ValueError:
             raise ValueError(f"{WORKERS_ENV} must be a whole number") from None
+    elif saved:
+        count = saved
     else:
         count = min(MAX_WORKERS, (os.cpu_count() or 2) // 2)
         free = _free_memory()
@@ -708,18 +738,39 @@ def _tail(lines: list[str], limit: int = 4000) -> str:
     return "".join(lines)[-limit:]
 
 
-def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[dict]:
+def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path, stand_ins=()) -> list[dict]:
     """Compile resolved shots and their edit payload into renderer inputs.
 
     Pure apart from copying selected bytes into the flat asset cache. Kept
     separate from the render/subprocess path so the MP4 payload can be tested
     against the same shape the Player receives.
     """
+    from . import depth, shotkinds
+
     compiled = []
     root = Path(workdir).resolve().parent
+    without_depth = []
     for rs in shots:
         name, sha = _stage_asset(Path(rs.image), assets)
         entry = {**rs.shot.model_dump(), "image": name, "image_sha256": sha}
+        look = rs.grade.look if rs.grade is not None else None
+        if (
+            look is not None
+            and look.depth > 0
+            and not (rs.edit is not None and rs.edit.depth is False)
+            and not (rs.shot.asset_shot_id is None and shotkinds.is_local(rs.shot))
+            # A preview's labelled plate for a missing still has nothing to separate.
+            and rs.shot.id not in stand_ins
+        ):
+            layers = depth.layer_set(root, Path(rs.image))
+            if layers is None:
+                without_depth.append(rs.shot.id)
+            else:
+                staged = {
+                    layer: _stage_asset(layers["folder"] / f"{layer}.png", assets)[0]
+                    for layer in depth.LAYERS
+                }
+                entry["depth"] = {**staged, "model": layers["model"]}
         if rs.edit is not None:
             entry["edit"] = rs.edit.model_dump(by_alias=True)
         if rs.grade is not None:
@@ -748,6 +799,11 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
             if panes:
                 entry["split_panes"] = panes
         compiled.append(entry)
+    if without_depth:
+        # Never a silently flat shot in a film that asked for depth.
+        raise ValueError(
+            f"run depth for {len(without_depth)} stills first: {', '.join(without_depth[:8])}"
+        )
     return compiled
 
 
@@ -1119,7 +1175,7 @@ def render_base(
     output.parent.mkdir(parents=True, exist_ok=True)
     assets = Path(workdir).resolve() / "remotion-assets"
     assets.mkdir(parents=True, exist_ok=True)
-    compiled = compile_shots(shots, workdir, assets)
+    compiled = compile_shots(shots, workdir, assets, preview_placeholders)
     inputs = {
         "shots": compiled,
         "preview_banner": preview_banner,
@@ -1129,6 +1185,9 @@ def render_base(
         inputs["titles"] = titles
     if capture is not None:
         inputs["capture"] = capture
+    faces = typefaces_input((shot.get("grade") or {}).get("typeface") for shot in compiled)
+    if faces:
+        inputs["typefaces"] = faces
     inputs.update(_brand_inputs(project, brand, assets))
     revision = implementation_hash()
     selected = selected_asset_root(compiled, assets)
@@ -1266,9 +1325,8 @@ def title_assets(spec: dict, palette: dict) -> dict:
         "intro": spec["intro"],
         "palette": colours,
         "logo": logo,
-        # Local Avenir Next is resolved by Chromium's system font stack; .ttc is
-        # not a portable webfont. Its source bytes are still in the fingerprint.
-        "font": None,
+        # No typeface named: Chromium's system stack, as every existing film has it.
+        "font": typeface_url(spec["typeface"]) if spec.get("typeface") else None,
     }
 
 

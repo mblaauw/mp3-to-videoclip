@@ -16,6 +16,9 @@ CACHED = (
     "work/remotion-chunks/c1.mp4",
     "work/remotion-assets/a.png",
     "work/graphics/cache/f.png",
+    "work/remotion-asset-selections/abc/a.png",
+    "work/preview-plates/s001.png",
+    "work/depth/abc-def/near.png",
 )
 KEPT = (
     "project.json",

@@ -166,6 +166,7 @@ export function useFilmData(slug: string) {
           preview_banner: payload.preview_banner,
           preview_placeholders: payload.preview_placeholders,
           brand_plate: payload.brand_plate ?? null,
+          typefaces: payload.typefaces,
           brand_duration_frames: payload.brand_duration_frames,
         },
         audio: payload.audio,

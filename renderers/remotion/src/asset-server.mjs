@@ -73,13 +73,20 @@ function withSource(item, url) {
   return item.image ? {...item, src: `${url}/${encodeURIComponent(item.image)}`} : item;
 }
 
+function withLayerSources(depth, url) {
+  const src = {};
+  for (const layer of ["far", "mid", "near"]) src[layer] = `${url}/${encodeURIComponent(depth[layer])}`;
+  return {...depth, src};
+}
+
 /** The render's input with every still loaded from the server. The request is untouched. */
 export function withServedAssets(input, url) {
   return {
     ...input,
     shots: (input.shots ?? []).map((shot) => ({
       ...withSource(shot, url),
-      ...(shot.panes ? {panes: shot.panes.map((pane) => withSource(pane, url))} : {}),
+      ...(shot.split_panes ? {split_panes: shot.split_panes.map((pane) => withSource(pane, url))} : {}),
+      ...(shot.depth ? {depth: withLayerSources(shot.depth, url)} : {}),
     })),
   };
 }

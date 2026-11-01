@@ -46,7 +46,17 @@ def film_brand(name: str, partner: str) -> dict | None:
     return brand
 
 
-def draft_spec(title: str, brand: dict | None = None) -> dict:
+#: Each look's face for a new film. Every face is selectable afterwards.
+PRESET_FACES = {
+    "photographic-painted-v2": "fraunces",
+    "painted-comic-noir-v1": "fraunces",
+    "clean-photographic-v1": "inter",
+    "product-studio-v1": "inter",
+    "brand-graphic-v1": "bebas",
+}
+
+
+def draft_spec(title: str, brand: dict | None = None, typeface: str | None = None) -> dict:
     """Never invent credits. Empty cards deliberately block brief approval."""
     names, _, production_line = _identity(brand)
     spec = {
@@ -69,6 +79,8 @@ def draft_spec(title: str, brand: dict | None = None) -> dict:
     }
     if brand:
         spec["brand"] = brand
+    if typeface:
+        spec["typeface"] = typeface
     return spec
 
 
