@@ -85,6 +85,18 @@ function WordRows({
             }}
           >
             <time>{line.start !== null ? clock(line.start) : ""}</time>
+            {line.words && line.start !== null && line.end ? (
+              <span className="word-ticks" aria-hidden="true">
+                {line.words.map((word) => (
+                  <i
+                    key={word.start}
+                    style={{
+                      left: `${(((word.start - (line.start as number)) / ((line.end as number) - (line.start as number))) * 100).toFixed(1)}%`,
+                    }}
+                  />
+                ))}
+              </span>
+            ) : null}
             <span>{line.text}</span>
             {index === picked && line.start !== null && !tapping && (
               <span className="track-nudge">

@@ -335,3 +335,12 @@ A final real 48-frame 1080p ProRes 4444 alpha render used the unchanged graphics
 concurrency 2, retained alpha extrema 0/255, and matched the T8 frame-24 decoded
 RGBA bytes exactly. Checkerboard review showed no full-frame opaque black matte.
 Full engine/golden tests additionally cover timing, compositing and audio checks.
+
+## Look options
+
+Each of bloom, halation, flare, dust and haze was measured alone at 0.6 against no option, as 20
+stills of Tree of Love at 1920×1080 on one browser: −5 %, +4 %, −5 %, −4 % and +5 %, against a
+difference of 9 % between two plain runs. That is no measurable cost per frame, and no option
+crossed the plan's 25 %. They were measured as stills rather than as the plan's 10 s film, and they
+stay off unless a film turns them on.
+

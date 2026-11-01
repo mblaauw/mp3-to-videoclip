@@ -974,6 +974,22 @@ def _grid_findings(root: Path, edit: EditDecisionList, windows: list) -> list[di
     cuts = [shot.start_frame for shot in edit.shots[1:]]
     cuts += [crop.frame for shot in edit.shots for crop in shot.crops]
     findings = []
+    stray = [
+        accent.frame
+        for shot in edit.shots
+        for accent in shot.accents
+        if accent.type == "impulse"
+        and min(abs(accent.frame - hit) for hit in hits) > GRID_TOLERANCE_FRAMES
+    ]
+    if stray:
+        findings.append(
+            {
+                "code": "impulse_off_grid",
+                "severity": "warn",
+                "message": f"{len(stray)} impulse(s) land off the beat, where a bump reads as a mistake.",
+                "frames": stray,
+            }
+        )
     for section, start, end in windows:
         off = late = 0
         for cut in cuts:
@@ -1086,11 +1102,19 @@ def retime_by_lines(root: Path, edit: EditDecisionList, board: Storyboard) -> Ed
         delta = start - shot.start_frame
         end = start + length
         inside_shot = lambda frame: max(start, min(end - 1, frame + delta))  # noqa: E731, B023
+        ramp = shot.motion.ramp
         shots.append(
             shot.model_copy(
                 update={
                     "start_frame": start,
                     "duration_frames": length,
+                    "motion": shot.motion.model_copy(
+                        update={
+                            "ramp": ramp.model_copy(update={"frame": inside_shot(ramp.frame)})
+                            if ramp and start < inside_shot(ramp.frame)
+                            else None
+                        }
+                    ),
                     "accents": [
                         a.model_copy(update={"frame": inside_shot(a.frame)}) for a in shot.accents
                     ],
@@ -1104,6 +1128,7 @@ def retime_by_lines(root: Path, edit: EditDecisionList, board: Storyboard) -> Ed
                                 "out_frame": min(
                                     end, inside_shot(t.in_frame) + t.out_frame - t.in_frame
                                 ),
+                                "words": [],
                             }
                         )
                         for t in shot.text

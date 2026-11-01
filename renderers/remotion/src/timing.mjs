@@ -47,16 +47,35 @@ export function smoothstep(progress) {
   return p * p * (3 - 2 * p);
 }
 
+export const EASINGS = ["linear", "smoothstep", "ease_in", "ease_out", "snap"];
+
 export function easingName(value) {
   if (value === undefined || value === null) return "linear";
-  if (value !== "linear" && value !== "smoothstep") {
+  if (!EASINGS.includes(value)) {
     fail(`unsupported easing ${JSON.stringify(value)}; expected "linear" or "smoothstep"`);
   }
   return value;
 }
 
 export function ease(progress, easing = "linear") {
-  return easing === "smoothstep" ? smoothstep(progress) : clamp01(progress);
+  const p = clamp01(progress);
+  if (easing === "smoothstep") return smoothstep(p);
+  if (easing === "ease_in") return p * p;
+  if (easing === "ease_out") return 1 - (1 - p) * (1 - p);
+  // A fast start and a long settle.
+  if (easing === "snap") return 1 - (1 - p) ** 4;
+  return p;
+}
+
+/**
+ * Travel at a point in the move. With a ramp the move reaches ``share`` at ``knee`` (0..1 of the
+ * move) and settles over the rest, each part eased, so the weight lands on that frame.
+ */
+export function rampedTravel(progress, easing, knee, share) {
+  const p = clamp01(progress);
+  if (knee === null || knee === undefined || knee <= 0 || knee >= 1) return ease(p, easing);
+  if (p <= knee) return share * ease(p / knee, easing);
+  return share + (1 - share) * ease((p - knee) / (1 - knee), "ease_out");
 }
 
 function requireIndex(value, label, {allowZero = true} = {}) {
@@ -327,7 +346,9 @@ export function cameraAtFrame(span, frame) {
   if (span.edit?.motion) {
     const crop = activeCrop(span.edit.crops, span.edit.start_frame + local);
     if (crop) return {zoom: crop.zoom, x: crop.x ?? 0.5, y: crop.y ?? 0.5};
-    return editCamera(span.edit.motion, local / last);
+    const ramp = span.edit.motion.ramp;
+    const knee = ramp ? (ramp.frame - span.edit.start_frame) / last : null;
+    return editCamera(span.edit.motion, local / last, knee);
   }
   if (Array.isArray(span.camera_keyframes) && span.camera_keyframes.length > 0) {
     return keyframeCamera(span.camera_keyframes, local);
@@ -358,7 +379,7 @@ export function activeCrop(crops, absoluteFrame) {
 }
 
 /** Edit-owned motion, bounded like the legacy camera. */
-export function editCamera(motion, progress) {
+export function editCamera(motion, progress, knee = null) {
   if (motion === null || typeof motion !== "object" || Array.isArray(motion)) {
     fail("edit motion must be an object");
   }
@@ -376,7 +397,7 @@ export function editCamera(motion, progress) {
   if (!Array.isArray(anchor) || anchor.length !== 2) fail("edit motion anchor must be [x, y]");
   const x = clamp01(anchor[0]);
   const y = clamp01(anchor[1]);
-  const p = ease(progress, easingName(motion.easing));
+  const p = rampedTravel(progress, easingName(motion.easing), knee, motion.ramp?.share ?? 0);
   if (kind === "hold") return {zoom: 1, x, y};
   if (kind === "push_in" || kind === "pull_back") {
     return {zoom: lerp(from, to, p), x, y};
@@ -487,7 +508,9 @@ export const EDIT_TRANSITIONS = [
   "slide",
 ];
 export const EDIT_MOTIONS = ["hold", "push_in", "pull_back", "pan_left", "pan_right"];
-export const EDIT_ACCENTS = ["punch_in", "flash", "light_leak"];
+export const EDIT_ACCENTS = ["punch_in", "flash", "light_leak", "impulse"];
+export const IMPULSE_DIRECTIONS = ["left", "right", "up", "down"];
+export const TEXT_DECORATIONS = ["shadow", "outline", "box"];
 export const TEXT_ANIMATIONS = ["fade", "fade_in", "type_on", "slide_up", "pop", "kinetic_words"];
 export const EDIT_TEXT_STYLES = [
   "super",
@@ -581,6 +604,11 @@ export function validateEditMotion(value) {
     if (number < 0 || number > 1) fail("edit motion anchor is normalized 0..1");
   }
   easingName(value.easing);
+  if (value.ramp !== undefined && value.ramp !== null) {
+    requireIndex(value.ramp.frame, "edit motion ramp frame");
+    const share = requireNumber(value.ramp.share, "edit motion ramp share");
+    if (share < 0 || share > 1) fail("edit motion ramp share must stay between 0 and 1");
+  }
   return value;
 }
 
@@ -595,6 +623,14 @@ export function validateEditAccent(value, label = "edit accent") {
   const amount = requireNumber(value.amount ?? 1.04, `${label}.amount`);
   if (amount < 1 || amount > 1.2) fail(`${label}.amount must stay between 1.0 and 1.2`);
   requireIndex(value.duration_frames ?? 6, `${label}.duration_frames`, {allowZero: false});
+  if (value.type === "impulse") {
+    if (amount > 1.1) fail(`${label}: an impulse stays at or under 1.1`);
+    const frames = value.duration_frames ?? 6;
+    if (frames < 2 || frames > 12) fail(`${label}: an impulse lasts 2 to 12 frames`);
+    if (value.direction != null && !IMPULSE_DIRECTIONS.includes(value.direction)) {
+      fail(`${label}: unsupported impulse direction`);
+    }
+  }
   return value;
 }
 
@@ -616,6 +652,15 @@ export function validateEditText(value, label = "edit text") {
   requireIndex(value.in_frame, `${label}.in_frame`);
   requireIndex(value.out_frame, `${label}.out_frame`);
   if (value.out_frame <= value.in_frame) fail(`${label}.out_frame must follow in_frame`);
+  if (value.decoration !== undefined && !TEXT_DECORATIONS.includes(value.decoration)) {
+    fail(`${label}.decoration is not supported`);
+  }
+  for (const word of value.words ?? []) {
+    requireIndex(word.in_frame, `${label} word frame`);
+    if (word.in_frame < value.in_frame || word.in_frame >= value.out_frame) {
+      fail(`${label}: a word's frame must be inside its text's window`);
+    }
+  }
   return value;
 }
 
@@ -670,6 +715,10 @@ export function validateEditShot(value, shot) {
     if (accent.frame < value.start_frame || accent.frame >= value.start_frame + duration) {
       fail(`edit shot ${shot.id} accent ${index} is outside the shot`);
     }
+  }
+  const ramp = value.motion?.ramp;
+  if (ramp && (ramp.frame <= value.start_frame || ramp.frame >= value.start_frame + duration)) {
+    fail(`edit shot ${value.shot_id ?? "?"} motion ramp is outside the shot`);
   }
   validateEditCrops(value.crops, value.start_frame, duration, shot.id);
   for (const [index, text] of (value.text ?? []).entries()) {
@@ -829,12 +878,24 @@ const GRAIN_TURNS = [0, 90, 180, 270];
  * seeds from its id, so a shot that moves along the film looks exactly the same and
  * its render can be reused. The picture is scaled just enough that no moved edge shows.
  */
+export const DUST_TILE = 900;
+
 export function lookState(look, localFrame, shotId, width, height, fps) {
   if (look === undefined || look === null) return null;
   const grain = Number(look.grain ?? 0);
   const weave = Number(look.weave ?? 0);
   const drift = Number(look.drift ?? 0);
-  if (grain <= 0 && weave <= 0 && drift <= 0) return null;
+  const bloom = Number(look.bloom ?? 0);
+  const halation = Number(look.halation ?? 0);
+  const flare = Number(look.flare ?? 0);
+  const dust = Number(look.dust ?? 0);
+  const haze = Number(look.haze ?? 0);
+  if (
+    grain <= 0 && weave <= 0 && drift <= 0 && bloom <= 0 && halation <= 0 && flare <= 0 &&
+    dust <= 0 && haze <= 0
+  ) {
+    return null;
+  }
   const seed = shotSeed(shotId);
   const frame = localFrame;
   const seconds = frame / fps;
@@ -857,6 +918,18 @@ export function lookState(look, localFrame, shotId, width, height, fps) {
   const scale = 1 + (2 * margin) / reach + 2 * tiltMargin * (Math.max(width, height) / reach);
   return {
     transform: `translate(${dx.toFixed(3)}px, ${dy.toFixed(3)}px) rotate(${tilt.toFixed(4)}deg) scale(${scale.toFixed(5)})`,
+    bloom: bloom * 0.28,
+    bloomBlur: reach * 0.012,
+    halation: halation * 0.45,
+    halationBlur: reach * 0.008,
+    // Anchored per shot, drifting slowly so it never sits still on a held frame.
+    flare: flare * 0.7,
+    flareX: 0.15 + ((seed % 700) / 700) * 0.7 + 0.03 * Math.sin((2 * Math.PI * seconds) / 19 + phase),
+    flareY: 0.1 + ((seed % 300) / 300) * 0.3 + 0.02 * Math.sin((2 * Math.PI * seconds) / 23 + phase),
+    dust: dust * 0.6,
+    dustX: Math.floor(frameNoise(frame, seed + 5) * DUST_TILE),
+    dustY: Math.floor(frameNoise(frame, seed + 6) * DUST_TILE),
+    haze: haze * 0.55,
     grainOpacity: grain * GRAIN_STRENGTH,
     grainX: Math.floor(frameNoise(frame, seed + 3) * GRAIN_TILE),
     grainY: Math.floor(frameNoise(frame, seed + 4) * GRAIN_TILE),
@@ -910,12 +983,19 @@ export function parallaxState(depth, motion, localFrame, duration, shotId, width
 }
 
 /** Overlay strength and camera bump from the accents active at an absolute frame. */
+const IMPULSE_REACH = 0.5;
+const IMPULSE_WAYS = {left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1]};
+
 export function accentState(accents, frame) {
-  if (accents === undefined || accents === null) return {punch: 1, flash: 0, leak: 0};
+  if (accents === undefined || accents === null) {
+    return {punch: 1, flash: 0, leak: 0, shiftX: 0, shiftY: 0};
+  }
   if (!Array.isArray(accents)) fail("edit accents must be an array");
   let punch = 1;
   let flash = 0;
   let leak = 0;
+  let shiftX = 0;
+  let shiftY = 0;
   for (const [index, accent] of accents.entries()) {
     validateEditAccent(accent, `edit accent ${index}`);
     const k = frame - accent.frame;
@@ -926,8 +1006,19 @@ export function accentState(accents, frame) {
     if (accent.type === "punch_in") punch = Math.max(punch, 1 + (accent.amount - 1) * remaining);
     if (accent.type === "flash") flash = Math.max(flash, remaining);
     if (accent.type === "light_leak") leak = Math.max(leak, remaining);
+    if (accent.type === "impulse") {
+      // A damped spring: it kicks at once, swings back once and is gone by the last frame.
+      const t = k / duration;
+      const spring = Math.exp(-4 * t) * Math.cos(3 * Math.PI * t) * (1 - t);
+      punch = Math.max(punch, 1 + (accent.amount - 1) * Math.abs(spring));
+      const way = IMPULSE_WAYS[accent.direction];
+      if (way) {
+        shiftX += way[0] * spring * IMPULSE_REACH;
+        shiftY += way[1] * spring * IMPULSE_REACH;
+      }
+    }
   }
-  return {punch, flash, leak};
+  return {punch, flash, leak, shiftX, shiftY};
 }
 
 /** Text animation state for one layer at a 0..1 window progress. */
@@ -966,6 +1057,26 @@ export function textAnimationStyle(animation, progress, index = 0, count = 1) {
     };
   }
   return {opacity, reveal: 1, transform: null};
+}
+
+/** A word that lands on its own frame, for text whose words were really timed. */
+export function kineticWordStyle(frame, wordFrame, outFrame, fps) {
+  const local = smoothstep(clamp01((frame - wordFrame) / Math.max(1, fps * 0.2)));
+  const leave = 1 - smoothstep(clamp01((frame - (outFrame - fps * 0.25)) / Math.max(1, fps * 0.25)));
+  return {
+    opacity: local * leave,
+    transform: `translateY(${(1 - local) * 18}px) scale(${0.92 + 0.08 * local})`,
+  };
+}
+
+/** Text clear of the frame's edges: 5 % in landscape, 12 % top and bottom in portrait. */
+export function textSafeBox(box, width, height) {
+  if (height <= width) return box;
+  const inset = height * 0.12;
+  const safe = {...box};
+  if (safe.top !== undefined) safe.top = Math.max(safe.top, inset);
+  if (safe.bottom !== undefined) safe.bottom = Math.max(safe.bottom, inset);
+  return safe;
 }
 
 /** Normalized pane rectangles for the split primitive. */

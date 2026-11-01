@@ -168,6 +168,7 @@ export type LyricLine = {
   text: string;
   /** A `[Spoken Hook]` line: a heading of the song, never sung or timed. */
   tag: string | null;
+  words?: { text: string; start: number; end: number }[];
   start: number | null;
   end: number | null;
   source: "tapped" | "auto" | "lrc" | null;

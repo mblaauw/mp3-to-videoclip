@@ -105,7 +105,30 @@ function fontStack(family) {
   return family ? `'${family}', ${DEFAULT_FONT_STACK}` : DEFAULT_FONT_STACK;
 }
 
-function textBox(style, width, height, color, family) {
+const DECORATIONS = {
+  // A hard edge for a busy picture, from eight sides rather than a stroke that eats the letters.
+  outline:
+    "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, " +
+    "0 -2px 0 #000, 0 2px 0 #000, -2px 0 0 #000, 2px 0 0 #000",
+};
+
+function decorated(box, decoration, unit) {
+  if (decoration === "outline") return {...box, textShadow: DECORATIONS.outline};
+  if (decoration === "box") {
+    return {
+      ...box,
+      textShadow: "none",
+      background: "rgba(8,8,10,0.72)",
+      padding: `${unit * 0.012}px ${unit * 0.02}px`,
+      boxDecorationBreak: "clone",
+    };
+  }
+  return box;
+}
+
+function textBox(style, width, frameHeight, color, family) {
+  // Sizes come from the short side, so portrait text is the size landscape text is.
+  const height = Math.min(width, frameHeight);
   const base = {
     position: "absolute",
     fontFamily: fontStack(family),
@@ -120,7 +143,7 @@ function textBox(style, width, height, color, family) {
         "0 2px 4px rgba(0,0,0,0.95), 0 0 22px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.75)",
       left: width * 0.06,
       right: width * 0.06,
-      top: height * 0.34,
+      top: frameHeight * 0.34,
       textAlign: "center",
       fontSize: height * 0.086,
       fontWeight: 600,
@@ -134,7 +157,7 @@ function textBox(style, width, height, color, family) {
       ...base,
       left: width * 0.1,
       right: width * 0.1,
-      top: height * 0.52,
+      top: frameHeight * 0.52,
       textAlign: "center",
       fontSize: height * 0.032,
       fontWeight: 500,
@@ -148,7 +171,7 @@ function textBox(style, width, height, color, family) {
       ...base,
       left: width * 0.1,
       right: width * 0.1,
-      top: height * 0.63,
+      top: frameHeight * 0.63,
       textAlign: "center",
       fontSize: height * 0.044,
       fontWeight: 700,
@@ -162,7 +185,7 @@ function textBox(style, width, height, color, family) {
       ...base,
       left: width * 0.1,
       right: width * 0.1,
-      top: height * 0.38,
+      top: frameHeight * 0.38,
       textAlign: "center",
       fontSize: height * 0.082,
       fontWeight: 900,
@@ -176,7 +199,7 @@ function textBox(style, width, height, color, family) {
       ...base,
       left: width * 0.12,
       right: width * 0.12,
-      top: height * 0.32,
+      top: frameHeight * 0.32,
       textAlign: "center",
       fontSize: height * 0.062,
       fontWeight: 800,
@@ -188,7 +211,7 @@ function textBox(style, width, height, color, family) {
       ...base,
       left: width * 0.1,
       right: width * 0.1,
-      bottom: height * 0.14,
+      bottom: frameHeight * 0.14,
       textAlign: "center",
       fontSize: height * 0.048,
       fontWeight: 700,
@@ -200,7 +223,7 @@ function textBox(style, width, height, color, family) {
     return {
       ...base,
       left: width * 0.08,
-      bottom: height * 0.18,
+      bottom: frameHeight * 0.18,
       maxWidth: width * 0.7,
       padding: `${height * 0.016}px ${width * 0.024}px`,
       background: "rgba(8,8,10,0.68)",
@@ -214,7 +237,7 @@ function textBox(style, width, height, color, family) {
   return {
     ...base,
     left: width * 0.08,
-    bottom: height * 0.1,
+    bottom: frameHeight * 0.1,
     maxWidth: width * 0.84,
     padding: `${height * 0.014}px ${width * 0.02}px`,
     background: "rgba(8,8,10,0.55)",
@@ -227,21 +250,24 @@ function textBox(style, width, height, color, family) {
 }
 
 function TextLayer({item, absoluteFrame, width, height, family}) {
+  const {fps} = useVideoConfig();
   if (absoluteFrame < item.in_frame || absoluteFrame >= item.out_frame) return null;
   const duration = Math.max(item.out_frame - item.in_frame, 1);
   const progress = (absoluteFrame - item.in_frame) / duration;
-  const box = textBox(item.style, width, height, item.color, family);
+  const box = timing.textSafeBox(
+    decorated(textBox(item.style, width, height, item.color, family), item.decoration, Math.min(width, height)),
+    width,
+    height,
+  );
   const words = item.text.split(/\s+/).filter(Boolean);
   if (item.animation === "kinetic_words") {
     return (
       <div style={box}>
         {words.map((word, index) => {
-          const state = timing.textAnimationStyle(
-            "kinetic_words",
-            progress,
-            index,
-            words.length,
-          );
+          const timed = item.words?.[index];
+          const state = timed
+            ? timing.kineticWordStyle(absoluteFrame, timed.in_frame, item.out_frame, fps)
+            : timing.textAnimationStyle("kinetic_words", progress, index, words.length);
           return (
             <span
               key={`${item.id}-${index}`}
@@ -277,6 +303,15 @@ function TextLayer({item, absoluteFrame, width, height, family}) {
   );
 }
 
+// A second, sparse tile: a few specks that jump about, as dust on a print does.
+const DUST_IMAGE = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='${timing.DUST_TILE}' height='${timing.DUST_TILE}'>` +
+    [[41, 77, 1.6], [212, 140, 1], [388, 402, 2.2], [530, 66, 1.1], [655, 311, 1.4], [121, 533, 1], [742, 618, 2], [303, 781, 1.2], [860, 842, 1.5], [478, 590, 0.9]]
+      .map(([x, y, r]) => `<circle cx='${x}' cy='${y}' r='${r * 2}' fill='white'/>`)
+      .join("") +
+    "</svg>",
+)}")`;
+
 // One tile of noise, drawn once and only moved per frame, which is what keeps it cheap.
 const GRAIN_IMAGE = `url("data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns='http://www.w3.org/2000/svg' width='${timing.GRAIN_TILE}' height='${timing.GRAIN_TILE}'>` +
@@ -295,6 +330,8 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
     width,
     height,
     ...camera,
+    x: camera.x + accent.shiftX,
+    y: camera.y + accent.shiftY,
     zoom: camera.zoom * accent.punch,
   });
   const {fps} = useVideoConfig();
@@ -366,6 +403,37 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
               style={{width: "100%", height: "100%", objectFit: "cover", display: "block"}}
             />
           )}
+          {look && look.bloom > 0 && span.src !== null && panes.length < 2 ? (
+            <Img
+              src={span.src ?? staticFile(span.image)}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: `blur(${look.bloomBlur}px)`,
+                mixBlendMode: "screen",
+                opacity: look.bloom,
+              }}
+            />
+          ) : null}
+          {look && look.halation > 0 && span.src !== null && panes.length < 2 ? (
+            <Img
+              src={span.src ?? staticFile(span.image)}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                // Only the highlights survive the contrast, then they bleed warm.
+                filter: `contrast(4) brightness(0.55) sepia(1) saturate(4) hue-rotate(-25deg) blur(${look.halationBlur}px)`,
+                mixBlendMode: "screen",
+                opacity: look.halation,
+              }}
+            />
+          ) : null}
         </div>
         {grade.tint ? (
           <AbsoluteFill
@@ -386,6 +454,38 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
           />
         ) : null}
       </div>
+      {look && look.haze > 0 ? (
+        <AbsoluteFill
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(235,228,215,0.9) 0%, rgba(235,228,215,0.35) 45%, rgba(235,228,215,0) 75%)",
+            opacity: look.haze,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
+      {look && look.flare > 0 ? (
+        <AbsoluteFill
+          style={{
+            background: `radial-gradient(circle at ${(look.flareX * 100).toFixed(2)}% ${(look.flareY * 100).toFixed(2)}%, rgba(255,226,180,0.95) 0%, rgba(255,190,120,0.35) 14%, rgba(255,190,120,0) 42%)`,
+            mixBlendMode: "screen",
+            opacity: look.flare,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
+      {look && look.dust > 0 ? (
+        <AbsoluteFill
+          style={{
+            backgroundImage: DUST_IMAGE,
+            backgroundSize: `${timing.DUST_TILE}px ${timing.DUST_TILE}px`,
+            backgroundPosition: `${look.dustX}px ${look.dustY}px`,
+            mixBlendMode: "screen",
+            opacity: look.dust,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
       {look && look.grainOpacity > 0 ? (
         <div
           style={{

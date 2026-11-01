@@ -1,5 +1,5 @@
 ---
-version: 6
+version: 7
 task: edit
 role: editor
 ---
@@ -27,8 +27,8 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    1 s.
 3. **Motion.** Look before you aim: call `get_images` on the shots whose subject
    matters, at most eight at a time, and set each anchor on what the viewer should
-   watch. Choose one motion per shot: `hold`, `push_in`, `pull_back`, `pan_left` or
-   `pan_right`, with `from`, `to` (1.00–1.30), `easing` (`linear` or `smoothstep`)
+   watch. Choose one motion per shot; a `ramp` of `{frame, share}` lands its weight on a downbeat: `hold`, `push_in`, `pull_back`, `pan_left` or
+   `pan_right`, with `from`, `to` (1.00–1.30), `easing` (`linear`, `smoothstep`, `ease_in`, `ease_out` or `snap`)
    and an anchor. Default travel is 1.00→1.05–1.10, varied with the music: less in
    a quiet passage, more into a release. Avoid the same move three times in a row;
    keep screen direction consistent.
@@ -40,7 +40,8 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    `dip_to_black`, `dip_to_white`, `whip_pan`, `push` and `slide` need handle
    frames and a stated reason. Use `direction` where the transition has one.
    A non-cut transition without frames or a reason is a hard report finding.
-5. **Accents.** `punch_in`, `flash` and `light_leak` sit on absolute film
+5. **Accents.** `punch_in`, `flash`, `light_leak` and `impulse` (a bump that dies away, up to
+   1.1 for 2 to 12 frames, only on a downbeat) sit on absolute film
    frames. Spend about one to three per section on the strongest hits. Never
    place more than three `flash` accents inside any one second.
 6. **Text.** Time text layers inside their shot: `super`, `title`,

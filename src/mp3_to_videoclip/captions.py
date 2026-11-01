@@ -52,7 +52,13 @@ def timed_lines(root: Path, fps: int, total_frames: int) -> list[dict[str, Any]]
         end = max(end, start + round(MIN_SECONDS * fps))
         end = min(end, start + round(MAX_SECONDS * fps), limit)
         if end > start:
-            lines.append({"index": row["index"], "text": row["text"], "start": start, "end": end})
+            line = {"index": row["index"], "text": row["text"], "start": start, "end": end}
+            if row.get("words"):
+                line["words"] = [
+                    {"text": word["text"], "in_frame": timeline.frame_number(word["start"], fps)}
+                    for word in row["words"]
+                ]
+            lines.append(line)
     return lines
 
 
@@ -92,6 +98,16 @@ def caption_layers(
             part += 1
             if part > 1 and end - start < MIN_TAIL_SECONDS * fps:
                 continue
+            # Words land where they were heard, when the whole line was and it fits one shot.
+            words = line.get("words") or []
+            whole = (
+                words
+                and part == 1
+                and start == line["start"]
+                and end == line["end"]
+                and len(line["text"]) <= MAX_TEXT
+                and all(start <= word["in_frame"] < end for word in words)
+            )
             layers[shot.shot_id].append(
                 EditText(
                     id=f"{PREFIX}{line['index']}" + (f"-{part}" if part > 1 else ""),
@@ -99,7 +115,8 @@ def caption_layers(
                     text=_clipped(line["text"]),
                     in_frame=start,
                     out_frame=end,
-                    animation="fade",
+                    animation="kinetic_words" if whole else "fade",
+                    **({"words": words} if whole else {}),
                 )
             )
     return layers

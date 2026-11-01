@@ -225,6 +225,36 @@ def match_lines(rows: list[dict], tokens: list[dict]) -> dict[int, tuple[float, 
     }
 
 
+def match_words(rows: list[dict], tokens: list[dict]) -> dict[int, list[dict]]:
+    """Each line's heard words, for lines where every word was heard. A gap would misplace them."""
+    heard = heard_words(tokens)
+    known: list[str] = []
+    owner: list[int] = []
+    totals: dict[int, int] = {}
+    spoken: dict[int, list[str]] = {}
+    for row in rows:
+        if row.get("tag"):
+            continue
+        for word in str(row["text"]).split():
+            clean = _norm(word)
+            if clean:
+                known.append(clean)
+                owner.append(row["index"])
+                totals[row["index"]] = totals.get(row["index"], 0) + 1
+                spoken.setdefault(row["index"], []).append(word)
+    found: dict[int, list[int]] = {}
+    for position, match in sorted(_align(known, [word["text"] for word in heard]).items()):
+        found.setdefault(owner[position], []).append(match)
+    return {
+        index: [
+            {"text": text, "start": heard[match]["start"], "end": heard[match]["end"]}
+            for text, match in zip(spoken[index], matches, strict=True)
+        ]
+        for index, matches in found.items()
+        if len(matches) == totals[index]
+    }
+
+
 def _heard_path(root: Path, audio: Path) -> Path:
     return (
         root
@@ -300,6 +330,7 @@ def time_lyrics(root: Path) -> dict[str, Any]:
     heard = hear(root, P.render_audio(root, project))
     operations.phase("matching-words")
     times = match_lines(rows, heard["tokens"])
+    heard_by_line = match_words(rows, heard["tokens"])
     kept = {row["index"]: row for row in rows if row["source"] in ("tapped", "lrc")}
     lines = []
     previous = 0.0
@@ -327,7 +358,16 @@ def time_lyrics(root: Path) -> dict[str, Any]:
         if start >= project.duration:
             continue
         previous = start
-        lines.append({"index": row["index"], "start": start, "end": end, "source": "auto"})
+        words = heard_by_line.get(row["index"])
+        lines.append(
+            {
+                "index": row["index"],
+                "start": start,
+                "end": end,
+                "source": "auto",
+                **({"words": words} if words else {}),
+            }
+        )
     view = lyric_timing.save(root, {"lines": lines}, project.duration)
     sung = [row for row in view["lines"] if not row["tag"]]
     return {"timed": sum(1 for row in sung if row["start"] is not None), "sung": len(sung)}
