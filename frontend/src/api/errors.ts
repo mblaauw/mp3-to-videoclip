@@ -6,9 +6,9 @@ export type ErrorEnvelope = {
 };
 
 const COPY: Record<string, string> = {
-  no_llm_key: "The director has no model key. Open Settings.",
+  no_llm_key: "The director has no model key. Add one in Settings.",
   director_unavailable: "The director is not available right now.",
-  director_model_unavailable: "That director model is not available. Open Settings.",
+  director_model_unavailable: "That director model is not available. Choose another in Settings.",
   internal_error: "Something went wrong. Details are in the log.",
   loopback_only: "Studio only answers on this computer.",
   origin_not_allowed: "That request came from an unexpected page.",
@@ -21,7 +21,58 @@ const COPY: Record<string, string> = {
   not_found: "That item could not be found.",
   payload_too_large: "That file is too large.",
   unsupported_media_type: "That file type is not supported here.",
+  project_busy: "Another job is working on this film. Try again when it finishes.",
+  conflict: "This changed somewhere else. Reload and check it before saving again.",
+  approval_invalid: "That approval could not be recorded.",
+  no_runware_key: "Pictures and voices need a Runware key. Add one in Settings.",
+  storyboard_missing: "The storyboard has not been made yet.",
+  brief_missing: "The story has not been written yet.",
+  edit_missing: "The cut has not been made yet.",
+  analysis_missing: "The song has not been analyzed yet.",
+  artifact_missing: "That file is not there yet.",
+  quote_missing: "That quote is no longer there. Estimate again.",
+  service_unavailable: "Studio is still starting up. Try again in a moment.",
+  // What a provider answered. Nothing was charged for a refused request.
+  network_error: "The provider could not be reached. Check the connection and try again.",
+  invalidApiKey: "The provider refused the key. Check it in Settings.",
+  insufficientCredits: "The provider account is out of credit.",
+  rateLimitExceeded: "The provider is limiting requests. Try again shortly.",
+  invalidModel: "The provider does not offer that model.",
+  modelNotFound: "The provider does not offer that model.",
+  invalidRequest: "The provider refused the request.",
+  invalidTaskUUID: "The provider refused the request.",
+  taskNotFound: "The provider has no record of that task.",
+  provider_error: "The provider answered with an error.",
+  upstream_error: "The provider answered with an error.",
 };
+
+export type ErrorAction = { label: string; settings: true } | { label: string; stage: string };
+
+const SETTINGS_CODES = new Set([
+  "no_llm_key",
+  "director_model_unavailable",
+  "no_runware_key",
+  "invalidApiKey",
+]);
+
+const STAGE_CODES: Record<string, { label: string; stage: string }> = {
+  storyboard_missing: { label: "Go to Storyboard", stage: "storyboard" },
+  brief_missing: { label: "Go to Story", stage: "story" },
+  edit_missing: { label: "Go to Film", stage: "film" },
+  analysis_missing: { label: "Go to Track", stage: "track" },
+};
+
+/** The sentence for a code, or nothing when only the server's detail can say. */
+export function errorCopy(code: string | null | undefined): string | undefined {
+  return code ? COPY[code] : undefined;
+}
+
+/** What the owner can do about a code, if there is one thing to do. */
+export function errorAction(code: string | null | undefined): ErrorAction | undefined {
+  if (!code) return undefined;
+  if (SETTINGS_CODES.has(code)) return { label: "Open settings", settings: true };
+  return STAGE_CODES[code];
+}
 
 function detailText(detail: unknown): string {
   if (typeof detail === "string") return detail;
@@ -54,6 +105,11 @@ export class ApiError extends Error {
     this.status = status;
     this.code = code;
     this.detail = detail;
+  }
+
+  /** So a screen that prints the failure shows the sentence, not the class name. */
+  toString(): string {
+    return this.message;
   }
 }
 

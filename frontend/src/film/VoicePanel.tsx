@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type EditPayload, type VoiceEstimate, type VoiceLine } from "../api";
+import { errorCopy } from "../api/errors";
 import { usePlayerControls } from "../spine/player";
 import { clock } from "../spine/wave";
 import { Button } from "../ui";
@@ -213,9 +214,7 @@ export function VoicePanel({
     setBusy(true);
     setProblem(null);
     try {
-      const value = await api.estimateVoice(slug);
-      if ("error" in value) setProblem(value.error);
-      else setEstimate(value);
+      setEstimate(await api.estimateVoice(slug));
     } catch {
       // The request helper has already shown what went wrong.
     } finally {
@@ -229,10 +228,6 @@ export function VoicePanel({
     setProblem(null);
     try {
       const started = await api.generateVoice(slug, estimate.quote_id);
-      if ("error" in started) {
-        setProblem(started.error);
-        return;
-      }
       if ("needs_budget" in started) {
         setProblem("This film's budget has no room for these takes. Add to the budget first.");
         return;
@@ -241,7 +236,7 @@ export function VoicePanel({
       for (;;) {
         const job = await api.job(started.job_id);
         if (!["queued", "running", "stopping"].includes(job.status)) {
-          if (job.status !== "succeeded") setProblem(job.error || "The takes could not be made.");
+          if (job.status !== "succeeded") setProblem(errorCopy(job.code) || job.error || "The takes could not be made.");
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));
