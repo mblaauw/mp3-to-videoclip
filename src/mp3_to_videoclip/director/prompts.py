@@ -64,6 +64,11 @@ EXAMPLES = {
     "revise": "examples/revise.md",
 }
 
+#: Storyboard and profile carry a short digest of their own, to stay inside the budget.
+CRAFT_TASKS = frozenset(
+    {"concepts", "script_mv", "script_ad", "prompts", "review", "revise", "import"}
+)
+
 
 @dataclass(frozen=True)
 class PromptBundle:
@@ -159,7 +164,7 @@ def select_task(root: Path, stage: str | None, role: Role) -> str:
         if not brief.get("script"):
             return "script_ad" if kind in ("promo", "advert") else "script_mv"
         creative = brief.get("creative") if isinstance(brief.get("creative"), dict) else {}
-        structured = project.get("prompt_version") == 2
+        structured = project.get("prompt_version") in (2, 3)
         if structured and int(creative.get("profile_version") or 0) < 1:
             return "profile"
         return "revise"
@@ -194,6 +199,7 @@ def assemble(
     files = [
         f"{role_value}/system.md",
         "shared/truth.md",
+        *(["shared/craft.md"] if task_value in CRAFT_TASKS else []),
         f"kinds/{kind_value}.md",
     ]
     if role_value == "writer" and style_value:

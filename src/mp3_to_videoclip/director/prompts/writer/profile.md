@@ -1,5 +1,5 @@
 ---
-version: 3
+version: 4
 task: profile
 role: writer
 ---
@@ -61,6 +61,17 @@ fidelity and material, light and contrast, palette, finish, and at most three
 guards. No people, places, story, wardrobe, occupancy, text rules, per-scene
 light or meta instructions. If the selected preset is protected, keep its core
 verbatim and append at most 60 words.
+
+## Craft digest
+
+Choose the motif now, and make sure the arc plants it in the first section,
+transforms it in the middle and pays it off in the last chorus. Write the arc as a
+colour script as well: one palette and one light per section, a change of colour
+spent only where the song changes. When the song map is measured, record those
+palettes in `sections`, one entry per section with its start and end in seconds,
+`palette`, `light` and `lens`; a film with one look throughout leaves it out. Give
+every recurring place enough description that shots of it can vary in scale. The
+look holds the whole film, so per-section colour belongs in `sections`, not there.
 
 ## Output
 
