@@ -1,5 +1,6 @@
 """The prompt compiler: what each shot asks the image model for."""
 
+import hashlib
 from pathlib import Path
 
 from PIL import Image
@@ -20,7 +21,7 @@ from ..storage import (
 )
 from .board import load_board
 from .brief import legacy_brief_hash, load_brief
-from .project import creative_workflow, load_project, prompt_look_first
+from .project import compile_order, creative_workflow, load_project, prompt_look_first
 
 # Framing is visual content, not a camera move: it is transmitted to the model.
 FRAMING_TEXT = {
@@ -189,8 +190,29 @@ def creative_profile_version(brief: Brief) -> str:
             "look": creative.look,
             "image_rules": creative.image_rules,
             "avoid": brief.avoid,
+            **({"sections": [s.model_dump() for s in creative.sections]} if creative.sections else {}),
         }
     )
+
+
+def _section_look(project: Project, creative: CreativeProfile, shot: Shot) -> str:
+    """The colour script's line for this shot's first frame. Version 3 only."""
+    if project.prompt_version != 3:
+        return ""
+    at = shot.start_frame / project.fps
+    for section in creative.sections:
+        if section.start <= at < section.end:
+            lens = f"; lens {section.lens}" if section.lens else ""
+            return f"Section look: palette {', '.join(section.palette)}; light {section.light}{lens}"
+    return ""
+
+
+def shot_seed(seed: int, shot_id: str) -> int:
+    """A stable seed per shot, so a redo of one shot never moves its neighbours.
+
+    Kept inside the 31 bits the image models' schemas allow.
+    """
+    return int(hashlib.sha256(f"{seed}:{shot_id}".encode()).hexdigest()[:8], 16) % 2**31
 
 
 def _creative_scene(creative: CreativeProfile, scene_id: str | None):
@@ -303,31 +325,37 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
             f"({match.anchor[0]:.2f}, {match.anchor[1]:.2f})."
             + (f" {match.note}" if match.note else "")
         )
+    look_first = compile_order(project) == "look-first"
     prompt = "\n".join(
         filter(
             None,
             [
-                creative.look if prompt_look_first(project) else "",
+                creative.look if look_first else "",
                 shot.image_prompt,
                 bridge_line,
                 "Framing: " + FRAMING_TEXT[shot.framing] if shot.framing else "",
                 "Must show: " + "; ".join(shot.must_show) if shot.must_show else "",
+                _section_look(project, creative, shot),
                 scene.description if scene else "",
                 *[by_id[i].description for i in bound_ids],
                 *characters,
-                creative.look if not prompt_look_first(project) else "",
+                creative.look if not look_first else "",
                 *creative.image_rules,
                 "Avoid: " + "; ".join(_avoid_list(brief)) if _avoid_list(brief) else "",
             ],
         )
     )
-    return {
+    spec = {
         "shot_id": shot.id,
         "positivePrompt": prompt,
         "size": list(project.image_size),
         "references": refs,
         "profile_version": creative_profile_version(brief),
     }
+    # The quote moves these to negativePrompt where the live schema has one.
+    if project.prompt_version == 3 and _avoid_list(brief):
+        spec["avoid"] = _avoid_list(brief)
+    return spec
 
 
 @snapshot_read
@@ -367,6 +395,8 @@ def image_spec(root: Path, shot: Shot, *, verify_source: bool = True) -> dict:
             "settings": project.image_settings.model_dump()
             if project.image_settings is not None
             else {},
-            "seed": project.image_seed,
+            "seed": shot_seed(project.image_seed, shot.id)
+            if project.prompt_version == 3 and project.image_seed is not None
+            else project.image_seed,
         }
     return spec

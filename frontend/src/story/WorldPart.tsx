@@ -30,7 +30,9 @@ export function WorldPart({
           <p className="hint">Loading the appearance…</p>
         </section>
       )}
-      {brief && intake?.prompt_version === 2 && <ProfileCard brief={brief} onAsk={askWriter} />}
+      {brief && (intake?.prompt_version ?? 0) >= 2 && (
+        <ProfileCard slug={slug} brief={brief} onAsk={askWriter} onBriefChange={briefChanged} />
+      )}
       {brief && <CharactersCard slug={slug} brief={brief} onBriefChange={briefChanged} />}
     </div>
   );

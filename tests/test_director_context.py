@@ -158,12 +158,30 @@ def test_unreadable_timings_keep_the_snapshot_and_guess_nothing(tmp_path: Path):
     assert "Shots (4:" in text
 
 
-def test_only_the_storyboard_task_gets_the_timings(tmp_path: Path):
+def test_only_the_writers_tasks_get_the_timings(tmp_path: Path):
     root = make_api_project(tmp_path)
     P.update_brief(root, {"treatment": STORY})
-    for task in (None, "revise", "notes"):
+    for task in (None, "notes"):
         text = build_context("production", tmp_path, stage="storyboard", task=task)
         assert "Story on the song" not in text
+    for task in ("revise", "profile", "prompts"):
+        text = build_context("production", tmp_path, stage="storyboard", task=task)
+        assert "Story on the song" in text
+
+
+def test_a_writer_sees_a_long_passage_whole_and_what_it_can_look_at(tmp_path: Path):
+    root = make_api_project(tmp_path)
+    long = "word " * 200
+    P.update_brief(root, {"treatment": long})
+    write_json(
+        root / "work/assets.json",
+        {"sheet:ana": {"selected": 2, "versions": [{"version": 2, "path": "x", "sha256": "y"}]}},
+    )
+    text = build_context("production", tmp_path, task="profile")
+    assert text.count(long.strip()) >= 2
+    assert "## Pictures to look at with get_images" in text
+    assert "- sheet:ana: the sheet or plate made for it, version 2" in text
+    assert "Pictures to look at" not in build_context("production", tmp_path, task="notes")
 
 
 def test_timings_stay_out_of_every_approval_hash(tmp_path: Path):

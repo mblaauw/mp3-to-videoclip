@@ -442,7 +442,7 @@ def test_estimate_quotes_the_alias_owner_once(project, monkeypatch):
     write_json(project / P.STAGE_FILES["storyboard"], board)
     captured = {}
 
-    def fake_quote(root, scope, reserve, *, ids, regenerate):
+    def fake_quote(root, scope, reserve, *, ids, regenerate, edit_from=None, edit_note=""):
         captured["ids"] = ids
         return {
             "id": "quote-alias",

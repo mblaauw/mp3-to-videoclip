@@ -552,7 +552,7 @@ def execute(args):
                 max_seconds=args.max_seconds,
             )
             resolved_min = (
-                (1.5 if (project.prompt_version == 2) else 4)
+                (1.5 if project.prompt_version in (2, 3) else 4)
                 if args.min_seconds is None
                 else args.min_seconds
             )

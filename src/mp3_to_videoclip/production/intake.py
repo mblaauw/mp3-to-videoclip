@@ -177,7 +177,7 @@ def init_project(
         height=height,
         music_mode=music_mode,
         workflow_version=2,
-        prompt_version=2,
+        prompt_version=3,
         signature_required=profile.signature_required,
         source_filename=source.name,
         renderer_backend="remotion",
@@ -303,6 +303,7 @@ def apply_intake(
     intent: dict | None = None,
     style_preset: str | None = None,
     audio_window: dict | None = None,
+    prompt_version: int | None = None,
 ) -> dict:
     """Apply the Story intake card as one validated change.
 
@@ -315,6 +316,11 @@ def apply_intake(
     previous_window = project.audio_window
     if audio_window is not None:
         project, analysis_needed = _apply_window(root, project, audio_window)
+    if prompt_version is not None:
+        # One way only: a film moved to the newer prompt has marked its stills out of date.
+        if prompt_version != 3 or project.prompt_version not in (2, 3):
+            raise ValueError("this film cannot move to that image prompt")
+        project = project.model_copy(update={"prompt_version": 3})
     if style_preset is not None:
         if style_preset == "":
             # An explicit empty value detaches the film from a preset and keeps

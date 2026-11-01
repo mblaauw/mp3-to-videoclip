@@ -135,7 +135,7 @@ def test_new_productions_are_always_workflow_2_remotion(tmp_path):
     stored = json.loads((root / "project.json").read_text())
     assert stored["schema_version"] == 3
     assert stored["workflow_version"] == 2
-    assert stored["prompt_version"] == 2
+    assert stored["prompt_version"] == 3
     assert stored["renderer_backend"] == "remotion"
     assert stored["signature_required"] is True
     assert stored["source_filename"] == "source.mp3"

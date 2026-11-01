@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mp3_to_videoclip.storage import read_json, read_optional
+from mp3_to_videoclip.storage import inside, read_json, read_optional
 
 MAX_TOOL_IMAGES = 8
 THUMBNAIL_PIXELS = 512
@@ -266,7 +266,12 @@ TOOLS: list[dict] = [
         "Inspect up to eight selected stills as thumbnails. Use this before reviewing images.",
         {
             "slug": {"type": "string"},
-            "shot_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
+            "shot_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "maxItems": 8,
+                "description": "Shot ids, reference ids, character:<id> or sheet:<id>.",
+            },
         },
         ["slug", "shot_ids"],
     ),
@@ -354,6 +359,22 @@ TOOLS: list[dict] = [
                 "maxItems": 6,
             },
             "avoid": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
+            "sections": {
+                "type": "array",
+                "description": "Optional colour script: one palette and light per song section.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "start": {"type": "number"},
+                        "end": {"type": "number"},
+                        "palette": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+                        "light": {"type": "string"},
+                        "lens": {"type": "string"},
+                    },
+                    "required": ["id", "start", "end", "palette", "light"],
+                },
+            },
             "look": {
                 "type": "string",
                 "description": "Rendering only, 90-150 words. With a style preset: send the current "
@@ -612,6 +633,7 @@ def _dispatch(
                     image_rules=arguments.get("image_rules") or [],
                     avoid=arguments.get("avoid") or [],
                     look=arguments.get("look") or "",
+                    sections=arguments.get("sections"),
                 )
             ),
         )
@@ -732,6 +754,30 @@ def _thumbnail(path: Path) -> tuple[str, int, int]:
     return f"data:image/jpeg;base64,{encoded}", width, height
 
 
+def _world_picture(root: Path, name: str, assets: dict) -> Path | None:
+    """The file behind a reference, character or sheet id; ``None`` means it names a shot."""
+    from mp3_to_videoclip import production as P
+
+    brief = P.load_brief(root)
+    if name.startswith("sheet:"):
+        entry = assets.get(name) or {}
+        chosen = next(
+            (v for v in entry.get("versions", []) if v["version"] == entry.get("selected")), None
+        )
+        if chosen is None:
+            raise ValueError("no sheet has been made for it")
+        return inside(root, chosen["path"])
+    if name.startswith("character:"):
+        wanted = name.removeprefix("character:")
+        character = next((item for item in brief.characters if item.id == wanted), None)
+        if character is None or not character.references:
+            raise ValueError("this character has no reference image")
+        return inside(root, character.references[0])
+    creative = brief.creative
+    reference = next((r for r in creative.references if r.id == name), None) if creative else None
+    return inside(root, reference.path) if reference is not None else None
+
+
 def _get_images(root: Path, shot_ids) -> ToolResult:
     from mp3_to_videoclip import production as P
 
@@ -752,6 +798,12 @@ def _get_images(root: Path, shot_ids) -> ToolResult:
     errors: list[str] = []
     for shot_id in requested:
         try:
+            picture = _world_picture(root, shot_id, assets)
+            if picture is not None:
+                data_url, width, height = _thumbnail(picture)
+                images.append(data_url)
+                entries.append({"id": shot_id, "width": width, "height": height})
+                continue
             resolved = P.resolved_assets(root, [shot_id])[0]
             owner = resolved.shot.asset_shot_id or resolved.shot.id
             entry = assets.get(owner, {})

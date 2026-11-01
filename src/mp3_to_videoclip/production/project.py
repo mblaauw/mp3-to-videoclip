@@ -82,6 +82,13 @@ def prompt_look_first(project: Project) -> bool:
     return project.prompt_version == 2 or project.schema_version == 3
 
 
+def compile_order(project: Project) -> str:
+    """Where the look goes. Version 2 leads with it; version 3 leads with the subject."""
+    if project.prompt_version == 3:
+        return "subject-first"
+    return "look-first" if prompt_look_first(project) else "subject-first"
+
+
 def project_payload(project: Project) -> dict:
     """Legacy projects never serialized ``music_mode``; keep their hashes stable."""
     value = project.model_dump()
