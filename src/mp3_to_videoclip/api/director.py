@@ -13,7 +13,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip import promptlog
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.api.errors import ApiError
-from mp3_to_videoclip.config import effective_settings
+from mp3_to_videoclip.config import effective_settings, split_model
 from mp3_to_videoclip.director import prompts as prompt_suite
 from mp3_to_videoclip.director.context import build_context
 from mp3_to_videoclip.director.llm import DirectorLLM
@@ -191,6 +191,14 @@ async def get_director_model(slug: str, request: Request, role: str = "writer"):
     return {"model": model, "gateway": "opencode", "can_see": can_see}
 
 
+def _answering(settings, role: str) -> dict:
+    """The provider and model this turn will really use, on whichever path."""
+    if settings.gateway != "opencode":
+        return {"provider": "direct", "model": settings.llm_model}
+    model = _role_model(settings, role)
+    return {"provider": split_model(model)["provider"], "model": split_model(model)["model"]}
+
+
 @router.get("/chat")
 async def get_chat(slug: str, request: Request, role: str | None = None):
     from mp3_to_videoclip.director.conversation import ROLES, load_messages
@@ -230,7 +238,10 @@ async def post_chat(slug: str, request: Request, payload: dict):
         style_preset=project.style_preset,
         task=task,
     )
-    promptlog.remember(root, bundle.meta)
+    # Written down per turn, so the model that answered is known afterwards. Approval
+    # hashes never read this, so changing a model un-approves nothing.
+    meta = {**bundle.meta, **_answering(settings, role)}
+    promptlog.remember(root, meta)
     snapshot = build_context(slug, root.parent, stage=stage, context=context, task=bundle.task)
     system = bundle.text + "\n\n---\n\n" + snapshot
 
@@ -281,7 +292,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
                         message,
                         system,
                         model=model,
-                        prompt_meta=bundle.meta,
+                        prompt_meta=meta,
                     ):
                         _announce_tool(request, slug, event)
                         yield _line(event)
@@ -309,7 +320,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
             system,
             runner=runner,
             projects_dir=root.parent,
-            prompt_meta=bundle.meta,
+            prompt_meta=meta,
             role=role,
         ):
             _announce_tool(request, slug, event)

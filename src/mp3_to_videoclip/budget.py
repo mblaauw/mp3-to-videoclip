@@ -192,6 +192,70 @@ def split_commitment(root: Path) -> tuple[Decimal, Decimal, int]:
     return spent, reserved, paid_stills
 
 
+def cost_summary(root: Path) -> dict:
+    """One film's reported spend and open reservations by kind of task. Only reads.
+
+    Unlike ``split_commitment``, an unpriced task is counted rather than refused,
+    because this answers "what did it cost", not "may more be spent".
+    """
+    by_kind: dict[str, dict[str, Decimal]] = {}
+    unpriced = 0
+    for task in _journal(root).values():
+        row = by_kind.setdefault(
+            str(task.get("kind") or "other"), {"spent": Decimal(0), "reserved": Decimal(0)}
+        )
+        if task.get("cost_usd") is not None:
+            row["spent"] += money(task["cost_usd"])
+        elif task.get("reserve_usd") is not None:
+            row["reserved"] += money(task["reserve_usd"])
+        else:
+            unpriced += 1
+    return {"by_kind": by_kind, "unpriced": unpriced}
+
+
+def costs_across(projects_dir: Path) -> dict:
+    """Every production's journal summed by film and by kind of task."""
+    films = []
+    kinds: dict[str, dict[str, Decimal]] = {}
+    spent = reserved = Decimal(0)
+    unpriced = 0
+    for root in sorted(projects_dir.iterdir()) if projects_dir.is_dir() else []:
+        if not (root / TASKS_PATH).is_file():
+            continue
+        try:
+            summary = cost_summary(root)
+        except (ValueError, TypeError, AttributeError):
+            films.append({"slug": root.name, "unreadable": True})
+            continue
+        film_spent = sum((row["spent"] for row in summary["by_kind"].values()), Decimal(0))
+        film_reserved = sum((row["reserved"] for row in summary["by_kind"].values()), Decimal(0))
+        films.append(
+            {
+                "slug": root.name,
+                "spent_usd": str(film_spent),
+                "reserved_usd": str(film_reserved),
+                "unpriced": summary["unpriced"],
+            }
+        )
+        spent += film_spent
+        reserved += film_reserved
+        unpriced += summary["unpriced"]
+        for kind, row in summary["by_kind"].items():
+            total = kinds.setdefault(kind, {"spent": Decimal(0), "reserved": Decimal(0)})
+            total["spent"] += row["spent"]
+            total["reserved"] += row["reserved"]
+    return {
+        "films": films,
+        "by_kind": [
+            {"kind": kind, "spent_usd": str(row["spent"]), "reserved_usd": str(row["reserved"])}
+            for kind, row in sorted(kinds.items())
+        ],
+        "spent_usd": str(spent),
+        "reserved_usd": str(reserved),
+        "unpriced": unpriced,
+    }
+
+
 def commitment(root: Path) -> Decimal:
     """Reported cost plus unknown reservation for every journal task."""
     spent, reserved, _ = split_commitment(root)

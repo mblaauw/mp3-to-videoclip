@@ -7,6 +7,7 @@ import json
 
 from api_support import api_client, make_api_project
 
+from mp3_to_videoclip import promptlog
 from mp3_to_videoclip.api import director as director_api
 from mp3_to_videoclip.config import Settings
 from mp3_to_videoclip.director.opencode import OpenCodeError
@@ -97,6 +98,18 @@ def test_chat_routes_a_writer_turn_through_the_gateway(tmp_path, monkeypatch):
     assert user_turn["prompt"]["task"] == "brief"
     assert user_turn["prompt"]["hash"]
     assert user_turn["prompt"]["files"]
+    # The model that answered is written down with the turn, and in the current record.
+    assert user_turn["prompt"]["provider"] == "openai"
+    assert user_turn["prompt"]["model"] == "gpt-6.1-sol"
+    assert promptlog.current(root)["model"] == "gpt-6.1-sol"
+
+
+def test_the_direct_path_records_its_one_model_for_every_role(tmp_path):
+    settings = Settings(gateway="direct", llm_model="flash", writer_model="openai/other")
+    assert director_api._answering(settings, "writer") == {"provider": "direct", "model": "flash"}
+    assert director_api._answering(settings, "critic") == {"provider": "direct", "model": "flash"}
+    settings = Settings(gateway="opencode", editor_model="a/b/c")
+    assert director_api._answering(settings, "editor") == {"provider": "a", "model": "b/c"}
 
 
 def test_only_the_writers_storyboard_turn_is_given_the_story_timings(tmp_path, monkeypatch):

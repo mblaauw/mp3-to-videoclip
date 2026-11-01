@@ -1,0 +1,111 @@
+# Providers, models and voices the Settings panel can offer.
+#
+# A price is written here only with its source and the date it was read. Anything
+# else has no price and the panel says "price unknown". A price is a reservation
+# input, never a bill: the journal keeps what the provider reports.
+
+[[providers]]
+id = "openai"
+label = "OpenAI or a compatible endpoint"
+kind = "openai-compatible"
+key_setting = "keys.openai_compatible.key"
+env_var = "OPENAI_API_KEY"
+lists_models = true
+unlocks = ["writer", "editor", "critic"]
+
+[[providers]]
+id = "opencode-go"
+label = "OpenCode Go"
+kind = "opencode-go"
+key_setting = "keys.opencode_go"
+env_var = "OPENCODE_API_KEY"
+lists_models = true
+unlocks = ["writer", "editor", "critic"]
+
+[[providers]]
+id = "anthropic"
+label = "Anthropic"
+kind = "anthropic"
+key_setting = "keys.anthropic"
+env_var = "ANTHROPIC_API_KEY"
+lists_models = true
+unlocks = ["writer", "editor", "critic"]
+
+[[providers]]
+id = "gemini"
+label = "Google Gemini"
+kind = "gemini"
+key_setting = "keys.gemini"
+env_var = "GEMINI_API_KEY"
+lists_models = true
+unlocks = ["writer", "editor", "critic"]
+
+[[providers]]
+id = "runware"
+label = "Runware"
+kind = "runware"
+key_setting = "keys.runware"
+env_var = "PROJECT_VEIL_RUNWARE_API"
+lists_models = true
+unlocks = ["pictures", "clips", "voices"]
+
+[[providers]]
+id = "elevenlabs"
+label = "ElevenLabs"
+kind = "elevenlabs"
+key_setting = "keys.elevenlabs"
+env_var = "ELEVENLABS_API_KEY"
+lists_models = true
+only_with_key = true
+unlocks = ["voices"]
+
+[[models]]
+id = "gpt-6.1-sol"
+provider = "openai"
+label = "GPT-6.1 Sol"
+capabilities = ["text", "vision"]
+recommended = ["writer", "critic"]
+
+[[models]]
+id = "deepseek-v4.1-flash"
+provider = "opencode-go"
+label = "DeepSeek V4.1 Flash"
+capabilities = ["text"]
+recommended = ["editor"]
+
+[[models]]
+id = "google-nano-banana-2-1"
+provider = "runware"
+label = "Nano Banana 2.1"
+capabilities = ["image"]
+recommended = ["pictures"]
+price = { amount = "0.034", unit = "image" }
+price_note = "Published example at 1376×768; the provider bills by tokens."
+price_source = "https://runware.ai/docs/models-api/pricing"
+price_checked = "2026-11-01"
+
+[[models]]
+id = "minimax-speech-2-8"
+provider = "runware"
+label = "MiniMax Speech 2.8"
+capabilities = ["speech"]
+recommended = ["narrator"]
+price = { amount = "0.10", unit = "1k_chars" }
+price_note = "HD rate."
+price_source = "https://runware.ai/docs/models-api/pricing"
+price_checked = "2026-11-01"
+
+[[voices]]
+id = "English_Magnetic_Male_2"
+provider = "runware"
+model = "minimax-speech-2-8"
+label = "Magnetic male"
+language = "en"
+recommended = true
+
+[[voices]]
+id = "English_Deep-VoicedGentleman"
+provider = "runware"
+model = "minimax-speech-2-8"
+label = "Deep-voiced gentleman"
+language = "en"
