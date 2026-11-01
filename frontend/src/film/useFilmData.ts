@@ -180,7 +180,7 @@ export function useFilmData(slug: string) {
     try {
       await api.seedEdit(slug);
       setCut(await api.editSummary(slug));
-      setNotice("The Editor cut the film. Timing now comes from the cut.");
+      setNotice("First cut made from the storyboard. Timing now comes from the cut.");
       setRevision((value) => value + 1);
       notifyProjectChanged();
       await load();

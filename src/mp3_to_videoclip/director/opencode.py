@@ -33,6 +33,7 @@ from mp3_to_videoclip.storage import read_optional, write_json
 from .conversation import append_message
 from .llm import IDLE_LIMIT, NOTHING_LOST, stall_message
 from .loop import TurnEvent
+from .tools import CRITIC_TOOLS
 
 WRITER_MODEL = "openai/gpt-6.1-sol"
 EDITOR_MODEL = "opencode-go/deepseek-v4.1-flash"
@@ -60,6 +61,11 @@ EDITOR_SYSTEM = (
     "the clipstudio_* tools for project state; never call execute, browser, "
     "opencode or any built-in tool. Every cut must have a musical or narrative "
     "reason; never invent a measurement or an asset."
+)
+CRITIC_SYSTEM = (
+    "You are the Studio Critic: you look at frames of a cut against the owner's brief "
+    "and write specific notes. You change nothing. Use only the clipstudio_* tools you "
+    "are allowed; never claim to have seen a frame you did not look at."
 )
 
 
@@ -144,6 +150,7 @@ def gateway_config(
     projects_dir: Path,
     writer_model: str = WRITER_MODEL,
     editor_model: str = EDITOR_MODEL,
+    critic_model: str = WRITER_MODEL,
     python: str | None = None,
 ) -> dict[str, Any]:
     """The app-owned config. Built-in tools are denied, Studio MCP tools allowed."""
@@ -169,6 +176,15 @@ def gateway_config(
         *({"action": action, "resource": "*", "effect": "deny"} for action in builtin_actions),
         {"action": "clipstudio_*", "resource": "*", "effect": "allow"},
     ]
+    # The Critic reads and leaves notes. The gateway enforces it, not its good manners.
+    critic_permissions = [
+        *({"action": action, "resource": "*", "effect": "deny"} for action in builtin_actions),
+        {"action": "clipstudio_*", "resource": "*", "effect": "deny"},
+        *(
+            {"action": f"clipstudio_{name}", "resource": "*", "effect": "allow"}
+            for name in sorted(CRITIC_TOOLS)
+        ),
+    ]
     return {
         "$schema": "https://opencode.ai/config.json",
         "default_agent": "writer",
@@ -186,6 +202,13 @@ def gateway_config(
                 "model": editor_model,
                 "system": EDITOR_SYSTEM,
                 "permissions": permissions,
+            },
+            "critic": {
+                "description": "Studio Critic: reviews a cut against the brief; changes nothing.",
+                "mode": "primary",
+                "model": critic_model,
+                "system": CRITIC_SYSTEM,
+                "permissions": critic_permissions,
             },
         },
         "mcp": {
@@ -293,6 +316,15 @@ class OpenCodeClient:
             for item in await self.models()
         )
 
+    async def model_can_see(self, model: str) -> bool | None:
+        """Whether the gateway says this model takes images; ``None`` when it doesn't say."""
+        provider, model_id, _variant = parse_model(model)
+        for item in await self.models():
+            if item.get("providerID") == provider and item.get("id") == model_id:
+                inputs = (item.get("capabilities") or {}).get("input")
+                return "image" in inputs if isinstance(inputs, list) else None
+        return None
+
     async def set_model(self, session_id: str, model: str) -> None:
         provider, model_id, variant = parse_model(model)
         value: dict[str, Any] = {"id": model_id, "providerID": provider}
@@ -331,12 +363,14 @@ class OpenCodeGateway:
         projects_dir: Path,
         writer_model: str = WRITER_MODEL,
         editor_model: str = EDITOR_MODEL,
+        critic_model: str = WRITER_MODEL,
     ):
         self.binary = binary
         self.workspace = workspace or gateway_workspace()
         self.projects_dir = Path(projects_dir).resolve()
         self.writer_model = writer_model
         self.editor_model = editor_model
+        self.critic_model = critic_model
         self.port: int | None = None
         self.password = ""
         self.process: subprocess.Popen | None = None
@@ -361,6 +395,7 @@ class OpenCodeGateway:
                 projects_dir=self.projects_dir,
                 writer_model=self.writer_model,
                 editor_model=self.editor_model,
+                critic_model=self.critic_model,
             ),
         )
 
@@ -449,6 +484,9 @@ def session_path(root: Path) -> Path:
 
 
 def load_session(root: Path, role: str, model: str) -> dict[str, Any] | None:
+    # Every review starts clean: a reused session hits its image limit and can't look again.
+    if role == "critic":
+        return None
     value = read_optional(session_path(root), {})
     if not isinstance(value, dict):
         return None

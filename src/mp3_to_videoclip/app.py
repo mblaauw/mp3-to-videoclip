@@ -38,6 +38,7 @@ from .api.setup import router as setup_router
 from .api.story import router as story_router
 from .api.storyboard import router as storyboard_router
 from .api.track import router as track_router
+from .api.voice import router as voice_router
 from .jobs import JobRunner
 from .jobs.watch import ProjectWatcher
 from .storage import ProjectBusy
@@ -175,7 +176,10 @@ class StudioGuard:
                 await self._reject(send, "origin not allowed", "origin_not_allowed", 403)
                 return
             content_type = (_header(scope, b"content-type") or "").split(";")[0].strip().lower()
-            is_upload = method == "POST" and path.rstrip("/") == "/api/projects"
+            is_upload = method == "POST" and (
+                path.rstrip("/") == "/api/projects"
+                or (path.startswith("/api/projects/") and path.endswith("/voice/upload"))
+            )
             if (
                 not (
                     is_upload
@@ -268,6 +272,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
     app.include_router(story_router)
     app.include_router(storyboard_router)
     app.include_router(images_router)
+    app.include_router(voice_router)
     app.include_router(film_router)
     app.include_router(history_router)
     app.include_router(budget_router)

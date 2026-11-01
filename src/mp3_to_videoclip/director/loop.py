@@ -28,7 +28,7 @@ from .llm import (
     service_failed_message,
     stall_message,
 )
-from .tools import TOOLS, ToolResult, dispatch
+from .tools import CRITIC_TOOLS, ToolResult, dispatch, tools_for
 
 MAX_TOOL_CALLS = 25
 
@@ -76,7 +76,9 @@ async def run_turn(
         assistant_text = ""
         pending: list[ToolCall] = []
         try:
-            async with aclosing(llm.stream(messages, tools=TOOLS, system=system)) as stream:
+            async with aclosing(
+                llm.stream(messages, tools=tools_for(role), system=system)
+            ) as stream:
                 async for event in stream:
                     if isinstance(event, TextDelta):
                         assistant_text += event.text
@@ -148,7 +150,10 @@ async def run_turn(
                     root, {"role": "assistant", "content": args.get("question", "")}, agent=role
                 )
                 return
-            tool_result = await dispatch(tc.name, args, runner, projects_dir)
+            if role == "critic" and tc.name not in CRITIC_TOOLS:
+                tool_result = json.dumps({"error": "the Critic changes nothing; use your notes"})
+            else:
+                tool_result = await dispatch(tc.name, args, runner, projects_dir)
             if isinstance(tool_result, ToolResult):
                 result_text = tool_result.text
                 images = tool_result.images

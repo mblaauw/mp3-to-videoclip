@@ -191,9 +191,9 @@ def build_preview(
     output = Path(output)
     workdir = Path(workdir)
 
-    from .production import render_audio
+    from .production import film_audio
 
-    audio = render_audio(root, project)
+    audio = film_audio(root, project)
     if not audio.is_file():
         raise FileNotFoundError(f"source audio not found: {audio}")
     board.check_project(project)

@@ -15,6 +15,7 @@ from ..storage import (
     digest,
     file_hash,
     inside,
+    read_json,
     snapshot_read,
 )
 from .board import load_board
@@ -28,6 +29,43 @@ FRAMING_TEXT = {
     "close_up": "close-up",
     "detail": "detail shot",
 }
+
+
+def out_of_date_stills(root: Path) -> list[str]:
+    """Paid shots whose selected still was made from a different prompt than today's."""
+    path = root / "work/assets.json"
+    assets = read_json(path) if path.is_file() else {}
+    stale = []
+    try:
+        shots = load_board(root).shots
+    except (OSError, ValueError):
+        # A board that can't load yet is another check's job to report.
+        return stale
+    for shot in shots:
+        entry = assets.get(shot.asset_shot_id or shot.id) or {}
+        chosen = next(
+            (
+                item
+                for item in entry.get("versions", [])
+                if item["version"] == entry.get("selected")
+            ),
+            None,
+        )
+        if chosen is None or shot.asset_shot_id is not None or not shotkinds.is_paid(shot):
+            continue
+        try:
+            if chosen.get("input_hash") != digest(image_spec(root, shot)):
+                stale.append(shot.id)
+        except (OSError, ValueError):
+            # A shot the profile can't compile yet is another check's job to report.
+            continue
+    return stale
+
+
+def _avoid_list(brief: Brief) -> list[str]:
+    """What pictures must leave out: the profile's list plus the owner's own in the intent."""
+    owner = brief.intent.avoid if brief.intent else []
+    return list(dict.fromkeys([*brief.avoid, *owner]))
 
 
 def _reference_cap(project: Project) -> int:
@@ -279,7 +317,7 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
                 *characters,
                 creative.look if not prompt_look_first(project) else "",
                 *creative.image_rules,
-                "Avoid: " + "; ".join(brief.avoid) if brief.avoid else "",
+                "Avoid: " + "; ".join(_avoid_list(brief)) if _avoid_list(brief) else "",
             ],
         )
     )

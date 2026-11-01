@@ -15,6 +15,7 @@ def input_metadata_hash(root: Path) -> str:
             "storyboard.json",
             "assets.json",
             "edit.json",
+            "voice.json",
             "graphics-spec.json",
             "lyrics.json",
             "events.json",

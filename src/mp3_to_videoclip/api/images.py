@@ -8,6 +8,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from mp3_to_videoclip import budget as correction_cycles
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import reviews, services, shotkinds
 from mp3_to_videoclip.api._helpers import project_root
@@ -150,6 +151,13 @@ async def estimate_images(slug: str, request: Request, payload: dict):
     shot_ids = payload.get("shot_ids") or []
     if not shot_ids:
         return {"error": "select at least one shot"}
+    # Say so plainly while the owner can still act, instead of a refused quote.
+    board = P.load_board(root)
+    owners = {shot.id: shot.asset_shot_id or shot.id for shot in board.shots}
+    named = list(dict.fromkeys(owners.get(shot_id, shot_id) for shot_id in shot_ids))
+    used_up = correction_cycles.used_up_corrections(root, named)
+    if used_up:
+        return {"needs_new_round": used_up}
     try:
         estimate = services.generation.estimate(
             root,
@@ -167,6 +175,19 @@ async def estimate_images(slug: str, request: Request, payload: dict):
         "decision": _decisions(root, estimate["reserve_usd"]),
         "budget": _budget_card(root),
     }
+
+
+@router.post("/images/new-round")
+async def start_new_round(slug: str, request: Request, payload: dict):
+    """The owner's reasoned decision to go past a shot's correction limit. Spends nothing."""
+    root = project_root(request, slug)
+    try:
+        correction_cycles.authorize_restaging(
+            root, payload.get("shot_ids") or [], payload.get("note") or ""
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"started": payload.get("shot_ids")}
 
 
 @router.post("/images/generate")
