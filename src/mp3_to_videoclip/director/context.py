@@ -81,32 +81,74 @@ def _still_status(root: Path, shot, assets: dict) -> str:
     return f"current v{selected}"
 
 
-def _music(root: Path) -> str:
-    from mp3_to_videoclip.domain import music_notes, section_map
+def _clock(seconds: float) -> str:
+    whole = int(seconds)
+    return f"{whole // 60}:{whole % 60:02d}"
 
-    music = section_map.apply(root, read_optional(root / "work" / "music.json"))
-    if not isinstance(music, dict):
-        return "not analysed"
-    sections = music.get("sections") or []
-    names = section_map.names_by_start(root)
-    labels = []
+
+def _song(root: Path) -> list[str]:
+    """What the song does, on every task. Compact, because it is sent every turn."""
+    from mp3_to_videoclip import song_map
+
+    heading = "## The song (measured estimates)"
     try:
-        labels = [
-            f"{names.get(round(float(item.get('start', 0)), 3)) or music_notes.default_name(index)} "
-            f"{float(item.get('start', 0)):.0f}-{float(item.get('end', 0)):.0f}s"
-            for index, item in enumerate(sections)
-            if isinstance(item, dict)
-        ]
-    except (TypeError, ValueError):
-        labels = []
-    tempo = music.get("estimated_tempo_bpm")
-    text = f"tempo {tempo if tempo is not None else 'unknown'} BPM"
-    if labels:
-        text += "; sections: " + ", ".join(labels[:12])
-    warnings = music.get("warnings") or []
-    if warnings:
-        text += "; warnings: " + _clip("; ".join(str(w) for w in warnings), 180)
-    return text
+        song = song_map.song_map(root)
+    except Exception as exc:  # noqa: BLE001
+        return [heading, f"- Unavailable ({_clip(exc, 80)})."]
+    if not song.get("available"):
+        return [heading, "- Not analysed yet."]
+    tempo, key = song["tempo"], song["key"]
+    parts = [f"tempo {tempo['bpm'] if tempo['bpm'] is not None else 'unknown'} BPM"]
+    if tempo.get("half_bpm"):
+        parts[0] += f" (could be {tempo['half_bpm']} or {tempo['double_bpm']})"
+    if key.get("tonic"):
+        rival = f", or {key['runner_up']}" if key.get("runner_up") else ""
+        parts.append(f"key {key['tonic']} {key['mode']}{rival}")
+    if song.get("grid_trusted"):
+        parts.append(f"{song['beats_per_bar']} beats a bar, {song['bar_frames']} frames a bar")
+    else:
+        parts.append("no trusted bar grid")
+    lines = [heading, "- " + "; ".join(parts) + "."]
+    for section in song["sections"]:
+        first = section.get("first_line")
+        lines.append(
+            f"- {section['name']} {_clock(section['start'])}-{_clock(section['end'])}, "
+            f"{section['energy_word']}, about {section['target_per_10s']} cuts per 10 s"
+            + (f', first sung "{_clip(first, 60)}"' if first else "")
+        )
+    if song.get("sparkline"):
+        digits = "".join(str(value) for value in song["sparkline"])
+        lines.append(f"- Loudness across the song, 0 to 9: {digits}")
+    return lines
+
+
+#: Writer tasks that write words against the song, so they need the sung lines in front of them.
+LYRIC_TASKS = frozenset({"concepts", "script_mv", "script_ad", "import", "storyboard"})
+TREATMENT_LIMIT = 4000
+
+
+def _treatment(text: str | None, task: str | None) -> str:
+    """Whole where the task writes from it, with a cap that protects the budget."""
+    if task not in LYRIC_TASKS:
+        return _clip(text, 420)
+    clipped = _clip(text, TREATMENT_LIMIT)
+    return clipped + (" (cut at 4,000 characters)" if clipped.endswith("…") else "")
+
+
+def _sung_lines(root: Path) -> list[str]:
+    from mp3_to_videoclip.domain import lyric_timing
+
+    rows = [row for row in lyric_timing.view(root)["lines"] if not row["tag"]]
+    if not rows:
+        return []
+    timed = sum(1 for row in rows if row["start"] is not None)
+    lines = [f"## Sung lines ({timed} of {len(rows)} timed)"]
+    for row in rows:
+        if row["start"] is None:
+            lines.append(f"- {_clip(row['text'], 160)}")
+        else:
+            lines.append(f"- {_clock(row['start'])} ({row['source']}) {_clip(row['text'], 160)}")
+    return lines
 
 
 def _story_on_song(root: Path, project) -> list[str]:
@@ -175,7 +217,6 @@ def build_context(
                 if project.audio_window is not None
                 else "; whole track"
             ),
-            f"- Music: {_music(root)}",
             f"- Budget: {_budget(root)}",
             f"- Recorded approvals (not revalidated): {_approvals(root)}",
             "- Still status checks the recorded input hash and file presence; "
@@ -183,6 +224,8 @@ def build_context(
         ]
         if stage:
             lines.append(f"- Current stage: {stage}")
+        lines.append("")
+        lines.extend(_song(root))
         if context:
             lines.append("")
             lines.append("## Session context")
@@ -209,7 +252,7 @@ def build_context(
                 )
         lines.append(f"- Direction: {_clip(brief.direction)}")
         lines.append(f"- Style: {_clip(brief.style)}")
-        lines.append(f"- Treatment: {_clip(brief.treatment, 420)}")
+        lines.append(f"- Treatment: {_treatment(brief.treatment, task)}")
         creative = brief.creative
         if creative is not None:
             lines.append(f"- Look: {_clip(creative.look, 360)}")
@@ -235,6 +278,10 @@ def build_context(
         if waiting:
             lines.append(f"- Owner must confirm permission for: {', '.join(waiting)}.")
         lines.append("")
+        if task in LYRIC_TASKS:
+            sung = _sung_lines(root)
+            if sung:
+                lines.extend([*sung, ""])
         if task == "storyboard":
             lines.extend(_story_on_song(root, project))
             lines.append("")

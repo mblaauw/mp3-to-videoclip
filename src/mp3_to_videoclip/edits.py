@@ -922,10 +922,13 @@ def cut_material(root: Path) -> dict:
     """What the music and the words offer to cut on, in film frames. Evidence, not orders."""
     from . import production as P
     from .domain import lyric_timing, section_map
+    from .song_map import song_map
 
     project = P.load_project(root)
     fps = project.fps
     frame = lambda seconds: round(float(seconds) * fps)  # noqa: E731
+    song = song_map(root)
+    words = {item["start_frame"]: item for item in song.get("sections", [])}
     music = section_map.apply(root, read_optional(root / "work" / "music.json")) or {}
     sections = [
         {
@@ -937,6 +940,10 @@ def cut_material(root: Path) -> dict:
         for index, item in enumerate(music.get("sections") or [])
         if isinstance(item, dict)
     ]
+    for section in sections:
+        heard = words.get(section["start_frame"]) or {}
+        section["energy_word"] = heard.get("energy_word")
+        section["target_per_10s"] = heard.get("target_per_10s")
     lines = [
         {"frame": frame(line["start"]), "text": line["text"], "source": line["source"]}
         for line in lyric_timing.view(root)["lines"]
@@ -958,9 +965,14 @@ def cut_material(root: Path) -> dict:
         "lines": lines,
         "changes": changes,
         "beats": beats,
+        "downbeats": song.get("downbeats", []),
+        "bar_frames": song.get("bar_frames"),
+        "beats_per_bar": song.get("beats_per_bar"),
+        "grid_trusted": song.get("grid_trusted", False),
         "notes": (
             "All of this is estimated unless a line's source is tapped. Beats may be half or "
-            "double the felt pulse. Prefer sections, sung lines and strong changes."
+            "double the felt pulse, and a downbeat means nothing unless grid_trusted is true. "
+            "Prefer sections, sung lines and strong changes."
         ),
     }
 

@@ -1,5 +1,5 @@
 ---
-version: 5
+version: 6
 task: edit
 role: editor
 ---
@@ -12,7 +12,10 @@ grade. The edit must cover the storyboard's whole timeline exactly.
 
 ## Procedure
 
-1. **Section plan.** Call `get_cut_material` first. For each music section write
+1. **Section plan.** Call `get_cut_material` first, and `get_song_map` for the bars.
+   A downbeat is the strongest place to land a cut, a bar is the natural length of a
+   shot, and a cut a frame early lands better than one a frame late. Trust them only
+   when `grid_trusted` is true. For each music section write
    `feel`, a cut-density target in cuts per 10 s, the dominant techniques, and what
    is held back for later. If a section deliberately holds, name a breathing-hold
    technique there.

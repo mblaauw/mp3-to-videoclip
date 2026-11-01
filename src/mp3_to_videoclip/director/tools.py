@@ -57,6 +57,7 @@ CRITIC_TOOLS = frozenset(
         "get_edit",
         "get_cut_material",
         "get_music_summary",
+        "get_song_map",
         "get_images",
         "get_film_frames",
         "save_critique",
@@ -134,6 +135,13 @@ TOOLS: list[dict] = [
     _tool(
         "get_music_summary",
         "Read the measured music summary.",
+        {"slug": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
+        "get_song_map",
+        "Read the song map in film frames: tempo with its octave rival, key, bars, downbeats, "
+        "beats, sections with energy words, density targets and first sung lines, and changes.",
         {"slug": {"type": "string"}},
         ["slug"],
     ),
@@ -493,6 +501,11 @@ def _dispatch(
 
         edit = edits.save_edit(root, arguments.get("edit") or {})
         return {"saved": True, "report": edits._tool_report(edits.report(root, edit=edit))}
+
+    if name == "get_song_map":
+        from mp3_to_videoclip import song_map
+
+        return song_map.song_map(root)
 
     if name == "get_music_summary":
         from mp3_to_videoclip.domain import section_map

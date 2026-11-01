@@ -1,12 +1,13 @@
 ---
-version: 3
+version: 4
 task: music
 role: editor
 ---
 # E1 — Read the recording
 
 Get the recording and its evidence straight before any creative decision. You
-are the first reader of the measured map, not its author.
+are the first reader of the measured map, not its author. `get_song_map` holds it
+all in film frames, with the file each value came from.
 
 ## What is measured
 
