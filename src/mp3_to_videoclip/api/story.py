@@ -10,13 +10,15 @@ from fastapi.responses import FileResponse
 from mp3_to_videoclip import idea, story_beats
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.read_snapshots import read_endpoint
 from mp3_to_videoclip.storage import digest, inside
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["story"])
 
 
 @router.get("/brief")
-async def get_brief(slug: str, request: Request, response: Response):
+@read_endpoint
+def get_brief(slug: str, request: Request, response: Response):
     root = project_root(request, slug)
     brief = P.load_brief(root)
     value = brief.model_dump()
@@ -74,7 +76,8 @@ async def set_proof_shots(slug: str, request: Request, payload: dict):
 
 
 @router.get("/treatments")
-async def get_treatments(slug: str, request: Request):
+@read_endpoint
+def get_treatments(slug: str, request: Request):
     root = project_root(request, slug)
     path = root / "work" / "treatments.json"
     if not path.is_file():
@@ -102,7 +105,8 @@ async def put_treatments(slug: str, request: Request, payload: dict):
 
 
 @router.get("/idea")
-async def get_idea(slug: str, request: Request):
+@read_endpoint
+def get_idea(slug: str, request: Request):
     return {"idea": idea.latest(project_root(request, slug))}
 
 
@@ -120,7 +124,8 @@ async def put_idea_sorted(slug: str, request: Request, payload: dict):
 
 
 @router.get("/story-passages")
-async def get_story_passages(slug: str, request: Request):
+@read_endpoint
+def get_story_passages(slug: str, request: Request):
     return {"passages": story_beats.passages(project_root(request, slug))}
 
 
@@ -158,7 +163,8 @@ def _intake_payload(root: Path, *, analysis_needed: bool = False) -> dict:
 
 
 @router.get("/intake")
-async def get_intake(slug: str, request: Request, response: Response):
+@read_endpoint
+def get_intake(slug: str, request: Request, response: Response):
     value = _intake_payload(project_root(request, slug))
     # The nested brief is a valid editing base for PATCH /brief.
     response.headers["ETag"] = f'"{digest(value["brief"])}"'

@@ -9,10 +9,12 @@ their storyboard timing and hashes unchanged.
 
 from __future__ import annotations
 
+import bisect
 from pathlib import Path
 
 from . import shotkinds
 from .models import (
+    MAX_SHOT_TEXT,
     EditAccent,
     EditDecisionList,
     EditMotion,
@@ -128,6 +130,7 @@ TOOL_PAGE_SHOTS = 30
 SAME_TRAVEL_RUN = 4
 SOFT_CROP_ZOOM = 1.4
 LONG_STATIC_SECONDS = 12.0
+GRID_TOLERANCE_FRAMES = 3
 UNREVIEWED_FEELS = ("unreviewed", "section", "")
 
 
@@ -788,6 +791,9 @@ def report(
                     }
                 )
 
+    warnings.extend(_grid_findings(root, edit, windows))
+    warnings.extend(_caption_findings(edit))
+
     transition_counts: dict[str, int] = {}
     accent_counts: dict[str, int] = {}
     motion_counts: dict[str, int] = {}
@@ -918,14 +924,138 @@ def _seed_motion(shot) -> EditMotion:
     return EditMotion(type="pan_right", **{"from": 1.08, "to": 1.08}, reason=reason)
 
 
+def _grid_findings(root: Path, edit: EditDecisionList, windows: list) -> list[dict]:
+    """Cuts in a full section that miss the grid, or land just after a hit, by section."""
+    from .song_map import song_map
+
+    song = song_map(root)
+    if not song.get("grid_trusted"):
+        return []
+    hits = sorted({*song["downbeats"], *song["beats"]})
+    if not hits:
+        return []
+    full = [
+        (item["start_frame"], item["end_frame"])
+        for item in song["sections"]
+        if item["energy_word"] == "full"
+    ]
+    cuts = [shot.start_frame for shot in edit.shots[1:]]
+    cuts += [crop.frame for shot in edit.shots for crop in shot.crops]
+    findings = []
+    for section, start, end in windows:
+        off = late = 0
+        for cut in cuts:
+            if not start <= cut < end or not any(low <= cut < high for low, high in full):
+                continue
+            place = bisect.bisect_right(hits, cut)
+            before = cut - hits[place - 1] if place else None
+            after = hits[place] - cut if place < len(hits) else None
+            nearest = min(value for value in (before, after) if value is not None)
+            if nearest > GRID_TOLERANCE_FRAMES:
+                off += 1
+            elif before is not None and 1 <= before <= GRID_TOLERANCE_FRAMES and after != 1:
+                late += 1
+        if off:
+            findings.append(
+                {
+                    "code": "off_grid",
+                    "section": section.id,
+                    "count": off,
+                    "message": f"section {section.id} has {off} cuts away from any beat",
+                }
+            )
+        if late:
+            findings.append(
+                {
+                    "code": "late_cut",
+                    "section": section.id,
+                    "count": late,
+                    "message": f"section {section.id} has {late} cuts just after a beat",
+                }
+            )
+    return findings
+
+
+def _caption_findings(edit: EditDecisionList) -> list[dict]:
+    """Two text layers on screen at once, within one shot or across a dissolve."""
+    findings = []
+    for shot in edit.shots:
+        layers = sorted(shot.text, key=lambda item: item.in_frame)
+        for earlier, later in zip(layers, layers[1:], strict=False):
+            if later.in_frame < earlier.out_frame:
+                findings.append(
+                    {
+                        "code": "caption_overlap",
+                        "shot_id": shot.shot_id,
+                        "text_id": later.id,
+                        "message": f"text {later.id} starts while {earlier.id} is on screen",
+                    }
+                )
+    return findings
+
+
+def apply_captions(
+    root: Path,
+    indexes: list[int] | None = None,
+    *,
+    mode: str | None = None,
+    expected_hash: str | None = None,
+) -> dict:
+    """Replace every caption layer in the cut. A cut change, so its approval goes stale."""
+    from . import captions
+    from . import production as P
+
+    board = P.load_board(root)
+    project = P.load_project(root, verify_source=False)
+    edit = load_edit(root, board=board)
+    if edit is None:
+        raise ValueError("make a cut before adding captions")
+    lines = captions.timed_lines(root, project.fps, board.total_frames)
+    if mode == "off":
+        chosen: set[int] | None = set()
+    elif mode == "named":
+        chosen = set(captions.named_indexes(root, lines))
+    elif mode == "all":
+        chosen = None
+    elif mode is None and indexes is not None:
+        known = {line["index"] for line in lines}
+        if not set(indexes) <= known:
+            raise ValueError("those lines have no time on the song yet")
+        chosen = set(indexes)
+    else:
+        raise ValueError("captions must be off, all, named or a list of lines")
+    layers = captions.caption_layers(edit, lines, chosen, project.fps)
+    shots = []
+    for shot in edit.shots:
+        kept = [item for item in shot.text if not item.id.startswith(captions.PREFIX)]
+        text = sorted([*kept, *layers[shot.shot_id]], key=lambda item: item.in_frame)
+        if len(text) > MAX_SHOT_TEXT:
+            raise ValueError(
+                f"shot {shot.shot_id} would carry {len(text)} text layers; "
+                f"it holds at most {MAX_SHOT_TEXT}. Choose fewer lines"
+            )
+        shots.append(shot.model_copy(update={"text": text}))
+    updated = edit.model_copy(update={"shots": shots})
+    saved = save_edit(root, updated, board=board, expected_hash=expected_hash)
+    return {
+        "captions": sum(
+            1 for shot in saved.shots for item in shot.text if item.id.startswith(captions.PREFIX)
+        ),
+        "timed_lines": len(lines),
+    }
+
+
 def cut_material(root: Path) -> dict:
     """What the music and the words offer to cut on, in film frames. Evidence, not orders."""
     from . import production as P
     from .domain import lyric_timing, section_map
+    from .song_map import song_map
 
     project = P.load_project(root)
     fps = project.fps
     frame = lambda seconds: round(float(seconds) * fps)  # noqa: E731
+    song = song_map(root)
+    words = {item["start_frame"]: item for item in song.get("sections", [])}
     music = section_map.apply(root, read_optional(root / "work" / "music.json")) or {}
     sections = [
         {
@@ -937,6 +1067,10 @@ def cut_material(root: Path) -> dict:
         for index, item in enumerate(music.get("sections") or [])
         if isinstance(item, dict)
     ]
+    for section in sections:
+        heard = words.get(section["start_frame"]) or {}
+        section["energy_word"] = heard.get("energy_word")
+        section["target_per_10s"] = heard.get("target_per_10s")
     lines = [
         {"frame": frame(line["start"]), "text": line["text"], "source": line["source"]}
         for line in lyric_timing.view(root)["lines"]
@@ -958,9 +1092,14 @@ def cut_material(root: Path) -> dict:
         "lines": lines,
         "changes": changes,
         "beats": beats,
+        "downbeats": song.get("downbeats", []),
+        "bar_frames": song.get("bar_frames"),
+        "beats_per_bar": song.get("beats_per_bar"),
+        "grid_trusted": song.get("grid_trusted", False),
         "notes": (
             "All of this is estimated unless a line's source is tapped. Beats may be half or "
-            "double the felt pulse. Prefer sections, sung lines and strong changes."
+            "double the felt pulse, and a downbeat means nothing unless grid_trusted is true. "
+            "Prefer sections, sung lines and strong changes."
         ),
     }
 

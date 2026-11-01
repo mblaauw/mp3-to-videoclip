@@ -129,3 +129,26 @@ signals and stills cannot prove musical pacing or a continuous audiovisual watch
 Production drafts: post-editor proposes purposeful movement/grade; visual-director
 checks style; film-finisher executes; critic sees actual pixels; director integrates.
 One bounded repair normally, no filter checklist, flashing or automatic beat cuts.
+
+## Workers, served stills and half-size previews
+
+A render with several chunks left runs several browsers, one `render.mjs` process per
+list: half the cores, at most 4, one fewer for each 600 MB short of free memory, and never
+more than the chunks left. `STUDIO_RENDER_WORKERS` overrides it. The machine lock is taken
+once for the whole render. The bundle is built first by `--bundle-only`. One worker failing
+or stalling ends the rest and names itself; nothing retries silently.
+
+`--serve-assets` loads stills from a loopback server for that one run, so the bundle holds
+code only and a new still never rebundles. The server answers this computer alone and
+refuses anything outside the selected directory. The request body and its hash do not
+change, because the sources are added at run time. The bundle comes from a second such
+server, because Remotion serving a folder itself takes the first free port from 3000 per
+chunk and several renderers would reach each other's servers.
+
+Previews render at 960×540 (540×960 portrait); bases and finals are untouched, so a preview
+shares no chunks with a base. A preview labels any shot whose still is missing or stale
+with a plate, names it, and cannot be approved. Frame checks skip frames inside a planned
+dip, flash or crop cut, and report them as `expected`. A final's chunks live in a store
+named by its own keys: a killed final resumes from it and any failure it survives clears
+it, except broken frames, which keep it as evidence. `STUDIO_RENDER_GL` passes a GL mode to
+Chrome and is recorded in the report; it is off by default.

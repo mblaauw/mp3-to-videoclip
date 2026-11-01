@@ -919,6 +919,10 @@ class EditText(Model):
         return value
 
 
+#: A long shot can carry every line sung over it.
+MAX_SHOT_TEXT = 24
+
+
 class EditShot(Model):
     """One edit decision: order, span, motion, transition, accents and text."""
 
@@ -929,7 +933,7 @@ class EditShot(Model):
     transition_in: EditTransition = Field(default_factory=EditTransition)
     split_layout: Literal["row", "column", "grid"] | None = None
     accents: list[EditAccent] = Field(default_factory=list, max_length=8)
-    text: list[EditText] = Field(default_factory=list, max_length=8)
+    text: list[EditText] = Field(default_factory=list, max_length=MAX_SHOT_TEXT)
     crops: list[EditCrop] = Field(default_factory=list, max_length=16)
 
     @model_serializer(mode="wrap")

@@ -64,8 +64,10 @@ def _measured_sections(root: Path) -> dict[float, dict]:
     music = read_optional(Path(root) / "work" / "music.json")
     if not isinstance(music, dict) or not isinstance(music.get("sections"), list):
         raise ValueError("measure the song before naming its sections")
+    from mp3_to_videoclip.song_map import base_sections
+
     measured: dict[float, dict] = {}
-    for item in music["sections"]:
+    for item in base_sections(root, music)[0]:
         if not isinstance(item, dict) or not isinstance(item.get("start"), (int, float)):
             continue
         measured[round(float(item["start"]), 3)] = item

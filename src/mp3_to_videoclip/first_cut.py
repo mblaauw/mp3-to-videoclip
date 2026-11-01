@@ -1,10 +1,12 @@
 """Suggest a first cut from what was measured, with no model and no randomness.
 
 The seed keeps an approved cut exactly as it was; this proposes a better one. It
-moves joins onto section starts and sung lines, varies camera travel with the
-song's own loudness, writes each section's feel from its name and measurement, and
-marks the strongest section arrivals. Nothing is saved here, and the shots, their
-order and their words stay as they are.
+moves joins onto section starts, sung lines and, where a bar grid was found,
+downbeats and beats. It adds crop cuts on bar lines in full sections and lets quiet
+ones hold, varies camera travel with the song's own loudness, writes each section's
+feel and target from its name and measurement, and marks the strongest section
+arrivals. Nothing is saved here, and the shots, their order and their words stay as
+they are.
 """
 
 from __future__ import annotations
@@ -13,8 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from .edits import cut_material, load_edit, report, seed_edit_preview
-from .models import EditAccent, EditDecisionList, EditMotion, EditSection, EditShot, EditTransition
-from .pacing import snap_joins
+from .models import (
+    EditAccent,
+    EditCrop,
+    EditDecisionList,
+    EditMotion,
+    EditSection,
+    EditShot,
+    EditTransition,
+)
+from .pacing import grid_tiers, snap_joins, split_points
 
 # Frames a cut leads a sung line by, so the picture is there as the word lands.
 LINE_LEAD = 2
@@ -25,6 +35,10 @@ TRAVEL = {"quiet": 0.03, "middle": 0.06, "full": 0.1}
 MAX_HOLD_SECONDS = 6.0
 PUNCH = 1.05
 DISSOLVE_FRAMES = 12
+# A crop cut's detail framing. The report calls anything above 1.4 soft.
+DETAIL_ZOOM = 1.25
+GRID_LEAD = 1
+MAX_CROPS = 16
 
 
 def _bands(sections: list[dict]) -> dict[int, str]:
@@ -62,6 +76,52 @@ def _motion(
     return "push_in"
 
 
+def _tiers(material: dict) -> list[list[int]]:
+    """Strongest evidence first. The bar grid only counts when its phase was found."""
+    sections = [section["start_frame"] for section in material["sections"]]
+    lines = [max(0, line["frame"] - LINE_LEAD) for line in material["lines"]]
+    changes = [change["frame"] for change in material["changes"]]
+    if not material.get("grid_trusted"):
+        return [sections, lines, changes]
+    downbeats, beats = grid_tiers(material["downbeats"], material["beats"], GRID_LEAD)
+    on_bar = [
+        min(downbeats, key=lambda bar: abs(bar - frame)) if downbeats else frame
+        for frame in changes
+    ]
+    return [sections, lines, downbeats, on_bar, beats]
+
+
+def _crops(
+    shot: EditShot, start: int, end: int, band: str, material: dict, fps: int
+) -> list[EditCrop]:
+    """More cuts without new pictures in a full section, fewer in a quiet one."""
+    if band == "quiet":
+        return []
+    kept = [crop for crop in shot.crops if start < crop.frame < end]
+    bar = material.get("bar_frames")
+    if band != "full" or kept or not material.get("grid_trusted") or not bar:
+        return kept
+    if end - start <= 2 * bar:
+        return kept
+    bars, _ = grid_tiers(material["downbeats"], [], GRID_LEAD)
+    inside = [frame for frame in bars if start < frame < end]
+    points = split_points(start, end, inside, bar, round(MIN_SHOT_SECONDS * fps))
+    x, y = shot.motion.anchor
+    crops = []
+    for position, frame in enumerate(points[:MAX_CROPS]):
+        detail = position % 2 == 0
+        crops.append(
+            EditCrop(
+                frame=frame,
+                zoom=DETAIL_ZOOM if detail else 1.0,
+                x=x if detail else 0.5,
+                y=y if detail else 0.5,
+                reason="on the bar, in a full passage",
+            )
+        )
+    return crops
+
+
 def suggest(root: Path) -> dict[str, Any]:
     """A suggested cut, with what would change and its report. Nothing is written."""
     from . import production as P
@@ -81,11 +141,7 @@ def suggest(root: Path) -> dict[str, Any]:
         total_frames=total,
         min_frames=round(MIN_SHOT_SECONDS * fps),
         reach=round(REACH_SECONDS * fps),
-        tiers=[
-            [section["start_frame"] for section in sections],
-            [max(0, line["frame"] - LINE_LEAD) for line in material["lines"]],
-            [change["frame"] for change in material["changes"]],
-        ],
+        tiers=_tiers(material),
     )
     starts = [0, *moved]
     ends = [*moved, total]
@@ -167,7 +223,11 @@ def suggest(root: Path) -> dict[str, Any]:
                     "accents": accents,
                     "transition_in": transition,
                     "text": kept_text,
-                    "crops": [crop for crop in shot.crops if start < crop.frame < end],
+                    "crops": (
+                        [crop for crop in shot.crops if start < crop.frame < end]
+                        if locked
+                        else _crops(shot, start, end, band, material, fps)
+                    ),
                 }
             )
         )
@@ -182,6 +242,7 @@ def suggest(root: Path) -> dict[str, Any]:
             end_frame=section["end_frame"],
             feel=f"{section['name']}: {feel_words[bands[index]]}",
             techniques=[],
+            density_per_10s=section.get("target_per_10s") or 0,
         )
         for index, section in enumerate(sections)
         if section["start_frame"] < total
@@ -211,6 +272,8 @@ def _changes(before: EditDecisionList, after: EditDecisionList, fps: int) -> dic
         (abs(shot.start_frame - old[shot.shot_id].start_frame) for shot in after.shots),
         default=0,
     )
+    crops_before = {crop.frame for shot in before.shots for crop in shot.crops}
+    crops_after = {crop.frame for shot in after.shots for crop in shot.crops}
     return {
         "joins_moved": len(moved),
         "largest_move_seconds": round(largest / fps, 2),
@@ -227,5 +290,7 @@ def _changes(before: EditDecisionList, after: EditDecisionList, fps: int) -> dic
         "accents": sum(len(shot.accents) for shot in after.shots),
         "dissolves": sum(1 for shot in after.shots if shot.transition_in.type == "fade"),
         "holds": sum(1 for shot in after.shots if shot.motion.type == "hold"),
+        "crops_added": sum(1 for frame in crops_after if frame not in crops_before),
+        "crops_removed": sum(1 for frame in crops_before if frame not in crops_after),
         "sections": len(after.sections),
     }

@@ -11,6 +11,7 @@ import os
 import tempfile
 import threading
 import time
+from collections import OrderedDict
 from contextvars import ContextVar
 from pathlib import Path
 
@@ -150,6 +151,32 @@ def file_hash(path: Path) -> str:
         for block in iter(lambda: f.read(1024 * 1024), b""):
             h.update(block)
     return h.hexdigest()
+
+
+_HASHES: OrderedDict[tuple, str] = OrderedDict()
+_HASHES_LOCK = threading.Lock()
+_HASHES_SIZE = 512
+
+
+def file_hash_cached(path: Path) -> str:
+    """A file's hash, read again only when its path, size, mtime or inode change.
+
+    For verifying immutable files on every read. Anything that spends money or records
+    an approval hashes the bytes with :func:`file_hash`.
+    """
+    resolved = Path(path).resolve()
+    stat = resolved.stat()
+    key = (str(resolved), stat.st_size, stat.st_mtime_ns, stat.st_ino)
+    with _HASHES_LOCK:
+        if key in _HASHES:
+            _HASHES.move_to_end(key)
+            return _HASHES[key]
+    value = file_hash(resolved)
+    with _HASHES_LOCK:
+        _HASHES[key] = value
+        while len(_HASHES) > _HASHES_SIZE:
+            _HASHES.popitem(last=False)
+    return value
 
 
 def sync_directory(directory: Path) -> None:

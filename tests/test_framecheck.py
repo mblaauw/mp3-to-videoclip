@@ -137,7 +137,7 @@ def test_a_real_encoded_broken_frame_is_found(tmp_path, monkeypatch):
     damaged[20] = _tiled(film[20])
     _encode(damaged, tmp_path / "movie.mp4")
     check, calls = _check(tmp_path / "movie.mp4", film, monkeypatch)
-    assert check == {"scanned": 40, "suspects": [20], "broken": [20]}
+    assert check == {"scanned": 40, "suspects": [20], "expected": [], "broken": [20]}
     assert calls == [[20]]
     assert not list(tmp_path.glob(".frame-check-*"))
 
@@ -147,14 +147,14 @@ def test_a_real_flash_is_cleared_by_the_fresh_render(tmp_path, monkeypatch):
     film[20] = np.minimum(film[20] + 60, 255)
     _encode(film, tmp_path / "movie.mp4")
     check, _ = _check(tmp_path / "movie.mp4", film, monkeypatch)
-    assert check == {"scanned": 40, "suspects": [20], "broken": []}
+    assert check == {"scanned": 40, "suspects": [20], "expected": [], "broken": []}
 
 
 def test_a_clean_movie_renders_nothing_more(tmp_path, monkeypatch):
     film = _film()
     _encode(film, tmp_path / "movie.mp4")
     check, calls = _check(tmp_path / "movie.mp4", film, monkeypatch)
-    assert check == {"scanned": 40, "suspects": [], "broken": []}
+    assert check == {"scanned": 40, "suspects": [], "expected": [], "broken": []}
     assert calls == []
 
 

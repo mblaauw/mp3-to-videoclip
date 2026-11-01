@@ -68,6 +68,7 @@ def test_preview_and_final_pass_the_brand_package(tmp_path, monkeypatch):
     monkeypatch.setattr(services.render, "_render", _fake_render(calls))
     monkeypatch.setattr(P, "require_approval", lambda root, stage: None)
     monkeypatch.setattr(services.render.P, "resolved_assets", lambda root, ids=None: [])
+    monkeypatch.setattr(services.render.P, "preview_assets", lambda root: ([], []))
 
     services.render.render_preview(root, root / "previews" / "brand-v001.mp4")
     services.render.render_final(root, root / "renders" / "brand-v001.mp4")
@@ -231,10 +232,11 @@ def test_working_renders_use_jpeg_and_reuse_and_a_final_does_neither(tmp_path, m
     calls = []
     root = tmp_path / "film"
     root.mkdir()
-    project = SimpleNamespace(slug="film")
+    project = SimpleNamespace(slug="film", fps=24, duration=10.0)
     monkeypatch.setattr(services.render.P, "require_approval", lambda *_a: None)
     monkeypatch.setattr(services.render.P, "load_project", lambda _r: project)
     monkeypatch.setattr(services.render.P, "resolved_assets", lambda _r: [])
+    monkeypatch.setattr(services.render.P, "preview_assets", lambda _r: ([], []))
     monkeypatch.setattr(services.render.P, "load_brand", lambda _r: None)
     monkeypatch.setattr(services.render.P, "render_audio", lambda _r, _p: tmp_path / "a.mp3")
     monkeypatch.setattr(services.render.P, "requires_signature", lambda _r, _p: False)

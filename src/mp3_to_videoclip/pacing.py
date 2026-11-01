@@ -53,7 +53,14 @@ from collections.abc import Iterable
 from fractions import Fraction
 from typing import Any
 
-__all__ = ["PacingError", "plan_boundaries", "snap_joins"]
+__all__ = [
+    "PacingError",
+    "density_plan",
+    "grid_tiers",
+    "plan_boundaries",
+    "snap_joins",
+    "split_points",
+]
 
 # Candidate tiers; the lowest wins inside a feasible window.
 _EVENT_TIER = 0
@@ -247,3 +254,52 @@ def snap_joins(
                 result[index] = min(options, key=lambda frame: (abs(frame - join), frame))
                 break
     return result
+
+
+#: Cuts per bar for each energy word, and per 10 s when no bar was measured.
+_CUTS_PER_BAR = {"quiet": 0.5, "middle": 1.0, "full": 2.5}
+_CUTS_PER_10S = {"quiet": 1.5, "middle": 3.0, "full": 5.0}
+#: The shortest shot a density may ask for.
+_MIN_CUT_SECONDS = 1.5
+
+
+def density_plan(
+    energy_words: Iterable[str], beats_per_bar: int | None, bpm: float | None
+) -> list[float]:
+    """A target in cuts per 10 s for each section, from its energy word and the bar."""
+    targets = []
+    bar_seconds = beats_per_bar * 60 / bpm if beats_per_bar and bpm else None
+    for word in energy_words:
+        if bar_seconds:
+            target = _CUTS_PER_BAR[word] / bar_seconds * 10
+        else:
+            target = _CUTS_PER_10S[word]
+        targets.append(round(min(target, 10 / _MIN_CUT_SECONDS), 2))
+    return targets
+
+
+def grid_tiers(
+    downbeats: Iterable[int], beats: Iterable[int], lead: int = 1
+) -> tuple[list[int], list[int]]:
+    """Downbeats and beats led by a frame, so the picture is there when the hit lands."""
+    return (
+        sorted({max(0, frame - lead) for frame in downbeats}),
+        sorted({max(0, frame - lead) for frame in beats}),
+    )
+
+
+def split_points(
+    start: int, end: int, bars: Iterable[int], every: int, min_frames: int
+) -> list[int]:
+    """Bar lines to cut on inside one shot, at least ``every`` frames apart.
+
+    Each part keeps at least ``min_frames``, including the last. Pure, and it adds a
+    framing change, never a new picture.
+    """
+    points: list[int] = []
+    last = start
+    for frame in sorted(set(bars)):
+        if frame - last >= max(every, min_frames) and end - frame >= min_frames:
+            points.append(frame)
+            last = frame
+    return points

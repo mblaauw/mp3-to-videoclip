@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mp3_to_videoclip import operations
+from mp3_to_videoclip import captions, operations
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.remotion import WORKING_CAPTURE
 from mp3_to_videoclip.render import render as _render
@@ -125,6 +125,7 @@ def _render_titled_final(
     )
     report["delivery_ready"] = True
     report["graphics_review_method"] = review["method"]
+    report["captions"] = captions.sidecars_for(root, output, project)
     _stamp(root, output, report, "final", inputs["provenance"])
     _write_report(output, report)
     return report
@@ -172,6 +173,7 @@ def render_final(root: Path, output: Path | None = None) -> dict:
         report["delivery_ready"] = True
         # compose already checked frames, identical audio and faststart.
         report["verified"] = True
+        report["captions"] = captions.sidecars_for(root, Path(report["output"]), project)
         # The compositor versions an occupied destination. Its returned path is
         # authoritative; never certify or overwrite the old movie's sidecar.
         _stamp(root, Path(report["output"]), report, "final", provenance)
@@ -195,9 +197,14 @@ def render_final(root: Path, output: Path | None = None) -> dict:
         brand=brand,
     )
     report["delivery_ready"] = True
+    report["captions"] = captions.sidecars_for(root, output, project)
     _stamp(root, output, report, "final", provenance)
     _write_report(output, report)
     return report
+
+
+#: Previews are for watching with the music, at half size. Bases and finals are untouched.
+PREVIEW_SIZES = {"16:9": (960, 540), "9:16": (540, 960)}
 
 
 @operations.progress_scope(stage="preview-render")
@@ -209,23 +216,25 @@ def render_preview(root: Path, output: Path | None = None) -> dict:
     output = output or _next_output(directory, f"{project.slug}-preview")
     with read_snapshot(root):
         project = P.load_project(root)
-        shots = P.resolved_assets(root)
+        shots, placeholders = P.preview_assets(root)
         brand = P.load_brand(root)
         provenance = _provenance(root, "preview")
+    width, height = PREVIEW_SIZES.get(project.aspect, (project.width, project.height))
     report = _render(
-        project,
+        project.model_copy(update={"width": width, "height": height}),
         shots,
         P.film_audio(root, project),
         output,
         root / "work",
         preview_banner=True,
+        preview_placeholders=tuple(placeholders),
         brand=brand,
         capture=WORKING_CAPTURE,
         reuse_chunks=True,
     )
     report["delivery_ready"] = False
     _stamp(root, output, report, "preview", provenance)
-    if not report["current"]:
+    if placeholders or not report["current"]:
         report["approval_ready"] = False
         _write_report(output, report)
         return report

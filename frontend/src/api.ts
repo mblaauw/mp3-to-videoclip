@@ -180,6 +180,8 @@ export type EditSuggestion = {
     accents: number;
     dissolves: number;
     holds: number;
+    crops_added: number;
+    crops_removed: number;
     sections: number;
   };
 };
@@ -210,6 +212,7 @@ export type TrackData = {
   section_names: { start: number; name: string }[];
   /** True while the owner's corrected sections replace the detected ones. */
   section_map?: boolean;
+  sections_from_music?: boolean;
 };
 
 export type ConceptBeat = {
@@ -1011,6 +1014,11 @@ export const api = {
     request<RatingResponse>(`/api/projects/${slug}/ratings`, {
       method: "POST",
       body: JSON.stringify({ artifact, rating, note }),
+    }),
+  setCaptions: (slug: string, mode: "off" | "all" | "named") =>
+    request<{ captions: number; timed_lines: number }>(`/api/projects/${slug}/edit/captions`, {
+      method: "POST",
+      body: JSON.stringify({ mode }),
     }),
   suggestEdit: (slug: string) =>
     request<EditSuggestion>(`/api/projects/${slug}/edit/suggest`, {

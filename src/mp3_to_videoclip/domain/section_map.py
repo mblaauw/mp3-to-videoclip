@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from mp3_to_videoclip.domain import lyric_timing, music_notes
+from mp3_to_videoclip.song_map import base_sections
 from mp3_to_videoclip.storage import project_lock, read_optional, state_lock, write_json
 
 FILE = "work/section-map.json"
@@ -43,7 +44,8 @@ def apply(root: Path, music: dict | None) -> dict | None:
         return music
     saved = read(root)
     if saved is None:
-        return music_notes.apply_names(music, music_notes.read(root))
+        base, _source = base_sections(root, music)
+        return music_notes.apply_names({**music, "sections": base}, music_notes.read(root))
     duration = float(music.get("duration") or saved[-1]["start"] + MIN_SECTION_SECONDS)
     sections = []
     for index, item in enumerate(saved):
@@ -73,7 +75,8 @@ def _measured_starts(root: Path) -> list[float]:
     music = read_optional(Path(root) / "work" / "music.json")
     if not isinstance(music, dict) or not isinstance(music.get("sections"), list):
         raise ValueError("measure the song before changing its sections")
-    return [round(float(item["start"]), 3) for item in music["sections"] if isinstance(item, dict)]
+    # Reset returns here, so this is the list the owner's corrections sit on.
+    return [round(float(item["start"]), 3) for item in base_sections(root, music)[0]]
 
 
 def save(root: Path, payload: dict, duration: float) -> dict[str, Any]:

@@ -75,7 +75,9 @@ def test_suggestion_covers_every_shot_and_writes_nothing(tmp_path):
     root = _film(tmp_path)
     before = sorted(path.name for path in (root / "work").iterdir())
     result = first_cut.suggest(root)
-    assert sorted(path.name for path in (root / "work").iterdir()) == before
+    # The song map's derived cache is the only new file.
+    after = sorted(path.name for path in (root / "work").iterdir() if path.name != "song-map.json")
+    assert after == before
     suggested = EditDecisionList.model_validate(result["edit"])
     suggested.check_board(P.load_board(root))
     assert result["report"]["ok"] is True
@@ -152,3 +154,118 @@ def test_api_suggests_without_saving_and_the_film_stays_unedited(tmp_path):
 def test_snap_refuses_bad_input(bad):
     with pytest.raises(pacing.PacingError):
         pacing.snap_joins([bad], total_frames=100, min_frames=2, reach=2, tiers=[])
+
+
+def _grid(root: Path, *, score: float = 1.5) -> None:
+    """A 2 s bar, with beats every half second, over the whole 60 s film."""
+    music = read_json(root / "work/music.json")
+    music["beats"] = [index * 0.5 for index in range(120)]
+    write_json(root / "work/music.json", music)
+    write_json(
+        root / "work/music-deep.json",
+        {
+            "refined_tempo": {"primary_bpm": 120.0},
+            "downbeats": [{"time": index * 2.0, "strength": 1.0} for index in range(30)],
+            "bar_length_candidates": [{"beats_per_bar": 4, "score": score}],
+            "sections": [],
+        },
+    )
+
+
+def test_grid_tiers_lead_a_hit_by_a_frame():
+    assert pacing.grid_tiers([48, 96], [12, 48], 1) == ([47, 95], [11, 47])
+    assert pacing.grid_tiers([0], [], 1) == ([0], [])
+
+
+def test_a_join_a_frame_before_a_downbeat_beats_a_nearer_beat():
+    downbeats, beats = pacing.grid_tiers([100], [97], 1)
+    moved = pacing.snap_joins(
+        [97], total_frames=400, min_frames=24, reach=20, tiers=[[], [], downbeats, beats]
+    )
+    assert moved == [99]
+
+
+def test_a_sung_line_still_beats_a_downbeat():
+    moved = pacing.snap_joins([100], total_frames=400, min_frames=24, reach=20, tiers=[[92], [99]])
+    assert moved == [92]
+
+
+def test_split_points_stay_on_bars_and_keep_every_part_long_enough():
+    bars = [48, 96, 144, 192, 240, 288]
+    assert pacing.split_points(0, 300, bars, 96, 36) == [96, 192]
+    assert pacing.split_points(0, 300, bars, 48, 36) == [48, 96, 144, 192, 240]
+    assert pacing.split_points(0, 300, [], 48, 36) == []
+
+
+def test_with_a_grid_joins_land_on_it_and_targets_are_written(tmp_path):
+    root = _film(tmp_path)
+    _grid(root)
+    result = first_cut.suggest(root)
+    suggested = EditDecisionList.model_validate(result["edit"])
+    suggested.check_board(P.load_board(root))
+    assert result["report"]["ok"] is True
+    assert all(section.density_per_10s > 0 for section in suggested.sections)
+    bars = {index * 48 - 1 for index in range(1, 31)}
+    full = [
+        shot.start_frame
+        for shot in suggested.shots
+        if 444 <= shot.start_frame < 888 and shot.start_frame != 444
+    ]
+    assert full and all(frame in bars for frame in full)
+
+
+def test_no_trusted_grid_means_no_snap_to_it_and_no_crop_cuts(tmp_path):
+    root = _film(tmp_path)
+    _grid(root, score=1.02)
+    suggested = EditDecisionList.model_validate(first_cut.suggest(root)["edit"])
+    assert not any(shot.crops for shot in suggested.shots)
+
+
+def test_crop_cuts_come_only_in_full_sections_and_stay_sharp(tmp_path):
+    root = _film(tmp_path)
+    _grid(root)
+    result = first_cut.suggest(root)
+    suggested = EditDecisionList.model_validate(result["edit"])
+    crops = [(shot, crop) for shot in suggested.shots for crop in shot.crops]
+    assert crops
+    assert result["changes"]["crops_added"] == len(crops)
+    for shot, crop in crops:
+        assert crop.zoom <= edits.SOFT_CROP_ZOOM
+        assert 444 <= shot.start_frame < 888
+        assert (crop.frame + 1) % 48 == 0
+
+
+def test_a_quiet_section_drops_a_crop_cut_and_can_hold(tmp_path):
+    from mp3_to_videoclip.models import EditCrop
+
+    root = _film(tmp_path)
+    _grid(root)
+    edit = edits.seed_edit(root)
+    first = edit.shots[0]
+    first.crops.append(EditCrop(frame=first.start_frame + 30, zoom=1.2))
+    edits.save_edit(root, edit)
+    result = first_cut.suggest(root)
+    suggested = EditDecisionList.model_validate(result["edit"])
+    assert suggested.shots[0].crops == []
+    assert result["changes"]["crops_removed"] >= 1
+
+
+def test_the_report_names_cuts_off_the_grid_and_just_after_it(tmp_path):
+    root = _film(tmp_path)
+    _grid(root)
+    edit = edits.seed_edit(root)
+    middle = next(shot for shot in edit.shots if 444 <= shot.start_frame < 888)
+    earlier = edit.shots[edit.shots.index(middle) - 1]
+    # 2 frames after a beat at 576, and 6 away from every beat at 582.
+    for offset, code in (
+        (578 - middle.start_frame, "late_cut"),
+        (582 - middle.start_frame, "off_grid"),
+    ):
+        earlier.duration_frames += offset
+        middle.start_frame += offset
+        middle.duration_frames -= offset
+        found = {item["code"] for item in edits.report(root, edit=edit)["warnings"]}
+        assert code in found
+        earlier.duration_frames -= offset
+        middle.start_frame -= offset
+        middle.duration_frames += offset

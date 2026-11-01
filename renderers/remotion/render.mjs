@@ -7,7 +7,9 @@
 // file is the side-effecting half only:
 //
 //   * bundles once into a content-addressed `.cache/<sha>` directory keyed on
-//     src/, package-lock.json and the request's asset root, and reuses it;
+//     src/ and package-lock.json, and reuses it. With --serve-assets the stills come
+//     from a loopback server for this run, so a new still never rebundles; without
+//     it they are bundled too, and the key holds them;
 //   * renders with the local Chrome executable (never downloads a browser) and
 //     refuses any remote asset download;
 //   * renders to a private temp file and publishes it with an exclusive hard
@@ -28,7 +30,6 @@ import {
   linkSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   renameSync,
   rmSync,
   statSync,
@@ -46,6 +47,7 @@ import {createProgressWriter} from "./src/progress.mjs";
 import {createDiagnostics} from "./src/diagnostics.mjs";
 import {benchmarkOptions as resolveBenchmarkOptions} from "./src/benchmark-profiles.mjs";
 import {ensureBundleCache} from "./src/bundle-cache.mjs";
+import {bundleKey, startAssetServer, withServedAssets} from "./src/asset-server.mjs";
 
 const RENDERER_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ENTRY_POINT = path.join(RENDERER_ROOT, "src", "index.jsx");
@@ -84,7 +86,8 @@ const KIND_SETTINGS = {
   },
 };
 
-const USAGE = "usage: node render.mjs <request.json|-> [--cache-dir <dir>] [--progress <file>] [--benchmark-profile videotoolbox-20m]";
+const USAGE = "usage: node render.mjs <request.json|-> [--cache-dir <dir>] [--progress <file>] [--serve-assets] [--bundle-only] [--gl <mode>] [--benchmark-profile videotoolbox-20m]";
+const GL_MODES = new Set(["angle", "swiftshader", "swangle", "egl", "vulkan", "angle-egl"]);
 
 function remotionVersion() {
   try {
@@ -99,9 +102,25 @@ function parseArgs(argv) {
   let cacheRoot = DEFAULT_CACHE_ROOT;
   let progressFile = null;
   let benchmarkProfile = null;
+  let serveAssets = false;
+  let bundleOnly = false;
+  let gl = null;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") return {help: true};
+    if (arg === "--serve-assets") {
+      serveAssets = true;
+      continue;
+    }
+    if (arg === "--bundle-only") {
+      bundleOnly = true;
+      continue;
+    }
+    if (arg === "--gl") {
+      gl = argv[++index];
+      if (!GL_MODES.has(gl)) fail(`unknown --gl mode ${gl} (${USAGE})`);
+      continue;
+    }
     if (arg === "--benchmark-profile") {
       benchmarkProfile = argv[++index];
       if (benchmarkProfile !== "videotoolbox-20m") fail("unknown benchmark profile");
@@ -132,7 +151,7 @@ function parseArgs(argv) {
     requestPath = arg;
   }
   if (requestPath === null) fail(`a request file is required (${USAGE})`);
-  return {help: false, requestPath, cacheRoot, progressFile, benchmarkProfile};
+  return {help: false, requestPath, cacheRoot, progressFile, benchmarkProfile, serveAssets, bundleOnly, gl};
 }
 
 function loadRequest(requestPath) {
@@ -153,44 +172,15 @@ function sha256File(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
 
-function listFiles(root, prefix = "") {
-  const files = [];
-  for (const entry of readdirSync(root, {withFileTypes: true}).sort((a, b) => a.name.localeCompare(b.name))) {
-    const full = path.join(root, entry.name);
-    const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) files.push(...listFiles(full, relative));
-    else if (entry.isFile()) files.push([relative, full]);
-  }
-  return files;
-}
-
-/**
- * Content key for the bundle: every source file, the lockfile and every asset
- * in the request's asset root. A changed pixel set therefore rebundles instead
- * of silently serving stale static assets.
- */
-export function bundleKey(assetRoot) {
-  const hash = createHash("sha256");
-  hash.update("mp3-to-videoclip-remotion-bundle-v2\n");
-  for (const [relative, full] of listFiles(SRC_DIR)) {
-    hash.update(`src:${relative}:${sha256File(full)}\n`);
-  }
-  hash.update(`lock:${sha256File(PACKAGE_LOCK)}\n`);
-  for (const [relative, full] of listFiles(assetRoot)) {
-    hash.update(`asset:${relative}:${sha256File(full)}\n`);
-  }
-  return hash.digest("hex");
-}
-
 /** Bundle into `cacheDir` unless a complete bundle is already there. */
-async function ensureBundle(cacheDir, assetRoot, progress) {
+async function ensureBundle(cacheDir, publicDir, progress) {
   const result = await ensureBundleCache({
     cacheDir,
     key: path.basename(cacheDir),
     build: (staging) => bundle({
       entryPoint: ENTRY_POINT,
       outDir: staging,
-      publicDir: assetRoot,
+      publicDir,
       rootDir: RENDERER_ROOT,
       enableCaching: true,
       onProgress: (percent) => {
@@ -239,7 +229,8 @@ function refuseRemoteAsset(src) {
 }
 
 async function run() {
-  const {help, requestPath, cacheRoot, progressFile, benchmarkProfile} = parseArgs(process.argv.slice(2));
+  const options = parseArgs(process.argv.slice(2));
+  const {help, progressFile} = options;
   if (help) {
     process.stdout.write(`${USAGE}\n`);
     return;
@@ -247,13 +238,13 @@ async function run() {
   const progress = createProgressWriter(progressFile);
   progress.update({phase: "validating-request"});
   try {
-    await render(progress, requestPath, cacheRoot, benchmarkProfile);
+    await render(progress, options);
   } finally {
     progress.close();
   }
 }
 
-async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
+async function render(progress, {requestPath, cacheRoot, benchmarkProfile, serveAssets, bundleOnly, gl}) {
   const totalStarted = performance.now();
   const diagnostics = createDiagnostics();
   const request = loadRequest(requestPath);
@@ -268,12 +259,41 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
   const settings = KIND_SETTINGS[normalized.kind];
   const chrome = normalized.chrome ?? resolveChrome(undefined);
 
-  const cacheKey = bundleKey(normalized.assetRoot);
+  const cacheKey = bundleKey(SRC_DIR, PACKAGE_LOCK, serveAssets ? null : normalized.assetRoot);
   const cacheDir = path.join(cacheRoot, cacheKey);
   const bundleStarted = performance.now();
-  const {serveUrl, bundleCached} = await ensureBundle(cacheDir, normalized.assetRoot, progress);
+  const {serveUrl, bundleCached} = await ensureBundle(
+    cacheDir,
+    serveAssets ? undefined : normalized.assetRoot,
+    progress,
+  );
   const bundleMs = performance.now() - bundleStarted;
+  if (bundleOnly) {
+    process.stdout.write(`${JSON.stringify({bundle_cached: bundleCached, bundle_ms: bundleMs})}\n`);
+    return;
+  }
+  const served = serveAssets ? await startAssetServer(normalized.assetRoot) : null;
+  // Handed a folder, Remotion serves it on the first free port from 3000 for each chunk, and
+  // several renderers then reach each other's servers. Handed a URL, it visits that.
+  const bundleServer = serveAssets ? await startAssetServer(serveUrl) : null;
+  try {
+    await renderWith(progress, {
+      request, normalized, settings, chrome, sha, bundleCached, bundleMs, served, gl,
+      serveUrl: bundleServer?.url ?? serveUrl,
+      benchmarkOptions, benchmarkProfile, diagnostics, totalStarted,
+    });
+  } finally {
+    await served?.close();
+    await bundleServer?.close();
+  }
+}
 
+async function renderWith(progress, run) {
+  const {normalized, settings, chrome, sha, serveUrl, bundleCached, bundleMs, served, gl,
+    benchmarkOptions, benchmarkProfile, diagnostics, totalStarted} = run;
+  const input = served && normalized.kind !== "graphics"
+    ? withServedAssets(normalized.input, served.url)
+    : normalized.input;
   const inputProps = {
     kind: normalized.kind,
     width: normalized.width,
@@ -283,13 +303,13 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
     input:
       normalized.kind === "graphics"
         ? {...normalized.input, part: normalized.part}
-        : normalized.input,
+        : input,
   };
   const shared = {
     serveUrl,
     inputProps,
     browserExecutable: chrome,
-    chromiumOptions: {headless: true},
+    chromiumOptions: gl ? {headless: true, gl} : {headless: true},
     onBrowserDownload: refuseBrowserDownload,
     logLevel: "error",
   };
@@ -305,11 +325,9 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
     });
     return;
   }
-  const composition = await selectComposition({...shared, id: settings.compositionId});
-  const setupMs = Number(process.hrtime.bigint() - started) / 1e6;
-  let renderMediaMs;
   if (normalized.kind === "stills") {
-    const stills = await renderStills(progress, shared, composition, normalized);
+    const {stills} = await renderStills(progress, shared, settings, normalized);
+    const setupMs = Number(process.hrtime.bigint() - started) / 1e6;
     const report = {
       frames: normalized.frames,
       width: normalized.width,
@@ -329,6 +347,9 @@ async function render(progress, requestPath, cacheRoot, benchmarkProfile) {
     process.stdout.write(`${JSON.stringify({...report, output: normalized.output, sidecar: sidecarPath})}\n`);
     return;
   }
+  const composition = await selectComposition({...shared, id: settings.compositionId});
+  const setupMs = Number(process.hrtime.bigint() - started) / 1e6;
+  let renderMediaMs;
   const capture = normalized.input.capture && normalized.kind === "base"
     ? {imageFormat: normalized.input.capture.format, jpegQuality: normalized.input.capture.quality}
     : {imageFormat: settings.imageFormat};
@@ -504,14 +525,24 @@ async function renderChunks(progress, shared, settings, normalized, facts) {
   process.stdout.write(`${JSON.stringify({...summary, output: normalized.output, sidecar: sidecarPath})}\n`);
 }
 
-/** Render each requested frame to PNG in a private directory, then publish it whole. */
-async function renderStills(progress, shared, composition, normalized) {
+/** Every requested frame to PNG through one browser, in a private directory, published whole. */
+async function renderStills(progress, shared, settings, normalized) {
   const temp = path.join(
     path.dirname(normalized.output),
     `.${path.basename(normalized.output)}.render-${process.pid}`,
   );
   mkdirSync(temp);
+  const browser = await openBrowser("chrome", {
+    browserExecutable: shared.browserExecutable,
+    chromiumOptions: shared.chromiumOptions,
+    logLevel: shared.logLevel,
+  });
   try {
+    const composition = await selectComposition({
+      ...shared,
+      puppeteerInstance: browser,
+      id: settings.compositionId,
+    });
     const stills = [];
     for (const [index, frame] of normalized.stills.entries()) {
       progress.update({phase: "rendering-stills", done: index, total: normalized.stills.length,
@@ -519,6 +550,7 @@ async function renderStills(progress, shared, composition, normalized) {
       const name = `f${String(frame).padStart(5, "0")}.png`;
       await renderStill({
         ...shared,
+        puppeteerInstance: browser,
         composition,
         frame,
         output: path.join(temp, name),
@@ -531,8 +563,9 @@ async function renderStills(progress, shared, composition, normalized) {
     progress.update({phase: "publishing-output"});
     if (existsSync(normalized.output)) fail(`output ${normalized.output} already exists; refusing to overwrite`);
     renameSync(temp, normalized.output);
-    return stills;
+    return {composition, stills};
   } finally {
+    await browser.close({silent: true});
     rmSync(temp, {recursive: true, force: true});
   }
 }

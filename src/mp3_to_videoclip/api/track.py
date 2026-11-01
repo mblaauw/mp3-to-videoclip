@@ -7,10 +7,12 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from mp3_to_videoclip import lyric_tools
+from mp3_to_videoclip import lyric_tools, song_map
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.domain import lyric_timing, music_notes, section_map
+from mp3_to_videoclip.read_snapshots import read_endpoint
+from mp3_to_videoclip.song_map import base_sections
 from mp3_to_videoclip.storage import (
     inside,
     project_lock,
@@ -52,8 +54,16 @@ async def get_excerpt(slug: str, request: Request):
     return FileResponse(target, media_type="audio/wav", content_disposition_type="inline")
 
 
+@router.get("/song-map")
+@read_endpoint
+def get_song_map(slug: str, request: Request):
+    root = project_root(request, slug)
+    return song_map.song_map(root)
+
+
 @router.get("/track")
-async def get_track(slug: str, request: Request):
+@read_endpoint
+def get_track(slug: str, request: Request):
     root = project_root(request, slug)
     music = read_optional(root / "work" / "music.json")
     notes = music_notes.read(root)
@@ -70,11 +80,17 @@ async def get_track(slug: str, request: Request):
         "source_duration": project.source_duration or project.duration,
         "section_names": notes["sections"],
         "section_map": section_map.read(root) is not None,
+        "sections_from_music": (
+            isinstance(music, dict)
+            and section_map.read(root) is None
+            and base_sections(root, music)[1] == "music-deep.json"
+        ),
     }
 
 
 @router.get("/music-notes")
-async def get_music_notes(slug: str, request: Request):
+@read_endpoint
+def get_music_notes(slug: str, request: Request):
     return music_notes.read(project_root(request, slug))
 
 
@@ -124,7 +140,8 @@ async def setup_lyric_tools(slug: str, request: Request):
 
 
 @router.get("/lyric-draft")
-async def get_lyric_draft(slug: str, request: Request):
+@read_endpoint
+def get_lyric_draft(slug: str, request: Request):
     return lyric_tools.read_draft(project_root(request, slug))
 
 
@@ -145,7 +162,8 @@ async def run_lyric_timing(slug: str, request: Request):
 
 
 @router.get("/lyric-timing")
-async def get_lyric_timing(slug: str, request: Request):
+@read_endpoint
+def get_lyric_timing(slug: str, request: Request):
     return lyric_timing.view(project_root(request, slug))
 
 

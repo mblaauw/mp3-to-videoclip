@@ -125,7 +125,9 @@ export function SectionsPart({ slug, model }: { slug: string; model: TrackModel 
     <section className="track-sections" aria-label="Sections">
       <div className="track-head">
         <h2>Sections</h2>
-        <small>Name them the way you talk about the song</small>
+        <small>
+          {data?.sections_from_music ? "Found in the music. " : ""}Name them the way you talk about the song
+        </small>
         {namesSaved && <span className="saved-note">Saved</span>}
         {edgeRefused && <span className="track-refused">Too close to an edge</span>}
       </div>

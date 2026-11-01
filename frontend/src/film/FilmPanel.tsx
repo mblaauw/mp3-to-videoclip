@@ -9,7 +9,7 @@ import { notifyProjectChanged } from "../shell/projectEvents";
 import { usePlayerControls } from "../spine/player";
 import { clock } from "../spine/wave";
 import { ShotThumb } from "../storyboard/ShotThumb";
-import { Button } from "../ui";
+import { Button, ErrorState } from "../ui";
 import type { CutNote } from "./cutNotes";
 import { DeliveryPanel } from "./DeliveryPanel";
 import {
@@ -172,7 +172,7 @@ function SuggestCut({
   const { changes } = suggestion;
   return (
     <div className="cut-suggestion" role="group" aria-label="Suggested cut">
-      <b>A cut from the song's sections and sung lines</b>
+      <b>A cut from the song's sections, sung lines and bars</b>
       <ul>
         <li>
           {changes.joins_moved} joins move, by up to {changes.largest_move_seconds} s
@@ -180,6 +180,9 @@ function SuggestCut({
         <li>{changes.moves_changed} camera moves change, {changes.holds} shots hold</li>
         <li>
           {changes.accents} accents, {changes.dissolves} dissolves
+        </li>
+        <li>
+          {changes.crops_added} crop cuts added, {changes.crops_removed} removed
         </li>
         <li>{changes.sections} sections get a written feel</li>
       </ul>
@@ -385,6 +388,49 @@ function CropCuts({
   );
 }
 
+type CaptionMode = "off" | "all" | "named";
+
+/** Draw the timed lines on the film. SRT and VTT always carry all of them. */
+function Captions({ slug, edit }: { slug: string; edit: EditPayload | null }) {
+  const drawn = (edit?.shots ?? []).reduce(
+    (count, shot) => count + (shot.text ?? []).filter((item) => item.id.startsWith("cap-")).length,
+    0,
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<CaptionMode>(drawn ? "all" : "off");
+  return (
+    <div className="caption-control">
+      <label>
+        Captions{" "}
+        <select
+          value={mode}
+          disabled={busy}
+          onChange={(event) => {
+            const next = event.target.value as CaptionMode;
+            setBusy(true);
+            setError(null);
+            api
+              .setCaptions(slug, next)
+              .then(() => {
+                setMode(next);
+                notifyProjectChanged();
+              })
+              .catch((caught) => setError(String(caught)))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <option value="off">Off</option>
+          <option value="all">All sung lines</option>
+          <option value="named">Named sections only</option>
+        </select>
+      </label>{" "}
+      <span className="hint">{drawn} on the film</span>
+      {error && <ErrorState what="changing the captions" error={error} compact />}
+    </div>
+  );
+}
+
 function Overview({
   film,
   edit,
@@ -435,6 +481,7 @@ function Overview({
           {cut.notes && <p className="cut-notes">{cut.notes}</p>}
           {cut.against_seed && <AgainstSeed changes={cut.against_seed} />}
           <SuggestCut slug={slug} onChange={onChange} />
+          <Captions slug={slug} edit={edit} />
           {edit && <LookControls edit={edit} onChange={onChange} />}
           <CriticNotes slug={slug} onSeek={(frame) => onSeekNote({ frame } as CutNote)} />
           {edit && (

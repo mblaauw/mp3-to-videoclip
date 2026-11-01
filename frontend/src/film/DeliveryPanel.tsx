@@ -74,6 +74,7 @@ export function DeliveryPanel({
                   >
                     {busy === "preview" ? "Queueing…" : rendering ? "Rendering…" : "Render the preview"}
                   </Button>
+                  <p className="hint">A half-size preview, to watch with the music.</p>
                 </div>
               )}
               {item.id === "titles" && item.state !== "done" && item.state !== "optional" && (

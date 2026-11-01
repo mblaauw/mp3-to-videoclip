@@ -6,13 +6,15 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.read_snapshots import read_endpoint
 from mp3_to_videoclip.storage import digest
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["storyboard"])
 
 
 @router.get("/storyboard")
-async def get_storyboard(slug: str, request: Request, response: Response):
+@read_endpoint
+def get_storyboard(slug: str, request: Request, response: Response):
     root = project_root(request, slug)
     if not (root / "work" / "storyboard.json").is_file():
         return {"available": False}

@@ -8,7 +8,7 @@ from ..models import (
     Project,
 )
 from ..storage import (
-    file_hash,
+    file_hash_cached,
     inside,
     read_json,
     snapshot_read,
@@ -47,7 +47,7 @@ def now() -> str:
 @snapshot_read
 def load_project(root: Path, verify_source=True) -> Project:
     project = Project.model_validate(read_json(root / "project.json"))
-    if verify_source and file_hash(inside(root, project.source)) != project.source_sha256:
+    if verify_source and file_hash_cached(inside(root, project.source)) != project.source_sha256:
         raise ValueError("copied source changed; create a new production instead")
     return project
 
