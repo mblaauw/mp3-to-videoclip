@@ -15,14 +15,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # Tests are also a package so ``python -m tests.evals`` works; keep the
 # historical top-level imports used by the test modules working.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# librosa caches its compiled numba code on disk. Parallel workers filling one
+# empty cache read each other's half-written entries and segfault, so each worker
+# keeps its own. Numba reads this once on import, so it must be set before librosa.
+if _worker := os.environ.get("PYTEST_XDIST_WORKER"):
+    os.environ["NUMBA_CACHE_DIR"] = str(
+        Path(tempfile.gettempdir()) / "mp3-to-videoclip-numba" / _worker
+    )
 
 import numpy as np
 import pytest
