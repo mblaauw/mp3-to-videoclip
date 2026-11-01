@@ -253,6 +253,14 @@ hand-written types. Every API 4xx/5xx is `{detail, code}`; the frontend parses
 it into `ApiError` and maps stable codes to user-facing copy and, where there is
 one next move, an action (Open settings, Go to a stage).
 
+The song map (`song_map.py`, cached in `work/song-map.json`) merges `music.json`,
+`music-deep.json`, the owner's section layer and the timed words into one object in film
+frames, served at `/song-map`, given to every role as `get_song_map` and summarised in
+every Director snapshot. Sections come from the deep pass's checkerboard boundaries when
+it found at least two, under the owner's layer, and never rewrite `music.json`, so no
+approval moves. The deep pass is the second phase of analysis. `music_map.py` is a
+different thing: the paid listening draft for music-led films.
+
 Settings is one schema 2 TOML file, nested by what a value is for (`roles`, `voices`,
 `pictures`, `keys`, `new_films`, `prices`, `computer`), with the old flat names kept as
 read-only properties so no caller had to change. `catalog.py` and `catalog.toml` say what

@@ -151,3 +151,26 @@ Two-second visual samples and a gallery are in `docs/primitives/`. They render
 through the production composition; `docs/primitives/render_samples.mjs`
 regenerates them. `renderers/remotion/tests/edit-primitives.test.mjs` unit-tests
 every primitive, the split rectangles, the flash rule and the request refusal.
+
+## The grid and the suggested cut
+
+*Suggest a cut* moves a join to the closest of these within 1.5 s, strongest first: a
+section start, a sung line (led by two frames), a downbeat (led by one), a strong change
+moved onto its nearest downbeat, a beat (led by one). The last three apply only when the
+best bar-length score is at least 1.1, because a score near 1.0 means the phase of the bar
+was never found. The song map says so as `grid_trusted`.
+
+Every section gets a density target from its energy against the rest of the song. Every
+storyboard shot appears exactly once, so a full section gets more cuts through crop cuts
+on bar lines, alternating the whole still and a 1.25 detail, and a quiet section drops
+crop cuts and lets shots hold. The report adds `off_grid` and `late_cut` by section, in
+full sections, where a grid was found. All of it is advice; none of it is a hard finding.
+
+## Captions
+
+Film's *Captions* control draws every timed line, only the lines in sections named hook,
+chorus or refrain, or none. The Editor's `set_captions` can choose any lines. A caption is
+an ordinary `lyric` text layer named `cap-<line>`, inside its shot and continued as a
+second layer when a line crosses a join, so choosing captions is a change to the cut and
+its approval goes stale. `captions.srt` and `captions.vtt` always hold every timed line
+and are written beside each final.
