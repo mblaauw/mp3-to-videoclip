@@ -88,8 +88,23 @@ def test_a_cache_clear_asks_first_then_removes_only_that_folder(page: Page, pane
     assert kept.read_bytes() == before
 
 
-def test_the_tab_rail_fits_a_phone(page: Page, panel):
-    page.set_viewport_size({"width": 390, "height": 844})
-    assert page.evaluate("document.documentElement.scrollWidth") <= 390
-    box = panel.get_by_label("Writer model").bounding_box()
-    assert box["x"] >= 0 and box["x"] + box["width"] <= 390
+@pytest.mark.parametrize("width", [390, 320])
+def test_no_field_is_cut_off_on_a_phone(page: Page, panel, width):
+    page.set_viewport_size({"width": width, "height": 844})
+    for name in (
+        "Roles",
+        "Voices",
+        "Pictures",
+        "Keys",
+        "New films",
+        "This computer",
+        "Costs",
+    ):
+        _tab(panel, name)
+        expect(panel.locator(".settings-section").first).to_be_visible()
+        widest = page.evaluate(
+            """() => Math.max(...[...document.querySelectorAll(
+                '.settings-body input, .settings-body select, .settings-body button'
+            )].map((item) => item.getBoundingClientRect().right))"""
+        )
+        assert widest <= width, f"{name} reaches {widest} on a {width} px screen"
