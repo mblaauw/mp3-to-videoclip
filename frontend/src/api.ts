@@ -120,6 +120,7 @@ export type Storyboard = {
   fps: number;
   total_frames: number;
   shots: Shot[];
+  placeholder_shot_ids?: string[];
 };
 
 export type MusicWindow = {

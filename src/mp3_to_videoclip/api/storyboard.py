@@ -19,7 +19,7 @@ async def get_storyboard(slug: str, request: Request, response: Response):
     board = P.load_board(root)
     value = board.model_dump()
     response.headers["ETag"] = f'"{digest(value)}"'
-    return value
+    return {**value, "placeholder_shot_ids": P.placeholder_shot_ids(board)}
 
 
 @router.patch("/storyboard/shots")
@@ -31,7 +31,7 @@ async def update_shots(slug: str, request: Request, payload: dict, response: Res
     board, _changed = P.update_shots(root, changes, expected_hash=request.headers.get("if-match"))
     value = board.model_dump()
     response.headers["ETag"] = f'"{digest(value)}"'
-    return value
+    return {**value, "placeholder_shot_ids": P.placeholder_shot_ids(board)}
 
 
 @router.post("/storyboard/skeleton")
@@ -48,4 +48,4 @@ async def create_skeleton(slug: str, request: Request, payload: dict | None = No
     from mp3_to_videoclip import promptlog
 
     promptlog.record(root, "storyboard-skeleton")
-    return board.model_dump()
+    return {**board.model_dump(), "placeholder_shot_ids": P.placeholder_shot_ids(board)}

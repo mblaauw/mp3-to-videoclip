@@ -166,3 +166,10 @@ def test_a_lost_quote_is_a_404_with_a_way_forward(tmp_path):
         )
     assert response.status_code in (400, 404)
     _no_path(response.json())
+
+
+def test_storyboard_reports_unfinished_shots(tmp_path):
+    make_api_project(tmp_path)
+    with api_client(tmp_path) as client:
+        body = client.get("/api/projects/production/storyboard").json()
+    assert isinstance(body["placeholder_shot_ids"], list)

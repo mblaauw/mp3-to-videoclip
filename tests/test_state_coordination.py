@@ -373,7 +373,9 @@ def test_stale_if_match_is_409_without_overwrite(tmp_path, document):
         response = client.get(get_path)
         assert response.status_code == 200
         etag = response.headers["etag"]
-        assert etag == f'"{digest(response.json())}"'
+        # The ETag is the stored artifact's revision; computed fields are not part of it.
+        stored = {k: v for k, v in response.json().items() if k != "placeholder_shot_ids"}
+        assert etag == f'"{digest(stored)}"'
         saved = client.patch(patch_path, json=payload, headers={"If-Match": etag})
         assert saved.status_code == 200, saved.text
         assert saved.headers["etag"] != etag
