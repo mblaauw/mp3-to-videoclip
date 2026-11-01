@@ -206,6 +206,40 @@ def _story_on_song(root: Path, project) -> list[str]:
     return [f"{heading}: {placed} of {len(lines)} placed", *lines]
 
 
+def _narration(root: Path) -> list[str]:
+    """A story film's clock: its structure, its budgets and its lines, on every task."""
+    from mp3_to_videoclip import narration, narration_timing
+    from mp3_to_videoclip.production import script as scripts
+
+    heading = "## The narration"
+    report = scripts.script_report(root)
+    if not report["beats"]:
+        return [heading, "- No script yet. There is no song: the kept takes will be the clock."]
+    lines = [heading, f"- Voice: {narration.current_voice(root)}."]
+    rate = report.get("measured_rate")
+    lines.append(
+        f"- Reading rate: {rate} words a second, measured."
+        if rate
+        else f"- Reading rate: {report['assumed_rate']} words a second, assumed until takes exist."
+    )
+    for beat in report["beats"]:
+        lines.append(
+            f"- Beat {beat['id']}: budget {beat['budget']:.1f} s, estimate {beat['estimate']:.1f} s"
+            + (f", measured {beat['measured']:.1f} s" if beat["measured"] is not None else "")
+        )
+    for row in narration_timing.read(root)["lines"]:
+        lines.append(
+            f"- {row['id']} ({row['beat']}, {row['source']}) {_clock(row['start'])}-{_clock(row['end'])}: "
+            f"{_clip(row['text'], 200)}"
+        )
+    if report["stale"]:
+        lines.append(f"- Stale takes, whose words changed: {', '.join(report['stale'])}.")
+    if report["invented"]:
+        lines.append(f"- Invented claims listed: {len(report['invented'])}.")
+    lines.extend(f"- {note}" for note in report["notes"])
+    return lines
+
+
 def build_context(
     slug: str,
     projects_dir: Path | None = None,
@@ -252,7 +286,7 @@ def build_context(
         if stage:
             lines.append(f"- Current stage: {stage}")
         lines.append("")
-        lines.extend(_song(root))
+        lines.extend(_narration(root) if project.spine == "soundtrack" else _song(root))
         if context:
             lines.append("")
             lines.append("## Session context")
@@ -313,8 +347,9 @@ def build_context(
             pictures = _pictures(brief, assets)
             if pictures:
                 lines.extend([*pictures, ""])
-            lines.extend(_story_on_song(root, project))
-            lines.append("")
+            if project.spine != "soundtrack":
+                lines.extend(_story_on_song(root, project))
+                lines.append("")
         if board is None:
             lines.append("## Shots\nNo storyboard yet.")
             return "\n".join(lines)
