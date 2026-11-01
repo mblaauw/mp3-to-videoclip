@@ -176,6 +176,44 @@ def test_a_final_never_reuses_and_leaves_nothing_behind(rig):
     assert not list((tmp / "remotion-chunks").glob("fresh-*"))
 
 
+def test_a_failed_final_leaves_no_store(rig):
+    film, fake, run, tmp = rig
+    fake.fail_after = 2
+    with pytest.raises(ValueError, match="died"):
+        run("final", reuse=False)
+    assert not list((tmp / "remotion-chunks").glob("fresh-*"))
+
+
+def test_a_killed_final_resumes_from_its_own_store_and_nothing_else(rig, monkeypatch):
+    film, fake, run, tmp = rig
+    run("working")
+    assert fake.rendered == [[0, 24, 60]]
+    fake.fail_after = 2
+    # A killed process runs no cleanup, so the store is still there when it comes back.
+    with monkeypatch.context() as killed:
+        killed.setattr(remotion.shutil, "rmtree", lambda *a, **k: None)
+        with pytest.raises(ValueError, match="died"):
+            run("final", reuse=False)
+    stores = list((tmp / "remotion-chunks").glob("fresh-*"))
+    assert len(stores) == 1
+    assert len(list(stores[0].glob("*.mp4"))) == 2
+    fake.fail_after = None
+    silent, check = run("final", reuse=False)
+    # The working render's chunks never reached it: only its own third chunk rendered.
+    assert fake.rendered[-1] == [60]
+    assert check["scanned"] == 84
+    assert render._count_frames(silent) == 84
+    assert not list((tmp / "remotion-chunks").glob("fresh-*"))
+
+
+def test_a_final_with_a_returning_broken_frame_keeps_its_store(rig):
+    film, fake, run, tmp = rig
+    fake.spoil = [{30}, {30}]
+    with pytest.raises(ValueError, match=r"the chunks are kept in fresh-"):
+        run("final", reuse=False)
+    assert len(list((tmp / "remotion-chunks").glob("fresh-*"))) == 1
+
+
 def test_a_damaged_chunk_fails_closed(rig):
     film, fake, run, tmp = rig
     run("first")
