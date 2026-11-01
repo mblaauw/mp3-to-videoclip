@@ -61,6 +61,7 @@ def test_images_list_file_and_select(client, project):
 
 
 def test_estimate_returns_the_quote_and_the_budget_decision(client, monkeypatch):
+    monkeypatch.setenv("PROJECT_VEIL_RUNWARE_API", "mock-key")
     _cap(client)
     fake = {
         "quote_id": "quote-1",
@@ -455,6 +456,16 @@ def test_estimate_quotes_the_alias_owner_once(project, monkeypatch):
     result = generation.estimate(project, ["s002", "s001"])
     assert captured["ids"] == ["s001"]
     assert result["quote_id"] == "quote-alias"
+
+
+def test_estimate_without_a_key_shows_no_price(client, monkeypatch):
+    _cap(client)
+    fake = {"quote_id": "quote-1", "tasks": 1, "reserve_usd": "0.05", "shot_ids": ["s001"]}
+    monkeypatch.setattr(services.generation, "estimate", lambda *a, **k: fake)
+    response = client.post("/api/projects/production/images/estimate", json={"shot_ids": ["s001"]})
+    assert response.status_code == 409
+    assert response.json()["code"] == "no_runware_key"
+    assert "estimate" not in response.json()
 
 
 def test_a_used_correction_asks_for_a_new_round_with_a_reason(tmp_path):

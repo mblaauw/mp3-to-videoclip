@@ -149,8 +149,6 @@ async def estimate_images(slug: str, request: Request, payload: dict):
     shot_ids = payload.get("shot_ids") or []
     if not shot_ids:
         raise HTTPException(status_code=400, detail="select at least one shot")
-    # Before a price is even shown: nothing can be bought without the key.
-    runware_api_key()
     # Say so plainly while the owner can still act, instead of a refused quote.
     board = P.load_board(root)
     owners = {shot.id: shot.asset_shot_id or shot.id for shot in board.shots}
@@ -170,6 +168,9 @@ async def estimate_images(slug: str, request: Request, payload: dict):
             status_code=400,
             detail="every selected shot already has this exact image; use regenerate",
         )
+    # Last, so a shot that needs no key is not told to go and get one. Still before
+    # a price is shown: nothing can be bought without the key.
+    runware_api_key()
     return {
         "estimate": estimate,
         "decision": _decisions(root, estimate["reserve_usd"]),

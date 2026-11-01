@@ -44,6 +44,8 @@ def isolated_user_settings(tmp_path: Path, monkeypatch):
         "mp3_to_videoclip.config.settings_path",
         lambda: tmp_path / "no-user-settings.toml",
     )
+    monkeypatch.delenv("PROJECT_VEIL_RUNWARE_API", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
 
 # --------------------------------------------------------------------------- #
