@@ -1,6 +1,6 @@
 /** One place for the sticky next-step copy and its single primary action. */
 
-export type Stage = "track" | "story" | "storyboard" | "images" | "film";
+export type Stage = "track" | "script" | "story" | "storyboard" | "images" | "film";
 export type StageState = "done" | "you" | "changed" | "not_ready" | "running";
 export type NextTone = "done" | "you" | "changed" | "error";
 export type NextTarget =
@@ -38,6 +38,7 @@ export type NextStep = {
 };
 
 export type ProjectFacts = {
+  spine?: string | null;
   kind?: string | null;
   music_mode?: string | null;
   prompt_version?: number | null;
@@ -305,6 +306,57 @@ function storyStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
   };
 }
 
+function scriptStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
+  if (!storyIsDone(project, approvals)) {
+    return {
+      tone: "you",
+      title: "The story needs approval first.",
+      detail: "The narrator's words come from the approved story.",
+      actions: continueTo("story", "Go to Story"),
+    };
+  }
+  const script = approval(approvals, "script");
+  const voice = approval(approvals, "voice");
+  if (!script || script.state === "missing" || script.state === "unavailable") {
+    return {
+      tone: "you",
+      title: "Write the script with the Writer.",
+      detail: "Each line sits on a beat, and the beat sheet shows it against that beat's budget.",
+      actions: [],
+    };
+  }
+  if (script.state !== "approved") {
+    return {
+      tone: script.state === "stale" ? "changed" : "you",
+      title: script.state === "stale" ? "The script changed. Approve it again." : "Approve the script.",
+      detail: "Takes are only bought for an approved script. Nothing is spent here.",
+      actions: approvedAction("Approve the script", "script"),
+    };
+  }
+  if (!voice || voice.state === "missing" || voice.state === "unavailable") {
+    return {
+      tone: "you",
+      title: "Build the soundtrack.",
+      detail: "Record the lines or bring your own takes, keep the ones you like, and hear the draft.",
+      actions: [],
+    };
+  }
+  if (voice.state !== "approved") {
+    return {
+      tone: voice.state === "stale" ? "changed" : "you",
+      title: voice.state === "stale" ? "The voice changed. Approve it again." : "Approve the voice.",
+      detail: "The kept takes are the film's clock, so the shots are cut to them next.",
+      actions: approvedAction("Approve the voice", "voice"),
+    };
+  }
+  return {
+    tone: "done",
+    title: "The voice is approved.",
+    detail: "The storyboard is built from when each line is said.",
+    actions: continueTo("storyboard", "Go to Storyboard"),
+  };
+}
+
 function storyboardStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
   if (!storyIsDone(project, approvals)) {
     return {
@@ -312,6 +364,14 @@ function storyboardStep(project: ProjectFacts, approvals: ApprovalMap): NextStep
       title: "The story needs approval first.",
       detail: "The storyboard is built from the approved story.",
       actions: continueTo("story", "Go to Story"),
+    };
+  }
+  if (project.spine === "soundtrack" && !approved(approvals, "script")) {
+    return {
+      tone: "you",
+      title: "The script needs approval first.",
+      detail: "A story film's shots are cut to its lines.",
+      actions: continueTo("script", "Go to Script"),
     };
   }
   if (stateOf(project, "storyboard") === "not_ready") {
@@ -588,6 +648,7 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap, images: ImageFa
 /** Where a step that names the page you are on acts instead. */
 const ON_THIS_PAGE: Record<Stage, NextTarget> = {
   track: "analysis",
+  script: "approval",
   story: "brief",
   storyboard: "board",
   images: "pictures",
@@ -614,6 +675,7 @@ function stepFor(
   budget: BudgetFacts,
 ): NextStep {
   if (stage === "track") return trackStep(project);
+  if (stage === "script") return scriptStep(project, approvals);
   if (stage === "story") return storyStep(project, approvals);
   if (stage === "storyboard") return storyboardStep(project, approvals);
   if (stage === "images") return imagesStep(project, approvals, images, budget);

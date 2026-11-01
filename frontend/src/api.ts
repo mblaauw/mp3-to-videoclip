@@ -53,6 +53,7 @@ export type ProjectDetail = {
   audio_window: AudioWindow | null;
   style_preset: string | null;
   signature_required: boolean | null;
+  spine?: string | null;
   fps: number;
   width: number;
   height: number;
@@ -436,6 +437,7 @@ export type Settings = {
   style_presets?: StylePreset[];
   kinds?: KindProfile[];
   default_titles?: Record<string, string>;
+  structures?: { id: string; label: string; length: number }[];
   shot_kinds?: {
     id: ShotKind;
     label: string;
@@ -731,7 +733,7 @@ export type HistoryRestore = {
 export type DeliveryLine = {
   id: string;
   label: string;
-  stage: "track" | "story" | "storyboard" | "images" | "film";
+  stage: "track" | "script" | "story" | "storyboard" | "images" | "film";
   state: "done" | "you" | "blocked" | "optional";
   required: boolean;
   detail: string;
@@ -813,6 +815,84 @@ export type GraphicsSpec = {
   };
 };
 
+export type ScriptLine = {
+  id: string;
+  text: string;
+  beat: string;
+  target_seconds?: number | null;
+  pause_after: number;
+  direction: string;
+  claims: { text: string; invented: boolean }[];
+};
+
+export type Take = {
+  version: number;
+  path: string;
+  text: string;
+  seconds: number;
+  source: string;
+  voice?: string;
+  cost_usd?: string;
+};
+
+export type TimedLine = {
+  id: string;
+  beat: string;
+  text: string;
+  start: number;
+  end: number;
+  pause_after: number;
+  source: string;
+};
+
+export type ScriptPayload = {
+  script: { structure: string; reading_rate_wps: number; lines: ScriptLine[]; notes: string } | null;
+  beats: {
+    structure: string;
+    label: string;
+    length: number;
+    beats: { id: string; label: string; budget: number; rule: string }[];
+  };
+  structures: { id: string; label: string; length: number }[];
+  timing: { lines: TimedLine[]; duration: number };
+  soundtrack: {
+    built: boolean;
+    url: string | null;
+    receipt: {
+      seconds: number;
+      lines_with_takes: number;
+      lines: number;
+      output_lufs: number | null;
+    } | null;
+  };
+  narration: {
+    voice: string;
+    measured_rate: number | null;
+    stale: string[];
+    lines: Record<string, { selected: number | null; kept: number[]; versions: Take[] }>;
+  };
+  voices: { id: string; label: string; provider: string; recommended: boolean }[];
+  report: {
+    beats: {
+      id: string;
+      label: string;
+      budget: number;
+      estimate: number;
+      measured: number | null;
+      over: number | null;
+    }[];
+    invented: { line: string; text: string }[];
+    stale: string[];
+    measured_rate?: number | null;
+    assumed_rate?: number;
+    moved?: string[];
+    notes: string[];
+  };
+  alignment: { ready: boolean; reason: string | null };
+  duration: number;
+  fictional: boolean;
+};
+
 export type BudgetDecision = {
   ok: boolean;
   needs_budget: boolean;
@@ -886,8 +966,10 @@ export const api = {
       body: JSON.stringify({ parked }),
     }),
   createProject: async (
-    file: File,
+    file: File | null,
     meta: {
+      structure?: string;
+      fictional?: boolean;
       title: string;
       aspect: string;
       titles?: string;
@@ -907,7 +989,7 @@ export const api = {
   ) => {
     const params = new URLSearchParams({
       title: meta.title,
-      filename: file.name,
+      filename: file?.name ?? "",
       aspect: meta.aspect,
       music_mode: meta.music_mode,
       budget: meta.budget,
@@ -915,6 +997,8 @@ export const api = {
     });
     if (meta.style_preset) params.set("style_preset", meta.style_preset);
     if (meta.titles) params.set("titles", meta.titles);
+    if (meta.structure) params.set("structure", meta.structure);
+    if (meta.fictional !== undefined) params.set("fictional", String(meta.fictional));
     if (meta.kind !== "music_video") {
       params.set("objective", meta.objective || "");
       params.set("message", meta.message || "");
@@ -927,8 +1011,8 @@ export const api = {
     }
     const res = await fetch(`/api/projects?${params}`, {
       method: "POST",
-      headers: { "Content-Type": file.type || "audio/mpeg" },
-      body: file,
+      headers: { "Content-Type": file ? file.type || "audio/mpeg" : "application/json" },
+      body: file ?? undefined,
     });
     if (!res.ok) {
       const error = await readApiError(res);
@@ -1056,6 +1140,63 @@ export const api = {
     request<{ job_id: string }>(`/api/projects/${slug}/depth/setup`, { method: "POST" }),
   runDepth: (slug: string) =>
     request<{ job_id: string }>(`/api/projects/${slug}/depth/run`, { method: "POST" }),
+  script: (slug: string) => request<ScriptPayload>(`/api/projects/${slug}/script`),
+  saveScript: (slug: string, body: { structure: string; lines: Partial<ScriptLine>[] }) =>
+    request<ScriptPayload>(`/api/projects/${slug}/script`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  buildSoundtrack: (slug: string) =>
+    request<ScriptPayload>(`/api/projects/${slug}/soundtrack`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  chooseVoice: (slug: string, voice: string) =>
+    request<ScriptPayload>(`/api/projects/${slug}/narration/voice`, {
+      method: "POST",
+      body: JSON.stringify({ voice }),
+    }),
+  keepTake: (slug: string, lineId: string, version: number) =>
+    request<ScriptPayload>(`/api/projects/${slug}/narration/keep`, {
+      method: "POST",
+      body: JSON.stringify({ line_id: lineId, version }),
+    }),
+  unkeepTake: (slug: string, lineId: string) =>
+    request<ScriptPayload>(`/api/projects/${slug}/narration/unkeep`, {
+      method: "POST",
+      body: JSON.stringify({ line_id: lineId }),
+    }),
+  uploadTake: (slug: string, lineId: string, file: File) =>
+    request<ScriptPayload>(
+      `/api/projects/${slug}/narration/upload?line_id=${encodeURIComponent(lineId)}&filename=${encodeURIComponent(file.name)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      },
+    ),
+  estimateLines: (slug: string, body: { line_ids?: string[]; regenerate?: boolean }) =>
+    request<{
+      quote_id: string;
+      voice: string;
+      tasks: number;
+      characters: number;
+      reserve_usd: string;
+      decision: { ok: boolean };
+    }>(`/api/projects/${slug}/narration/estimate`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  generateLines: (slug: string, quoteId: string) =>
+    request<{ job_id?: string; needs_budget?: boolean }>(`/api/projects/${slug}/narration/generate`, {
+      method: "POST",
+      body: JSON.stringify({ quote_id: quoteId }),
+    }),
+  alignTakes: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/narration/align`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   sheets: (slug: string) =>
     request<{ sheets: Record<string, SheetRow> }>(`/api/projects/${slug}/sheets`),
   estimateSheet: (slug: string, entryId: string) =>

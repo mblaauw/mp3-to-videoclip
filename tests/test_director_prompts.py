@@ -93,7 +93,7 @@ ALL_STYLES = tuple(preset["id"] for preset in styles.public_presets())
 def test_craft_is_loaded_where_the_writing_happens_and_nowhere_else(tmp_path):
     root = make_api_project(tmp_path)
     assert len((prompts.PROMPTS / "shared/craft.md").read_text().split()) <= 380
-    assert len(ALL_STYLES) == 5
+    assert len(ALL_STYLES) == 6
     for role, tasks in prompts.TASKS.items():
         for task in tasks:
             bundle = prompts.assemble(root, "story", role=role, task=task)
@@ -106,7 +106,7 @@ def test_craft_is_loaded_where_the_writing_happens_and_nowhere_else(tmp_path):
 def test_every_writer_task_is_under_the_word_budget(tmp_path):
     root = make_api_project(tmp_path)
     for task in prompts.TASKS["writer"]:
-        for kind in ("music_video", "promo", "advert"):
+        for kind in ("music_video", "promo", "advert", "narrative"):
             for style in ALL_STYLES:
                 bundle = prompts.assemble(
                     root,
@@ -242,7 +242,7 @@ def test_stored_versions_are_json_metadata(tmp_path):
 def test_the_storyboard_prompt_asks_for_shots_inside_each_passage(tmp_path):
     root = make_api_project(tmp_path)
     bundle = _bundle(root, "storyboard")
-    assert {"path": "writer/storyboard.md", "version": 4} in bundle.meta["files"]
+    assert {"path": "writer/storyboard.md", "version": 5} in bundle.meta["files"]
     assert "Keep each timed\npassage's shots inside its frames" in bundle.text
     assert 'marked "not on the song" has no time' in bundle.text
 

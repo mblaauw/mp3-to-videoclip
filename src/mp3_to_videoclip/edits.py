@@ -1077,6 +1077,46 @@ def apply_captions(
     }
 
 
+def retime_by_lines(root: Path, edit: EditDecisionList, board: Storyboard) -> EditDecisionList:
+    """Move the cut with its lines. Everything a shot carries moves with the shot."""
+    spans = {shot.id: (shot.start_frame, shot.duration_frames) for shot in board.shots}
+    shots = []
+    for shot in edit.shots:
+        start, length = spans[shot.shot_id]
+        delta = start - shot.start_frame
+        end = start + length
+        inside_shot = lambda frame: max(start, min(end - 1, frame + delta))  # noqa: E731, B023
+        shots.append(
+            shot.model_copy(
+                update={
+                    "start_frame": start,
+                    "duration_frames": length,
+                    "accents": [
+                        a.model_copy(update={"frame": inside_shot(a.frame)}) for a in shot.accents
+                    ],
+                    "crops": [
+                        c.model_copy(update={"frame": inside_shot(c.frame)}) for c in shot.crops
+                    ],
+                    "text": [
+                        t.model_copy(
+                            update={
+                                "in_frame": inside_shot(t.in_frame),
+                                "out_frame": min(
+                                    end, inside_shot(t.in_frame) + t.out_frame - t.in_frame
+                                ),
+                            }
+                        )
+                        for t in shot.text
+                    ],
+                }
+            )
+        )
+    updated = edit.model_copy(update={"shots": sorted(shots, key=lambda s: s.start_frame)})
+    updated.check_board(board)
+    write_json(edit_path(root), updated.model_dump(by_alias=True))
+    return updated
+
+
 def cut_material(root: Path) -> dict:
     """What the music and the words offer to cut on, in film frames. Evidence, not orders."""
     from . import production as P
@@ -1116,7 +1156,19 @@ def cut_material(root: Path) -> dict:
         frame(item["time"] if isinstance(item, dict) else item) for item in music.get("beats") or []
     ]
     board = effective_board(root) if (root / P.STAGE_FILES["storyboard"]).is_file() else None
+    spoken = {}
+    if project.spine == "soundtrack":
+        from . import narration_timing
+
+        said = narration_timing.read(root)["lines"]
+        lines = [{"frame": frame(row["start"]), "text": row["text"], "source": row["source"]} for row in said]  # fmt: skip
+        spoken = {
+            "line_ids": [row["id"] for row in said],
+            "sentence_ends": [frame(row["end"]) for row in said],
+            "pauses": [frame(item["start"]) for item in music.get("pauses") or []],
+        }
     return {
+        **spoken,
         "fps": fps,
         "total_frames": board.total_frames if board else round(project.duration * fps),
         "sections": sections,

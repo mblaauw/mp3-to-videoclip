@@ -37,6 +37,10 @@ yet (transcription, listening, backups, signing, maintenance). Start with
   intake, `brief.intent` and selectable style presets. Titles are a package chosen
   per film: the 25/40 signature, a short title and end card at either shape, or
   none. The brand kit sets the default; a kit with no name starts on short titles.
+- A fourth kind, the story film: a narrator leads and there may be no song. It starts from a
+  script on a structure's beats; the kept takes, their pauses and an optional bed are mixed
+  into one WAV that becomes the clock, so a longer take moves only the shots after it. Takes
+  are bought through the journal or brought as your own recordings.
 - Promo/advert excerpt windows with waveform handles and fades. The source MP3 is
   untouched; analysis, the Player and every render use the derived excerpt.
 - A measured waveform under the storyboard; drag a boundary (or use the arrow

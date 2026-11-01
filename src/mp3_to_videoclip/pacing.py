@@ -304,3 +304,23 @@ def split_points(
             points.append(frame)
             last = frame
     return points
+
+
+def line_starts(lines: Iterable[tuple[int, int]], *, total_frames: int, lead: int = 0) -> list[int]:
+    """Where each group of spoken lines takes the picture, in order, from frame 0.
+
+    ``lines`` holds each group's first spoken frame and how far ahead of it the picture
+    comes. Strictly increasing and inside the film, so the shots cover every frame.
+    """
+    total = _positive_frames(total_frames, "total_frames")
+    starts: list[int] = []
+    for index, (frame, ahead) in enumerate(lines):
+        start = (
+            0 if index == 0 else max(_integer(frame, "frame") - _integer(ahead, "ahead") - lead, 0)
+        )
+        if starts and start <= starts[-1]:
+            start = starts[-1] + 1
+        if start >= total:
+            raise ValueError("spoken lines run past the end of the film")
+        starts.append(start)
+    return starts

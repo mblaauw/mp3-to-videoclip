@@ -160,6 +160,17 @@ films keep every hash until the owner switches on Story's Look card, which marks
 of date. `sheets.py` buys character sheets and scene plates through the journal; binding one is the
 owner's click and asks for the story to be approved again.
 
+## Story films
+
+`spine: "soundtrack"` means the film has no source: `source` and `source_sha256` are absent and
+`render_audio` returns `production/soundtrack.py`'s WAV, keyed on every input. Its length is written
+only by `soundtrack.set_duration` and stays out of the stage hashes, so re-recording a line leaves the
+script approved. The chain is brief, `script`, `voice`, storyboard. `narration_timing.py` says when each
+line is said, estimated or measured; `board.retime_lines` re-derives bound shots' frames from it and
+`edits.retime_by_lines` moves the cut with them. `narration.py` buys takes through the same journal as
+stills. `structures.py` is the template table, and `analysis.analyze_narration` keeps the keys of
+`analyze` so the Spine and `cut_material` read speech without knowing.
+
 ## Evaluation and ratings
 
 Three frozen fixtures and their automatic checks live in `tests/evals/`. The

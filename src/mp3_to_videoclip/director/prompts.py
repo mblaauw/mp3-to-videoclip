@@ -21,6 +21,7 @@ Role = Literal["writer", "editor", "critic"]
 
 STAGE_ROLE: dict[str, Role] = {
     "track": "editor",
+    "script": "writer",
     "story": "writer",
     "storyboard": "writer",
     "images": "writer",
@@ -35,6 +36,8 @@ TASKS: dict[Role, dict[str, str]] = {
         "place": "writer/place.md",
         "script_mv": "writer/script_mv.md",
         "script_ad": "writer/script_ad.md",
+        "script_narrative": "writer/script_narrative.md",
+        "narration_pass": "writer/narration_pass.md",
         "profile": "writer/profile.md",
         "storyboard": "writer/storyboard.md",
         "prompts": "writer/prompts.md",
@@ -57,6 +60,7 @@ EXAMPLES = {
     "concepts": "examples/concepts.md",
     "script_mv": "examples/script_mv.md",
     "script_ad": "examples/script_ad.md",
+    "script_narrative": "examples/script_narrative.md",
     "profile": "examples/profile.md",
     "storyboard": "examples/storyboard.md",
     "prompts": "examples/prompts.md",
@@ -66,7 +70,16 @@ EXAMPLES = {
 
 #: Storyboard and profile carry a short digest of their own, to stay inside the budget.
 CRAFT_TASKS = frozenset(
-    {"concepts", "script_mv", "script_ad", "prompts", "review", "revise", "import"}
+    {
+        "concepts",
+        "script_mv",
+        "script_ad",
+        "script_narrative",
+        "prompts",
+        "review",
+        "revise",
+        "import",
+    }
 )
 
 
@@ -126,6 +139,8 @@ def select_task(root: Path, stage: str | None, role: Role) -> str:
         return "review"
     if stage == "track":
         return "music"
+    if stage == "script":
+        return "narration_pass" if (root / "work/script.json").is_file() else "script_narrative"
     if stage == "storyboard":
         return "notes" if role == "editor" else "storyboard"
     if stage == "film":
@@ -155,6 +170,10 @@ def select_task(root: Path, stage: str | None, role: Role) -> str:
             missing = missing or not str(cta.get("text") or "").strip()
         if missing:
             return "brief"
+        # A story film's words are on the Script stage; concepts stay behind their button.
+        if kind == "narrative":
+            creative = brief.get("creative") if isinstance(brief.get("creative"), dict) else {}
+            return "profile" if int(creative.get("profile_version") or 0) < 1 else "revise"
         treatments = _json(root, "work/treatments.json")
         concepts = treatments.get("concepts") or treatments.get("treatments") or []
         concepts = concepts if isinstance(concepts, list) else []
@@ -204,6 +223,9 @@ def assemble(
         *(["shared/craft.md"] if task_value in CRAFT_TASKS else []),
         f"kinds/{kind_value}.md",
     ]
+    if kind_value == "narrative" and role_value == "writer":
+        structure = (_json(root, "brief.json").get("intent") or {}).get("structure")
+        files.append(f"structures/{structure or 'five-beat-2m'}.md")
     if role_value == "writer" and style_value:
         style_path = _style_path(style_value)
         if style_path is not None:

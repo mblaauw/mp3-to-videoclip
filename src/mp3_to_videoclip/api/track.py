@@ -32,6 +32,12 @@ async def get_audio(slug: str, request: Request):
     """The source recording, for the in-app player and waveform."""
     root = project_root(request, slug)
     project = P.load_project(root)
+    if project.spine == "soundtrack":
+        try:
+            target = P.render_audio(root, project)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return FileResponse(target, media_type="audio/wav", content_disposition_type="inline")
     try:
         target = inside(root, project.source)
     except ValueError as exc:
@@ -106,6 +112,8 @@ async def get_embedded_lyrics(slug: str, request: Request):
 
     root = project_root(request, slug)
     project = P.load_project(root)
+    if project.source is None:
+        return {"text": None}
     try:
         audio = inside(root, project.source)
     except ValueError:

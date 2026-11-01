@@ -52,15 +52,17 @@ class Project(BaseModel):
     schema_version: Literal[3] = SCHEMA_VERSION
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
     title: str
-    source: str = "media/song.mp3"
-    source_sha256: str
+    source: str | None = "media/song.mp3"
+    source_sha256: str | None = None
     duration: float = Field(gt=0)
     aspect: Literal["16:9", "9:16"] = "16:9"
     fps: Literal[24, 30] = 24
     width: int = Field(gt=0, multiple_of=2)
     height: int = Field(gt=0, multiple_of=2)
-    music_mode: Literal["vocal", "instrumental"] | None = None
-    kind: Literal["music_video", "promo", "advert"] | None = None
+    music_mode: Literal["vocal", "instrumental", "narration-led"] | None = None
+    spine: Literal["song", "soundtrack"] | None = None
+    bed: str | None = None
+    kind: Literal["music_video", "promo", "advert", "narrative"] | None = None
     source_duration: float | None = Field(default=None, gt=0)
     audio_window: AudioWindow | None = None
     native_size: list[int] | None = None

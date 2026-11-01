@@ -69,6 +69,9 @@ def _tiers(material: dict) -> list[list[int]]:
     sections = [section["start_frame"] for section in material["sections"]]
     lines = [max(0, line["frame"] - LINE_LEAD) for line in material["lines"]]
     changes = [change["frame"] for change in material["changes"]]
+    # On speech a cut belongs where a sentence ends, then where the voice rests.
+    if "sentence_ends" in material:
+        return [sections, lines, material["sentence_ends"], material["pauses"]]
     if not material.get("grid_trusted"):
         return [sections, lines, changes]
     downbeats, beats = grid_tiers(material["downbeats"], material["beats"], GRID_LEAD)

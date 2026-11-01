@@ -19,6 +19,19 @@ const FALLBACK_KINDS: KindProfile[] = [
     default_style: "photographic-painted-v2",
   },
   {
+    id: "narrative",
+    label: "Story film",
+    purpose: "",
+    lengths: [60, 90, 120, 180, 300],
+    default_length: 120,
+    allows_full_track: false,
+    structures: [],
+    text_density: "",
+    signature_required: false,
+    style_presets: ["painted-documentary-v1"],
+    default_style: "painted-documentary-v1",
+  },
+  {
     id: "promo",
     label: "Promo",
     purpose: "",
@@ -56,6 +69,7 @@ const TITLES = [
 const WHOLE_TRACK = 0;
 
 const KIND_HINT: Record<string, string> = {
+  narrative: "A narrator leads. It starts from words; music, if any, sits under the voice.",
   music_video: "The song leads. Look, lyrics and story are decided next.",
   promo: "One message and an ending, on the whole track or an excerpt. Everything else moves to Story.",
   advert: "One message, a call to action and a length. The rest of the brief is on Story.",
@@ -73,7 +87,7 @@ export function NewProduction({
   onCancel,
   initialFile = null,
 }: {
-  onCreated: (slug: string) => void;
+  onCreated: (slug: string, first?: "track" | "story") => void;
   onCancel: () => void;
   initialFile?: File | null;
 }) {
@@ -85,6 +99,9 @@ export function NewProduction({
   );
   const [kind, setKind] = useState("music_video");
   const [aspect, setAspect] = useState<"16:9" | "9:16">("16:9");
+  const [structure, setStructure] = useState("five-beat-2m");
+  const [structures, setStructures] = useState<{ id: string; label: string }[]>([]);
+  const [fictional, setFictional] = useState(false);
   const [titles, setTitles] = useState<string | null>(null);
   const [defaultTitles, setDefaultTitles] = useState<Record<string, string>>({});
   const [mode, setMode] = useState("vocal");
@@ -106,6 +123,7 @@ export function NewProduction({
         if (start.budget_usd > 0) setBudget(start.budget_usd.toFixed(2));
         const known = settings.kinds || [];
         setDefaultTitles(settings.default_titles || {});
+        setStructures(settings.structures || []);
         if (start.aspect === "9:16") setAspect("9:16");
         setKinds(known);
         setLook(start.look || undefined);
@@ -148,6 +166,7 @@ export function NewProduction({
     ...(profile?.lengths ?? []),
   ];
   const isVideo = kind === "music_video";
+  const isStory = kind === "narrative";
   const wholeTrack = isVideo || length === WHOLE_TRACK;
 
   const changeKind = (next: string) => {
@@ -160,8 +179,8 @@ export function NewProduction({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!file || !title.trim() || busy) return;
-    if (!isVideo && !message.trim()) {
+    if ((!file && !isStory) || !title.trim() || busy) return;
+    if (!isVideo && !isStory && !message.trim()) {
       setError("Give the promo or advert one message.");
       return;
     }
@@ -176,17 +195,19 @@ export function NewProduction({
         title: title.trim(),
         aspect,
         titles: chosenTitles,
+        structure: isStory ? structure : undefined,
+        fictional: isStory ? fictional : undefined,
         music_mode: mode,
         budget,
         kind,
         // A saved look only applies to a kind that offers it.
         style_preset: look && profile?.style_presets.includes(look) ? look : undefined,
-        message: isVideo ? undefined : message.trim(),
+        message: isVideo || isStory ? undefined : message.trim(),
         cta_text: kind === "advert" ? cta.trim() : undefined,
         length_seconds: wholeTrack ? undefined : length,
         fade_out: wholeTrack ? undefined : 1.5,
       });
-      onCreated(created.slug);
+      onCreated(created.slug, isStory ? "story" : "track");
     } catch (caught) {
       setError(String(caught));
     } finally {
@@ -242,8 +263,12 @@ export function NewProduction({
           </>
         ) : (
           <>
-            <strong>Drop an MP3 here or choose a file</strong>
-            <span className="meta">MP3 only · up to 25 MB · stays on this machine</span>
+            <strong>
+              {isStory ? "Drop a music bed here, if you want one" : "Drop an MP3 here or choose a file"}
+            </strong>
+            <span className="meta">
+              {isStory ? "Optional · " : ""}MP3 only · up to 25 MB · stays on this machine
+            </span>
           </>
         )}
       </label>
@@ -258,14 +283,14 @@ export function NewProduction({
             maxLength={120}
           />
         </label>
-        <label>
+        {!isStory && <label>
           Music
           <select value={mode} onChange={(event) => setMode(event.target.value)}>
             <option value="vocal">Vocals</option>
             <option value="instrumental">Instrumental</option>
           </select>
-        </label>
-        {!isVideo && (
+        </label>}
+        {!isVideo && !isStory && (
           <label>
             One message
             <input
@@ -287,6 +312,28 @@ export function NewProduction({
               ))}
             </select>
           </label>
+        )}
+        {isStory && (
+          <>
+            <label>
+              Structure
+              <select value={structure} onChange={(event) => setStructure(event.target.value)}>
+                {structures.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="check-line">
+              <input
+                type="checkbox"
+                checked={fictional}
+                onChange={(event) => setFictional(event.target.checked)}
+              />
+              Fictional world: the Writer may invent, and lists everything it invents
+            </label>
+          </>
         )}
         <label>
           Shape
@@ -338,7 +385,7 @@ export function NewProduction({
       </p>
 
       <div className="actions">
-        <button type="submit" disabled={!file || !title.trim() || busy}>
+        <button type="submit" disabled={(!file && !isStory) || !title.trim() || busy}>
           {busy ? "Creating…" : "Create film"}
         </button>
         <button type="button" onClick={onCancel} disabled={busy}>

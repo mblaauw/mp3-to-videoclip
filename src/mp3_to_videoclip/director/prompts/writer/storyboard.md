@@ -1,5 +1,5 @@
 ---
-version: 4
+version: 5
 task: storyboard
 role: writer
 ---
@@ -44,6 +44,11 @@ that anchor. A `split` carries two or three `panes`, each a `shot_id` and crop.
 An `upload` carries a project-relative `asset`. A `product` carries
 `product_ref` (a reference ID or a project-relative product image) unless it
 uses an uploaded `asset`.
+
+## A story film
+
+With a narrator, the snapshot lists the lines. Bind each shot with `line_ids` to consecutive
+lines of one beat and write what we see while this is said; its frames then come from the takes.
 
 ## Timing and coverage
 

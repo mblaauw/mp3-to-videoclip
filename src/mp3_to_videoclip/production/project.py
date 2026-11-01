@@ -19,6 +19,8 @@ STAGE_FILES = {
     "lyrics": "work/lyrics.json",
     "events": "work/events.json",
     "brief": "brief.json",
+    "script": "work/script.json",
+    "voice": "work/soundtrack.json",
     "storyboard": "work/storyboard.json",
     "preview": "work/preview-review.json",
     "listening": "work/music-listening.json",
@@ -32,6 +34,8 @@ UPSTREAM = {
     "listening": "analysis",
     "brand": "analysis",
     "brief": "lyrics",
+    "script": "brief",
+    "voice": "script",
     "storyboard": "brief",
     "proof": "storyboard",
     "preview": "proof",
@@ -47,7 +51,11 @@ def now() -> str:
 @snapshot_read
 def load_project(root: Path, verify_source=True) -> Project:
     project = Project.model_validate(read_json(root / "project.json"))
-    if verify_source and file_hash_cached(inside(root, project.source)) != project.source_sha256:
+    if (
+        verify_source
+        and project.source is not None
+        and file_hash_cached(inside(root, project.source)) != project.source_sha256
+    ):
         raise ValueError("copied source changed; create a new production instead")
     return project
 
@@ -100,6 +108,11 @@ def project_payload(project: Project) -> dict:
     value.pop("budget", None)
     if value.get("music_mode") is None:
         value.pop("music_mode", None)
+    # A soundtrack film's length follows its takes, and the voice stage binds those, so
+    # re-recording a line must not un-approve the script.
+    if project.spine == "soundtrack":
+        value.pop("duration", None)
+        value.pop("source_duration", None)
     return value
 
 

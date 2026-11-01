@@ -8,10 +8,23 @@ export const STAGES: readonly { id: Stage; label: string }[] = [
   { id: "film", label: "Film" },
 ];
 
+/** A story film has no song to measure: its words come after its brief. */
+const STORY_FILM_STAGES: readonly { id: Stage; label: string }[] = [
+  { id: "story", label: "Story" },
+  { id: "script", label: "Script" },
+  { id: "storyboard", label: "Storyboard" },
+  { id: "images", label: "Images" },
+  { id: "film", label: "Film" },
+];
+
+export function stagesFor(spine?: string | null): readonly { id: Stage; label: string }[] {
+  return spine === "soundtrack" ? STORY_FILM_STAGES : STAGES;
+}
+
 export function stageLabel(stage: Stage): string {
-  return STAGES.find((item) => item.id === stage)?.label || stage;
+  return [...STAGES, ...STORY_FILM_STAGES].find((item) => item.id === stage)?.label || stage;
 }
 
 export function isStage(value: string): value is Stage {
-  return STAGES.some((item) => item.id === value);
+  return [...STAGES, ...STORY_FILM_STAGES].some((item) => item.id === value);
 }

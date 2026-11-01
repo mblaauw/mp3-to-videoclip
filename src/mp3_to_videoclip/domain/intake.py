@@ -63,7 +63,7 @@ def reserve_slug(title: str, projects_dir: Path) -> tuple[str, Path]:
 
 def create_from_upload(
     projects_dir: Path,
-    source: Path,
+    source: Path | None,
     *,
     title: str,
     aspect: str = "16:9",
@@ -109,12 +109,13 @@ def create_from_upload(
             raise ValueError("an advert needs " + ", ".join(missing))
         if length_seconds is None and intent_value.length_seconds is None:
             raise ValueError("an advert needs a target length")
-    if not source.is_file():
-        raise ValueError("the upload is empty")
-    if source.suffix.lower() != ".mp3":
-        raise ValueError("the source must be an MP3")
-    if source.stat().st_size > MAX_SOURCE_BYTES:
-        raise ValueError("the MP3 is larger than the 25 MB local intake limit")
+    if source is not None or profile.id != "narrative":
+        if source is None or not source.is_file():
+            raise ValueError("the upload is empty")
+        if source.suffix.lower() != ".mp3":
+            raise ValueError("the source must be an MP3")
+        if source.stat().st_size > MAX_SOURCE_BYTES:
+            raise ValueError("the MP3 is larger than the 25 MB local intake limit")
     cap = app_budget.money(budget)
     if cap <= 0:
         raise ValueError("the starting budget must be a positive USD amount")

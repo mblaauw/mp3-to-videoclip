@@ -86,23 +86,35 @@ def init_project(
     # production and must never be reused.
     if root.exists() and (not root.is_dir() or any(root.iterdir())):
         raise ValueError("project directory already exists; use its existing artifacts")
-    source = source.resolve(strict=True)
-    if source.suffix.lower() != ".mp3":
-        raise ValueError("MVP input is an MP3; convert other sources explicitly first")
-    info = probe(source)
-    if not any(s.get("codec_type") == "audio" for s in info["streams"]):
-        raise ValueError("source has no audio stream")
-    source_duration = audio_seconds(source)
     profile = kinds.get(kind)
-    window = _intake_window(
-        profile,
-        source_duration,
-        length_seconds=length_seconds,
-        window_start=window_start,
-        fade_in=fade_in,
-        fade_out=fade_out,
-    )
-    duration = window.duration if window is not None else source_duration
+    story_film = profile.id == "narrative"
+    # A story film's MP3, if it has one, is a bed under the voice, never its clock.
+    if source is None and not story_film:
+        raise ValueError("this kind of film starts from an MP3")
+    if source is not None:
+        source = source.resolve(strict=True)
+        if source.suffix.lower() != ".mp3":
+            raise ValueError("MVP input is an MP3; convert other sources explicitly first")
+        info = probe(source)
+        if not any(s.get("codec_type") == "audio" for s in info["streams"]):
+            raise ValueError("source has no audio stream")
+    if story_film:
+        source_duration = None
+        window = None
+        duration = float(length_seconds or profile.default_length)
+        if duration not in profile.lengths:
+            raise ValueError("choose one of this kind's lengths")
+    else:
+        source_duration = audio_seconds(source)
+        window = _intake_window(
+            profile,
+            source_duration,
+            length_seconds=length_seconds,
+            window_start=window_start,
+            fade_in=fade_in,
+            fade_out=fade_out,
+        )
+        duration = window.duration if window is not None else source_duration
     package = _titles_package(titles, kind, aspect, duration)
     width, height = (1920, 1080) if aspect == "16:9" else (1080, 1920)
     style_preset = style_preset or None
@@ -168,7 +180,8 @@ def init_project(
         slug=slug,
         schema_version=3,
         title=title.strip() if title is not None else slug.replace("-", " ").title(),
-        source_sha256=file_hash(source),
+        source="media/song.mp3" if not story_film else None,
+        source_sha256=file_hash(source) if not story_film else None,
         duration=duration,
         kind=profile.id,
         source_duration=source_duration,
@@ -177,11 +190,13 @@ def init_project(
         fps=fps,
         width=width,
         height=height,
-        music_mode=music_mode,
+        music_mode="narration-led" if story_film else music_mode,
+        spine="soundtrack" if story_film else None,
+        bed="media/bed.mp3" if story_film and source is not None else None,
         workflow_version=2,
         prompt_version=3,
         signature_required=package != "none",
-        source_filename=source.name,
+        source_filename=source.name if source is not None else None,
         renderer_backend="remotion",
         image_model=selected_model,
         image_settings=selected_settings,
@@ -190,7 +205,11 @@ def init_project(
         native_size=native_size if native_size is not None else profiles.default_size(aspect),
     )
     (root / "media").mkdir(parents=True)
-    shutil.copy2(source, root / project.source)
+    if story_film:
+        if source is not None:
+            shutil.copy2(source, root / project.bed)
+    else:
+        shutil.copy2(source, root / project.source)
     write_json(root / "project.json", project.model_dump())
     # New productions use the explicit creative profile; the event map starts empty
     # and reviewed-by-human. No stage is approved on the user's behalf.
@@ -200,7 +219,9 @@ def init_project(
     write_json(root / "work/assets.json", {})
     write_json(root / "work/tasks.json", {})
     _record_starting_look(root)
-    init_events(root)
+    # Events belong to a measured recording, and a story film starts with none.
+    if not story_film:
+        init_events(root)
     if package == "joint-v1":
         _init_signature(root, project)
     elif package == "title-v1":

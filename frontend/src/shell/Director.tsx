@@ -92,6 +92,11 @@ const UNDO_ARTIFACT: Record<string, string> = {
 const MONEY_TOOLS = new Set(["generate_images", "transcribe_lyrics"]);
 
 const SUGGESTIONS: Record<Stage, string[]> = {
+  script: [
+    "Write the narration on this structure.",
+    "Which beat runs long, and what would you cut?",
+    "List every invented fact in the script.",
+  ],
   track: ["Describe the song's structure in plain words.", "Which sections carry the most energy?"],
   story: [
     "Give me three structurally different directions.",

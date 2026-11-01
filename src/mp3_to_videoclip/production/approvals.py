@@ -50,10 +50,15 @@ def effective_upstream(root: Path, stage: str) -> str | None:
     """
     if stage == "brief":
         project = load_project(root)
+        # A story film's brief comes before any sound exists, so nothing is measured yet.
+        if project.spine == "soundtrack":
+            return None
         if project.kind not in (None, "music_video"):
             return "analysis"
         if project.music_mode in ("instrumental", "music-led"):
             return "analysis"
+    if stage == "storyboard" and load_project(root).spine == "soundtrack":
+        return "voice"
     if stage == "stills" and is_creative(root) and flow.settings(root)["preview_gate"]:
         return "preview"
     return UPSTREAM[stage]
@@ -184,6 +189,11 @@ def stage_hash(root: Path, stage: str) -> str:
         check_preview_binding(root, value)
     elif stage == "brand":
         value = {"package": read_json(root / STAGE_FILES[stage]), "render_hash": brand_hash(root)}
+    elif stage == "voice":
+        from . import soundtrack
+
+        read_json(root / STAGE_FILES[stage])
+        value = soundtrack.voice_content(root)
     elif stage in STAGE_FILES:
         value = read_json(root / STAGE_FILES[stage])
         if stage == "brief":
@@ -303,6 +313,10 @@ def approve(
         )
     for parent in _required_parents(root, stage):
         require_approval(root, parent)
+    if stage == "voice":
+        from . import soundtrack
+
+        soundtrack.require_complete(root)
     if stage == "lyrics":
         lyrics = Lyrics.model_validate(read_json(root / STAGE_FILES[stage]))
         project = load_project(root)

@@ -229,8 +229,8 @@ Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both a
 ## Where the roadmap stands, 1 Nov 2026
 
 Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76),
-E-1 (#77). E-2 and F-1 are in the PR after #77. Next in the final order: I-1, which needs G-3's
-resource store first.
+E-1 (#77), E-2 and F-1 (#78). G-3's resource store, I-1 and I-2 are in the PR after #78. Next in
+the final order: C-3.
 
 Differences from the plans, where the plan was wrong or could not hold:
 
@@ -268,3 +268,22 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   copy of Tree of Love all 38 image specs, the brief and stage hashes match main; the titles hash
   moves only with the renderer revision, as it does for any renderer change. `title-v1` was rendered
   at 16:9 and 9:16 and looked at.
+
+- **G-3 store:** subscribers and `useResource` landed, and the Script stage and Spine read through
+  them. `request` already shared fetches through `resources.read`, so `FilmShell`, `Images`,
+  `useFilmData` and `useStoryData` still make their own `Promise.allSettled` over that shared store;
+  moving them stays with the rest of G-3.
+- **I-1, I-2:** speech already had a journaled path in `voice.py` and a real schema: requests use
+  `speech: {text, voice}`, WAV and sync, not the plan's `positivePrompt`, MP3 and async. That schema has no
+  speed, pitch or emotion, so a direction steers the words and a redo, and `settings_from_direction` was not
+  written. **The plan's default voice `English_Magnetic_Male_2` is not among the 332 voices on the schema saved
+  on disk**, so a quote using it is refused by name until the owner picks another voice or the live schema
+  offers it. Tabs run Story then Script rather than Script in Track's place, because the brief comes first (D3).
+  The voice is locked in `work/narration.json`, not `intent.voice`, because locking it in the approved brief
+  would un-approve everything; takes bind it through their input hash. The measured reading rate is kept beside
+  the takes for the same reason, not written into the script. A line's first take goes straight into the mix, and
+  later ones wait for Keep. The owner's own recording works on every line, which the plan did not ask for and
+  which makes a whole film possible for $0. Ducking reuses `voice.py`'s measured spans and one linear gain reaches
+  the loudness target, in place of a `sidechaincompress` and `loudnorm` graph, so no line moves by a sample;
+  ambience waits for I-3. The plan's `STUDIO_PROJECTS` does not exist: the flag is `--projects-dir`. Takes, casting
+  and the Writer's turn have only met fakes: the $3.00 batch and one live turn need the owner's authorisation.

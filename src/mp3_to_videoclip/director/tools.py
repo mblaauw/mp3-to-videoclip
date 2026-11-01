@@ -276,6 +276,69 @@ TOOLS: list[dict] = [
         ["slug", "shot_ids"],
     ),
     _tool(
+        "get_script",
+        "Read a story film's script and its structure's beats with their budgets.",
+        {"slug": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
+        "write_script",
+        "Write a story film's whole script. Refused after its approval unless revising is true, "
+        "which you only send when the owner asked for a revision. Every invented fact is a claim "
+        "with invented true, and only a fictional world may have one.",
+        {
+            "slug": {"type": "string"},
+            "structure": {"type": "string"},
+            "lines": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "text": {"type": "string"},
+                        "beat": {"type": "string"},
+                        "target_seconds": {"type": "number"},
+                        "pause_after": {"type": "number"},
+                        "direction": {"type": "string"},
+                        "claims": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "text": {"type": "string"},
+                                    "invented": {"type": "boolean"},
+                                },
+                                "required": ["text"],
+                            },
+                        },
+                    },
+                    "required": ["id", "text", "beat"],
+                },
+            },
+            "notes": {"type": "string"},
+            "revising": {"type": "boolean"},
+        },
+        ["slug", "structure", "lines"],
+    ),
+    _tool(
+        "update_lines",
+        "Change named lines of a story film's script. A changed line's take goes stale, and "
+        "re-recording it costs money, so say which ones you changed.",
+        {
+            "slug": {"type": "string"},
+            "changes": {"type": "array", "items": {"type": "object"}},
+            "revising": {"type": "boolean"},
+        },
+        ["slug", "changes"],
+    ),
+    _tool(
+        "get_narration",
+        "Read a story film's takes, its timing, and each beat's budget against the real takes. "
+        "Nothing here spends: the owner records from the Script stage.",
+        {"slug": {"type": "string"}},
+        ["slug"],
+    ),
+    _tool(
         "update_brief",
         "Patch the brief with an RFC 7396 JSON merge. Omit fields you do not change; "
         "direction, style and treatment cannot be blanked. Returns the new brief. "
@@ -609,6 +672,9 @@ def _dispatch(
     if name == "get_images":
         return _get_images(root, arguments.get("shot_ids") or [])
 
+    if name in ("get_script", "write_script", "update_lines", "get_narration"):
+        return _script_tool(root, name, arguments)
+
     if name == "update_brief":
         patch = arguments.get("patch") or {}
         if not isinstance(patch, dict):
@@ -752,6 +818,48 @@ def _thumbnail(path: Path) -> tuple[str, int, int]:
         image.save(buffer, format="JPEG", quality=88, optimize=True)
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}", width, height
+
+
+def _script_tool(root: Path, name: str, arguments: dict) -> dict:
+    from mp3_to_videoclip import narration, narration_timing, structures
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip.production import script as scripts
+
+    if P.load_project(root, verify_source=False).spine != "soundtrack":
+        raise ValueError("only a story film has a script")
+    if name == "get_script":
+        script = scripts.load_script(root)
+        intent = P.load_brief(root).intent
+        return {
+            "script": script.model_dump() if script else None,
+            "beats": scripts.read_beats(root)
+            or structures.instance(
+                (intent.structure if intent else None) or structures.DEFAULT,
+                float((intent.length_seconds if intent else None) or 0),
+            ),
+        }
+    if name == "get_narration":
+        return {
+            "takes": narration.view(root),
+            "timing": narration_timing.read(root),
+            "report": scripts.script_report(root),
+        }
+    # Writing a line after its approval un-approves what stands on it: only on the owner's word.
+    approved = "script" in read_json(root / "work/approvals.json")
+    if approved and not arguments.get("revising"):
+        raise ValueError("the script is approved; change it only if the owner asks for a revision")
+    if name == "write_script":
+        script = scripts.write_script(
+            root,
+            {
+                "structure": arguments.get("structure"),
+                "lines": arguments.get("lines") or [],
+                "notes": arguments.get("notes") or "",
+            },
+        )
+    else:
+        script = scripts.update_lines(root, arguments.get("changes") or [])
+    return {"saved": True, "lines": len(script.lines), "report": scripts.script_report(root)}
 
 
 def _world_picture(root: Path, name: str, assets: dict) -> Path | None:
