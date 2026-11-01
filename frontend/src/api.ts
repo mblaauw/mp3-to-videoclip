@@ -367,7 +367,41 @@ export type IntakePayload = {
   analysis_needed: boolean;
 };
 
+export type RoleSettings = {
+  provider: string;
+  model: string;
+  thinking: "off" | "low" | "medium" | "high";
+  max_tokens_per_turn: number;
+};
+
 export type Settings = {
+  roles: Record<"writer" | "editor" | "critic" | "narrator", RoleSettings>;
+  voices: { provider: string; default_voice: string; favourites: string[] };
+  pictures: {
+    image_model_by_look: Record<string, string>;
+    video_model: string;
+    upscaler: string;
+    reserve_usd_per_still: number;
+    reserve_usd_per_clip_second: number;
+  };
+  keys: {
+    openai_compatible: { base_url: string; model: string };
+    [key: string]: unknown;
+  };
+  new_films: {
+    kind: string;
+    length_s: number;
+    aspect: string;
+    fps: number;
+    look: string;
+    budget_usd: number;
+    signature_package: boolean;
+    credit_roles: string[];
+    brand: { name: string; partner: string; logo: string; palette: string[]; font: string };
+  };
+  prices: Record<string, string>;
+  computer: { gateway: "opencode" | "direct"; opencode_bin: string; opencode_workspace: string };
+  notes: Record<string, string>;
   gateway?: "opencode" | "direct";
   opencode_bin?: string;
   opencode_workspace?: string;
@@ -697,9 +731,27 @@ export type DeliveryChecklist = {
 
 export type SettingsTest = {
   ok: boolean;
-  kind: "runware" | "opencode";
+  kind: "runware" | "opencode" | "provider" | "voice";
   message: string;
   version?: string;
+  preview_url?: string;
+};
+
+export type SettingsCache = {
+  name: string;
+  label: string;
+  rebuilds: string;
+  bytes: number;
+  folders: number;
+  clearable: boolean;
+};
+
+export type SettingsCosts = {
+  films: { slug: string; spent_usd?: string; reserved_usd?: string; unpriced?: number; unreadable?: boolean }[];
+  by_kind: { kind: string; spent_usd: string; reserved_usd: string }[];
+  spent_usd: string;
+  reserved_usd: string;
+  unpriced: number;
 };
 
 /** Generated from the typed `/api/jobs` response models. */
@@ -1029,6 +1081,29 @@ export const api = {
     request<SettingsTest>("/api/settings/test", {
       method: "POST",
       body: JSON.stringify({ kind }),
+    }),
+  testProvider: (provider: string) =>
+    request<SettingsTest>("/api/settings/test", {
+      method: "POST",
+      body: JSON.stringify({ kind: "provider", provider }),
+    }),
+  testVoice: (voice: string) =>
+    request<SettingsTest>("/api/settings/test", {
+      method: "POST",
+      body: JSON.stringify({ kind: "voice", voice }),
+    }),
+  settingsCatalog: () => request<unknown>("/api/settings/catalog"),
+  refreshCatalog: (provider: string) =>
+    request<{ listed: number; added: string[]; fetched_at: string }>("/api/settings/catalog/refresh", {
+      method: "POST",
+      body: JSON.stringify({ provider }),
+    }),
+  settingsCosts: () => request<SettingsCosts>("/api/settings/costs"),
+  settingsCaches: () => request<{ caches: SettingsCache[] }>("/api/settings/caches"),
+  clearCache: (name: string) =>
+    request<{ removed: number; bytes: number; busy: string[] }>("/api/settings/caches/clear", {
+      method: "POST",
+      body: JSON.stringify({ name }),
     }),
   setup: () => request<SetupStatus>("/api/setup"),
   installRenderer: () =>

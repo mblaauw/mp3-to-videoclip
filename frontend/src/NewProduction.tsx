@@ -55,6 +55,13 @@ const KIND_HINT: Record<string, string> = {
   advert: "One message, a call to action and a length. The rest of the brief is on Story.",
 };
 
+/** The length a film starts with: the saved one if this kind offers it. */
+function startingLength(profile: KindProfile, saved: number): number {
+  if (profile.lengths.includes(saved)) return saved;
+  if (profile.allows_full_track) return WHOLE_TRACK;
+  return profile.default_length || profile.lengths[0] || 30;
+}
+
 export function NewProduction({
   onCreated,
   onCancel,
@@ -76,6 +83,7 @@ export function NewProduction({
   const [message, setMessage] = useState("");
   const [cta, setCta] = useState("");
   const [length, setLength] = useState(WHOLE_TRACK);
+  const [look, setLook] = useState<string | undefined>(undefined);
   const [kinds, setKinds] = useState<KindProfile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,9 +93,16 @@ export function NewProduction({
     api
       .settings()
       .then((settings) => {
-        const value = settings.default_budget_usd;
-        if (typeof value === "number" && value > 0) setBudget(value.toFixed(2));
-        setKinds(settings.kinds || []);
+        const start = settings.new_films;
+        if (start.budget_usd > 0) setBudget(start.budget_usd.toFixed(2));
+        const known = settings.kinds || [];
+        setKinds(known);
+        setLook(start.look || undefined);
+        const profile = known.find((item) => item.id === start.kind);
+        if (profile) {
+          setKind(profile.id);
+          setLength(startingLength(profile, start.length_s));
+        }
       })
       .catch(() => {});
   }, []);
@@ -122,9 +137,7 @@ export function NewProduction({
     setKind(next);
     const nextProfile = options.find((item) => item.id === next);
     // A kind that can use the whole track starts there; an excerpt is a choice.
-    setLength(
-      nextProfile?.allows_full_track ? WHOLE_TRACK : nextProfile?.default_length || nextProfile?.lengths[0] || 30,
-    );
+    setLength(nextProfile ? startingLength(nextProfile, WHOLE_TRACK) : 30);
     setError(null);
   };
 
@@ -148,6 +161,8 @@ export function NewProduction({
         music_mode: mode,
         budget,
         kind,
+        // A saved look only applies to a kind that offers it.
+        style_preset: look && profile?.style_presets.includes(look) ? look : undefined,
         message: isVideo ? undefined : message.trim(),
         cta_text: kind === "advert" ? cta.trim() : undefined,
         length_seconds: wholeTrack ? undefined : length,
