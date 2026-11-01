@@ -1,14 +1,14 @@
 ---
-version: 1
+version: 2
 example: script_mv
 ---
 ## Worked example
 
-Good: the courier crosses the city, the record slips out of the bag at the
-bridge, and the search for it becomes the chorus. At the final chorus the
-courier reaches the venue; the record is already playing. The last image changes
-the first: the object was never missing, only early.
+Good: a family works a field at noon, each section later in the day. At the bridge
+the youngest stops and looks at the road. In the final chorus the last light falls
+on the one row they left uncut, and the first image returns: the same field, now
+waiting. The last image changes the first.
 
-Counter-example: "We see the artist walking through the city, looking sad, then
+Counter-example: "We see the artist walking through a field, looking sad, then
 the chorus arrives and everything is fine." Nothing is visible that causes the
 change, and "sad" is a label rather than an image.
