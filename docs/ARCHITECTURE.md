@@ -253,6 +253,15 @@ hand-written types. Every API 4xx/5xx is `{detail, code}`; the frontend parses
 it into `ApiError` and maps stable codes to user-facing copy and, where there is
 one next move, an action (Open settings, Go to a stage).
 
+Settings is one schema 2 TOML file, nested by what a value is for (`roles`, `voices`,
+`pictures`, `keys`, `new_films`, `prices`, `computer`), with the old flat names kept as
+read-only properties so no caller had to change. `catalog.py` and `catalog.toml` say what
+can be chosen: a price appears only with its source and date, and a refresh runs on a
+click through free calls and never overwrites a static price. `caches.py` is the one list
+of derived folders that may be cleared. Several stored choices wait for later phases, and
+the API's `notes` says which: per-role models on the direct path, thinking and token
+budgets, picture models per look, and the narrator voice.
+
 Engine refusals reach the API through one mapping, `api/errors.py:engine_error`,
 installed as app exception handlers: `ValueError` is 400, `ProjectBusy` and
 `RevisionConflict` 409, a missing Runware key 409 `no_runware_key`, `ProviderError`

@@ -138,9 +138,12 @@ arrow keys step frames. The Director stays closed here until you ask for it.
 These screens come from local fixtures at 1440 and 390 px. No paid provider call
 was made to capture them.
 
-**Director:** add `llm_api_key` (and optionally `llm_base_url` / `llm_model`) under
-`[settings]` in `~/.config/mp3-to-videoclip/settings.toml`, or set
-`OPENAI_API_KEY`. The Runware key can also live there instead of the environment.
+**Settings:** the gear opens one panel for every model, voice, price, key and new-film
+default, and says what is missing to make a film. It is stored in
+`~/.config/mp3-to-videoclip/settings.toml`; a key can come from the environment instead
+(`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENCODE_API_KEY`,
+`ELEVENLABS_API_KEY`). An older file is read as it is, and the first save keeps it as
+`settings.toml.v1.bak`.
 
 Approvals, reviews and spending are content-bound: bytes, prompt inputs and
 quote scopes are hashed, so changing an artifact invalidates its approval instead

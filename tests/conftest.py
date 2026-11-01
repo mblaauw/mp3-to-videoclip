@@ -54,8 +54,16 @@ def isolated_user_settings(tmp_path: Path, monkeypatch):
         "mp3_to_videoclip.config.settings_path",
         lambda: tmp_path / "no-user-settings.toml",
     )
-    monkeypatch.delenv("PROJECT_VEIL_RUNWARE_API", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    for name in (
+        "PROJECT_VEIL_RUNWARE_API",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GEMINI_API_KEY",
+        "OPENCODE_API_KEY",
+        "ELEVENLABS_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("MP3_TO_VIDEOCLIP_CATALOG_CACHE", str(tmp_path / "catalog-cache"))
 
 
 # --------------------------------------------------------------------------- #

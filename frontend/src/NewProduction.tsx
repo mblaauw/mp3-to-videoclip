@@ -161,7 +161,8 @@ export function NewProduction({
         music_mode: mode,
         budget,
         kind,
-        style_preset: look,
+        // A saved look only applies to a kind that offers it.
+        style_preset: look && profile?.style_presets.includes(look) ? look : undefined,
         message: isVideo ? undefined : message.trim(),
         cta_text: kind === "advert" ? cta.trim() : undefined,
         length_seconds: wholeTrack ? undefined : length,
