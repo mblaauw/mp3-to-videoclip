@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 from playwright.sync_api import Page, expect
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from mp3_to_videoclip import budget, config, services
 from mp3_to_videoclip.storage import read_json
@@ -67,7 +68,10 @@ def _use(provider: FakeProvider) -> None:
 def _ask(page: Page, studio, text: str) -> None:
     page.goto(studio.film("story"))
     composer = page.locator(".director textarea")
-    if not composer.is_visible():
+    # The rail may open by itself once the page has loaded; a click then would close it.
+    try:
+        composer.wait_for(state="visible", timeout=3000)
+    except PlaywrightTimeoutError:
         page.get_by_role("button", name="Director").first.click()
     composer.fill(text)
     composer.press("Enter")
