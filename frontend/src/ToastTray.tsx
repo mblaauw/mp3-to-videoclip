@@ -63,9 +63,13 @@ export function ToastTray() {
 
   if (!items.length) return null;
   return (
-    <div className="toasts" role="status" aria-live="polite">
+    <div className="toasts">
       {items.map((item) => (
-        <div className={`toast ${item.tone}`} key={item.id}>
+        <div
+          className={`toast ${item.tone}`}
+          key={item.id}
+          role={item.tone === "error" ? "alert" : "status"}
+        >
           <span className="toast-mark" aria-hidden="true" />
           <span className="toast-text">
             {item.message}

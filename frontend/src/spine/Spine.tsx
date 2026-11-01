@@ -1,3 +1,4 @@
+import { shown } from "../storyboard/placeholders";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   api,
@@ -551,7 +552,7 @@ export function Spine({
                   width: `${(shot.duration_frames / fps / timelineDuration) * 100}%`,
                   backgroundImage: url ? `url(${url})` : undefined,
                 }}
-                aria-label={`${shot.id}, ${shot.purpose}`}
+                aria-label={`${shot.id}, ${shown(shot.purpose) || "needs a job"}`}
                 onClick={() => {
                   player.seek(shot.start_frame / board.fps);
                   window.dispatchEvent(

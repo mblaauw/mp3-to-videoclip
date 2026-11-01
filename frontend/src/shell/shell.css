@@ -1183,7 +1183,7 @@ body {
     max-height: none;
     box-shadow: var(--float);
   }
-  .step-state,
+  .step:not([aria-current]) .step-state,
   .mark-word {
     display: none;
   }
@@ -1241,9 +1241,6 @@ body {
   }
   .budget-chip .meter {
     display: none;
-  }
-  .spine {
-    grid-template-columns: 64px minmax(0, 1fr);
   }
   .spine-transport {
     padding: 0 var(--s-2);

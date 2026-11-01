@@ -1,3 +1,4 @@
+import { shotCaption } from "../storyboard/placeholders";
 import { ArtifactRating } from "../ArtifactRating";
 import type { Stage } from "../shell/nextStep";
 import { ShotThumb } from "../storyboard/ShotThumb";
@@ -127,7 +128,7 @@ export function CutList({
                                   <span className="cut-motion">{shot.motion.label}</span>
                                 </div>
                                 <p className="cut-shot-job">
-                                  {source?.message || source?.purpose || "No shot content."}
+                                  {(source && shotCaption(source)) || "No shot content."}
                                 </p>
                                 <div className="cut-shot-tags">
                                   {shot.accents.map((accent) => (

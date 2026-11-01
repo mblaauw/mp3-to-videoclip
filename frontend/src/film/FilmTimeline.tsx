@@ -1,3 +1,4 @@
+import { shotCaption } from "../storyboard/placeholders";
 import {
   useEffect,
   useMemo,
@@ -287,7 +288,7 @@ export function FilmTimeline({
                     width: `${((end - start) / total) * 100}%`,
                     backgroundImage: url ? `url(${url})` : undefined,
                   }}
-                  aria-label={`${shot.id}: ${shot.message || shot.purpose}`}
+                  aria-label={`${shot.id}: ${shotCaption(shot) || "needs a job"}`}
                   title={`${shot.id}, ${((end - start) / fps).toFixed(1)} s`}
                   onClick={(event) => {
                     releaseMouseFocus(event);

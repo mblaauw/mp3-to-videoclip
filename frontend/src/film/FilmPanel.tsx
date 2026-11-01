@@ -1,3 +1,4 @@
+import { shotCaption } from "../storyboard/placeholders";
 import { useEffect, useState } from "react";
 import { api, type CutSummary, type EditPayload, type EditSuggestion } from "../api";
 import { ArtifactRating } from "../ArtifactRating";
@@ -402,6 +403,8 @@ function Overview({
   onNavigate: (stage: Stage) => void;
 }) {
   const { cut, board, rendererReady, slug, workflow } = film;
+  // The stage already says the one thing to do; nothing here can be done yet.
+  if (!film.hasBoard) return null;
   return (
     <>
       <header className="panel-head">
@@ -661,7 +664,7 @@ function ShotPanel({
           {summary?.section_name ? `, in ${summary.section_name}` : ""}
         </p>
       </header>
-      <p>{source?.message || source?.purpose}</p>
+      <p>{source && shotCaption(source)}</p>
       {edit && decision ? (
         <div>
           <h3 className="panel-sub">Camera move</h3>

@@ -1,3 +1,4 @@
+import { shotCaption } from "../storyboard/placeholders";
 import { describeTitlesNote } from "./titleNotes";
 import {
   Suspense,
@@ -147,7 +148,7 @@ export function LiveViewer({
           {tabs}
           {live && currentBoardShot && (
               <p className="film-now">
-                <b>{currentBoardShot.id}</b> {currentBoardShot.message || currentBoardShot.purpose}
+                <b>{currentBoardShot.id}</b> {shotCaption(currentBoardShot)}
                 {currentPicture?.stale && <em> Older prompt</em>}
               </p>
             )}
