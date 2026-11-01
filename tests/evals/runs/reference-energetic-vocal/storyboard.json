@@ -1,0 +1,139 @@
+{
+  "aspect": "16:9",
+  "fps": 24,
+  "total_frames": 4320,
+  "shots": [
+    {
+      "id": "s001",
+      "start_frame": 0,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show a dented horn doing something it was not doing before",
+      "message": "A dented horn has changed",
+      "framing": "wide",
+      "scene_id": "place-0",
+      "image_prompt": "A dented horn in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s002",
+      "start_frame": 360,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show chalk marks doing something it was not doing before",
+      "message": "Chalk marks has changed",
+      "framing": "detail",
+      "scene_id": "place-1",
+      "image_prompt": "Chalk marks in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s003",
+      "start_frame": 720,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show a kitchen doing something it was not doing before",
+      "message": "A kitchen has changed",
+      "framing": "medium",
+      "scene_id": "place-2",
+      "image_prompt": "A kitchen in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s004",
+      "start_frame": 1080,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show a bus stop doing something it was not doing before",
+      "message": "A bus stop has changed",
+      "framing": "close_up",
+      "scene_id": "place-0",
+      "image_prompt": "A bus stop in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s005",
+      "start_frame": 1440,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show the last rehearsal doing something it was not doing before",
+      "message": "The last rehearsal has changed",
+      "framing": "wide",
+      "scene_id": "place-1",
+      "image_prompt": "The last rehearsal in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s006",
+      "start_frame": 1800,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show a borrowed coat doing something it was not doing before",
+      "message": "A borrowed coat has changed",
+      "framing": "detail",
+      "scene_id": "place-2",
+      "image_prompt": "A borrowed coat in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s007",
+      "start_frame": 2160,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show a dented horn doing something it was not doing before",
+      "message": "A dented horn has changed",
+      "framing": "medium",
+      "scene_id": "place-0",
+      "image_prompt": "A dented horn in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s008",
+      "start_frame": 2520,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show chalk marks doing something it was not doing before",
+      "message": "Chalk marks has changed",
+      "framing": "close_up",
+      "scene_id": "place-1",
+      "image_prompt": "Chalk marks in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s009",
+      "start_frame": 2880,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show a kitchen doing something it was not doing before",
+      "message": "A kitchen has changed",
+      "framing": "wide",
+      "scene_id": "place-2",
+      "image_prompt": "A kitchen in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s010",
+      "start_frame": 3240,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show a bus stop doing something it was not doing before",
+      "message": "A bus stop has changed",
+      "framing": "detail",
+      "scene_id": "place-0",
+      "image_prompt": "A bus stop in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s011",
+      "start_frame": 3600,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show the last rehearsal doing something it was not doing before",
+      "message": "The last rehearsal has changed",
+      "framing": "medium",
+      "scene_id": "place-1",
+      "image_prompt": "The last rehearsal in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s012",
+      "start_frame": 3960,
+      "duration_frames": 360,
+      "kind": "scene",
+      "purpose": "Show a borrowed coat doing something it was not doing before",
+      "message": "A borrowed coat has changed",
+      "framing": "close_up",
+      "scene_id": "place-2",
+      "image_prompt": "A borrowed coat in plain daylight, seen from close to the ground."
+    }
+  ]
+}

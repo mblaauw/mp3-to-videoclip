@@ -30,7 +30,7 @@ from mp3_to_videoclip.models import (
 )
 from mp3_to_videoclip.storage import file_hash, write_json
 
-from . import checks, rubric
+from . import checks, judge, lexicon, rubric
 
 HERE = Path(__file__).resolve().parent
 RUNS = HERE / "runs"
@@ -223,6 +223,10 @@ def evaluate_run(run_dir: Path) -> dict:
             treatments = Treatments.model_validate(_json(treatments_path))
             board = Storyboard.model_validate(_json(storyboard_path))
             automatic = checks.report(fixture, treatments.model_dump(), board.model_dump())
+            text = lexicon.words_of(treatments.model_dump(), board.model_dump())
+            automatic["cliches"] = lexicon.cliche_report(text)
+            automatic["entropy"] = lexicon.entropy_report(board.model_dump())
+            automatic["ok"] = automatic["ok"] and automatic["cliches"]["ok"] and automatic["entropy"]["ok"]  # fmt: skip
             result["checks"] = automatic
             result["ok"] = automatic["ok"]
         elif role == "editor":
@@ -334,8 +338,8 @@ def _rating_rows(values: list[dict]) -> list[str]:
 
 def _run_rows(runs: list[dict]) -> list[str]:
     rows = [
-        "| Fixture | Model | Automatic | Concepts | Board | Claims | Edit hard | Ad |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Fixture | Model | Automatic | Concepts | Board | Claims | Edit hard | Ad | Clichés per 1,000 | Shot entropy |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for run in runs:
         checks_value = run.get("checks") or {}
@@ -347,7 +351,7 @@ def _run_rows(runs: list[dict]) -> list[str]:
         automatic_ad = [item for item in ad if item.get("automatic", True)]
         ad_ok = all(item.get("ok") for item in automatic_ad) if automatic_ad else None
         rows.append(
-            "| {fixture} | {model} | {auto} | {concepts} | {board} | {claims} | {hard} | {ad} |".format(
+            "| {fixture} | {model} | {auto} | {concepts} | {board} | {claims} | {hard} | {ad} | {cliches} | {entropy} |".format(
                 fixture=run["fixture"],
                 model=run["model"],
                 auto=_status(run["ok"]),
@@ -362,6 +366,8 @@ def _run_rows(runs: list[dict]) -> list[str]:
                 else "—",
                 hard=(str(len(checks_value.get("hard", []))) if not writer else "—"),
                 ad=("—" if ad_ok is None else ("pass" if ad_ok else "fail")),
+                cliches=(checks_value.get("cliches") or {}).get("per_thousand", "—"),
+                entropy=(checks_value.get("entropy") or {}).get("total", "—"),
             )
         )
     return rows
@@ -590,6 +596,29 @@ def run(
     return paths, summary
 
 
+def judge_runs(directory: Path, name: str, llm=None) -> int:
+    """Score each writer run and keep the score and what it used in its own meta.json."""
+    if llm is None:
+        from mp3_to_videoclip.config import Role, effective_settings
+        from mp3_to_videoclip.config import split_model as split
+        from mp3_to_videoclip.director.llm import DirectorLLM
+        from mp3_to_videoclip.director.routing import route_for
+
+        settings = effective_settings()
+        settings.roles.critic = Role(**split(name))
+        route = route_for(settings, "critic")
+        llm = DirectorLLM(base_url=route.base_url, api_key=route.key, model=route.model, kind=route.kind)  # fmt: skip
+    judged = 0
+    for run_dir in sorted(path for path in directory.iterdir() if (path / "meta.json").is_file()):
+        meta = _json(run_dir / "meta.json")
+        if meta.get("role") != "writer" or meta.get("synthetic"):
+            continue
+        scored = judge.score(llm, _json(run_dir / "treatments.json"), _json(run_dir / "storyboard.json"))  # fmt: skip
+        write_json(run_dir / "meta.json", {**meta, "judge": {"model": name, **scored}})
+        judged += 1
+    return judged
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runs", type=Path, default=RUNS, help="directory of run bundles")
@@ -601,7 +630,12 @@ def main(argv: list[str] | None = None) -> int:
         help="optional exported work/ratings.jsonl to include by prompt hash",
     )
     parser.add_argument("--strict", action="store_true", help="exit 1 if a run fails")
+    parser.add_argument("--judge", default=None, help="provider/model to score each writer run")
+    parser.add_argument("--allow-spend", action="store_true", help="a judge costs money")
     args = parser.parse_args(argv)
+    judge.require_spend(args.judge, args.allow_spend)
+    if args.judge:
+        judge_runs(args.runs, args.judge)
     paths, summary = run(
         runs_dir=args.runs,
         report_dir=args.reports,

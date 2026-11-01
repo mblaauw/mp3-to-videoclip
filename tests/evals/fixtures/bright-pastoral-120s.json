@@ -1,0 +1,109 @@
+{
+  "name": "bright-pastoral-120s",
+  "kind": "music_video",
+  "music_mode": "instrumental",
+  "duration": 120.0,
+  "lyrics": [],
+  "intent": {
+    "kind": "music_video",
+    "about": "A family brings in a harvest through one bright day and leaves a row standing.",
+    "performance": false
+  },
+  "music": {
+    "estimated_tempo_bpm": 96,
+    "sections": [
+      {
+        "start": 0,
+        "end": 30,
+        "label": "morning"
+      },
+      {
+        "start": 30,
+        "end": 75,
+        "label": "noon"
+      },
+      {
+        "start": 75,
+        "end": 105,
+        "label": "turn"
+      },
+      {
+        "start": 105,
+        "end": 120,
+        "label": "last light"
+      }
+    ],
+    "beats": [
+      0.0,
+      0.63,
+      1.25,
+      1.88
+    ],
+    "energy_curve": [
+      {
+        "time": 0,
+        "energy": 0.3
+      },
+      {
+        "time": 30,
+        "energy": 0.6
+      },
+      {
+        "time": 75,
+        "energy": 0.8
+      },
+      {
+        "time": 105,
+        "energy": 0.4
+      },
+      {
+        "time": 120,
+        "energy": 0.2
+      }
+    ]
+  },
+  "stills": [
+    {
+      "shot_id": "s001",
+      "colors": [
+        "#E8D9A8",
+        "#6E8B3D"
+      ]
+    },
+    {
+      "shot_id": "s002",
+      "colors": [
+        "#E8D9A8",
+        "#6E8B3D"
+      ]
+    },
+    {
+      "shot_id": "s003",
+      "colors": [
+        "#E8D9A8",
+        "#6E8B3D"
+      ]
+    },
+    {
+      "shot_id": "s004",
+      "colors": [
+        "#E8D9A8",
+        "#6E8B3D"
+      ]
+    },
+    {
+      "shot_id": "s005",
+      "colors": [
+        "#E8D9A8",
+        "#6E8B3D"
+      ]
+    },
+    {
+      "shot_id": "s006",
+      "colors": [
+        "#E8D9A8",
+        "#6E8B3D"
+      ]
+    }
+  ]
+}
