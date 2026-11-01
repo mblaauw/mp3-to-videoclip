@@ -203,6 +203,10 @@ def render_final(root: Path, output: Path | None = None) -> dict:
     return report
 
 
+#: Previews are for watching with the music, at half size. Bases and finals are untouched.
+PREVIEW_SIZES = {"16:9": (960, 540), "9:16": (540, 960)}
+
+
 @operations.progress_scope(stage="preview-render")
 def render_preview(root: Path, output: Path | None = None) -> dict:
     """Marked preview plus the exact review report the preview approval binds."""
@@ -212,23 +216,25 @@ def render_preview(root: Path, output: Path | None = None) -> dict:
     output = output or _next_output(directory, f"{project.slug}-preview")
     with read_snapshot(root):
         project = P.load_project(root)
-        shots = P.resolved_assets(root)
+        shots, placeholders = P.preview_assets(root)
         brand = P.load_brand(root)
         provenance = _provenance(root, "preview")
+    width, height = PREVIEW_SIZES.get(project.aspect, (project.width, project.height))
     report = _render(
-        project,
+        project.model_copy(update={"width": width, "height": height}),
         shots,
         P.film_audio(root, project),
         output,
         root / "work",
         preview_banner=True,
+        preview_placeholders=tuple(placeholders),
         brand=brand,
         capture=WORKING_CAPTURE,
         reuse_chunks=True,
     )
     report["delivery_ready"] = False
     _stamp(root, output, report, "preview", provenance)
-    if not report["current"]:
+    if placeholders or not report["current"]:
         report["approval_ready"] = False
         _write_report(output, report)
         return report

@@ -131,6 +131,25 @@ def local_plate_path(root: Path, shot_id: str) -> Path:
     return _local_plate(root, load_project(root), shot)
 
 
+def _resolved_shot(root: Path, project, assets: dict, shot) -> RenderShot:
+    if shot.asset_shot_id is not None:
+        owner_id = shot.asset_shot_id
+    elif shotkinds.is_local(shot):
+        return RenderShot(shot=shot, image=str(_local_plate(root, project, shot)))
+    else:
+        owner_id = shot.id
+    entry = assets.get(owner_id, {})
+    chosen = next(
+        (v for v in entry.get("versions", []) if v["version"] == entry.get("selected")), None
+    )
+    if not chosen or chosen["input_hash"] != digest(image_spec(root, shot)):
+        raise ValueError(f"shot {shot.id} has no current selected still")
+    path = inside(root, chosen["path"])
+    if file_hash(path) != chosen["sha256"]:
+        raise ValueError(f"selected still for {shot.id} changed")
+    return RenderShot(shot=shot, image=str(path))
+
+
 def resolved_assets(root: Path, ids: list[str] | None = None) -> list[RenderShot]:
     from .. import edits
 
@@ -139,28 +158,41 @@ def resolved_assets(root: Path, ids: list[str] | None = None) -> list[RenderShot
     effective = edit.effective_board(board) if edit is not None else board
     project = load_project(root)
     assets = read_json(root / "work/assets.json")
-    result = []
-    for shot in effective.shots:
-        if ids is not None and shot.id not in ids:
-            continue
-        if shot.asset_shot_id is not None:
-            owner_id = shot.asset_shot_id
-        elif shotkinds.is_local(shot):
-            result.append(RenderShot(shot=shot, image=str(_local_plate(root, project, shot))))
-            continue
-        else:
-            owner_id = shot.id
-        entry = assets.get(owner_id, {})
-        chosen = next(
-            (v for v in entry.get("versions", []) if v["version"] == entry.get("selected")), None
-        )
-        if not chosen or chosen["input_hash"] != digest(image_spec(root, shot)):
-            raise ValueError(f"shot {shot.id} has no current selected still")
-        path = inside(root, chosen["path"])
-        if file_hash(path) != chosen["sha256"]:
-            raise ValueError(f"selected still for {shot.id} changed")
-        result.append(RenderShot(shot=shot, image=str(path)))
+    result = [
+        _resolved_shot(root, project, assets, shot)
+        for shot in effective.shots
+        if ids is None or shot.id in ids
+    ]
     return edits.attach_edit(result, edit)
+
+
+def preview_assets(root: Path) -> tuple[list[RenderShot], list[str]]:
+    """Every shot for a preview, with a labelled plate for a still it can't have yet.
+
+    Returns the shots and the ids standing in, so a preview can always be watched and
+    says what it isn't showing. Only a preview may use this: a base or a final refuses.
+    """
+    from .. import edits
+    from ..preview import _placeholder_plate
+
+    board = load_board(root)
+    edit = edits.load_edit(root, board=board)
+    effective = edit.effective_board(board) if edit is not None else board
+    project = load_project(root)
+    path = root / "work/assets.json"
+    assets = read_json(path) if path.is_file() else {}
+    result = []
+    placeholders = []
+    for shot in effective.shots:
+        try:
+            result.append(_resolved_shot(root, project, assets, shot))
+        except (OSError, ValueError):
+            plate = root / "work" / "preview-plates" / f"{shot.id}.png"
+            plate.parent.mkdir(parents=True, exist_ok=True)
+            _placeholder_plate(shot, (project.width, project.height), plate)
+            result.append(RenderShot(shot=shot, image=str(plate)))
+            placeholders.append(shot.id)
+    return edits.attach_edit(result, edit), placeholders
 
 
 @state_mutation
