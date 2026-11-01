@@ -85,6 +85,7 @@ export type Grade = {
   strength: number;
   overrides?: PreviewShot["post_effects"];
   look?: { grain: number; weave: number; drift: number } | null;
+  typeface?: "inter" | "fraunces" | "bebas" | null;
 };
 
 export type SplitPane = {
@@ -141,6 +142,7 @@ export type BaseFilmInput = {
   shots: PreviewShot[];
   preview_banner?: boolean;
   preview_placeholders?: string[];
+  typefaces?: Record<string, { family: string; src: string }>;
   brand_plate?: string | null;
   brand_duration_frames?: number;
   titles?: TitlesInput | null;

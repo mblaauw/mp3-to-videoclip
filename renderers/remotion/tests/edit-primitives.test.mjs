@@ -317,3 +317,16 @@ test("fade_in rises and then stays, so words hold through the last frame", () =>
   assert.equal(timing.textAnimationStyle("fade_in", 0.5).opacity, 1);
   assert.equal(timing.textAnimationStyle("fade_in", 1).opacity, 1);
 });
+
+test("the grain is a large tile, turned and mirrored per frame, the same on any machine", () => {
+  const look = {grain: 0.5, weave: 0, drift: 0};
+  const seen = new Set();
+  for (let frame = 0; frame < 200; frame += 1) {
+    const state = lookState(look, frame, "s001", 1920, 1080, 24);
+    assert.match(state.grainTransform, /^rotate\((0|90|180|270)deg\) scaleX\(-?1\)$/);
+    assert.ok(state.grainSpan >= Math.hypot(1920, 1080));
+    seen.add(state.grainTransform);
+  }
+  assert.equal(seen.size, 8);
+  assert.deepEqual(lookState(look, 7, "s001", 1920, 1080, 24), lookState(look, 7, "s001", 1920, 1080, 24));
+});

@@ -1026,12 +1026,15 @@ class Grade(Model):
     strength: float = Field(default=1.0, ge=0, le=1)
     overrides: PostEffects | None = None
     look: FilmLook | None = None
+    typeface: Literal["inter", "fraunces", "bebas"] | None = None
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
         value = handler(self)
         if value.get("overrides") is None:
             value.pop("overrides", None)
+        if value.get("typeface") is None:
+            value.pop("typeface", None)
         # Absent when unset, so a film without a look hashes as it always has.
         if value.get("look") is None:
             value.pop("look", None)

@@ -85,6 +85,17 @@ price_source = "https://runware.ai/docs/models-api/pricing"
 price_checked = "2026-11-01"
 
 [[models]]
+id = "real-esrgan"
+provider = "runware"
+label = "Real-ESRGAN"
+capabilities = ["upscale"]
+recommended = ["upscaler"]
+price = { amount = "0.0006", unit = "image" }
+price_note = "Published measure at factor 2."
+price_source = "https://runware.ai/docs/models-api/pricing"
+price_checked = "2026-11-01"
+
+[[models]]
 id = "minimax-speech-2-8"
 provider = "runware"
 label = "MiniMax Speech 2.8"

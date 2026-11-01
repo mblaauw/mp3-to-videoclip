@@ -97,6 +97,31 @@ def run(root: Path, quote_id: str, *, concurrency: int = 1) -> dict:
         return G.generate(root, quote_id, concurrency=concurrency)
 
 
+def estimate_upscale(root: Path, shot_ids: list[str], *, reserve: str | None = None) -> dict:
+    """Quote a sharper version of each selected still; saves the quote and spends nothing."""
+    from mp3_to_videoclip import upscale
+    from mp3_to_videoclip.storage import project_lock
+
+    with project_lock(root):
+        quote = upscale.quote_upscale(root, shot_ids, reserve=reserve)
+    return {
+        "quote_id": quote["id"],
+        "tasks": len(quote["tasks"]),
+        "reserve_usd": quote["reserve_total_usd"],
+        "model": quote["model"],
+        "pricing": quote.get("published_pricing"),
+    }
+
+
+def run_upscale(root: Path, quote_id: str) -> dict:
+    """Execute an authorized quote exactly once; never resubmits."""
+    from mp3_to_videoclip import upscale
+    from mp3_to_videoclip.storage import project_lock
+
+    with project_lock(root):
+        return upscale.generate_upscale(root, quote_id)
+
+
 def recover(root: Path, task_uuid: str) -> dict:
     return G.recover(root, task_uuid)
 

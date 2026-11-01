@@ -325,6 +325,8 @@ export type ImageVersion = {
   path: string;
   sha256: string;
   input_hash: string;
+  derived_from?: { version: number; sha256: string };
+  derivation?: { kind: string; model: string; factor: number };
 };
 
 export type ImageReview = {
@@ -1019,6 +1021,19 @@ export const api = {
     request<{ captions: number; timed_lines: number }>(`/api/projects/${slug}/edit/captions`, {
       method: "POST",
       body: JSON.stringify({ mode }),
+    }),
+  estimateUpscale: (slug: string, shotIds: string[]) =>
+    request<{
+      estimate: { quote_id: string; tasks: number; reserve_usd: string };
+      decision: { ok: boolean };
+    }>(`/api/projects/${slug}/images/upscale/estimate`, {
+      method: "POST",
+      body: JSON.stringify({ shot_ids: shotIds }),
+    }),
+  generateUpscale: (slug: string, quoteId: string) =>
+    request<{ job_id?: string; needs_budget?: boolean }>(`/api/projects/${slug}/images/upscale`, {
+      method: "POST",
+      body: JSON.stringify({ quote_id: quoteId }),
     }),
   suggestEdit: (slug: string) =>
     request<EditSuggestion>(`/api/projects/${slug}/edit/suggest`, {

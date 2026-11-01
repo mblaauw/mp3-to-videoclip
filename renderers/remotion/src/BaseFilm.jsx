@@ -5,11 +5,13 @@
 // use src/timing.mjs, so spans, dissolves, camera moves, grades, edit
 // transitions, accents, split layouts and text animation are the same pure
 // functions of the frame in the browser and in the MP4.
-import React from "react";
+import React, {useEffect, useState} from "react";
 import {
   AbsoluteFill,
   Img,
   Sequence,
+  continueRender,
+  delayRender,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
@@ -65,10 +67,44 @@ function SplitPanes({panes, layout, width, height}) {
   );
 }
 
-function textBox(style, width, height, color) {
+/** Embedded faces as `data:` URLs from the caller; the render waits until they load. */
+function useTypefaces(typefaces) {
+  const entries = Object.values(typefaces ?? {});
+  const [handle] = useState(() => (entries.length ? delayRender("embedded typefaces") : null));
+  useEffect(() => {
+    if (!entries.length) return undefined;
+    const style = document.createElement("style");
+    style.textContent = entries
+      .map(
+        (face) =>
+          `@font-face{font-family:'${face.family}';src:url(${face.src});font-display:block;font-weight:100 900;}`,
+      )
+      .join("");
+    document.head.appendChild(style);
+    let released = false;
+    const release = () => {
+      if (!released) {
+        released = true;
+        continueRender(handle);
+      }
+    };
+    Promise.all(entries.map((face) => document.fonts?.load?.(`700 100px '${face.family}'`)))
+      .then(release)
+      .catch(release);
+    return () => style.remove();
+    // The faces never change within one render; they arrive once with the input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handle]);
+}
+
+function fontStack(family) {
+  return family ? `'${family}', ${DEFAULT_FONT_STACK}` : DEFAULT_FONT_STACK;
+}
+
+function textBox(style, width, height, color, family) {
   const base = {
     position: "absolute",
-    fontFamily: DEFAULT_FONT_STACK,
+    fontFamily: fontStack(family),
     color: color ?? "#FFFFFF",
     textShadow: "0 2px 18px rgba(0,0,0,0.55)",
   };
@@ -186,11 +222,11 @@ function textBox(style, width, height, color) {
   };
 }
 
-function TextLayer({item, absoluteFrame, width, height}) {
+function TextLayer({item, absoluteFrame, width, height, family}) {
   if (absoluteFrame < item.in_frame || absoluteFrame >= item.out_frame) return null;
   const duration = Math.max(item.out_frame - item.in_frame, 1);
   const progress = (absoluteFrame - item.in_frame) / duration;
-  const box = textBox(item.style, width, height, item.color);
+  const box = textBox(item.style, width, height, item.color, family);
   const words = item.text.split(/\s+/).filter(Boolean);
   if (item.animation === "kinetic_words") {
     return (
@@ -247,7 +283,7 @@ const GRAIN_IMAGE = `url("data:image/svg+xml,${encodeURIComponent(
 
 const WHIP_BLUR_ID = "whip-blur";
 
-export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height, whipBlur = 0}) {
+export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height, whipBlur = 0, typefaces = null}) {
   const grade = timing.gradeStyle(span.grade, span.post_effects);
   const accent = timing.accentState(span.edit?.accents, absoluteFrame);
   const camera = timing.cameraAtFrame(span, localFrame);
@@ -321,11 +357,18 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
         ) : null}
       </div>
       {look && look.grainOpacity > 0 ? (
-        <AbsoluteFill
+        <div
           style={{
+            position: "absolute",
+            width: look.grainSpan,
+            height: look.grainSpan,
+            left: (width - look.grainSpan) / 2,
+            top: (height - look.grainSpan) / 2,
             backgroundImage: GRAIN_IMAGE,
             backgroundSize: `${timing.GRAIN_TILE}px ${timing.GRAIN_TILE}px`,
+            backgroundRepeat: "repeat",
             backgroundPosition: `${look.grainX}px ${look.grainY}px`,
+            transform: look.grainTransform,
             mixBlendMode: "overlay",
             opacity: look.grainOpacity,
             pointerEvents: "none",
@@ -337,6 +380,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
           key={item.id}
           item={item}
           absoluteFrame={absoluteFrame}
+          family={typefaces?.[span.grade?.typeface]?.family}
           width={width}
           height={height}
         />
@@ -366,6 +410,7 @@ export function BaseFilm({input, overlay = null}) {
   const frame = useCurrentFrame();
   const {width, height, fps} = useVideoConfig();
   const shots = input?.shots ?? [];
+  useTypefaces(input?.typefaces);
   const previewBanner = input?.preview_banner === true;
   const placeholders = new Set(input?.preview_placeholders ?? []);
   const brandPlate = input?.brand_plate ?? null;
@@ -437,6 +482,7 @@ export function BaseFilm({input, overlay = null}) {
             durationInFrames={span.duration_frames + span.handle}
           >
             <ShotLayer
+              typefaces={input?.typefaces}
               span={span}
               localFrame={layer.localFrame}
               absoluteFrame={frame}

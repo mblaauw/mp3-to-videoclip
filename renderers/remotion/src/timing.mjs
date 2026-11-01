@@ -676,6 +676,8 @@ export function validateEditShot(value, shot) {
   return value;
 }
 
+export const TYPEFACES = ["inter", "fraunces", "bebas"];
+
 export function validateGrade(value) {
   if (value === undefined || value === null) return null;
   if (typeof value !== "object" || Array.isArray(value)) fail("grade must be an object");
@@ -693,6 +695,9 @@ export function validateGrade(value) {
       const amount = requireNumber(value.look[key] ?? 0, `grade.look.${key}`);
       if (amount < 0 || amount > 1) fail(`grade.look.${key} must be between 0 and 1`);
     }
+  }
+  if (value.typeface !== undefined && value.typeface !== null && !TYPEFACES.includes(value.typeface)) {
+    fail(`unsupported grade typeface ${JSON.stringify(value.typeface)}`);
   }
   if (value.overrides !== undefined && value.overrides !== null) {
     if (typeof value.overrides !== "object" || Array.isArray(value.overrides)) {
@@ -807,7 +812,8 @@ const GRAIN_STRENGTH = 0.26;
 const WEAVE_SHARE = 0.0011;
 const DRIFT_SHARE = 0.007;
 const DRIFT_TILT_DEGREES = 0.12;
-export const GRAIN_TILE = 256;
+export const GRAIN_TILE = 1024;
+const GRAIN_TURNS = [0, 90, 180, 270];
 
 /**
  * The film look at one frame of a shot, or null when off. Pure and deterministic, so
@@ -846,6 +852,11 @@ export function lookState(look, localFrame, shotId, width, height, fps) {
     grainOpacity: grain * GRAIN_STRENGTH,
     grainX: Math.floor(frameNoise(frame, seed + 3) * GRAIN_TILE),
     grainY: Math.floor(frameNoise(frame, seed + 4) * GRAIN_TILE),
+    // A larger tile, turned and mirrored per frame, so no repeat stands still on a flat sky.
+    grainTransform:
+      `rotate(${GRAIN_TURNS[Math.floor(frameNoise(frame, seed + 5) * 4) % 4]}deg) ` +
+      `scaleX(${frameNoise(frame, seed + 6) < 0.5 ? -1 : 1})`,
+    grainSpan: Math.ceil(Math.hypot(width, height)),
   };
 }
 

@@ -428,6 +428,19 @@ def begin_task(root: Path, quote: dict, task: dict, *, kind=None, admitted=()):
             for entry in journal.values()
         ):
             raise ValueError("a conflicting task/version was submitted; recover or requote")
+    if (kind or quote["kind"]) == "upscale":
+        from .upscale import check_before_spend
+
+        check_before_spend(root, task)
+        if any(
+            entry.get("shot_id") == task["shot_id"]
+            and (
+                entry.get("version") == task["version"]
+                or entry.get("status") in ("submitted", "result")
+            )
+            for entry in journal.values()
+        ):
+            raise ValueError("a conflicting task/version was submitted; recover or requote")
     if (kind or quote["kind"]) == "transcription" and quote.get("provider", "openai") == "openai":
         if (root / "work/lyrics.json").exists():
             raise ValueError("lyrics already exist; preserve them rather than overwrite/rebill")
@@ -495,7 +508,16 @@ def finish_image(root: Path, task_uuid: str, result: dict, client: RunwareClient
         current = journal[task_uuid]
         if current.get("status") == "resolved":
             raise ValueError("task was manually reconciled during download; inspect the result")
-        record_asset(root, task["shot_id"], task["version"], path, task["input_hash"], task_uuid)
+        record_asset(
+            root,
+            task["shot_id"],
+            task["version"],
+            path,
+            task["input_hash"],
+            task_uuid,
+            derived_from=task.get("derived_from"),
+            derivation=task.get("derivation"),
+        )
         current.update(status="ready", path=relative, sha256=file_hash(path), completed_at=now())
         write_json(root / "work/tasks.json", journal)
         _replace_outdated_selection(root, task)
@@ -787,7 +809,7 @@ def recover(root: Path, task_uuid: str, client=None):
         from .transcription import recover_runware
 
         return recover_runware(root, task_uuid, client)
-    if not task or task["kind"] != "images":
+    if not task or task["kind"] not in ("images", "upscale"):
         raise ValueError("unknown image task; transcription has no automatic recovery endpoint")
     if task["status"] == "ready" and asset_intact(root, task):
         # Ready journal bytes can outlive an interrupted asset-index publication.
@@ -799,6 +821,8 @@ def recover(root: Path, task_uuid: str, client=None):
             inside(root, task["path"]),
             task["input_hash"],
             task_uuid,
+            derived_from=task.get("derived_from"),
+            derivation=task.get("derivation"),
         )
         return True
     if task["status"] == "resolved":

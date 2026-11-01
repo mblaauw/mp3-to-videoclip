@@ -131,6 +131,8 @@ SAME_TRAVEL_RUN = 4
 SOFT_CROP_ZOOM = 1.4
 LONG_STATIC_SECONDS = 12.0
 GRID_TOLERANCE_FRAMES = 3
+SOFT_PUSH_SCALE = 1.15
+SOFT_PUSH_SOURCE = 1.2
 UNREVIEWED_FEELS = ("unreviewed", "section", "")
 
 
@@ -791,6 +793,7 @@ def report(
                     }
                 )
 
+    warnings.extend(_soft_push_findings(root, edit, project))
     warnings.extend(_grid_findings(root, edit, windows))
     warnings.extend(_caption_findings(edit))
 
@@ -922,6 +925,34 @@ def _seed_motion(shot) -> EditMotion:
     if shot.camera == "pan_left":
         return EditMotion(type="pan_left", **{"from": 1.08, "to": 1.08}, reason=reason)
     return EditMotion(type="pan_right", **{"from": 1.08, "to": 1.08}, reason=reason)
+
+
+def _soft_push_findings(root: Path, edit: EditDecisionList, project: Project) -> list[dict]:
+    """A push-in past this is where a sharper still pays for itself."""
+    assets = read_optional(root / "work/assets.json")
+    if not isinstance(assets, dict):
+        return []
+    findings = []
+    for shot in edit.shots:
+        peak = max(shot.motion.from_scale or 1.0, shot.motion.to_scale or 1.0)
+        if peak <= SOFT_PUSH_SCALE:
+            continue
+        entry = assets.get(shot.shot_id)
+        if not isinstance(entry, dict) or entry.get("selected") is None:
+            continue
+        chosen = next(
+            (v for v in entry.get("versions", []) if v.get("version") == entry["selected"]), {}
+        )
+        factor = (chosen.get("derivation") or {}).get("factor", 1)
+        if project.image_size[0] * factor < SOFT_PUSH_SOURCE * project.width:
+            findings.append(
+                {
+                    "code": "soft_push_in",
+                    "shot_id": shot.shot_id,
+                    "message": f"shot {shot.shot_id} pushes in to {peak:.2f} on a small still",
+                }
+            )
+    return findings
 
 
 def _grid_findings(root: Path, edit: EditDecisionList, windows: list) -> list[dict]:

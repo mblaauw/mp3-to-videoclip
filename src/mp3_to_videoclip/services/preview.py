@@ -14,7 +14,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip import shotkinds, voice
 from mp3_to_videoclip.branding import pack_hash, render_brand_plate
 from mp3_to_videoclip.read_snapshots import read_operation
-from mp3_to_videoclip.remotion import data_url
+from mp3_to_videoclip.remotion import data_url, typefaces_input
 from mp3_to_videoclip.storage import digest, inside, read_json
 
 MISSING_IMAGE = "missing-still.jpg"
@@ -161,6 +161,8 @@ def player_input(root: Path, slug: str) -> dict:
             render_brand_plate(brand, project, plate)
         payload["brand_plate"] = data_url(plate, "image/png")
         payload["brand_duration_frames"] = round(brand.duration_seconds * project.fps)
+    if grade and grade.get("typeface"):
+        payload["typefaces"] = typefaces_input([grade["typeface"]])
     payload["titles"], payload["titles_note"] = _titles(root, project)
     return payload
 

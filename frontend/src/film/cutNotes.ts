@@ -88,6 +88,8 @@ export function describeNote(finding: EditFinding, index: number, context: Conte
     case "reading_time":
     case "text_reading_time":
       return note(`${place}: on-screen text may be too quick to read`, text);
+    case "soft_push_in":
+      return note(`${shot?.shot_id ?? place}: pushes in further than the still is sharp`, "Make a sharper version of this still on Images, or ease the push-in.");
     case "off_grid":
       return note(`${place}: cuts away from the beat`, "A full passage lands harder on a downbeat. Move these joins, or keep them if the drift is the point.");
     case "late_cut":

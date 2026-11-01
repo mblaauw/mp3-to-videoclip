@@ -289,6 +289,21 @@ function LookControls({ edit, onChange }: { edit: EditPayload; onChange: PanelEd
       {LOOK_AMOUNTS.map((amount) => (
         <LookAmountField key={amount.key} edit={edit} amount={amount} onChange={onChange} />
       ))}
+      <label className="look-amount">
+        Typeface{" "}
+        <select
+          value={edit.grade.typeface ?? ""}
+          onChange={(event) => {
+            const typeface = (event.target.value || null) as Grade["typeface"];
+            void onChange({ ...edit, grade: { ...edit.grade, typeface } }, "the typeface");
+          }}
+        >
+          <option value="">This computer's default</option>
+          <option value="inter">Inter</option>
+          <option value="fraunces">Fraunces</option>
+          <option value="bebas">Bebas Neue</option>
+        </select>
+      </label>
       <p className="hint">Text and titles stay crisp above the look.</p>
     </details>
   );

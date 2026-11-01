@@ -41,6 +41,29 @@ WORKERS_ENV = "STUDIO_RENDER_WORKERS"
 GL_ENV = "STUDIO_RENDER_GL"
 
 
+# The faces a film can be set in, embedded from these bytes so no computer's fonts matter.
+FONTS = ENGINE / "fonts"
+TYPEFACES = {
+    "inter": ("Inter", "Inter.woff2"),
+    "fraunces": ("Fraunces", "Fraunces.woff2"),
+    "bebas": ("Bebas Neue", "BebasNeue.woff2"),
+}
+
+
+def typeface_url(name: str) -> str:
+    if name not in TYPEFACES:
+        raise ValueError(f"unknown typeface {name}")
+    return data_url(FONTS / TYPEFACES[name][1], "font/woff2")
+
+
+def typefaces_input(names) -> dict:
+    """The embedded faces a list of shots uses, by name."""
+    return {
+        name: {"family": TYPEFACES[name][0], "src": typeface_url(name)}
+        for name in sorted({name for name in names if name})
+    }
+
+
 class AssetCacheCorruption(ValueError):
     """An immutable cached asset differs from its content-addressed name."""
 
@@ -122,26 +145,26 @@ def visual_identity(project: Project, inputs: dict, revision: str) -> str:
 
 
 def implementation_hash() -> str:
-    """Bind renderer code, locked dependencies and font bytes; never the browser.
+    """Bind renderer code, locked dependencies and the embedded fonts; never the browser.
 
     A browser security update changes produced bytes only if the renderer source
     changes, so hashing the desktop binary would revoke a reviewed preview for no
     content reason. Local Node and Chrome are checked when a render starts, not
     when an approval is compared.
     """
-    from .graphics import resolve_font
-
     names = ["package.json", "package-lock.json", "render.mjs"]
-    paths = [ENGINE / n for n in names] + sorted((ENGINE / "src").glob("*"))
+    paths = (
+        [ENGINE / n for n in names]
+        + sorted((ENGINE / "src").glob("*"))
+        + sorted(FONTS.glob("*.woff2"))
+    )
     missing = [str(p) for p in paths if not p.is_file()]
     if missing or not (ENGINE / "src/index.jsx").is_file():
         raise ValueError(f"Remotion source bundle incomplete: {missing}")
-    font = resolve_font()[0]
     return digest(
         {
             "files": {str(p.relative_to(ENGINE)): file_hash(p) for p in paths},
             "adapter": file_hash(Path(__file__)),
-            "font": file_hash(font),
         }
     )
 
@@ -1129,6 +1152,9 @@ def render_base(
         inputs["titles"] = titles
     if capture is not None:
         inputs["capture"] = capture
+    faces = typefaces_input((shot.get("grade") or {}).get("typeface") for shot in compiled)
+    if faces:
+        inputs["typefaces"] = faces
     inputs.update(_brand_inputs(project, brand, assets))
     revision = implementation_hash()
     selected = selected_asset_root(compiled, assets)
@@ -1266,9 +1292,8 @@ def title_assets(spec: dict, palette: dict) -> dict:
         "intro": spec["intro"],
         "palette": colours,
         "logo": logo,
-        # Local Avenir Next is resolved by Chromium's system font stack; .ttc is
-        # not a portable webfont. Its source bytes are still in the fingerprint.
-        "font": None,
+        # No typeface named: Chromium's system stack, as every existing film has it.
+        "font": typeface_url(spec["typeface"]) if spec.get("typeface") else None,
     }
 
 

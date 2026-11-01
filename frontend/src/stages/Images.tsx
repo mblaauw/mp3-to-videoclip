@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { ApprovalBar, useApprovals } from "../ApprovalBar";
 import { ReferencePicker } from "../images/ReferencePicker";
+import { MakeSharper } from "../images/MakeSharper";
 import { NewRoundCard } from "../images/NewRoundCard";
 import { PaidCard } from "../images/PaidCard";
 import { usePaidImages } from "../images/paid";
@@ -772,6 +773,14 @@ export function ImagesStage({
               </span>
             </div>
 
+            {!current.local && !current.stale && current.selected != null && (
+              <MakeSharper
+                slug={slug}
+                shotId={current.id}
+                disabled={imageJobs.length > 0}
+                onStarted={() => notifyProjectChanged({ slug })}
+              />
+            )}
             {!current.local && current.versions.length > 0 && (
               <div className="version-row" aria-label="Versions">
                 {current.versions.map((version) => (
@@ -786,6 +795,7 @@ export function ImagesStage({
                     aria-pressed={version.version === current.selected}
                   >
                     v{version.version}
+                    {version.derivation ? ` · ${version.derivation.factor}×` : ""}
                     <img
                       src={`/api/projects/${slug}/images/${encodeURIComponent(current.owner)}/${
                         version.version
