@@ -210,6 +210,7 @@ export type TrackData = {
   section_names: { start: number; name: string }[];
   /** True while the owner's corrected sections replace the detected ones. */
   section_map?: boolean;
+  sections_from_music?: boolean;
 };
 
 export type ConceptBeat = {

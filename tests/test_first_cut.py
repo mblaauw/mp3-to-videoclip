@@ -75,7 +75,9 @@ def test_suggestion_covers_every_shot_and_writes_nothing(tmp_path):
     root = _film(tmp_path)
     before = sorted(path.name for path in (root / "work").iterdir())
     result = first_cut.suggest(root)
-    assert sorted(path.name for path in (root / "work").iterdir()) == before
+    # The song map's derived cache is the only new file.
+    after = sorted(path.name for path in (root / "work").iterdir() if path.name != "song-map.json")
+    assert after == before
     suggested = EditDecisionList.model_validate(result["edit"])
     suggested.check_board(P.load_board(root))
     assert result["report"]["ok"] is True
