@@ -1180,6 +1180,46 @@
   pointer-events: none;
 }
 
+.film-voice-tick {
+  position: absolute;
+  bottom: 0;
+  width: 2px;
+  height: 40%;
+  background: var(--gold);
+  pointer-events: none;
+}
+
+.voice-line {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--line);
+}
+.voice-line textarea {
+  width: 100%;
+  resize: vertical;
+}
+.voice-start {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.voice-start input {
+  width: 5em;
+}
+.voice-takes {
+  display: grid;
+  gap: var(--s-2);
+}
+.voice-takes audio {
+  width: 100%;
+  height: 32px;
+}
+.voice-warning {
+  margin: 0;
+  color: var(--gold);
+}
+
 .film-crops {
   display: grid;
   gap: 6px;
@@ -1208,4 +1248,16 @@
 
 .cut-against-seed {
   margin: 6px 0;
+}
+
+.critic-notes li {
+  margin-bottom: var(--s-2);
+}
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  text-decoration: underline;
+  cursor: pointer;
 }

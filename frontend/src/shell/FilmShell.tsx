@@ -429,7 +429,14 @@ function FilmShellContent({
 
   useEffect(() => {
     const ask = (event: Event) => {
-      const detail = (event as CustomEvent<{ text?: string; send?: boolean; task?: string }>).detail;
+      const detail = (
+        event as CustomEvent<{
+          text?: string;
+          send?: boolean;
+          task?: string;
+          role?: DirectorPrompt["role"];
+        }>
+      ).detail;
       setInspectorShot(null);
       setDirectorOpen(true);
       setDirectorPrompt({
@@ -437,6 +444,7 @@ function FilmShellContent({
         at: Date.now(),
         send: detail?.send,
         task: detail?.task,
+        role: detail?.role,
       });
     };
     window.addEventListener("studio:ask-director", ask);
@@ -481,10 +489,13 @@ function FilmShellContent({
   const step = nextStep(stage, projectFacts, approvals, facts, budget || {});
   const baseAudio = project.audio_url || `/api/projects/${slug}/audio`;
   const committedWindow = intake?.audio_window || null;
+  // Film is where the voiceover is heard; Track keeps listening to the music alone.
   const playerSrc =
-    committedWindow && project.kind !== "music_video"
-      ? `${baseAudio}?v=${committedWindow.start}-${committedWindow.end}-${committedWindow.fade_in}-${committedWindow.fade_out}`
-      : baseAudio;
+    stage === "film" && project.film_audio_url
+      ? project.film_audio_url
+      : committedWindow && project.kind !== "music_video"
+        ? `${baseAudio}?v=${committedWindow.start}-${committedWindow.end}-${committedWindow.fade_in}-${committedWindow.fade_out}`
+        : baseAudio;
   const spineBoard = board && editPayload ? applyEditBoard(board, editPayload) : board;
 
   const commitAudioWindow = async (window: AudioWindow): Promise<boolean> => {
@@ -574,7 +585,6 @@ function FilmShellContent({
       if (!action.paid) return;
       setPendingPaid(action.paid);
       if (stage !== "images") onNavigate("images");
-      scrollTo(".images-body", 180);
       return;
     }
     if (action.target === "pictures") {

@@ -65,13 +65,58 @@ function SplitPanes({panes, layout, width, height}) {
   );
 }
 
-function textBox(style, width, height) {
+function textBox(style, width, height, color) {
   const base = {
     position: "absolute",
     fontFamily: DEFAULT_FONT_STACK,
-    color: "#FFFFFF",
+    color: color ?? "#FFFFFF",
     textShadow: "0 2px 18px rgba(0,0,0,0.55)",
   };
+  if (style === "logotype") {
+    return {
+      ...base,
+      // A logotype may sit over a busy picture, so it carries its own dark halo.
+      textShadow:
+        "0 2px 4px rgba(0,0,0,0.95), 0 0 22px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.75)",
+      left: width * 0.06,
+      right: width * 0.06,
+      top: height * 0.34,
+      textAlign: "center",
+      fontSize: height * 0.086,
+      fontWeight: 600,
+      letterSpacing: "0.2em",
+      lineHeight: 1.1,
+      textTransform: "uppercase",
+    };
+  }
+  if (style === "tagline") {
+    return {
+      ...base,
+      left: width * 0.1,
+      right: width * 0.1,
+      top: height * 0.52,
+      textAlign: "center",
+      fontSize: height * 0.032,
+      fontWeight: 500,
+      letterSpacing: "0.32em",
+      lineHeight: 1.5,
+      textTransform: "uppercase",
+    };
+  }
+  if (style === "cta") {
+    return {
+      ...base,
+      left: width * 0.1,
+      right: width * 0.1,
+      top: height * 0.63,
+      textAlign: "center",
+      fontSize: height * 0.044,
+      fontWeight: 700,
+      letterSpacing: "0.22em",
+      lineHeight: 1.3,
+      textTransform: "uppercase",
+    };
+  }
   if (style === "title") {
     return {
       ...base,
@@ -145,7 +190,7 @@ function TextLayer({item, absoluteFrame, width, height}) {
   if (absoluteFrame < item.in_frame || absoluteFrame >= item.out_frame) return null;
   const duration = Math.max(item.out_frame - item.in_frame, 1);
   const progress = (absoluteFrame - item.in_frame) / duration;
-  const box = textBox(item.style, width, height);
+  const box = textBox(item.style, width, height, item.color);
   const words = item.text.split(/\s+/).filter(Boolean);
   if (item.animation === "kinetic_words") {
     return (

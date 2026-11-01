@@ -8,6 +8,14 @@ import {
 
 export type PaidScope = "proof" | "stills";
 
+/** A batch held back because some of its shots have used their correction. */
+export type NewRound = {
+  used: string[];
+  ids: string[];
+  scope: PaidScope;
+  regenerate: boolean;
+};
+
 export type PaidQuote = {
   estimate: ImageEstimate;
   decision: BudgetDecision;
@@ -30,6 +38,7 @@ export function usePaidImages(
   onDone: () => void,
 ) {
   const [quote, setQuote] = useState<PaidQuote | null>(null);
+  const [newRound, setNewRound] = useState<NewRound | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -83,6 +92,7 @@ export function usePaidImages(
       if (!ids.length || busy) return;
       setBusy(true);
       setQuote(null);
+      setNewRound(null);
       setError(null);
       setMessage(null);
       try {
@@ -92,6 +102,10 @@ export function usePaidImages(
           scope,
           regenerate,
         });
+        if (response.needs_new_round?.length) {
+          setNewRound({ used: response.needs_new_round, ids, scope, regenerate });
+          return;
+        }
         if (response.error || !response.estimate || !response.decision) {
           setError(response.error || "The pictures could not be estimated.");
           return;
@@ -147,13 +161,34 @@ export function usePaidImages(
     [busy, generateQuote, quote],
   );
 
+  const startNewRound = useCallback(
+    async (note: string) => {
+      if (!newRound || busy) return;
+      const { used, ids, scope, regenerate } = newRound;
+      setBusy(true);
+      setError(null);
+      try {
+        await api.startNewRound(slug, used, note);
+      } catch (caught) {
+        setError(String(caught));
+        return;
+      } finally {
+        setBusy(false);
+      }
+      setNewRound(null);
+      await request(ids, scope, regenerate);
+    },
+    [busy, newRound, request, slug],
+  );
+
   const clear = useCallback(() => {
     setQuote(null);
+    setNewRound(null);
     setError(null);
     setMessage(null);
   }, []);
 
   const clearQueued = useCallback(() => setQueued([]), []);
 
-  return { quote, busy, error, message, queued, request, topUp, confirm, clear, clearQueued };
+  return { quote, newRound, startNewRound, busy, error, message, queued, request, topUp, confirm, clear, clearQueued };
 }

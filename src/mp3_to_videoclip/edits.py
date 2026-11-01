@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from . import shotkinds
 from .models import (
     EditAccent,
     EditDecisionList,
@@ -279,7 +280,7 @@ def _technique_rows(edit: EditDecisionList, board: Storyboard) -> list[dict]:
         for accent in shot.accents:
             add(TECHNIQUE_NAMES[accent.type], accent.reason)
         for item in shot.text:
-            key = "fade_text" if item.animation == "fade" else item.animation
+            key = "fade_text" if item.animation in ("fade", "fade_in") else item.animation
             add(TECHNIQUE_NAMES[key], item.reason)
         content = storyboard.get(shot.shot_id)
         if content is not None and content.kind == "split":
@@ -298,7 +299,9 @@ def _technique_rows(edit: EditDecisionList, board: Storyboard) -> list[dict]:
                     or TECHNIQUE_NAMES.get(decision.transition_in.type) == name
                     or any(TECHNIQUE_NAMES.get(a.type) == name for a in decision.accents)
                     or any(
-                        TECHNIQUE_NAMES.get("fade_text" if t.animation == "fade" else t.animation)
+                        TECHNIQUE_NAMES.get(
+                            "fade_text" if t.animation in ("fade", "fade_in") else t.animation
+                        )
                         == name
                         for t in decision.text
                     )
@@ -321,10 +324,21 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
         return {"applicable": False, "checks": []}
     content = {shot.id: shot for shot in board.shots}
     first_five = [decision for decision in edit.shots if decision.start_frame < 5 * project.fps]
+
+    def _words_on_screen(decision) -> bool:
+        """A designed plate draws its own words; on a picture only the cut's layers show."""
+        shot = content.get(decision.shot_id)
+        return bool(decision.text) or bool(
+            shot is not None
+            and shot.text
+            and shotkinds.is_local(shot)
+            and not shotkinds.is_reprise(shot)
+        )
+
     visible = any(
         content[decision.shot_id].kind in ("product", "logo", "end_card")
         or content[decision.shot_id].product_ref
-        or content[decision.shot_id].text
+        or _words_on_screen(decision)
         for decision in first_five
         if decision.shot_id in content
     )
@@ -334,6 +348,9 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
         if content.get(decision.shot_id) is not None
         and content[decision.shot_id].kind == "end_card"
     ]
+    # A painted card with the words set over it closes a film just as well.
+    if not end_cards and edit.shots and edit.shots[-1].text:
+        end_cards = [edit.shots[-1]]
     end_ok = bool(end_cards) and all(
         decision.duration_frames >= 3 * project.fps for decision in end_cards
     )
@@ -373,6 +390,7 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
                     content[decision.shot_id].message,
                     content[decision.shot_id].purpose,
                     *content[decision.shot_id].text,
+                    *[item.text for item in decision.text],
                 ]
             )
             for decision in edit.shots
@@ -392,6 +410,13 @@ def _ad_checks(root: Path, project: Project, board: Storyboard, edit: EditDecisi
             }
         )
     return {"applicable": True, "checks": checks}
+
+
+def _is_plain_reprise(board, shot_id: str) -> bool:
+    if board is None:
+        return False
+    shot = next((item for item in board.shots if item.id == shot_id), None)
+    return shot is not None and shotkinds.is_reprise(shot)
 
 
 def report(
@@ -648,6 +673,37 @@ def report(
                     "message": (
                         f"{shot.shot_id} crops in to {max(crop.zoom for crop in soft):.2f}x; "
                         "check that the still stays sharp enough"
+                    ),
+                }
+            )
+    if board is not None:
+        board_shots = {shot.id: shot for shot in board.shots}
+        for shot in edit.shots:
+            planned = board_shots.get(shot.shot_id)
+            # Designed plates draw their own words; on a picture only the cut's layers show.
+            on_a_picture = planned is not None and (
+                not shotkinds.is_local(planned) or shotkinds.is_reprise(planned)
+            )
+            if on_a_picture and planned.text and not shot.text:
+                warnings.append(
+                    {
+                        "code": "text_not_drawn",
+                        "shot_id": shot.shot_id,
+                        "message": (
+                            f"{shot.shot_id} has words on the storyboard, but they only show "
+                            "as text layers in the cut, and it has none"
+                        ),
+                    }
+                )
+    for shot in edit.shots:
+        if not shot.crops and _is_plain_reprise(board, shot.shot_id):
+            warnings.append(
+                {
+                    "code": "reprise_uncropped",
+                    "shot_id": shot.shot_id,
+                    "message": (
+                        f"{shot.shot_id} repeats a still with no new framing; give it a crop on "
+                        "its first frame"
                     ),
                 }
             )
@@ -1016,6 +1072,8 @@ def tool_page(root: Path, first: int = 0, count: int = TOOL_PAGE_SHOTS) -> dict:
         value["sections"] = [section.model_dump() for section in edit.sections]
         value["grade"] = edit.grade.model_dump()
         value["notes"] = edit.notes
+        if edit.voice:
+            value["voice"] = [line.model_dump() for line in edit.voice]
         value["report"] = _tool_report(report(root, edit=edit))
     return value
 
@@ -1054,6 +1112,17 @@ def patch_shots(root: Path, changes: list[dict]) -> dict:
         )
     saved = save_edit(root, values)
     return {"saved": len(changes), "report": _tool_report(report(root, edit=saved))}
+
+
+def set_voice_lines(root: Path, lines: list[dict]) -> dict:
+    """Replace the cut's spoken lines, leaving every shot alone."""
+    edit = load_edit(root)
+    if edit is None:
+        raise ValueError("there is no cut yet")
+    values = edit.model_dump(by_alias=True)
+    values["voice"] = lines
+    saved = save_edit(root, values)
+    return {"saved": len(saved.voice), "report": _tool_report(report(root, edit=saved))}
 
 
 def _against_seed(root: Path, edit: EditDecisionList) -> dict | None:

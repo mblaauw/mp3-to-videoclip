@@ -384,6 +384,14 @@ function imagesStep(
         ],
       };
     }
+    if (total === 0 && proof?.expected_hash) {
+      return {
+        tone: proofChanged ? "changed" : "you",
+        title: "No stills to buy for this film.",
+        detail: "Every picture is your own or made here. Check them, then approve.",
+        actions: approvedAction("Approve the pictures", "proof"),
+      };
+    }
     if (total > 0 && kept >= total && proof?.expected_hash) {
       return {
         tone: proofChanged ? "changed" : "you",
