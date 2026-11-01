@@ -8,6 +8,7 @@ const dependencies: Record<string, string[]> = {
   images: ["images", "edit", "preview", "approvals", "film", "budget"],
   budget: ["budget"],
   track: ["track", "music-notes", "preview", "approvals", "film", "intake", "edit"],
+  script: ["script", "storyboard", "track", "preview", "approvals", "film", "edit", "budget"],
   lyrics: ["track", "approvals", "film"],
   treatments: ["treatments", "brief", "intake", "approvals", "history"],
   approvals: ["approvals", "film"],
@@ -18,6 +19,32 @@ const dependencies: Record<string, string[]> = {
 type Entry = { promise: Promise<unknown> };
 export class Resources {
   private entries = new Map<string, Entry>();
+  private listeners = new Map<string, Set<() => void>>();
+  private pending = new Set<string>();
+
+  /** Called when this key's value is out of date. Returns how to stop listening. */
+  subscribe(key: string, listener: () => void): () => void {
+    const group = this.listeners.get(key) ?? new Set();
+    group.add(listener);
+    this.listeners.set(key, group);
+    return () => {
+      group.delete(listener);
+      if (!group.size) this.listeners.delete(key);
+    };
+  }
+
+  /** A burst of invalidations tells each listener once. */
+  private tell(key: string) {
+    if (!this.listeners.has(key)) return;
+    if (!this.pending.size) {
+      queueMicrotask(() => {
+        const keys = [...this.pending];
+        this.pending.clear();
+        for (const item of keys) this.listeners.get(item)?.forEach((listener) => listener());
+      });
+    }
+    this.pending.add(key);
+  }
 
   read<T>(key: string, load: () => Promise<T>): Promise<T> {
     const existing = this.entries.get(key);
@@ -40,6 +67,7 @@ export class Resources {
   invalidate(change: ResourceChange = {}) {
     if (!change.slug || change.source === "reconnect") {
       this.entries.clear();
+      for (const key of this.listeners.keys()) this.tell(key);
       return;
     }
     const affected = change.artifact ? dependencies[change.artifact] : undefined;
@@ -49,6 +77,11 @@ export class Resources {
       if (match?.[1] !== change.slug) continue;
       // Missing/unknown hints are whole-project invalidations. Detail always changes.
       if (!affected || !match[2] || affected.includes(match[2])) this.entries.delete(key);
+    }
+    for (const key of this.listeners.keys()) {
+      const match = key.match(/^\/api\/projects\/([^/?]+)(?:\/([^/?]+))?/);
+      if (match?.[1] !== change.slug) continue;
+      if (!affected || !match[2] || affected.includes(match[2])) this.tell(key);
     }
   }
 }
