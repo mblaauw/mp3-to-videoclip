@@ -61,6 +61,7 @@ def test_images_list_file_and_select(client, project):
 
 
 def test_estimate_returns_the_quote_and_the_budget_decision(client, monkeypatch):
+    monkeypatch.setenv("PROJECT_VEIL_RUNWARE_API", "mock-key")
     _cap(client)
     fake = {
         "quote_id": "quote-1",
@@ -83,7 +84,7 @@ def test_estimate_returns_the_quote_and_the_budget_decision(client, monkeypatch)
 
     assert client.post(
         "/api/projects/production/images/estimate", json={"shot_ids": []}
-    ).json() == {"error": "select at least one shot"}
+    ).json() == {"detail": "select at least one shot", "code": "bad_request"}
 
     def fail(*args, **kwargs):
         raise ValueError("brief needs current user approval")
@@ -91,7 +92,7 @@ def test_estimate_returns_the_quote_and_the_budget_decision(client, monkeypatch)
     monkeypatch.setattr(services.generation, "estimate", fail)
     assert client.post(
         "/api/projects/production/images/estimate", json={"shot_ids": ["s001"]}
-    ).json() == {"error": "brief needs current user approval"}
+    ).json() == {"detail": "brief needs current user approval", "code": "bad_request"}
 
 
 def test_generate_authorizes_the_exact_quote_before_queueing(client, monkeypatch):
@@ -128,7 +129,8 @@ def test_generate_authorizes_the_exact_quote_before_queueing(client, monkeypatch
     assert calls["note"] == "test batch"
     assert submitted == [("images", "production")]
     assert client.post("/api/projects/production/images/generate", json={}).json() == {
-        "error": "estimate the selection first"
+        "detail": "estimate the selection first",
+        "code": "bad_request",
     }
 
 
@@ -171,7 +173,7 @@ def test_generate_needs_explicit_reference_upload_consent(client, monkeypatch):
     body = client.post(
         "/api/projects/production/images/generate", json={"quote_id": "quote-1"}
     ).json()
-    assert "confirm" in body["error"]
+    assert "confirm" in body["detail"]
 
 
 def test_generate_reports_a_stale_or_unknown_quote(client, monkeypatch):
@@ -182,7 +184,7 @@ def test_generate_reports_a_stale_or_unknown_quote(client, monkeypatch):
     body = client.post(
         "/api/projects/production/images/generate", json={"quote_id": "quote-x"}
     ).json()
-    assert body["error"] == "quote needs explicit spending authorization"
+    assert body["detail"] == "quote needs explicit spending authorization"
 
 
 def test_review_records_a_verdict_on_the_exact_version(client, project):
@@ -454,6 +456,16 @@ def test_estimate_quotes_the_alias_owner_once(project, monkeypatch):
     result = generation.estimate(project, ["s002", "s001"])
     assert captured["ids"] == ["s001"]
     assert result["quote_id"] == "quote-alias"
+
+
+def test_estimate_without_a_key_shows_no_price(client, monkeypatch):
+    _cap(client)
+    fake = {"quote_id": "quote-1", "tasks": 1, "reserve_usd": "0.05", "shot_ids": ["s001"]}
+    monkeypatch.setattr(services.generation, "estimate", lambda *a, **k: fake)
+    response = client.post("/api/projects/production/images/estimate", json={"shot_ids": ["s001"]})
+    assert response.status_code == 409
+    assert response.json()["code"] == "no_runware_key"
+    assert "estimate" not in response.json()
 
 
 def test_a_used_correction_asks_for_a_new_round_with_a_reason(tmp_path):

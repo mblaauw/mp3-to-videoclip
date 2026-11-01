@@ -16,6 +16,15 @@ type Context = {
 
 const first = (value: string, pattern: RegExp) => value.match(pattern)?.[1] ?? "";
 
+const MOVES: Record<string, string> = {
+  push_in: "push-in",
+  pull_back: "pull-back",
+  pan_left: "pan left",
+  pan_right: "pan right",
+  hold: "hold",
+};
+const move = (name: string) => MOVES[name] ?? name.replace(/_/g, " ");
+
 /** A report finding in plain language, anchored to where it happens. */
 export function describeNote(finding: EditFinding, index: number, context: Context): CutNote {
   const section = context.sections.find((item) => item.id === finding.section);
@@ -49,7 +58,7 @@ export function describeNote(finding: EditFinding, index: number, context: Conte
         ? note(`${place}: loud, but only ${first(text, /only ([\d.]+)/)} cuts per 10 seconds`, "A loud section usually wants more cuts.")
         : note(`${place}: quiet, with ${first(text, /at ([\d.]+)/)} cuts per 10 seconds`, "A quiet section usually wants fewer cuts.");
     case "motion_repetition":
-      return note(`${place}: third ${first(text, /three (\w+)/) || "same"} move in a row`, "A different move here would vary the rhythm.");
+      return note(`${place}: third ${move(first(text, /three (\w+)/)) || "same"} in a row`, "A different move here would vary the rhythm.");
     case "framing_repetition": {
       const framing = first(text, /back-to-back (\w+) framings/).replace("_", " ");
       return note(`${place}: same framing as the shot before`, `Both are ${framing || "the same"} shots.`);
@@ -64,6 +73,18 @@ export function describeNote(finding: EditFinding, index: number, context: Conte
       return note(`${place}: this join has no reason`, "Add a note saying why, or make it a cut.");
     case "flash_rate":
       return note("Too many flashes close together", "Flashing is limited to three per second, for people sensitive to it.");
+    case "travel_repetition":
+      return note(`${place}: the same ${move(first(text, /\d+ (\w+) moves/)) || "move"} repeats`, "Several shots in a row travel the same distance. Varying one keeps it from feeling mechanical.");
+    case "long_static_shot":
+      return note(`${place}: still for ${first(text, /([\d.]+)s/)} seconds`, "Fine if it is meant to hold. If not, give it a slow move or a new framing.");
+    case "crop_soft":
+      return note(`${place}: this crop may look soft`, `It enlarges the still ${first(text, /([\d.]+)x/)} times. A wider crop or a sharper still would hold up better.`);
+    case "section_no_feel":
+      return note(`${place}: no feel written for this section`, "A line about how it should feel guides the cuts and moves here.");
+    case "text_not_drawn":
+      return note(`${place}: the storyboard's words are not on screen`, "They only show if the cut draws them. Add them as text on this shot, or remove them from the storyboard.");
+    case "reprise_uncropped":
+      return note(`${place}: a repeated still with no new framing`, "A crop on its first frame makes the repeat read as a new shot.");
     case "reading_time":
     case "text_reading_time":
       return note(`${place}: on-screen text may be too quick to read`, text);

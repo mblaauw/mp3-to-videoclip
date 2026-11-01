@@ -1,3 +1,4 @@
+import { shown } from "../storyboard/placeholders";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
@@ -651,7 +652,7 @@ export function ImagesStage({
                 <span className="still-foot">
                   <b>{shot.id}</b>
                   <span>
-                    {shotById.get(shot.id)?.purpose ||
+                    {shown(shotById.get(shot.id)?.purpose) ||
                       shot.message ||
                       kindMeta(shot.kind).label}
                   </span>
@@ -747,11 +748,11 @@ export function ImagesStage({
           <footer className="lightbox-foot">
             <div className="lightbox-copy">
               <b>
-                {currentShot?.purpose || current.message || kindMeta(current.kind).label}
+                {shown(currentShot?.purpose) || current.message || kindMeta(current.kind).label}
               </b>
               {current.message && <span className="lightbox-message">{current.message}</span>}
               {current.text?.length > 0 && <p>{current.text.join(" · ")}</p>}
-              {currentShot?.image_prompt && (
+              {currentShot && shown(currentShot.image_prompt) && (
                 <p className="lightbox-prompt">{currentShot.image_prompt}</p>
               )}
               <span className="hint">

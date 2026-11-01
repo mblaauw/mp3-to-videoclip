@@ -66,10 +66,6 @@ export function usePaidImages(
           });
           return;
         }
-        if (result.error) {
-          setError(result.error);
-          return;
-        }
         setQuote(null);
         setQueued(current.estimate.shot_ids?.length ? current.estimate.shot_ids : current.ids);
         setMessage(
@@ -106,8 +102,8 @@ export function usePaidImages(
           setNewRound({ used: response.needs_new_round, ids, scope, regenerate });
           return;
         }
-        if (response.error || !response.estimate || !response.decision) {
-          setError(response.error || "The pictures could not be estimated.");
+        if (!response.estimate || !response.decision) {
+          setError("The pictures could not be estimated.");
           return;
         }
         const next: PaidQuote = {

@@ -1,3 +1,5 @@
+import { shotCaption } from "../storyboard/placeholders";
+import { describeTitlesNote } from "./titleNotes";
 import {
   Suspense,
   lazy,
@@ -122,7 +124,7 @@ export function LiveViewer({
             )}
           </div>
         ) : (
-          <p className="empty">{liveError ?? "No storyboard yet."}</p>
+          <p className="empty">{liveError ?? "This film has no storyboard yet."}</p>
         )}
       </div>
       {full ? (
@@ -146,7 +148,7 @@ export function LiveViewer({
           {tabs}
           {live && currentBoardShot && (
               <p className="film-now">
-                <b>{currentBoardShot.id}</b> {currentBoardShot.message || currentBoardShot.purpose}
+                <b>{currentBoardShot.id}</b> {shotCaption(currentBoardShot)}
                 {currentPicture?.stale && <em> Older prompt</em>}
               </p>
             )}
@@ -167,7 +169,7 @@ export function LiveViewer({
                 Show titles
               </label>
             ) : (
-              live?.titlesNote && <span className="hint">{live.titlesNote}</span>
+              live?.titlesNote && <TitlesNote raw={live.titlesNote} />
             )}
             <button type="button" className="film-full-btn" onClick={() => onFull(true)} title="Full view (F)">
               Full view
@@ -175,5 +177,20 @@ export function LiveViewer({
           </div>
       )}
     </section>
+  );
+}
+
+function TitlesNote({ raw }: { raw: string }) {
+  const note = describeTitlesNote(raw);
+  return (
+    <span className="hint">
+      {note.title} {note.reason}
+      {note.details && (
+        <details>
+          <summary>Details</summary>
+          {note.details}
+        </details>
+      )}
+    </span>
   );
 }

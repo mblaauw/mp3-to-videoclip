@@ -170,7 +170,7 @@ def test_track_read_lyrics_write_and_local_analysis(client, project, monkeypatch
     assert track["lyrics"]["segments"][0]["text"] == "Reviewed line"
 
     bad = client.put("/api/projects/production/lyrics", json={"provider": "manual"})
-    assert bad.status_code == 200 and "error" in bad.json()
+    assert bad.status_code == 400 and bad.json()["code"] == "bad_request"
 
     lyrics = Lyrics(
         provider="manual", model="test", segments=[Segment(start=0, end=1, text="line")]
@@ -187,7 +187,7 @@ def test_track_read_lyrics_write_and_local_analysis(client, project, monkeypatch
     assert len(history) == 2, "both replaced lyric artifacts must stay in history"
     stored = client.get("/api/projects/production/track").json()["lyrics"]
     assert stored["segments"][-1]["end"] == 2.0
-    assert "error" in client.put("/api/projects/production/lyrics", json={"lrc": "no tags"}).json()
+    assert client.put("/api/projects/production/lyrics", json={"lrc": "no tags"}).status_code == 400
 
     audio = client.get("/api/projects/production/audio")
     assert audio.status_code == 200

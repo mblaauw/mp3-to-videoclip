@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ProjectSummary } from "./api";
+import { OPEN_SETTINGS } from "./api/errorAction";
 import { ArchiveShell, FilmShell, LibraryShell } from "./shell/FilmShell";
 import { goArchive, goFilm, goLibrary, useHashRoute } from "./shell/route";
 import { notifyProjectChanged, PROJECT_CHANGED } from "./shell/projectEvents";
@@ -13,6 +14,11 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = () => setSettingsOpen(true);
+  useEffect(() => {
+    const open = () => setSettingsOpen(true);
+    window.addEventListener(OPEN_SETTINGS, open);
+    return () => window.removeEventListener(OPEN_SETTINGS, open);
+  }, []);
 
   const loadEpoch = useRef(0);
   const refresh = useCallback(async () => {

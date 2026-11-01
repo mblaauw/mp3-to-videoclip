@@ -1549,6 +1549,8 @@ export interface components {
              * @default false
              */
             blocking: boolean;
+            /** Code */
+            code?: string | null;
             /** Cost Usd */
             cost_usd: number;
             /** Error */
@@ -1585,6 +1587,8 @@ export interface components {
              * @default false
              */
             blocking: boolean;
+            /** Code */
+            code?: string | null;
             /** Cost Usd */
             cost_usd: number;
             /** Error */

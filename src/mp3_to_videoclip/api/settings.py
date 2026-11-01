@@ -112,10 +112,7 @@ async def put_settings(payload: dict):
     for key in ("llm_api_key", "runware_api_key"):
         if not updates.get(key):
             updates[key] = getattr(current, key)
-    try:
-        settings = Settings(**{**current.model_dump(), **updates})
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    settings = Settings(**{**current.model_dump(), **updates})
     save_settings(settings)
     from mp3_to_videoclip.api.director import close_gateways
 

@@ -12,7 +12,9 @@ from mp3_to_videoclip import budget as correction_cycles
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import reviews, services, shotkinds
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.api.errors import ApiError
 from mp3_to_videoclip.domain import budget
+from mp3_to_videoclip.providers import runware_api_key
 from mp3_to_videoclip.read_snapshots import read_endpoint
 from mp3_to_videoclip.storage import digest, inside, read_json
 
@@ -83,7 +85,9 @@ def get_plate(slug: str, shot_id: str, request: Request):
     root = project_root(request, slug)
     try:
         target = P.local_plate_path(root, shot_id)
-    except (FileNotFoundError, ValueError) as exc:
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="local plate is missing") from exc
+    except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if not target.is_file():
         raise HTTPException(status_code=404, detail="local plate is missing")
@@ -99,10 +103,7 @@ async def get_image_file(slug: str, owner: str, version: int, request: Request):
     chosen = next((v for v in entry.get("versions", []) if v["version"] == version), None)
     if not chosen:
         raise HTTPException(status_code=404, detail="unknown image version")
-    try:
-        target = inside(root, chosen["path"])
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    target = inside(root, chosen["path"])
     if not target.is_file():
         raise HTTPException(status_code=404, detail="image file is missing")
     return FileResponse(target)
@@ -130,18 +131,15 @@ async def review_image(slug: str, request: Request, payload: dict):
         raise HTTPException(
             status_code=400, detail="confirm that you inspected the exact image bytes"
         )
-    try:
-        record = reviews.record_review(
-            root,
-            shot_id,
-            version,
-            verdict,
-            note=note.strip() or None,
-            reviewer="studio",
-            inspected=True,
-        )
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record = reviews.record_review(
+        root,
+        shot_id,
+        version,
+        verdict,
+        note=note.strip() or None,
+        reviewer="studio",
+        inspected=True,
+    )
     return {"review": record}
 
 
@@ -150,7 +148,7 @@ async def estimate_images(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     shot_ids = payload.get("shot_ids") or []
     if not shot_ids:
-        return {"error": "select at least one shot"}
+        raise HTTPException(status_code=400, detail="select at least one shot")
     # Say so plainly while the owner can still act, instead of a refused quote.
     board = P.load_board(root)
     owners = {shot.id: shot.asset_shot_id or shot.id for shot in board.shots}
@@ -158,18 +156,21 @@ async def estimate_images(slug: str, request: Request, payload: dict):
     used_up = correction_cycles.used_up_corrections(root, named)
     if used_up:
         return {"needs_new_round": used_up}
-    try:
-        estimate = services.generation.estimate(
-            root,
-            shot_ids,
-            scope=payload.get("scope", "stills"),
-            reserve=str(payload.get("reserve_usd", "0.05")),
-            regenerate=bool(payload.get("regenerate")),
-        )
-    except ValueError as exc:
-        return {"error": str(exc)}
+    estimate = services.generation.estimate(
+        root,
+        shot_ids,
+        scope=payload.get("scope", "stills"),
+        reserve=str(payload.get("reserve_usd", "0.05")),
+        regenerate=bool(payload.get("regenerate")),
+    )
     if not estimate["tasks"]:
-        return {"error": "every selected shot already has this exact image; use regenerate"}
+        raise HTTPException(
+            status_code=400,
+            detail="every selected shot already has this exact image; use regenerate",
+        )
+    # Last, so a shot that needs no key is not told to go and get one. Still before
+    # a price is shown: nothing can be bought without the key.
+    runware_api_key()
     return {
         "estimate": estimate,
         "decision": _decisions(root, estimate["reserve_usd"]),
@@ -181,12 +182,9 @@ async def estimate_images(slug: str, request: Request, payload: dict):
 async def start_new_round(slug: str, request: Request, payload: dict):
     """The owner's reasoned decision to go past a shot's correction limit. Spends nothing."""
     root = project_root(request, slug)
-    try:
-        correction_cycles.authorize_restaging(
-            root, payload.get("shot_ids") or [], payload.get("note") or ""
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    correction_cycles.authorize_restaging(
+        root, payload.get("shot_ids") or [], payload.get("note") or ""
+    )
     return {"started": payload.get("shot_ids")}
 
 
@@ -195,28 +193,29 @@ async def generate_images(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     quote_id = payload.get("quote_id")
     if not quote_id:
-        return {"error": "estimate the selection first"}
+        raise HTTPException(status_code=400, detail="estimate the selection first")
     try:
         quote = services.generation.quote(root, quote_id)
-    except (ValueError, FileNotFoundError) as exc:
-        return {"error": str(exc)}
+    except FileNotFoundError as exc:
+        raise ApiError(
+            404, "That quote is no longer there. Estimate again.", "quote_missing"
+        ) from exc
     decision = _decisions(root, quote["reserve_total_usd"])
     if not decision["ok"]:
         return {"needs_budget": True, "decision": decision, "budget": _budget_card(root)}
     if services.generation.uploads_required(quote) and not payload.get("uploads_confirmed"):
-        return {"error": "reference images will be uploaded; confirm that explicitly"}
+        raise HTTPException(
+            status_code=400, detail="reference images will be uploaded; confirm that explicitly"
+        )
     runner = getattr(request.app.state, "runner", None)
     if runner is None:
-        return {"error": "job runner unavailable"}
-    try:
-        services.generation.authorize(
-            root,
-            quote_id,
-            note=payload.get("note") or "user confirmed in Studio",
-            uploads_confirmed=bool(payload.get("uploads_confirmed")),
-        )
-    except ValueError as exc:
-        return {"error": str(exc)}
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+    services.generation.authorize(
+        root,
+        quote_id,
+        note=payload.get("note") or "user confirmed in Studio",
+        uploads_confirmed=bool(payload.get("uploads_confirmed")),
+    )
 
     async def work():
         return await asyncio.to_thread(services.generation.run, root, quote_id)
@@ -238,11 +237,8 @@ async def select_version(slug: str, request: Request, payload: dict):
     shot_id = payload.get("shot_id")
     version = payload.get("version")
     if shot_id is None or version is None:
-        return {"error": "shot_id and version required"}
-    try:
-        P.select_asset(root, shot_id, version)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="shot_id and version required")
+    P.select_asset(root, shot_id, version)
     return {"selected": shot_id, "version": version}
 
 

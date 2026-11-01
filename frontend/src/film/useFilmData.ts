@@ -63,6 +63,7 @@ export function useFilmData(slug: string) {
   const [showEditFile, setShowEditFile] = useState(
     () => window.localStorage.getItem(SHOW_EDIT_FILE) === "1",
   );
+  const [hasBoard, setHasBoard] = useState(true);
   const graphicsKey = useRef("");
   const previewsKey = useRef("");
 
@@ -77,18 +78,30 @@ export function useFilmData(slug: string) {
   const loadEpoch = useRef(0);
   const load = useCallback(async () => {
     const epoch = ++loadEpoch.current;
+    // Everything below is computed from the board, so a film without one has nothing to ask.
+    const boardResult = await api.storyboard(slug).then(
+      (value) => ({ status: "fulfilled", value }) as const,
+      (reason: unknown) => ({ status: "rejected", reason }) as const,
+    );
+    if (epoch !== loadEpoch.current) return;
+    const noBoard = boardResult.status === "fulfilled" && !("shots" in boardResult.value);
+    setHasBoard(!noBoard);
+    if (noBoard) {
+      setBoard(null);
+      setError(null);
+      setLoaded(true);
+      return;
+    }
     const [
       filesResult,
       cutResult,
       checklistResult,
-      boardResult,
       imagesResult,
       graphicsResult,
     ] = await Promise.allSettled([
       api.exports(slug),
       api.editSummary(slug),
       api.checklist(slug),
-      api.storyboard(slug),
       api.images(slug),
       api.graphicsReview(slug),
     ]);
@@ -133,6 +146,11 @@ export function useFilmData(slug: string) {
   const liveEpoch = useRef(0);
   const reloadLive = useCallback(async () => {
     const epoch = ++liveEpoch.current;
+    if (!hasBoard) {
+      setLive(null);
+      setLiveError(null);
+      return;
+    }
     try {
       const payload = await api.preview(slug);
       if (epoch !== liveEpoch.current) return;
@@ -164,7 +182,7 @@ export function useFilmData(slug: string) {
       if (epoch !== liveEpoch.current) return;
       setLiveError("The live preview could not be read. Check the storyboard and stills.");
     }
-  }, [slug]);
+  }, [hasBoard, slug]);
 
   useEffect(() => {
     void reloadLive();
@@ -340,6 +358,7 @@ export function useFilmData(slug: string) {
 
   return {
     slug,
+    hasBoard,
     files,
     signatureRequired,
     selected,

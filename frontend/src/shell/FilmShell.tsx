@@ -312,6 +312,7 @@ function FilmShellContent({
   const [images, setImages] = useState<ImageShot[]>([]);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [board, setBoard] = useState<Storyboard | null>(null);
+  const [hasModelKey, setHasModelKey] = useState<boolean | undefined>(undefined);
   const [storyBands, setStoryBands] = useState<{ start: number; end: number }[]>([]);
   const [music, setMusic] = useState<Music | null>(null);
   const [intake, setIntake] = useState<IntakePayload | null>(null);
@@ -391,6 +392,9 @@ function FilmShellContent({
       setReserve((value > 0 ? value : 0.05).toFixed(2));
       const kinds = settingsResult.value.shot_kinds;
       if (kinds && kinds.length) setShotKinds(kinds);
+      setHasModelKey(
+        settingsResult.value.gateway !== "direct" || Boolean(settingsResult.value.has_llm_api_key),
+      );
     }
   }, [slug, project.shots]);
 
@@ -485,6 +489,12 @@ function FilmShellContent({
     has_cta: intake
       ? Boolean(intake.intent?.cta?.text?.trim() || intake.intent?.cta?.url?.trim())
       : undefined,
+    has_model_key: hasModelKey,
+    has_storyboard: project.shots > 0,
+    placeholder_shot_ids: board?.placeholder_shot_ids,
+    permission_pending: (intake?.brief?.characters || [])
+      .filter((character) => character.permission_confirmed === false)
+      .map((character) => character.id),
   };
   const step = nextStep(stage, projectFacts, approvals, facts, budget || {});
   const baseAudio = project.audio_url || `/api/projects/${slug}/audio`;
@@ -590,6 +600,32 @@ function FilmShellContent({
     if (action.target === "pictures") {
       if (stage !== "images") onNavigate("images");
       scrollTo(".images-body");
+      return;
+    }
+    if (action.target === "world") {
+      if (stage !== "story") onNavigate("story");
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("studio:story-part", { detail: "world" }));
+      }, 0);
+      return;
+    }
+    if (action.target === "settings") {
+      onSettings();
+      return;
+    }
+    if (action.target === "director") {
+      setDirectorOpen(true);
+      return;
+    }
+    if (action.target === "placeholders") {
+      if (stage !== "storyboard") onNavigate("storyboard");
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("studio:show-unfinished-shots"));
+      }, 0);
+      return;
+    }
+    if (action.target === "board") {
+      scrollTo(".storyboard-head");
     }
   };
 

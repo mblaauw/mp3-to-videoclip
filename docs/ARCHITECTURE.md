@@ -250,7 +250,16 @@ reported in real units (images, frames) and stays indeterminate otherwise. `fron
 generated with `npm run api:types` from the app's OpenAPI document and types the
 routes that declare response models; legacy untyped routes keep explicit
 hand-written types. Every API 4xx/5xx is `{detail, code}`; the frontend parses
-it into `ApiError` and maps stable codes to user-facing copy.
+it into `ApiError` and maps stable codes to user-facing copy and, where there is
+one next move, an action (Open settings, Go to a stage).
+
+Engine refusals reach the API through one mapping, `api/errors.py:engine_error`,
+installed as app exception handlers: `ValueError` is 400, `ProjectBusy` and
+`RevisionConflict` 409, a missing Runware key 409 `no_runware_key`, `ProviderError`
+502 with its code, and `FileNotFoundError` 404 with a per-artifact code and never a
+path. Routes keep their own `except` only to say something more specific.
+`needs_budget` and `needs_new_round` are 200s, because they are decisions and not
+failures.
 
 The old hand-written `ThreadingHTTPServer` and its Python-string UI were removed
 in the Phase 4 cleanup. `cli.py` remains for engine tasks that do not have a GUI

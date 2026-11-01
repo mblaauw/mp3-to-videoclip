@@ -1,4 +1,5 @@
 import type { components } from "./api/schema";
+import { toastAction } from "./api/errorAction.ts";
 import { readApiError } from "./api/errors.ts";
 import type { PreviewShot } from "./baseFilm";
 import { toast } from "./toast.ts";
@@ -119,6 +120,7 @@ export type Storyboard = {
   fps: number;
   total_frames: number;
   shots: Shot[];
+  placeholder_shot_ids?: string[];
 };
 
 export type MusicWindow = {
@@ -757,7 +759,6 @@ export type ImageEstimateResponse = {
   estimate?: ImageEstimate;
   decision?: BudgetDecision;
   budget?: Omit<Budget, "history">;
-  error?: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -773,7 +774,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }).finally(() => { if (mutation) invalidate(); });
     if (!res.ok) {
       const error = await readApiError(res);
-      toast(error.message);
+      toast(error.message, "error", toastAction(error.code, project?.[1]));
       throw error;
     }
     // Also invalidate reads started while the write was in progress.
@@ -850,7 +851,7 @@ export const api = {
     });
     if (!res.ok) {
       const error = await readApiError(res);
-      toast(error.message);
+      toast(error.message, "error", toastAction(error.code));
       throw error;
     }
     resources.invalidate();
@@ -978,12 +979,12 @@ export const api = {
   voice: (slug: string) =>
     request<{ voice: string; lines: VoiceLine[] }>(`/api/projects/${slug}/voice`),
   estimateVoice: (slug: string) =>
-    request<VoiceEstimate | { error: string }>(`/api/projects/${slug}/voice/estimate`, {
+    request<VoiceEstimate>(`/api/projects/${slug}/voice/estimate`, {
       method: "POST",
       body: JSON.stringify({}),
     }),
   generateVoice: (slug: string, quoteId: string) =>
-    request<{ job_id: string } | { error: string } | { needs_budget: true }>(
+    request<{ job_id: string } | { needs_budget: true }>(
       `/api/projects/${slug}/voice/generate`,
       { method: "POST", body: JSON.stringify({ quote_id: quoteId }) },
     ),
@@ -1089,7 +1090,7 @@ export const api = {
       body: JSON.stringify({ lines }),
     }),
   saveLyrics: (slug: string, text: string) =>
-    request<{ status?: string; segments?: number; lines?: number; error?: string }>(
+    request<{ status?: string; segments?: number; lines?: number }>(
       `/api/projects/${slug}/lyrics`,
       { method: "PUT", body: JSON.stringify({ text }) },
     ),
@@ -1153,7 +1154,6 @@ export const api = {
   ) =>
     request<{
       job_id?: string;
-      error?: string;
       needs_budget?: boolean;
       decision?: BudgetDecision;
       budget?: Omit<Budget, "history">;

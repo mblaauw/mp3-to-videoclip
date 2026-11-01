@@ -79,7 +79,7 @@ def test_local_shot_estimate_and_review_are_refused(client, project):
         "/api/projects/production/images/estimate",
         json={"shot_ids": ["s002"], "scope": "stills", "reserve_usd": "0.05"},
     ).json()
-    assert "local shot" in estimate["error"]
+    assert "local shot" in estimate["detail"]
 
     review = client.post(
         "/api/projects/production/images/review",

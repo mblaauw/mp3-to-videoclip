@@ -12,7 +12,12 @@ export type NextTarget =
   | "preview"
   | "render"
   | "make-missing"
-  | "pictures";
+  | "pictures"
+  | "world"
+  | "settings"
+  | "director"
+  | "placeholders"
+  | "board";
 
 export type NextAction = {
   label: string;
@@ -48,6 +53,13 @@ export type ProjectFacts = {
   stage_states?: Partial<Record<Stage, StageState>>;
   /** Film knows a current titles review is waiting to be inspected. */
   titles_review_ready?: boolean;
+  /** The Director can answer here. Unknown until settings load, so never assumed false. */
+  has_model_key?: boolean;
+  has_storyboard?: boolean;
+  /** The engine's own count of shots the approval would refuse. */
+  placeholder_shot_ids?: string[];
+  /** Who the owner has not yet confirmed permission for. */
+  permission_pending?: string[];
 };
 
 export type ApprovalFacts = {
@@ -190,11 +202,23 @@ function storyStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
         actions: [{ label: "Go to Track", to: "track", kind: "primary" }],
       };
     }
+    const refused = /permission to upload\/depict (\S+)/.exec(String(brief.error || ""));
+    if (refused) {
+      const names = project.permission_pending?.length
+        ? project.permission_pending.join(", ")
+        : refused[1];
+      return {
+        tone: "you",
+        title: `Confirm permission for ${names}.`,
+        detail: "The World part holds the card. Only you can confirm it.",
+        actions: [{ label: "Go to World", target: "world", kind: "primary" }],
+      };
+    }
     return {
       tone: "you",
       title: "The story is not ready yet.",
       detail: brief.error || "Complete the artifact this stage depends on.",
-      actions: [{ label: "Go to Story", to: "story", kind: "primary" }],
+      actions: [{ label: "Open the brief", target: "brief", kind: "primary" }],
     };
   }
   if (
@@ -244,13 +268,21 @@ function storyStep(project: ProjectFacts, approvals: ApprovalMap): NextStep {
     };
   }
   if (project.prompt_version === 2 && (project.profile_version ?? 0) < 1) {
+    if (project.has_model_key === false) {
+      return {
+        tone: "you",
+        title: "The director needs a model key.",
+        detail: "The Writer builds the cast, places and rules the stills use. Add a key to ask it.",
+        actions: [{ label: "Open settings", target: "settings", kind: "primary" }],
+      };
+    }
     return {
       tone: "you",
-      title: "Build the cast, places and rules.",
+      title: "Ask the Writer to build the cast and places.",
       detail:
         "The Writer turns the treatment into the structured profile the stills use. " +
         "The story cannot be approved before it exists.",
-      actions: [{ label: "Open Story", to: "story", kind: "primary" }],
+      actions: [{ label: "Open the Director", target: "director", kind: "primary" }],
     };
   }
   if (brief?.state === "stale" || stateOf(project, "story") === "changed") {
@@ -296,6 +328,15 @@ function storyboardStep(project: ProjectFacts, approvals: ApprovalMap): NextStep
       title: "Storyboard approved.",
       detail: "Its timing and shot content are signed off.",
       actions: continueTo("images", "Continue to Images"),
+    };
+  }
+  const unfinished = project.placeholder_shot_ids?.length ?? 0;
+  if (unfinished > 0) {
+    return {
+      tone: "you",
+      title: `${unfinished} ${unfinished === 1 ? "shot still needs" : "shots still need"} a job and a prompt.`,
+      detail: "The storyboard cannot be approved until every shot says what it is for.",
+      actions: [{ label: "Show them", target: "placeholders", kind: "primary" }],
     };
   }
   if (approval(approvals, "storyboard")?.state === "stale" || stateOf(project, "storyboard") === "changed") {
@@ -470,6 +511,14 @@ function onlyTheCutChanged(approvals: ApprovalMap, images: ImageFacts): boolean 
 }
 
 function filmStep(project: ProjectFacts, approvals: ApprovalMap, images: ImageFacts): NextStep {
+  if (project.has_storyboard === false) {
+    return {
+      tone: "you",
+      title: "This film has no storyboard yet.",
+      detail: "The cut is made from the storyboard's shots.",
+      actions: continueTo("storyboard", "Go to Storyboard"),
+    };
+  }
   if (stateOf(project, "film") === "done") {
     return {
       tone: "done",
@@ -536,7 +585,28 @@ function filmStep(project: ProjectFacts, approvals: ApprovalMap, images: ImageFa
   };
 }
 
-export function nextStep(
+/** Where a step that names the page you are on acts instead. */
+const ON_THIS_PAGE: Record<Stage, NextTarget> = {
+  track: "analysis",
+  story: "brief",
+  storyboard: "board",
+  images: "pictures",
+  film: "render",
+};
+
+/** A next step never sends the owner to the page they are already on. */
+function stayHere(stage: Stage, step: NextStep): NextStep {
+  return {
+    ...step,
+    actions: step.actions.map((action) => {
+      if (action.to !== stage) return action;
+      const { to: _here, ...rest } = action;
+      return { ...rest, target: ON_THIS_PAGE[stage] };
+    }),
+  };
+}
+
+function stepFor(
   stage: Stage,
   project: ProjectFacts,
   approvals: ApprovalMap,
@@ -548,6 +618,16 @@ export function nextStep(
   if (stage === "storyboard") return storyboardStep(project, approvals);
   if (stage === "images") return imagesStep(project, approvals, images, budget);
   return filmStep(project, approvals, images);
+}
+
+export function nextStep(
+  stage: Stage,
+  project: ProjectFacts,
+  approvals: ApprovalMap,
+  images: ImageFacts,
+  budget: BudgetFacts,
+): NextStep {
+  return stayHere(stage, stepFor(stage, project, approvals, images, budget));
 }
 
 export function stageWord(state: StageState | undefined): string {

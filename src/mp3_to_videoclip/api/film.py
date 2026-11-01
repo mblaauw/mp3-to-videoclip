@@ -13,7 +13,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root, valid_slug
 from mp3_to_videoclip.domain import archive
 from mp3_to_videoclip.read_snapshots import read_endpoint
-from mp3_to_videoclip.storage import RevisionConflict, digest, inside, read_json, read_optional
+from mp3_to_videoclip.storage import digest, inside, read_json, read_optional
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["film"])
 
@@ -41,14 +41,11 @@ async def put_graphics_credits(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     if not (root / "work" / "graphics-spec.json").is_file():
         raise HTTPException(status_code=404, detail="this film has no credits package")
-    try:
-        cards = signature.save_credits(
-            root,
-            payload.get("cards"),
-            use_as_template=payload.get("use_as_template", False),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    cards = signature.save_credits(
+        root,
+        payload.get("cards"),
+        use_as_template=payload.get("use_as_template", False),
+    )
     return {"cards": cards, "confirmed": True}
 
 
@@ -134,13 +131,10 @@ def get_edit(slug: str, request: Request, response: Response):
     from mp3_to_videoclip import edits
 
     root = project_root(request, slug)
-    try:
-        result = edits.summary(root)
-        if result.get("present"):
-            response.headers["ETag"] = f'"{digest(result["edit"])}"'
-        return result
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    result = edits.summary(root)
+    if result.get("present"):
+        response.headers["ETag"] = f'"{digest(result["edit"])}"'
+    return result
 
 
 @router.get("/film/checklist")
@@ -150,10 +144,7 @@ def get_delivery_checklist(slug: str, request: Request):
     from mp3_to_videoclip.domain import delivery
 
     root = project_root(request, slug)
-    try:
-        return delivery.build(root)
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return delivery.build(root)
 
 
 @router.get("/edit/summary")
@@ -163,10 +154,7 @@ def get_edit_summary(slug: str, request: Request):
     from mp3_to_videoclip import edits
 
     root = project_root(request, slug)
-    try:
-        return edits.cut_summary(root)
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return edits.cut_summary(root)
 
 
 @router.post("/edit/seed")
@@ -175,11 +163,8 @@ async def seed_edit(slug: str, request: Request):
     from mp3_to_videoclip import edits
 
     root = project_root(request, slug)
-    try:
-        edit = edits.seed_edit(root)
-        return edits.summary(root, edit)
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    edit = edits.seed_edit(root)
+    return edits.summary(root, edit)
 
 
 @router.post("/edit/suggest")
@@ -188,10 +173,7 @@ async def suggest_edit(slug: str, request: Request):
     from mp3_to_videoclip import first_cut
 
     root = project_root(request, slug)
-    try:
-        return await asyncio.to_thread(first_cut.suggest, root)
-    except (ValueError, FileNotFoundError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return await asyncio.to_thread(first_cut.suggest, root)
 
 
 @router.put("/edit")
@@ -201,15 +183,10 @@ async def put_edit(slug: str, request: Request, payload: dict, response: Respons
 
     root = project_root(request, slug)
     value = payload.get("edit", payload)
-    try:
-        edit = edits.save_edit(root, value, expected_hash=request.headers.get("if-match"))
-        result = edits.summary(root, edit)
-        response.headers["ETag"] = f'"{digest(result["edit"])}"'
-        return result
-    except RevisionConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    edit = edits.save_edit(root, value, expected_hash=request.headers.get("if-match"))
+    result = edits.summary(root, edit)
+    response.headers["ETag"] = f'"{digest(result["edit"])}"'
+    return result
 
 
 @router.get("/critique")
@@ -240,15 +217,12 @@ async def render(slug: str, request: Request, payload: dict):
     if kind not in KINDS:
         raise HTTPException(status_code=400, detail="kind must be preview, titles, base or final")
     if kind in ("titles", "base", "final"):
-        try:
-            P.require_approval(root, "stills")
-            if kind == "final" and P.requires_signature(root):
-                P.require_approval(root, "graphics")
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        P.require_approval(root, "stills")
+        if kind == "final" and P.requires_signature(root):
+            P.require_approval(root, "graphics")
     runner = getattr(request.app.state, "runner", None)
     if runner is None:
-        return {"error": "job runner unavailable"}
+        raise HTTPException(status_code=503, detail="job runner unavailable")
     import asyncio
 
     from mp3_to_videoclip import services

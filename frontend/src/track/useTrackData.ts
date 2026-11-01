@@ -242,11 +242,7 @@ export function useTrackData(slug: string) {
     setLyricsSaving(true);
     setError(null);
     try {
-      const result = await api.saveLyrics(slug, text);
-      if (result.error) {
-        setError(result.error);
-        return false;
-      }
+      await api.saveLyrics(slug, text);
       await load();
       notifyProjectChanged();
       return true;

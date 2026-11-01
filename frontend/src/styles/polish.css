@@ -880,10 +880,32 @@
   transform: translateX(-50%);
 }/* ------------------------------------------------------------ film layout */
 
-@media (max-width: 900px) {
+/* Phone transport rules live here: this file loads after shell.css and owns the column. */
+@media (max-width: 700px) {
+  :root {
+    --spine-transport-w: 72px;
+  }
+  .spine .spine-transport {
+    justify-items: center;
+    padding: 0 2px;
+  }
+  .spine .spine-buttons > :not(.spine-play),
+  .spine .spine-now,
+  .spine .spine-tools {
+    display: none;
+  }
+  .spine .spine-time {
+    display: block;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 900px) and (min-width: 701px) {
   :root {
     --spine-transport-w: 168px;
   }
+}
+@media (max-width: 900px) {
   .spine-volume,
   .spine-now {
     display: none;

@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import pytest
 from api_support import api_client, make_api_project
 from fastapi.testclient import TestClient
 
+from mp3_to_videoclip.api.errors import engine_error
 from mp3_to_videoclip.app import create_app
 from mp3_to_videoclip.config import Settings
+from mp3_to_videoclip.models import Shot
+from mp3_to_videoclip.production import has_placeholders
+from mp3_to_videoclip.providers import MissingProviderKey, ProviderError
+from mp3_to_videoclip.storage import ProjectBusy, RevisionConflict
 
 
 def test_unknown_project_is_enveloped(tmp_path):
@@ -89,3 +98,97 @@ def test_missing_director_key_has_a_settings_code(tmp_path, monkeypatch):
         response = client.post("/api/projects/production/chat", json={"message": "hello"})
     assert response.status_code == 503
     assert response.json()["code"] == "no_llm_key"
+
+
+def _no_path(body: dict) -> None:
+    assert "/" not in str(body["detail"]) and ".json" not in str(body["detail"])
+
+
+def test_missing_artifacts_name_the_artifact_and_never_the_path(tmp_path):
+    root = make_api_project(tmp_path)
+    (root / "work" / "storyboard.json").unlink(missing_ok=True)
+    with api_client(tmp_path) as client:
+        response = client.get("/api/projects/production/edit")
+    assert response.status_code == 404
+    assert response.json()["code"] == "storyboard_missing"
+    _no_path(response.json())
+
+
+def test_a_film_with_no_brief_says_so(tmp_path):
+    root = make_api_project(tmp_path)
+    (root / "brief.json").unlink()
+    with api_client(tmp_path) as client:
+        response = client.get("/api/projects/production/brief")
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "The story has not been written yet.",
+        "code": "brief_missing",
+    }
+
+
+@pytest.mark.parametrize(
+    ("raised", "status", "code"),
+    [
+        (ValueError("no such shot"), 400, "bad_request"),
+        (ProjectBusy("another job is running"), 409, "project_busy"),
+        (RevisionConflict("changed under you"), 409, "conflict"),
+        (ProviderError("network_error"), 502, "network_error"),
+        (ProviderError("invalidApiKey", status=401), 502, "invalidApiKey"),
+        (MissingProviderKey("no key"), 409, "no_runware_key"),
+        (FileNotFoundError(2, "gone", "/secret/place/music.json"), 404, "analysis_missing"),
+        (FileNotFoundError(2, "gone", "/secret/place/other.bin"), 404, "artifact_missing"),
+        (FileNotFoundError("source audio not found: /secret/song.mp3"), 404, "artifact_missing"),
+    ],
+)
+def test_engine_error_mapping(raised, status, code):
+    error = engine_error(raised)
+    assert (error.status_code, error.code) == (status, code)
+    assert "secret" not in error.detail
+
+
+@pytest.mark.parametrize(
+    ("route", "payload"),
+    [
+        ("images/estimate", {"shot_ids": []}),
+        ("images/generate", {}),
+        ("images/select", {}),
+        ("voice/generate", {}),
+    ],
+)
+def test_refusals_are_not_http_200(tmp_path, route, payload):
+    make_api_project(tmp_path)
+    with api_client(tmp_path) as client:
+        response = client.post(f"/api/projects/production/{route}", json=payload)
+    assert response.status_code == 400, route
+    assert response.json()["code"] == "bad_request"
+
+
+def test_a_lost_quote_is_a_404_with_a_way_forward(tmp_path):
+    make_api_project(tmp_path)
+    with api_client(tmp_path) as client:
+        response = client.post(
+            "/api/projects/production/images/generate", json={"quote_id": "gone"}
+        )
+    assert response.status_code in (400, 404)
+    _no_path(response.json())
+
+
+def test_storyboard_reports_unfinished_shots(tmp_path):
+    make_api_project(tmp_path)
+    with api_client(tmp_path) as client:
+        body = client.get("/api/projects/production/storyboard").json()
+    assert isinstance(body["placeholder_shot_ids"], list)
+
+
+def test_the_screen_and_the_engine_share_placeholder_cases():
+    cases = json.loads((Path(__file__).parent / "fixtures/placeholder-cases.json").read_text())
+    for value, expected in cases:
+        shot = Shot(
+            id="s001",
+            start_frame=0,
+            duration_frames=24,
+            purpose="job",
+            image_prompt="a picture",
+            message=value,
+        )
+        assert has_placeholders(shot) is expected, value

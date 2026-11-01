@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import voice
 from mp3_to_videoclip.api._helpers import project_root
+from mp3_to_videoclip.api.errors import ApiError
 from mp3_to_videoclip.domain import budget
 from mp3_to_videoclip.generation import authorize, read_quote
 from mp3_to_videoclip.storage import inside, project_lock
@@ -99,15 +100,12 @@ def get_take(slug: str, line_id: str, version: int, request: Request):
 @router.post("/voice/estimate")
 async def estimate_voice(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    try:
-        with project_lock(root):
-            quote = voice.quote_voice(
-                root,
-                payload.get("line_ids") or None,
-                regenerate=bool(payload.get("regenerate")),
-            )
-    except (OSError, ValueError) as exc:
-        return {"error": str(exc)}
+    with project_lock(root):
+        quote = voice.quote_voice(
+            root,
+            payload.get("line_ids") or None,
+            regenerate=bool(payload.get("regenerate")),
+        )
     return {
         "quote_id": quote["id"],
         "voice": quote["voice"],
@@ -124,31 +122,30 @@ async def generate_voice(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
     quote_id = payload.get("quote_id")
     if not quote_id:
-        return {"error": "estimate the lines first"}
+        raise HTTPException(status_code=400, detail="estimate the lines first")
     try:
         quote = read_quote(root, quote_id)
-    except (OSError, ValueError) as exc:
-        return {"error": str(exc)}
+    except FileNotFoundError as exc:
+        raise ApiError(
+            404, "That quote is no longer there. Estimate again.", "quote_missing"
+        ) from exc
     if quote.get("kind") != "voice":
-        return {"error": "this quote is not for voiceover"}
+        raise HTTPException(status_code=400, detail="this quote is not for voiceover")
     decision = budget.check(root, quote["reserve_total_usd"])
     if not decision["ok"]:
         return {"needs_budget": True, "decision": decision}
     runner = getattr(request.app.state, "runner", None)
     if runner is None:
-        return {"error": "job runner unavailable"}
-    try:
-        with project_lock(root):
-            authorize(
-                root,
-                quote_id,
-                quote["reserve_total_usd"],
-                payload.get("note") or "user confirmed in Studio",
-                via="studio",
-                review_confirmed=True,
-            )
-    except ValueError as exc:
-        return {"error": str(exc)}
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+    with project_lock(root):
+        authorize(
+            root,
+            quote_id,
+            quote["reserve_total_usd"],
+            payload.get("note") or "user confirmed in Studio",
+            via="studio",
+            review_confirmed=True,
+        )
 
     async def work():
         def run():
@@ -186,8 +183,5 @@ async def upload_take(slug: str, line_id: str, filename: str, request: Request):
     with tempfile.TemporaryDirectory(prefix="voice-take-") as temp:
         source = Path(temp) / f"take{suffix}"
         source.write_bytes(data)
-        try:
-            voice.import_take(root, line_id, source)
-        except (OSError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        voice.import_take(root, line_id, source)
     return _payload(root)

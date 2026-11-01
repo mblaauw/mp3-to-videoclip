@@ -1,3 +1,4 @@
+import { isPlaceholder } from "./placeholders";
 import { useEffect, useState } from "react";
 import type { ImageShot, Shot } from "../api";
 import { isPaidShot, kindMeta, kindOf } from "../shotKinds";
@@ -35,7 +36,11 @@ export function ShotThumb({
   }, [source]);
 
   const local = !isPaidShot(shot);
-  const framing = shot.framing ? shot.framing.replace("_", " ") : "framing to set";
+  const framing = shot.framing
+    ? shot.framing.replace("_", " ")
+    : isPlaceholder(shot.image_prompt)
+      ? "Needs a prompt"
+      : "Framing not set";
   const text = shot.text || [];
 
   return (

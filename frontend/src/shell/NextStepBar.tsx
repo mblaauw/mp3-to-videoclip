@@ -27,7 +27,7 @@ export function NextStepBar({
   onAction: (action: NextAction, note?: string) => void | Promise<unknown>;
   /** The previous stage, so the way back is as obvious as the way forward. */
   back?: { label: string; onClick: () => void } | null;
-  /** One line for Film's top bar; the detail moves to a tooltip. */
+  /** Sits in the top bar: the detail is a smaller second line under the title. */
   compact?: boolean;
   /** Keeps the approval note when compact, for stages that approve in the top bar. */
   allowNote?: boolean;
@@ -78,7 +78,6 @@ export function NextStepBar({
       className={`next-bar ${step.tone} ${compact ? "compact" : ""}`}
       role="status"
       aria-live="polite"
-      title={compact ? step.detail : undefined}
     >
       {back && (
         <button type="button" className="next-back" onClick={back.onClick}>
@@ -88,7 +87,7 @@ export function NextStepBar({
       <div className="next-say">
         <StatusDot tone={TONE[step.tone]} />
         <strong>{step.title}</strong>
-        {step.detail && !compact && <span>{step.detail}</span>}
+        {step.detail && <span>{step.detail}</span>}
       </div>
       <div className="next-actions">
         {approving &&

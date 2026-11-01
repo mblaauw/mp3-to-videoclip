@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from mp3_to_videoclip import idea, story_beats
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
-from mp3_to_videoclip.storage import RevisionConflict, digest, inside
+from mp3_to_videoclip.storage import digest, inside
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["story"])
 
@@ -27,14 +27,7 @@ async def get_brief(slug: str, request: Request, response: Response):
 @router.patch("/brief")
 async def update_brief(slug: str, request: Request, payload: dict, response: Response):
     root = project_root(request, slug)
-    try:
-        brief = P.update_brief(
-            root, payload, expected_hash=request.headers.get("if-match"), owner=True
-        )
-    except RevisionConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    brief = P.update_brief(root, payload, expected_hash=request.headers.get("if-match"), owner=True)
     value = brief.model_dump()
     response.headers["ETag"] = f'"{digest(value)}"'
     return value
@@ -60,20 +53,14 @@ async def add_character_reference(slug: str, character_id: str, request: Request
 @router.post("/characters/{character_id}/references/remove")
 async def remove_character_reference(slug: str, character_id: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    try:
-        brief = P.remove_character_reference(root, character_id, str(payload.get("path")))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    brief = P.remove_character_reference(root, character_id, str(payload.get("path")))
     return brief.model_dump()
 
 
 @router.get("/references/{name}")
 async def get_reference_image(slug: str, name: str, request: Request):
     root = project_root(request, slug)
-    try:
-        target = inside(root, f"media/references/{name}")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    target = inside(root, f"media/references/{name}")
     if not target.is_file():
         raise HTTPException(status_code=404, detail="that reference does not exist")
     return FileResponse(target)
@@ -82,10 +69,7 @@ async def get_reference_image(slug: str, name: str, request: Request):
 @router.post("/proof-shots")
 async def set_proof_shots(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    try:
-        shot_ids = P.set_proof_ids(root, payload.get("shot_ids"))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    shot_ids = P.set_proof_ids(root, payload.get("shot_ids"))
     return {"proof_shot_ids": shot_ids}
 
 
@@ -113,10 +97,7 @@ async def get_treatments(slug: str, request: Request):
 @router.put("/treatments")
 async def put_treatments(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    try:
-        treatments = P.update_treatments(root, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    treatments = P.update_treatments(root, payload)
     return treatments.model_dump()
 
 
@@ -128,20 +109,14 @@ async def get_idea(slug: str, request: Request):
 @router.post("/idea")
 async def post_idea(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    try:
-        return {"idea": idea.keep_paste(root, payload.get("text"))}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"idea": idea.keep_paste(root, payload.get("text"))}
 
 
 @router.put("/idea/sorted")
 async def put_idea_sorted(slug: str, request: Request, payload: dict):
     """Moving a sentence between parts: the same rule that binds the Writer binds this."""
     root = project_root(request, slug)
-    try:
-        return {"idea": idea.apply_sort(root, payload, by="owner")}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"idea": idea.apply_sort(root, payload, by="owner")}
 
 
 @router.get("/story-passages")
@@ -195,15 +170,12 @@ async def update_intake(slug: str, request: Request, payload: dict, response: Re
     root = project_root(request, slug)
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="intake must be a JSON object")
-    try:
-        result = P.apply_intake(
-            root,
-            intent=payload.get("intent"),
-            style_preset=payload.get("style_preset"),
-            audio_window=payload.get("audio_window"),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    result = P.apply_intake(
+        root,
+        intent=payload.get("intent"),
+        style_preset=payload.get("style_preset"),
+        audio_window=payload.get("audio_window"),
+    )
     value = _intake_payload(root, analysis_needed=result["analysis_needed"])
     response.headers["ETag"] = f'"{digest(value["brief"])}"'
     return value

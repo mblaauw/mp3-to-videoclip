@@ -154,7 +154,11 @@ refuses to write to them.
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run pytest -m e2e --browser-channel chrome
 ```
+
+The last line drives the blocked states in a real browser with no keys. It needs
+Google Chrome, or `uv run playwright install chromium` and no `--browser-channel`.
 
 `tests/test_contract_golden.py` pins the compiled prompt, the frame timing and the
 Remotion request; regenerate it only for an intended change and say why in the

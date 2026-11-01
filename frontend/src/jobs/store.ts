@@ -13,6 +13,8 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import type { Job, JobDetail } from "../api";
+import { toastAction } from "../api/errorAction";
+import { errorCopy } from "../api/errors";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { goFilm, parseHash } from "../shell/route";
 import { toast } from "../toast";
@@ -41,6 +43,7 @@ type ServerEvent = {
   render_kind?: Job["render_kind"];
   project?: string;
   error?: string;
+  code?: string;
   progress?: Partial<Job["progress"]>;
   source?: string;
   artifact?: string;
@@ -178,7 +181,8 @@ function announce(name: JobEventName, payload: ServerEvent) {
   }
   if (name === "job.failed") {
     const what = FAILED[kind] || "A job failed";
-    toast(`${here || !slug ? "" : `${slug}: `}${what}: ${payload.error || "unknown error"}`);
+    const why = errorCopy(payload.code) || payload.error || "unknown error";
+    toast(`${here || !slug ? "" : `${slug}: `}${what}: ${why}`, "error", toastAction(payload.code, slug));
   }
 }
 

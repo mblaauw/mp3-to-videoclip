@@ -1,3 +1,4 @@
+import { shotCaption, shown } from "../storyboard/placeholders";
 import { useEffect, useMemo, useState } from "react";
 import {
   api,
@@ -82,6 +83,13 @@ export function StoryboardStage({
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"pictures" | "table">("pictures");
   const [loaded, setLoaded] = useState(false);
+  const [showUnfinished, setShowUnfinished] = useState(false);
+
+  useEffect(() => {
+    const show = () => setShowUnfinished(true);
+    window.addEventListener("studio:show-unfinished-shots", show);
+    return () => window.removeEventListener("studio:show-unfinished-shots", show);
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -188,7 +196,22 @@ export function StoryboardStage({
     }
   };
 
-  const groups = useMemo(() => (board ? groupsFor(board, music) : []), [board, music]);
+  const unfinished = useMemo(
+    () => new Set(board?.placeholder_shot_ids ?? []),
+    [board],
+  );
+  const onlyUnfinished = showUnfinished && unfinished.size > 0;
+  const shownBoard = useMemo(
+    () =>
+      board && onlyUnfinished
+        ? { ...board, shots: board.shots.filter((shot) => unfinished.has(shot.id)) }
+        : board,
+    [board, onlyUnfinished, unfinished],
+  );
+  const groups = useMemo(
+    () => (shownBoard ? groupsFor(shownBoard, music) : []),
+    [shownBoard, music],
+  );
   const fps = board?.fps || 24;
 
   return (
@@ -197,8 +220,8 @@ export function StoryboardStage({
         <div>
           <h1>Storyboard</h1>
           <p>
-            Integer-frame timeline, stable shot IDs. Choose each shot's kind, job, message
-            and on-screen text; only scene and generated product or bridge shots cost money.
+            Choose each shot's kind, job and picture. Only scene and generated shots cost
+            money.
           </p>
           <ApprovalBar stages={["storyboard"]} />
         </div>
@@ -298,6 +321,16 @@ export function StoryboardStage({
             </p>
           )}
 
+          {onlyUnfinished && (
+            <p className="hint board-filter">
+              Showing the {unfinished.size} {unfinished.size === 1 ? "shot" : "shots"} that still
+              {unfinished.size === 1 ? " needs" : " need"} a job and a prompt.{" "}
+              <Button size="small" variant="quiet" onClick={() => setShowUnfinished(false)}>
+                Show all
+              </Button>
+            </p>
+          )}
+
           {view === "pictures" ? (
             <div className="board-sections">
               {groups.map((group) => (
@@ -326,7 +359,7 @@ export function StoryboardStage({
                           >
                             <ShotThumb slug={slug} shot={shot} image={imageFor(shot.id)} />
                             <span className="shot-card-caption">
-                              {shot.message || shot.purpose}
+                              {shotCaption(shot) || <span className="needs-pill">Needs a job</span>}
                             </span>
                           </button>
                           <footer className="shot-card-foot">
@@ -389,7 +422,7 @@ export function StoryboardStage({
                   </tr>
                 </thead>
                 <tbody>
-                  {board.shots.map((shot) => {
+                  {(shownBoard?.shots ?? []).map((shot) => {
                     const paid = isPaidShot(shot);
                     const starred = proofIds.includes(shot.id);
                     const canStar = paid && shot.asset_shot_id === null && expectedProof > 0;
@@ -420,7 +453,9 @@ export function StoryboardStage({
                             {kindMeta(kindOf(shot)).icon} {kindMeta(kindOf(shot)).label}
                           </span>
                         </td>
-                        <td className="table-job">{shot.purpose}</td>
+                        <td className="table-job">
+                          {shown(shot.purpose) || <span className="needs-pill">Needs a job</span>}
+                        </td>
                         <td>{paid ? "Paid still" : "Free"}</td>
                         <td>
                           {canStar ? (

@@ -82,6 +82,11 @@ def set_proof_ids(root: Path, shot_ids: list[str]) -> list[str]:
     return list(brief.creative.proof_shot_ids)
 
 
+def placeholder_shot_ids(board) -> list[str]:
+    """The shots a storyboard approval would refuse, by the one rule below."""
+    return [shot.id for shot in board.shots if has_placeholders(shot)]
+
+
 def has_placeholders(shot: Shot) -> bool:
     # Marked placeholders, not words such as Spanish "todo" inside lyrics.
     return any(

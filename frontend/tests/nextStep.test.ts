@@ -126,7 +126,7 @@ test("story asks the writer to start when there is no brief", () => {
     budget,
   );
   assert.match(step.title, /Write the story/);
-  assert.equal(step.actions[0].to, "story");
+  assert.equal(step.actions[0].target, "brief");
 });
 
 test("story names lyrics as the real blocker", () => {
@@ -249,8 +249,8 @@ test("a v2 story asks for the creative profile before approval", () => {
     images(),
     budget,
   );
-  assert.match(step.title, /cast, places and rules/);
-  assert.equal(step.actions[0].to, "story");
+  assert.match(step.title, /build the cast and places/);
+  assert.equal(step.actions[0].target, "director");
 });
 
 test("a v2 story with a profile offers the approval", () => {
@@ -290,7 +290,7 @@ test("storyboard asks for a board when none exists", () => {
     budget,
   );
   assert.match(step.title, /No storyboard yet/);
-  assert.equal(step.actions[0].to, "storyboard");
+  assert.equal(step.actions[0].target, "board");
 });
 
 test("storyboard asks for approval when the board is unapproved", () => {
@@ -732,4 +732,93 @@ test("a film with no paid stills can still pass the style check", () => {
   );
   assert.equal(step.actions[0].approve, "proof");
   assert.match(step.title, /No stills to buy/);
+});
+
+test("no step ever links to the stage it is shown on", () => {
+  const stages = ["track", "story", "storyboard", "images", "film"] as const;
+  const stageStates: StageState[] = ["done", "you", "changed", "not_ready", "running"];
+  const decisions = ["approved", "stale", "missing", "unavailable"] as const;
+  const errors = [null, "analysis is missing", "lyrics are missing", "permission to upload/depict hero is not confirmed.", "something else"];
+  const facts: Partial<ProjectFacts>[] = [
+    {},
+    { has_analysis: false },
+    { has_lyrics: false },
+    { kind: "advert", has_message: false, has_cta: false },
+    { prompt_version: 2, profile_version: 0, has_model_key: false },
+    { prompt_version: 2, profile_version: 0, has_model_key: true },
+    { has_storyboard: false },
+    { placeholder_shot_ids: ["s001"] },
+  ];
+  let seen = 0;
+  for (const stage of stages) {
+    for (const state of stageStates) {
+      for (const decision of decisions) {
+        for (const error of errors) {
+          for (const fact of facts) {
+            const map = Object.fromEntries(
+              ["brief", "storyboard", "proof", "stills", "preview", "graphics"].map((name) => [
+                name,
+                { state: decision, error },
+              ]),
+            ) as ApprovalMap;
+            const step = nextStep(
+              stage,
+              project({ ...fact, stage_states: states({ [stage]: state }) }),
+              map,
+              images(),
+              budget,
+            );
+            seen += 1;
+            for (const action of step.actions) {
+              assert.notEqual(action.to, stage, `${stage}: ${step.title} → ${action.label}`);
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.ok(seen > 1000);
+});
+
+test("an unconfirmed permission names who and goes to the card", () => {
+  const step = nextStep(
+    "story",
+    project({ permission_pending: ["hero", "dj"] }),
+    approvals({ brief: { state: "unavailable", error: "permission to upload/depict hero is not confirmed. Only the owner" } }),
+    images(),
+    budget,
+  );
+  assert.equal(step.title, "Confirm permission for hero, dj.");
+  assert.deepEqual(step.actions[0], { label: "Go to World", target: "world", kind: "primary" });
+});
+
+test("a missing profile asks the Writer, or for the key the Writer needs", () => {
+  const facts = { prompt_version: 2, profile_version: 0 };
+  const withKey = nextStep("story", project({ ...facts, has_model_key: true }), approvals(), images(), budget);
+  assert.equal(withKey.actions[0].target, "director");
+  const noKey = nextStep("story", project({ ...facts, has_model_key: false }), approvals(), images(), budget);
+  assert.match(noKey.title, /needs a model key/);
+  assert.equal(noKey.actions[0].target, "settings");
+});
+
+test("unfinished shots are counted and shown, not approved", () => {
+  const step = nextStep(
+    "storyboard",
+    project({
+      placeholder_shot_ids: ["s001", "s002"],
+      stage_states: states({ story: "done", storyboard: "you" }),
+    }),
+    approvals({ brief: { state: "approved" } }),
+    images(),
+    budget,
+  );
+  assert.equal(step.title, "2 shots still need a job and a prompt.");
+  assert.equal(step.actions[0].target, "placeholders");
+  assert.equal(step.actions[0].approve, undefined);
+});
+
+test("film without a storyboard sends to Storyboard before anything else", () => {
+  const step = nextStep("film", project({ has_storyboard: false }), approvals(), images(), budget);
+  assert.equal(step.title, "This film has no storyboard yet.");
+  assert.equal(step.actions[0].to, "storyboard");
 });

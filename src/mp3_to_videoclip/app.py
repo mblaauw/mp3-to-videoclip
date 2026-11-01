@@ -26,7 +26,7 @@ from .api.approvals import router as approvals_router
 from .api.budget import router as budget_router
 from .api.director import close_gateways
 from .api.director import router as director_router
-from .api.errors import error_code, error_payload
+from .api.errors import engine_error, error_code, error_payload
 from .api.film import router as film_router
 from .api.history import router as history_router
 from .api.images import router as images_router
@@ -41,7 +41,6 @@ from .api.track import router as track_router
 from .api.voice import router as voice_router
 from .jobs import JobRunner
 from .jobs.watch import ProjectWatcher
-from .storage import ProjectBusy
 
 MUTATING = ("POST", "PUT", "PATCH", "DELETE")
 #: How long the SSE stream waits for an event before it sends a heartbeat.
@@ -281,9 +280,18 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
     app.include_router(director_router)
     app.include_router(jobs_router)
 
-    @app.exception_handler(ProjectBusy)
-    async def project_busy(_request: Request, exc: ProjectBusy):
-        return JSONResponse(error_payload(str(exc), "project_busy"), status_code=409)
+    @app.exception_handler(ValueError)
+    @app.exception_handler(FileNotFoundError)
+    async def engine_refusal(request: Request, exc: Exception):
+        error = engine_error(exc)
+        logger.info(
+            "%s %s refused: %s (%s)",
+            request.method,
+            request.url.path,
+            error.code,
+            type(exc).__name__,
+        )
+        return JSONResponse(error_payload(error.detail, error.code), status_code=error.status_code)
 
     @app.get("/api/events")
     async def events(request: Request):

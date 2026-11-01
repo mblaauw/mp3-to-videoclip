@@ -81,6 +81,12 @@ class ProviderError(ValueError):
         super().__init__(message)
 
 
+class MissingProviderKey(ValueError):
+    """The owner has not added this provider's key yet. Nothing was sent."""
+
+    code = "no_runware_key"
+
+
 def _network_errors() -> tuple[type[Exception], ...]:
     return (httpx.HTTPError, httpx.InvalidURL)
 
@@ -194,7 +200,7 @@ def runware_api_key() -> str:
 
     key = effective_settings().runware_api_key
     if not key or not key.strip():
-        raise ValueError(
+        raise MissingProviderKey(
             f"{RUNWARE_KEY_ENV} is not configured in Studio settings or the environment; "
             "no audio upload/inference made"
         )

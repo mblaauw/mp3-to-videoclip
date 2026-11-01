@@ -24,6 +24,9 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
+`uv run pytest -m e2e --browser-channel chrome` runs the browser tests; plain
+`pytest` leaves them out and CI runs them as their own job.
+
 `tests/test_contract_golden.py` pins the compiled prompt, integer-frame timing and
 the Remotion request. Regenerate it only for an intended change and state the
 reason in the commit. `tests/test_archive.py` proves the frozen films are only

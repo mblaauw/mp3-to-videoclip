@@ -429,40 +429,34 @@ async def create_project(
     if kind != "music_video" or any(
         (objective, message, audience, cta_text, cta_url, length_seconds)
     ):
-        try:
-            intent = Intent(
-                kind=kind,
-                objective=objective.strip(),
-                audience=audience.strip(),
-                message=message.strip(),
-                cta=CallToAction(text=cta_text.strip(), url=cta_url.strip())
-                if (cta_text.strip() or cta_url.strip())
-                else None,
-                length_seconds=int(length_seconds) if length_seconds is not None else None,
-            ).model_dump()
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        intent = Intent(
+            kind=kind,
+            objective=objective.strip(),
+            audience=audience.strip(),
+            message=message.strip(),
+            cta=CallToAction(text=cta_text.strip(), url=cta_url.strip())
+            if (cta_text.strip() or cta_url.strip())
+            else None,
+            length_seconds=int(length_seconds) if length_seconds is not None else None,
+        ).model_dump()
     with tempfile.TemporaryDirectory(prefix="mp3-intake-") as temp:
         source = Path(temp) / "source.mp3"
         source.write_bytes(data)
-        try:
-            created = intake.create_from_upload(
-                projects_dir,
-                source,
-                title=title,
-                aspect=aspect,
-                music_mode=music_mode,
-                budget=cap,
-                kind=kind,
-                intent=intent,
-                style_preset=style_preset or None,
-                length_seconds=length_seconds,
-                window_start=window_start if kind != "music_video" else 0.0,
-                fade_in=fade_in if kind != "music_video" else 0.0,
-                fade_out=fade_out if kind != "music_video" else 0.0,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        created = intake.create_from_upload(
+            projects_dir,
+            source,
+            title=title,
+            aspect=aspect,
+            music_mode=music_mode,
+            budget=cap,
+            kind=kind,
+            intent=intent,
+            style_preset=style_preset or None,
+            length_seconds=length_seconds,
+            window_start=window_start if kind != "music_video" else 0.0,
+            fade_in=fade_in if kind != "music_video" else 0.0,
+            fade_out=fade_out if kind != "music_video" else 0.0,
+        )
 
     root = created["root"]
     project = P.load_project(root)
