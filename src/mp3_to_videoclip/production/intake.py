@@ -23,6 +23,8 @@ from .board import init_events
 from .brief import _merge_patch, load_brief
 from .project import STAGE_FILES, load_project
 
+STARTING_LOOK = "work/starting-look.json"
+
 
 def style_template(projects_dir: Path) -> str | None:
     """Most recent sibling film-style text, for prefilling a new production.
@@ -195,6 +197,7 @@ def init_project(
     write_json(root / "work/approvals.json", {})
     write_json(root / "work/assets.json", {})
     write_json(root / "work/tasks.json", {})
+    _record_starting_look(root)
     init_events(root)
     if profile.signature_required:
         _init_signature(root, project)
@@ -248,6 +251,20 @@ def _matching_preset(look: str | None) -> styles.StylePreset | None:
         if look == value.look or look.startswith(value.look + "\n\n"):
             return value
     return None
+
+
+def _record_starting_look(root: Path) -> None:
+    """What this new film's first cut starts with. A film without this file starts with none.
+
+    Depth only where its tools are set up: a film with depth refuses to render without its
+    layers, and a first film shouldn't begin with a 800 MB download.
+    """
+    from .. import depth
+    from ..config import load_settings
+
+    amount = load_settings().new_films.depth
+    if amount > 0 and depth.status()["ready"]:
+        write_json(root / STARTING_LOOK, {"depth": amount})
 
 
 def _init_signature(root: Path, project: Project) -> None:

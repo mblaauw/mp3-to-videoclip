@@ -225,3 +225,74 @@ def test_the_player_gets_layers_only_when_the_film_has_depth(tmp_path, monkeypat
     shot = player_input(root, root.name)["shots"][0]
     assert shot["depth"]["src"]["near"].startswith(f"/api/projects/{root.name}/depth/")
     assert read_json(root / "work/edit.json")
+
+
+def _new_film(tmp_path, monkeypatch, *, ready):
+    from mp3_to_videoclip.production import intake
+
+    monkeypatch.setattr(
+        depth, "status", lambda: {"ready": ready, "supported": True, "reason": None}
+    )
+    root = make_api_project(tmp_path)
+    intake._record_starting_look(root)
+    return root
+
+
+def test_a_new_film_starts_at_the_saved_depth_when_the_tools_are_ready(tmp_path, monkeypatch):
+    root = _new_film(tmp_path, monkeypatch, ready=True)
+    assert edits.seed_edit(root).grade.look.depth == 0.6
+
+
+def test_without_the_tools_a_new_film_starts_flat_and_can_render(tmp_path, monkeypatch):
+    root = _new_film(tmp_path, monkeypatch, ready=False)
+    assert edits.seed_edit(root).grade.look is None
+
+
+def test_a_saved_zero_starts_flat(tmp_path, monkeypatch):
+    from mp3_to_videoclip import config
+
+    config.save_settings(config.Settings(new_films={"depth": 0}))
+    root = _new_film(tmp_path, monkeypatch, ready=True)
+    assert edits.seed_edit(root).grade.look is None
+
+
+def test_an_existing_film_stays_off_whatever_the_setting_says(tmp_path, monkeypatch):
+    monkeypatch.setattr(depth, "status", lambda: {"ready": True, "supported": True, "reason": None})
+    root = make_api_project(tmp_path)
+    assert edits.seed_edit(root).grade.look is None
+
+
+def test_a_render_makes_missing_layers_itself_only_when_it_can(tmp_path, monkeypatch):
+    root = make_api_project(tmp_path)
+    add_assets(root, versions=1)
+    _edit_with_depth(root)
+    ran = []
+    monkeypatch.setattr(depth, "run", lambda r: ran.append(r))
+    monkeypatch.setattr(depth, "status", lambda: {"ready": False})
+    depth.ensure_for_render(root)
+    assert ran == []
+    monkeypatch.setattr(depth, "status", lambda: {"ready": True})
+    depth.ensure_for_render(root)
+    assert ran == [root]
+
+
+def test_a_film_with_no_depth_never_runs_the_tools(tmp_path, monkeypatch):
+    root = make_api_project(tmp_path)
+    add_assets(root, versions=1)
+    edits.seed_edit(root)
+    monkeypatch.setattr(depth, "status", lambda: {"ready": True})
+    monkeypatch.setattr(depth, "run", lambda r: 1 / 0)
+    depth.ensure_for_render(root)
+
+
+def test_a_stand_in_for_a_missing_still_stays_flat_instead_of_refusing(tmp_path):
+    root = make_api_project(tmp_path)
+    add_assets(root, versions=1)
+    _edit_with_depth(root)
+    work = root / "work"
+    assets = work / "remotion-assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    shots = P.resolved_assets(root)
+    ids = [rs.shot.id for rs in shots]
+    compiled = remotion.compile_shots(shots, work, assets, ids)
+    assert all("depth" not in shot for shot in compiled)

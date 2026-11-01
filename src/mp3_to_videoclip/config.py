@@ -95,6 +95,8 @@ class NewFilms(BaseModel):
     fps: int = Field(default=24, ge=1)
     look: str = ""
     budget_usd: float = Field(default=5.0, ge=0)
+    #: How much depth a new film starts with, where the depth tools are set up.
+    depth: float = Field(default=0.6, ge=0, le=1)
     signature_package: bool = True
     credit_roles: list[str] = ["director", "music", "visuals"]
     brand: Brand = Brand()

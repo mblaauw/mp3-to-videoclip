@@ -400,6 +400,7 @@ export type Settings = {
     fps: number;
     look: string;
     budget_usd: number;
+    depth: number;
     signature_package: boolean;
     credit_roles: string[];
     brand: { name: string; partner: string; logo: string; palette: string[]; font: string };

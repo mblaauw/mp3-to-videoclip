@@ -738,7 +738,7 @@ def _tail(lines: list[str], limit: int = 4000) -> str:
     return "".join(lines)[-limit:]
 
 
-def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[dict]:
+def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path, stand_ins=()) -> list[dict]:
     """Compile resolved shots and their edit payload into renderer inputs.
 
     Pure apart from copying selected bytes into the flat asset cache. Kept
@@ -759,6 +759,8 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path) -> list[
             and look.depth > 0
             and not (rs.edit is not None and rs.edit.depth is False)
             and not (rs.shot.asset_shot_id is None and shotkinds.is_local(rs.shot))
+            # A preview's labelled plate for a missing still has nothing to separate.
+            and rs.shot.id not in stand_ins
         ):
             layers = depth.layer_set(root, Path(rs.image))
             if layers is None:
@@ -1173,7 +1175,7 @@ def render_base(
     output.parent.mkdir(parents=True, exist_ok=True)
     assets = Path(workdir).resolve() / "remotion-assets"
     assets.mkdir(parents=True, exist_ok=True)
-    compiled = compile_shots(shots, workdir, assets)
+    compiled = compile_shots(shots, workdir, assets, preview_placeholders)
     inputs = {
         "shots": compiled,
         "preview_banner": preview_banner,

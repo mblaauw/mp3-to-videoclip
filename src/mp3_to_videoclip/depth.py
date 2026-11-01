@@ -244,6 +244,20 @@ def coverage(root: Path) -> dict[str, Any]:
     }
 
 
+def ensure_for_render(root: Path) -> None:
+    """Make any layers a film with depth is missing, before a render needs them.
+
+    Free and local, so it needs no click. Without the tools the render's own refusal says so.
+    """
+    from . import edits
+
+    root = Path(root)
+    edit = edits.load_edit(root)
+    look = edit.grade.look if edit is not None else None
+    if look is not None and look.depth > 0 and status()["ready"]:
+        run(root)
+
+
 def run(root: Path) -> dict[str, Any]:
     """Make the layers of every selected still that lacks them. Free, and only local."""
     root = Path(root)

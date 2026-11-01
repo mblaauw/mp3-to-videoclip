@@ -21,6 +21,7 @@ from .models import (
     EditSection,
     EditShot,
     EditTransition,
+    FilmLook,
     Grade,
     Project,
     RenderShot,
@@ -1134,6 +1135,15 @@ def cut_material(root: Path) -> dict:
     }
 
 
+def _starting_grade(root: Path) -> Grade:
+    """A new film's first grade. Only a film recorded at intake starts with a look."""
+    from .production.intake import STARTING_LOOK
+
+    start = read_optional(root / STARTING_LOOK)
+    amount = start.get("depth") if isinstance(start, dict) else None
+    return Grade(look=FilmLook(depth=amount)) if amount else Grade()
+
+
 def seed_edit_preview(root: Path) -> EditDecisionList:
     """The cut seeding would write, without writing it."""
     from . import production as P
@@ -1165,7 +1175,7 @@ def seed_edit_preview(root: Path) -> EditDecisionList:
     edit = EditDecisionList(
         sections=sections,
         shots=shots,
-        grade=Grade(),
+        grade=_starting_grade(root),
         notes="Seeded from the storyboard; timing, motion and joins are now edit-owned.",
     )
     edit.check_board(board)
