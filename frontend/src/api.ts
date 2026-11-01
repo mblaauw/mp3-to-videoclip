@@ -435,6 +435,7 @@ export type Settings = {
   image_reserve_usd?: number;
   style_presets?: StylePreset[];
   kinds?: KindProfile[];
+  default_titles?: Record<string, string>;
   shot_kinds?: {
     id: ShotKind;
     label: string;
@@ -889,6 +890,7 @@ export const api = {
     meta: {
       title: string;
       aspect: string;
+      titles?: string;
       music_mode: string;
       budget: string;
       kind: string;
@@ -912,6 +914,7 @@ export const api = {
       kind: meta.kind,
     });
     if (meta.style_preset) params.set("style_preset", meta.style_preset);
+    if (meta.titles) params.set("titles", meta.titles);
     if (meta.kind !== "music_video") {
       params.set("objective", meta.objective || "");
       params.set("message", meta.message || "");

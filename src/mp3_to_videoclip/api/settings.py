@@ -54,7 +54,7 @@ def _read(value: dict, path: tuple[str, ...]) -> str:
 
 def _public(settings: Settings) -> dict:
     """Never send a secret back to the browser; expose presence instead."""
-    from mp3_to_videoclip import kinds, shotkinds, styles
+    from mp3_to_videoclip import kinds, shotkinds, signature, styles
 
     value = settings.model_dump()
     has = {}
@@ -75,6 +75,10 @@ def _public(settings: Settings) -> dict:
     }
     value["has_runware_api_key"] = bool(settings.runware_api_key)
     value["notes"] = NOTES
+    # What a new film of each kind starts with, so the form opens on the same answer.
+    value["default_titles"] = {
+        kind["id"]: signature.default_package(settings, kind["id"]) for kind in kinds.public_kinds()
+    }
     value["style_presets"] = styles.public_presets()
     value["kinds"] = kinds.public_kinds()
     value["shot_kinds"] = shotkinds.public_kinds()

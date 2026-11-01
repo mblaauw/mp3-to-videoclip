@@ -389,6 +389,7 @@ async def create_project(
     window_start: float = 0.0,
     fade_in: float = 0.0,
     fade_out: float = 1.5,
+    titles: Literal["joint-v1", "title-v1", "none"] | None = None,
 ):
     """Upload one MP3, create a schema 3 production and queue local analysis."""
     from mp3_to_videoclip import services
@@ -450,6 +451,7 @@ async def create_project(
             window_start=window_start if kind != "music_video" else 0.0,
             fade_in=fade_in if kind != "music_video" else 0.0,
             fade_out=fade_out if kind != "music_video" else 0.0,
+            titles=titles,
         )
 
     root = created["root"]

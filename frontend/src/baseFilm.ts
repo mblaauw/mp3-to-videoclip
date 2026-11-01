@@ -125,7 +125,7 @@ export type PreviewShot = {
 
 /** One planned title window: whole frames on the film's timeline. */
 export type TitleWindow = {
-  kind: "intro" | "identity" | "card" | "lockup" | "caption";
+  kind: "intro" | "identity" | "card" | "lockup" | "caption" | "title" | "end_card";
   id: string;
   start_frame: number;
   frames: number;

@@ -31,18 +31,21 @@ export function NewFilmsTab() {
         <ChoiceRow
           path="new_films.aspect"
           label="Shape"
-          hint="Portrait returns when its layouts do."
-          options={[{ value: "16:9", label: "Landscape 16:9" }]}
+          hint="A new film can still choose the other shape."
+          options={[
+            { value: "16:9", label: "Landscape 16:9" },
+            { value: "9:16", label: "Portrait 9:16" },
+          ]}
           free={false}
         />
         <NumberRow path="new_films.fps" label="Frames per second" hint={STORED_ONLY} min="1" />
-        <ToggleRow path="new_films.signature_package" label="Signature opening and closing" hint={STORED_ONLY} />
+        <ToggleRow path="new_films.signature_package" label="Open and close a music video with titles" hint="With a name below it uses the 25/40 signature; without one, a short title. Each film can choose." />
         <ListRow path="new_films.credit_roles" label="Credit roles" hint={STORED_ONLY} placeholder="director, music, visuals" />
       </Section>
       <Section title="Brand kit" note="Used in the opening and closing graphics. A film keeps the names it was made with.">
         <TextRow path="new_films.brand.name" label="Artist or brand" />
         <TextRow path="new_films.brand.partner" label="Partner" />
-        <TextRow path="new_films.brand.logo" label="Logo file" hint={STORED_ONLY} placeholder="/path/to/logo.png" />
+        <TextRow path="new_films.brand.logo" label="Logo file" hint="An SVG on this computer, shown on short end cards." placeholder="/path/to/logo.svg" />
         <ListRow path="new_films.brand.palette" label="Palette" hint={STORED_ONLY} placeholder="#D9B36C, #1B1C1F" />
         <TextRow path="new_films.brand.font" label="Font" hint={STORED_ONLY} />
       </Section>

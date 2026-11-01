@@ -34,6 +34,7 @@ export function CreditsCard({ slug }: { slug: string }) {
   if (!graphics?.available) return null;
 
   const guided = graphics.guided !== false;
+  const short = graphics.spec?.package === "title-v1";
   const valid = cleanCards(cards).length > 0;
 
   const change = (index: number, position: 0 | 1, value: string) => {
@@ -75,7 +76,8 @@ export function CreditsCard({ slug }: { slug: string }) {
   return (
     <section className="stage-block credits-card">
       <h2>
-        Credits <small>The closing roll for this film</small>
+        {short ? "End card" : "Credits"}{" "}
+        <small>{short ? "Up to four lines on the closing card" : "The closing roll for this film"}</small>
         {confirmed && <span className="saved-note">Confirmed</span>}
       </h2>
       {!guided && (

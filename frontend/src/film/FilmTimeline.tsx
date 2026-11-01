@@ -26,6 +26,8 @@ function windowLabel(window: TitleWindow & { card?: string[] }): string {
   if (window.kind === "intro") return "Opening";
   if (window.kind === "identity") return "Partners";
   if (window.kind === "lockup") return "End";
+  if (window.kind === "title") return "Title";
+  if (window.kind === "end_card") return "End card";
   if (window.kind === "card" && window.card) {
     const word = window.card[0].split(" ")[0];
     return word[0] + word.slice(1).toLowerCase();

@@ -46,6 +46,12 @@ const FALLBACK_KINDS: KindProfile[] = [
   },
 ];
 
+const TITLES = [
+  { id: "joint-v1", label: "25/40 signature" },
+  { id: "title-v1", label: "Short title and end card" },
+  { id: "none", label: "None" },
+];
+
 /** The whole track, as a length choice for kinds that allow it. */
 const WHOLE_TRACK = 0;
 
@@ -78,6 +84,9 @@ export function NewProduction({
       : "",
   );
   const [kind, setKind] = useState("music_video");
+  const [aspect, setAspect] = useState<"16:9" | "9:16">("16:9");
+  const [titles, setTitles] = useState<string | null>(null);
+  const [defaultTitles, setDefaultTitles] = useState<Record<string, string>>({});
   const [mode, setMode] = useState("vocal");
   const [budget, setBudget] = useState("5.00");
   const [message, setMessage] = useState("");
@@ -96,6 +105,8 @@ export function NewProduction({
         const start = settings.new_films;
         if (start.budget_usd > 0) setBudget(start.budget_usd.toFixed(2));
         const known = settings.kinds || [];
+        setDefaultTitles(settings.default_titles || {});
+        if (start.aspect === "9:16") setAspect("9:16");
         setKinds(known);
         setLook(start.look || undefined);
         const profile = known.find((item) => item.id === start.kind);
@@ -126,6 +137,12 @@ export function NewProduction({
 
   const options = kinds.length ? kinds : FALLBACK_KINDS;
   const profile = options.find((item) => item.id === kind);
+  // The signature is a landscape package: a portrait film can't have it.
+  const titleOptions = TITLES.filter((item) => aspect === "16:9" || item.id !== "joint-v1");
+  const wantedTitles = titles ?? defaultTitles[kind] ?? "title-v1";
+  const chosenTitles = titleOptions.some((item) => item.id === wantedTitles)
+    ? wantedTitles
+    : "title-v1";
   const lengthOptions = [
     ...(profile?.allows_full_track ? [WHOLE_TRACK] : []),
     ...(profile?.lengths ?? []),
@@ -157,7 +174,8 @@ export function NewProduction({
     try {
       const created = await api.createProject(file, {
         title: title.trim(),
-        aspect: "16:9",
+        aspect,
+        titles: chosenTitles,
         music_mode: mode,
         budget,
         kind,
@@ -270,6 +288,26 @@ export function NewProduction({
             </select>
           </label>
         )}
+        <label>
+          Shape
+          <select
+            value={aspect}
+            onChange={(event) => setAspect(event.target.value as "16:9" | "9:16")}
+          >
+            <option value="16:9">16:9, landscape</option>
+            <option value="9:16">9:16, portrait</option>
+          </select>
+        </label>
+        <label>
+          Titles
+          <select value={chosenTitles} onChange={(event) => setTitles(event.target.value)}>
+            {titleOptions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
         {kind === "advert" && (
           <label>
             Call to action
