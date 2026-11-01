@@ -65,4 +65,109 @@ resource cache lands before I7, because the narrative screens build on it.
 
 ## Phase summaries
 
-Filled in from each plan as it lands; the plan files are authoritative.
+The plan files are authoritative; this is the one-paragraph view, with the
+decisions each plan still asks of the owner.
+
+**A · blocked states** (one PR, about 4.5 days). One `engine_error()` installed as
+app exception handlers: `ValueError` 400, provider errors 502 with their code, a
+`no_runware_key` 409, missing artifacts 404 with a per-artifact code and never a
+path; the twelve HTTP-200 error bodies become 400s. The frontend copy map covers
+every code and carries an action (Open settings, Go to stage). `nextStep.ts` gets
+the facts it lacks (model key, storyboard present, placeholder shots, permission
+pending) and a guard that no step links to its own stage. Compact bars show the
+detail. Film without a storyboard shows one card; the missing renderer card is
+fixed. Placeholders read as "Needs a job"; the Storyboard header, rating refresh,
+cut and titles notes, the phone tab row and transport, and error toasts as alerts.
+Four Playwright smoke tests over the blocked states. Decisions: adopt Playwright
+through pytest-playwright (yes); 404 with per-artifact codes; a
+`placeholder_shot_ids` field on the storyboard; placeholders shown empty with the
+engine marker written back on an empty save; `role=alert` for error toasts only.
+
+**H · settings and catalogue** (two PRs, about 3.5 + 4.25 days). A `catalog.toml`
+and `catalog.py` of providers, models and voices with capabilities, unit prices
+carrying a source and a date, a recommended flag, and on-demand refresh from
+OpenCode, Runware model search and ElevenLabs voices behind a key. Settings schema
+2 by role, voices, pictures, keys, new-film defaults with a brand kit, prices and
+computer, with the thirteen flat names kept as computed properties so no caller
+changes, and a v1 migration. Routes for the catalogue, tests per provider and per
+voice, costs from every journal, and cache listing and clearing through an
+allowlist. The panel: tab rail, search, "what is missing" checklist, per-field
+Saved, reset to recommended, "Other…" on every dropdown, the MiniMax default voice,
+ElevenLabs only with a key, the Critic greyed. Decisions: `tomli-w` for nested
+TOML; a voice sample is free from the provider's preview else bought once on an
+explicit click; clearing `work/remotion-chunks` and `work/remotion-assets` inside
+productions as a written exception to the never-delete rule; keep the owner's two
+names as defaults until F1; prices only with a source and a date.
+
+**B · musical** (two PRs, about a week). A `song_map.py` merging the quick and deep
+measurements with the owner's section layer into one cached `work/song-map.json`,
+served, injected into every Writer task and given to both roles as a tool; sections
+from the checkerboard novelty peaks live in the song map only so `music.json` and
+every hash hold; the deep pass becomes the second phase of the standard analysis
+job; lyrics with times and the whole treatment reach concepts, script and import;
+`pacing.py` gains grid tiers (section start, sung line, downbeat, change snapped to
+a downbeat, beat, each led by a frame or two) and split points on bar lines using
+crop cuts, with quiet sections stretching toward holds; captions from
+`lyric-timing.json` as text layers plus SRT and VTT. Decisions as recommended in
+the plan, including the join order and what "merge when quiet" means.
+
+**C · move** (four PRs, about four weeks). C-1 sharper and typed: a journaled 2×
+upscale as a derived still version, a 1024 px rotated grain tile, three OFL display
+faces embedded per look. C-2 depth: a local `depth.py` job (Depth Anything V2
+Small, cached by still hash) and parallax layers in the composition as pure frame
+functions, `grade.look.depth` per film with a per-shot off switch, off for existing
+films. C-3 motion and look: easing curves, ramps and impulses on downbeats from the
+song map, bloom, halation, flare, dust and haze as look options, text decorations
+and safe areas, per-word lyric timing. C-4 clips: one image-to-video model from the
+catalogue, 5 s clips as journaled asset versions with a clip layer in both outputs.
+Decisions: upscale rather than a larger native size; factor 2; depth per film and
+per shot; the tile over per-pixel noise; Inter, Fraunces and Bebas Neue; two capped
+paid batches for acceptance (up to 10 upscales, up to 3 clips of 5 s).
+
+**E · the Director** (three PRs, about two weeks). E-1: provider plugins behind the
+one adapter (OpenAI-compatible, Anthropic, Gemini), per-role provider and model,
+the gateway retired with `director/mcp.py` kept for outside agents, usage priced
+from the catalogue into `work/model-usage.jsonl` and shown under each answer and in
+the budget popover, the loop keeping its own reasoning across compaction. E-2: a
+`shared/craft.md` under 380 words, three new example idioms, a context that hears
+the song map and sees the owner's references, `creative.sections[]` for the
+evolving look, compiler version 3 for new films (subject before look, negative
+prompt, per-shot seeds) so existing films keep their hashes, character sheets and
+scene plates bought and bound from the World tab, edit-mode redos. E-3: typed tool
+schemas, a required reason on every write persisted to `work/decisions.jsonl` with
+diffs in the tool row, five new tools, the one-click first draft as a job under a
+$1.00 default ceiling with draft approvals that unlock only brief, storyboard and
+the proof batch, and the creative evaluation with a judge from another provider
+where two keys exist. Decisions as recommended in the plan.
+
+**I · narrative films** (four PRs, about 33 days). Step 1: `Project.spine =
+"soundtrack"`, `audio.build_soundtrack` as the clock with a read-rate estimate,
+`work/script.json`, beats from structure templates, the `script` and `voice`
+approvals, the Script stage and a 2:00 film playing silently in the Player from a
+script. Step 2: `narration.py` on the journal's pattern with Runware MiniMax takes
+and an ElevenLabs scaffold, takes reviewed like stills, the Writer's script and
+narration tasks with the five-beat, place-across-time, essay and fable templates.
+Step 3: `plate`, `era`, `document`, `date_card` and `title_card` kinds, the
+painted-documentary, archival and illustrated looks, the narrator and place with
+eras in the profile, the mixer with ducking and loudness in the soundtrack build,
+captions and sidecars. Step 4: clips after C-4. Decisions: mixer in the soundtrack
+build; duration leaves the project hash only for soundtrack films; brief, script,
+voice, storyboard in that order; a stale take stays audible but blocks the voice
+approval; one capped first batch ("The Last House Key", at most 25 lines, cap
+$3.00); word timing through the lyric tools where set up; captions not burned in
+by default; short clips hold their last frame.
+
+**G · debt** (three PRs, about 20 days). G-1: FFmpeg helpers out of the renderer,
+the zoompan path and the animatic deleted, schema 3 only with the version fields
+kept inert so hashes hold, the golden regenerated on a schema-3 fixture, the
+compositor and its caches behind the CLI as `legacy/` with slow tests. G-2: a CLI
+dispatch table with 14 commands and 20 deleted, `edits.report` as finding
+families, approve and dispatch as tables, reservation from published pricing,
+a streamed upload, pixel goldens as a separate Chrome-gated script in CI. G-3: one
+shell-level resource store, the OpenAPI generator deleted, the three large
+components split, stylesheets into the token system, ESLint. Decisions: the pilot
+production becomes an archive; delete rather than move the FFmpeg renderer; refuse
+a final whose titles review came from the old compositor; inert version fields.
+
+**D · fast** and **F · open it up**: plans in progress; summaries follow when they
+land.
