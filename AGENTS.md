@@ -19,7 +19,7 @@ anything: the phase record owns its decisions and the rework is complete.
 ## Checks
 
 ```sh
-uv run pytest
+uv run pytest -n auto
 uv run ruff check .
 uv run ruff format --check .
 ```
