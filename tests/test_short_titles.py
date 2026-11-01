@@ -146,7 +146,7 @@ def test_the_credits_card_writes_end_card_lines_on_a_short_film(tmp_path):
     production.init_project(root, synth_source(tmp_path), "film", title="Film", titles="title-v1")
     signature.save_credits(root, [["Music", "Ana"]])
     spec = read_json(root / "work/graphics-spec.json")
-    assert spec["end_card"]["lines"] == ["Music  Ana"]
+    assert spec["end_card"]["lines"] == ["Music: Ana"]
     assert spec["credits_tail_seconds"] == 5.0
     with pytest.raises(ValueError, match="at most 4"):
         signature.save_credits(root, [["a", str(i)] for i in range(5)])

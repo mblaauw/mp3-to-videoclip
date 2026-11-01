@@ -321,7 +321,7 @@ def save_credits(root: Path, cards, *, use_as_template: bool = False) -> list:
         if package_of(spec) == "title-v1":
             if len(normalized) > END_CARD_MAX_LINES:
                 raise ValueError(f"an end card has at most {END_CARD_MAX_LINES} lines of text")
-            spec["end_card"]["lines"] = [f"{role}  {name}" for role, name in normalized]
+            spec["end_card"]["lines"] = [f"{role}: {name}" for role, name in normalized]
             spec["credits_tail_seconds"] = float(spec["credits_tail_seconds"]) or 5.0
         write_json(root / SPEC, spec)
         if use_as_template:

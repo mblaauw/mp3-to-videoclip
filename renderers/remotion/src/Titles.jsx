@@ -591,7 +591,7 @@ function ShortTitlePart({intro, palette, family, t, seconds}) {
   const middle = insets.top + (height - insets.top - insets.bottom) / 2;
   return (
     <AbsoluteFill style={{opacity: alpha}}>
-      <AbsoluteFill style={{background: softBand(rgb, 0.45)}} />
+      <AbsoluteFill style={{background: `rgba(${rgb.join(",")}, 0.4)`}} />
       <Fitted
         top={intro.line ? middle - unit * 0.03 : middle}
         size={unit * 0.085}
@@ -631,7 +631,7 @@ function EndCardPart({card, palette, logo, family, t, seconds}) {
   const lockupTop = middle - blockHeight / 2 - unit * 0.05;
   return (
     <AbsoluteFill style={{opacity: alpha}}>
-      <AbsoluteFill style={{background: softBand(rgb, 0.72)}} />
+      <AbsoluteFill style={{background: `rgba(${rgb.join(",")}, 0.62)`}} />
       {logo ? (
         <IdentityMark src={logo} height={unit * 0.12} top={lockupTop - unit * 0.1} centre alpha={1} />
       ) : null}
@@ -652,7 +652,7 @@ function EndCardPart({card, palette, logo, family, t, seconds}) {
           key={line}
           top={middle - blockHeight / 2 + unit * 0.035 + index * unit * 0.05}
           size={unit * 0.028}
-          colour={palette.secondary ?? palette.ink}
+          colour={palette.ink}
           weight={500}
           insets={insets}
           family={family}
