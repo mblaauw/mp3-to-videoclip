@@ -43,6 +43,8 @@ import { notifyProjectChanged, useProjectChanged } from "./projectEvents";
 import { goLibrary } from "./route";
 import { ScriptStage } from "../stages/Script";
 import { useSpokenLines } from "../script/useSpokenLines";
+import { Button } from "../ui";
+import { FirstDraftDialog } from "./FirstDraftDialog";
 import { STAGES } from "./stages";
 import { TopBar } from "./TopBar";
 import { scrollBehavior } from "../ui";
@@ -55,6 +57,12 @@ const APPROVED: Record<string, string> = {
   stills: "All stills approved",
   preview: "Preview approved",
   graphics: "Titles approved",
+};
+
+const DRAFT_NAME: Record<string, string> = {
+  brief: "The story",
+  storyboard: "The storyboard",
+  proof: "The proof stills",
 };
 
 const APPROVAL_STAGES = [
@@ -314,6 +322,7 @@ function FilmShellContent({
   const [approvals, setApprovals] = useState<ApprovalMap>({});
   const [approvalStates, setApprovalStates] = useState<Record<string, ApprovalState>>({});
   const [approvalsLoaded, setApprovalsLoaded] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(false);
   const [images, setImages] = useState<ImageShot[]>([]);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [board, setBoard] = useState<Storyboard | null>(null);
@@ -485,6 +494,9 @@ function FilmShellContent({
     setDirectorShots([id]);
   };
   const spokenLines = useSpokenLines(slug, project.spine);
+  const drafted = Object.values(approvalStates).filter(
+    (item) => item.via === "draft" && item.state === "approved",
+  );
   const projectFacts: ProjectFacts = {
     ...project,
     stage_states: shellStates,
@@ -671,7 +683,34 @@ function FilmShellContent({
         />
         <main className="shell-main">
           {loadError && <p role="alert">Could not refresh film data: {loadError}</p>}
-          {stage !== "film" && stage !== "story" && stage !== "track" && (
+          {stage === "story" && project.shots === 0 && project.spine !== "soundtrack" && (
+            <div className="row-actions">
+              <Button size="small" variant="quiet" onClick={() => setDraftOpen(true)}>
+                Make a first draft
+              </Button>
+            </div>
+          )}
+          {draftOpen && <FirstDraftDialog slug={slug} onClose={() => setDraftOpen(false)} />}
+          {drafted.map((item) => (
+            <div className="next-step drafted" key={item.stage}>
+              <p className="hint">{DRAFT_NAME[item.stage] ?? item.stage}: drafted, not yours.</p>
+              <Button
+                size="small"
+                onClick={() =>
+                  void api
+                    .approve(slug, item.stage, {
+                      expected_hash: item.expected_hash ?? "",
+                      confirmed: true,
+                      note: "the owner made the draft theirs",
+                    })
+                    .then(() => notifyProjectChanged({ slug }))
+                }
+              >
+                Make it yours
+              </Button>
+            </div>
+          ))}
+          {stage !== "film" && stage !== "story" && stage !== "track" && stage !== "script" && (
             <NextStepBar
               step={step}
               ready={approvalsLoaded}
