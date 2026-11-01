@@ -12,6 +12,8 @@ import { notifyProjectChanged } from "../shell/projectEvents";
 import { usePlayer } from "./player";
 import { Transport } from "./Transport";
 import { clock, sectionAt, sectionColor, sectionName, waveformBars } from "./wave";
+import type { TimedLine } from "../api";
+import { lineAt } from "../script/parse";
 import { Waveform } from "./Waveform";
 import { SECTION_EDGE } from "../track/useTrackData";
 
@@ -64,7 +66,9 @@ export function Spine({
   onBoardChange,
   readOnly = false,
   bands = [],
+  spokenLines = [],
 }: {
+  spokenLines?: TimedLine[];
   slug: string;
   stage: string;
   board: Storyboard | null;
@@ -83,6 +87,7 @@ export function Spine({
   bands?: { start: number; end: number }[];
 }) {
   const player = usePlayer();
+  const spoken = lineAt(spokenLines, player.time);
   const canvasRef = useRef<HTMLDivElement>(null);
   const busy = useRef(false);
   const [drag, setDrag] = useState<{ index: number; frame: number } | null>(null);
@@ -327,6 +332,16 @@ export function Spine({
         shownDuration={shownDuration}
         excerptMode={excerptMode}
       />
+      {spoken && (
+        <button
+          type="button"
+          className="spine-line"
+          title="Go to the start of this line"
+          onClick={() => player.seek(spoken.start)}
+        >
+          {spoken.text}
+        </button>
+      )}
       <div
         className="spine-track"
         role="slider"

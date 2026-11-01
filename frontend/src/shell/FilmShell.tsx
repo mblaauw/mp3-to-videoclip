@@ -41,6 +41,8 @@ import {
 } from "./nextStep";
 import { notifyProjectChanged, useProjectChanged } from "./projectEvents";
 import { goLibrary } from "./route";
+import { ScriptStage } from "../stages/Script";
+import { useSpokenLines } from "../script/useSpokenLines";
 import { STAGES } from "./stages";
 import { TopBar } from "./TopBar";
 import { scrollBehavior } from "../ui";
@@ -59,6 +61,8 @@ const APPROVAL_STAGES = [
   "analysis",
   "lyrics",
   "brief",
+  "script",
+  "voice",
   "storyboard",
   "proof",
   "preview",
@@ -225,6 +229,7 @@ function StageView({
   images: ImageShot[];
 }) {
   if (stage === "track") return <TrackStage slug={slug} />;
+  if (stage === "script") return <ScriptStage slug={slug} />;
   if (stage === "story")
     return (
       <StoryStage
@@ -479,6 +484,7 @@ function FilmShellContent({
     setInspectorShot(id);
     setDirectorShots([id]);
   };
+  const spokenLines = useSpokenLines(slug, project.spine);
   const projectFacts: ProjectFacts = {
     ...project,
     stage_states: shellStates,
@@ -642,7 +648,7 @@ function FilmShellContent({
           budget={budget}
           stageStates={shellStates}
           next={
-            stage === "film" || stage === "story" || stage === "track" ? (
+            stage === "film" || stage === "story" || stage === "track" || stage === "script" ? (
               <NextStepBar compact allowNote={stage === "story"} step={step} ready={approvalsLoaded} onAction={act} />
             ) : null
           }
@@ -756,6 +762,7 @@ function FilmShellContent({
           onAudioWindowCommit={commitAudioWindow}
           onBoardChange={setBoard}
           readOnly={stage === "storyboard" && editOwnsTiming}
+          spokenLines={spokenLines}
         />
         )}
       </div>
@@ -779,7 +786,7 @@ export function LibraryShell({
   error: string | null;
   onOpen: (slug: string, stage: string) => void;
   onArchive: (slug: string) => void;
-  onCreated: (slug: string) => void;
+  onCreated: (slug: string, first?: "track" | "story") => void;
   onSettings: () => void;
   onRetry: () => void;
 }) {

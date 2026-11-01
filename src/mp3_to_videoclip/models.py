@@ -10,7 +10,7 @@ NATIVE_SIZE_MIN = 512
 NATIVE_SIZE_MAX = 4096
 NATIVE_SIZE_RATIO_TOLERANCE = 0.01
 
-Kind = Literal["music_video", "promo", "advert"]
+Kind = Literal["music_video", "promo", "advert", "narrative"]
 ShotKind = Literal[
     "scene",
     "product",
@@ -97,14 +97,17 @@ class Project(Model):
     schema_version: Literal[1, 3] = 1
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
     title: str
-    source: str = "media/song.mp3"
-    source_sha256: str
+    #: A soundtrack film has no source: its clock is the mix built from its takes.
+    source: str | None = "media/song.mp3"
+    source_sha256: str | None = None
     duration: float = Field(gt=0)
     aspect: Literal["16:9", "9:16"] = "16:9"
     fps: Literal[24, 30] = 24
     width: int = Field(gt=0, multiple_of=2)
     height: int = Field(gt=0, multiple_of=2)
-    music_mode: Literal["vocal", "instrumental", "music-led"] | None = None
+    music_mode: Literal["vocal", "instrumental", "music-led", "narration-led"] | None = None
+    spine: Literal["song", "soundtrack"] | None = None
+    bed: str | None = None
     kind: Kind | None = None
     source_duration: float | None = Field(default=None, gt=0)
     audio_window: AudioWindow | None = None
@@ -118,6 +121,20 @@ class Project(Model):
     signature_required: bool | None = Field(default=None, strict=True)
     source_filename: str | None = None
     renderer_backend: Literal["ffmpeg", "remotion"] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_soundtrack_has_no_source(cls, data):
+        if isinstance(data, dict) and data.get("spine") == "soundtrack":
+            return {**data, "source": data.get("source")}
+        return data
+
+    @model_validator(mode="after")
+    def _a_song_has_a_source(self):
+        if self.spine != "soundtrack" and self.source_sha256 is None:
+            raise ValueError("a film with a song needs its source_sha256")
+        return self
+
     budget: list[dict] = Field(default_factory=list)
 
     @property
@@ -156,6 +173,10 @@ class Project(Model):
             "kind",
             "source_duration",
             "audio_window",
+            "spine",
+            "bed",
+            "source",
+            "source_sha256",
         ):
             if value.get(key) is None:
                 value.pop(key, None)
@@ -355,11 +376,22 @@ class Intent(Model):
     performance: bool | None = None
     reference_links: list[str] = Field(default_factory=list)
     assets: str = ""
+    #: A story film only: whether its world is invented, and which template it fills.
+    fictional: bool | None = None
+    structure: str | None = None
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
         value = handler(self)
-        for key in ("notes", "about", "performance", "reference_links", "assets"):
+        for key in (
+            "notes",
+            "about",
+            "performance",
+            "reference_links",
+            "assets",
+            "fictional",
+            "structure",
+        ):
             if value.get(key) in (None, "", []):
                 value.pop(key, None)
         if value.get("cta") is None:
@@ -588,6 +620,42 @@ class Pane(Model):
     crop: Framing = Field(default_factory=Framing)
 
 
+class Claim(Model):
+    """A fact a line states. Invented facts are listed, and only a fictional world has them."""
+
+    text: str = Field(min_length=1, max_length=300)
+    invented: bool = False
+
+
+class ScriptLine(Model):
+    """One spoken sentence or two. Its take, not this number, decides how long it lasts."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    text: str = Field(min_length=1, max_length=600)
+    beat: str = Field(min_length=1, max_length=64)
+    target_seconds: float | None = Field(default=None, gt=0)
+    pause_after: float = Field(default=0.5, ge=0, le=20)
+    direction: str = Field(default="", max_length=400)
+    claims: list[Claim] = Field(default_factory=list, max_length=12)
+
+
+class Script(Model):
+    """What the narrator says, on a structure's beats."""
+
+    schema_version: Literal[1] = 1
+    structure: str
+    reading_rate_wps: float = Field(default=2.3, gt=0.5, lt=6)
+    lines: list[ScriptLine] = Field(min_length=1, max_length=200)
+    notes: str = Field(default="", max_length=2000)
+
+    @model_validator(mode="after")
+    def unique_lines(self):
+        ids = [line.id for line in self.lines]
+        if len(set(ids)) != len(ids):
+            raise ValueError("script line IDs must be unique")
+        return self
+
+
 class Shot(Model):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
     start_frame: int = Field(ge=0)
@@ -619,11 +687,13 @@ class Shot(Model):
     panes: list[Pane] = Field(default_factory=list, max_length=3)
     character_states: dict[str, str] = Field(default_factory=dict)
     state_requirements: dict[str, dict[str, str]] = Field(default_factory=dict)
+    #: Lines said over this shot, in a soundtrack film; its frames come from their takes.
+    line_ids: list[str] = Field(default_factory=list, max_length=24)
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
         value = handler(self)
-        for key in ("character_states", "state_requirements"):
+        for key in ("character_states", "state_requirements", "line_ids"):
             if not value.get(key):
                 value.pop(key, None)
         for key in ("camera_keyframes", "post_effects", "transition"):

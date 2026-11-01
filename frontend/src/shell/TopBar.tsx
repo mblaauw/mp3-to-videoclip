@@ -5,7 +5,7 @@ import { toast } from "../toast";
 import { Button, Pill, StatusDot, type PillTone, type StatusTone } from "../ui";
 import { ChatIcon, ClockIcon, GearIcon, MarkIcon } from "../ui/icons";
 import { stageWord, type Stage, type StageState } from "./nextStep";
-import { STAGES } from "./stages";
+import { stagesFor } from "./stages";
 
 const JOB_LABEL: Record<string, string> = {
   analysis: "Measuring the song",
@@ -311,7 +311,7 @@ export function TopBar({
             <span className="crumb-film">{project.title}</span>
           </nav>
           <nav className="stepper" aria-label="Stages">
-            {STAGES.map((item, index) => {
+            {stagesFor(project.spine).map((item, index) => {
               const state = (
                 item.id === "track" && analysisRunning ? "running" : states[item.id]
               ) as StageState | undefined;

@@ -38,6 +38,8 @@ def _tail(value: bytes, limit: int = 1200) -> str:
 
 
 def source_audio(root: Path, project: Project) -> Path:
+    if project.source is None:
+        raise ValueError("this film has no source recording; its sound is built from its takes")
     return inside(root, project.source)
 
 
@@ -123,6 +125,10 @@ def build_excerpt(root: Path, project: Project) -> Path:
 
 def render_audio(root: Path, project: Project) -> Path:
     """The audio every render, preview and Player must use."""
+    if project.spine == "soundtrack":
+        from .production.soundtrack import current
+
+        return current(root)
     if project.audio_window is None:
         return source_audio(root, project)
     return build_excerpt(root, project)

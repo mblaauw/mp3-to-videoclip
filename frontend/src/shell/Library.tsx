@@ -7,7 +7,7 @@ import { notifyProjectChanged } from "./projectEvents";
 import { stageLabel } from "./stages";
 import type { Stage } from "./nextStep";
 
-const STAGE_ORDER = ["track", "story", "storyboard", "images", "film"] as const;
+const STAGE_ORDER = ["track", "story", "script", "storyboard", "images", "film"] as const;
 
 const NEXT_LABEL: Record<string, string> = {
   track: "Measure the song",
@@ -184,7 +184,7 @@ export function Library({
   error: string | null;
   onOpen: (slug: string, stage: string) => void;
   onArchive: (slug: string) => void;
-  onCreated: (slug: string) => void;
+  onCreated: (slug: string, first?: "track" | "story") => void;
   onRetry?: () => void;
 }) {
   const [newFile, setNewFile] = useState<File | null>(null);
@@ -316,9 +316,9 @@ export function Library({
           >
             <NewProduction
               initialFile={newFile}
-              onCreated={(slug) => {
+              onCreated={(slug, first) => {
                 setNewOpen(false);
-                onCreated(slug);
+                onCreated(slug, first);
               }}
               onCancel={() => setNewOpen(false)}
             />

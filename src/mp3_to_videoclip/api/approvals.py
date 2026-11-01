@@ -48,6 +48,8 @@ STAGES = (
     "analysis",
     "lyrics",
     "brief",
+    "script",
+    "voice",
     "storyboard",
     "proof",
     "preview",

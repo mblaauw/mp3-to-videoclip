@@ -135,9 +135,9 @@ def _intake_payload(root: Path, *, analysis_needed: bool = False) -> dict:
 
     project = P.load_project(root, verify_source=False)
     brief = P.load_brief(root)
-    source = inside(root, project.source)
+    source = inside(root, project.source) if project.source else None
     peaks = []
-    if source.is_file():
+    if source is not None and source.is_file():
         peaks = audio.cached_peaks(
             source,
             project.source_sha256,

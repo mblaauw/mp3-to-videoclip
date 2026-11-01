@@ -120,6 +120,31 @@ KINDS: dict[Kind, KindProfile] = {
         ),
         default_style="clean-photographic-v1",
     ),
+    "narrative": KindProfile(
+        id="narrative",
+        label="Story film",
+        purpose="A narrator leads and the film follows the voice; music, if any, sits under it.",
+        lengths=(60, 90, 120, 180, 300),
+        default_length=120,
+        allows_full_track=False,
+        structures=(
+            "five-beat-2m",
+            "place-across-time",
+            "essay",
+            "fable",
+        ),
+        shot_mix="Painted scenes, plates, date and title cards",
+        text_density="Dates, names, one closing line",
+        pacing="Follows the narration; a hold is earned by the sentence",
+        opening_closing="Chosen per film: a short title and end card, or none",
+        signature_required=False,
+        style_presets=(
+            "painted-documentary-v1",
+            "photographic-painted-v2",
+            "clean-photographic-v1",
+        ),
+        default_style="painted-documentary-v1",
+    ),
 }
 
 

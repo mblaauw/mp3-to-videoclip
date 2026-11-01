@@ -339,3 +339,70 @@ def analyze(source: Path, duration: float) -> dict:
             "instrument or mood labels; pulse candidates retain half/double ambiguity.",
         ],
     }
+
+
+#: Below this share of the loudest frame, a frame counts as a pause.
+SPEECH_GATE = 0.08
+MIN_PAUSE_SECONDS = 0.25
+
+
+def analyze_narration(source: Path, duration: float, lines: list[dict], beats: dict | None) -> dict:
+    """Speech instead of beats. The keys match ``analyze`` so every reader carries on working."""
+    result = _empty_result(duration)
+    result["warnings"] = ["Tempo means nothing on speech; sections are the script's beats."]
+    y, sr = librosa.load(source, sr=22050, mono=True)
+    hop = 512
+    rms = librosa.feature.rms(y=y, hop_length=hop)[0] if y.size else np.zeros(1)
+    times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop)
+    top = float(rms.max()) if rms.size else 0.0
+    energy = rms / top if top > 1e-6 else np.zeros_like(rms)
+    result["energy_curve"] = [
+        {
+            "time": round(float(start), 3),
+            "energy": float(energy[(times >= start) & (times < start + 1)].mean())
+            if ((times >= start) & (times < start + 1)).any()
+            else 0.0,
+        }
+        for start in np.arange(0, duration, 1)
+    ]
+    segments = []
+    voiced = energy > SPEECH_GATE
+    start = None
+    for index, on in enumerate(voiced):
+        if on and start is None:
+            start = float(times[index])
+        elif not on and start is not None:
+            segments.append([start, float(times[index])])
+            start = None
+    if start is not None:
+        segments.append([start, duration])
+    merged: list[list[float]] = []
+    for segment in segments:
+        if merged and segment[0] - merged[-1][1] < MIN_PAUSE_SECONDS:
+            merged[-1][1] = segment[1]
+        else:
+            merged.append(segment)
+    result["speech_segments"] = [{"start": round(a, 3), "end": round(b, 3)} for a, b in merged]
+    result["pauses"] = [
+        {"start": round(a[1], 3), "end": round(b[0], 3)}
+        for a, b in zip(merged, merged[1:], strict=False)
+    ]
+    labels = {beat["id"]: beat["label"] for beat in (beats or {}).get("beats", [])}
+    placed: list[dict] = []
+    for line in lines:
+        if placed and placed[-1]["beat"] == line["beat"]:
+            continue
+        placed.append({"beat": line["beat"], "start": line["start"]})
+    for current, following in zip(placed, [*placed[1:], {"start": duration}], strict=True):
+        begin, end = float(current["start"]), float(following["start"])
+        values = energy[(times >= begin) & (times < end)]
+        result["sections"].append(
+            {
+                "start": round(begin, 3),
+                "end": min(duration, round(end, 3)),
+                "energy": float(values.mean()) if len(values) else 0,
+                "label": "beat",
+                "name": labels.get(current["beat"], current["beat"]),
+            }
+        )
+    return result

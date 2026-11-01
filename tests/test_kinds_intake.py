@@ -43,7 +43,8 @@ def _source(tmp_path: Path) -> Path:
 
 
 def test_kind_table_and_prompt_files_are_complete():
-    assert set(kinds.KINDS) == {"music_video", "promo", "advert"}
+    assert set(kinds.KINDS) == {"music_video", "promo", "advert", "narrative"}
+    assert kinds.get("narrative").signature_required is False
     assert kinds.get("music_video").signature_required is True
     assert kinds.get("promo").signature_required is False
     assert kinds.get("advert").signature_required is False

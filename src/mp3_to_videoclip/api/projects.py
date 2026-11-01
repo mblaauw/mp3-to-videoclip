@@ -21,7 +21,7 @@ from mp3_to_videoclip.storage import inside, read_json, read_optional
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
-StageName = Literal["track", "story", "storyboard", "images", "film"]
+StageName = Literal["track", "script", "story", "storyboard", "images", "film"]
 StageWord = Literal["done", "you", "changed", "not_ready"]
 
 
@@ -44,6 +44,7 @@ class ProjectSummary(BaseModel):
     has_analysis: bool = False
     has_lyrics: bool = False
     signature_required: bool | None = None
+    spine: str | None = None
     preview_required: bool = False
     poster_stills: list[str] = Field(default_factory=list)
     stage_states: dict[str, StageWord] = Field(default_factory=dict)
@@ -155,6 +156,17 @@ def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
     )
     states: dict[str, str] = {"track": "done" if track_ready else "you"}
     stale = stage_state.stale(root, approvals)
+    if project.spine == "soundtrack":
+        # Nothing waits on a measured song, so Script takes the place Track held.
+        states["track"] = "done"
+        if not (root / P.STAGE_FILES["script"]).is_file():
+            states["script"] = "you"
+        elif not isinstance(approvals.get("voice"), dict):
+            states["script"] = "you"
+        elif stale.get("script") or stale.get("voice"):
+            states["script"] = "changed"
+        else:
+            states["script"] = "done"
 
     if not brief_path.is_file():
         states["story"] = "not_ready"
@@ -201,7 +213,10 @@ def _stage_states(root: Path, project, approvals: dict) -> dict[str, str]:
 
 
 def _next_step(states: dict[str, str]) -> str | None:
-    for stage in ("track", "story", "storyboard", "images", "film"):
+    for stage in ("track", "story", "script", "storyboard", "images", "film"):
+        # Only a story film has a Script stage.
+        if stage == "script" and stage not in states:
+            continue
         if states.get(stage) != "done":
             return stage
     return None
@@ -258,7 +273,7 @@ def _film_summary(entry: Path, parked: set[str], result: list[ProjectSummary]) -
     try:
         project = P.load_project(entry, verify_source=False)
         # Whether the audio is there costs a stat; its bytes are checked when they are used.
-        if not inside(entry, project.source).is_file():
+        if project.source is not None and not inside(entry, project.source).is_file():
             raise ValueError("the source audio is missing")
         assets_path = entry / "work" / "assets.json"
         assets = read_json(assets_path) if assets_path.is_file() else {}
@@ -313,6 +328,7 @@ def _film_summary(entry: Path, parked: set[str], result: list[ProjectSummary]) -
                     if project.audio_window is not None
                     else f"/api/projects/{entry.name}/audio"
                 ),
+                spine=project.spine,
                 film_audio_url=_film_audio_url(entry, project),
                 updated_at=_updated_at(
                     entry,
@@ -374,11 +390,11 @@ async def set_parked(slug: str, body: ParkedBody, request: Request):
 async def create_project(
     request: Request,
     title: str,
-    filename: str,
+    filename: str = "",
     aspect: Literal["16:9", "9:16"] = "16:9",
     music_mode: Literal["vocal", "instrumental"] = "vocal",
     budget: str | None = None,
-    kind: Literal["music_video", "promo", "advert"] = "music_video",
+    kind: Literal["music_video", "promo", "advert", "narrative"] = "music_video",
     style_preset: str | None = None,
     objective: str = "",
     message: str = "",
@@ -390,6 +406,8 @@ async def create_project(
     fade_in: float = 0.0,
     fade_out: float = 1.5,
     titles: Literal["joint-v1", "title-v1", "none"] | None = None,
+    structure: str | None = None,
+    fictional: bool | None = None,
 ):
     """Upload one MP3, create a schema 3 production and queue local analysis."""
     from mp3_to_videoclip import services
@@ -397,11 +415,12 @@ async def create_project(
     from mp3_to_videoclip.domain import intake
     from mp3_to_videoclip.models import CallToAction, Intent
 
+    story_film = kind == "narrative"
     content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
-    if content_type not in ("audio/mpeg", "audio/mp3", "application/octet-stream"):
+    if not story_film and content_type not in ("audio/mpeg", "audio/mp3", "application/octet-stream"):  # fmt: skip
         raise HTTPException(status_code=415, detail="upload an audio/mpeg file")
     name = Path(filename).name
-    if not name.lower().endswith(".mp3"):
+    if not (story_film and not name) and not name.lower().endswith(".mp3"):
         raise HTTPException(status_code=400, detail="the source must be an MP3")
     length = request.headers.get("content-length")
     if length is not None:
@@ -411,7 +430,8 @@ async def create_project(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="invalid content length") from exc
     data = await request.body()
-    if not data:
+    # A story film's upload is an optional bed; it starts from words.
+    if not data and not story_film:
         raise HTTPException(status_code=400, detail="the upload is empty")
     if len(data) > intake.MAX_SOURCE_BYTES:
         raise HTTPException(status_code=413, detail="the MP3 is too large")
@@ -433,10 +453,14 @@ async def create_project(
             if (cta_text.strip() or cta_url.strip())
             else None,
             length_seconds=int(length_seconds) if length_seconds is not None else None,
+            fictional=fictional if story_film else None,
+            structure=structure if story_film else None,
         ).model_dump()
     with tempfile.TemporaryDirectory(prefix="mp3-intake-") as temp:
         source = Path(temp) / "source.mp3"
         source.write_bytes(data)
+        if not data:
+            source = None
         created = intake.create_from_upload(
             projects_dir,
             source,
@@ -458,7 +482,8 @@ async def create_project(
     project = P.load_project(root)
     job_id = None
     runner = getattr(request.app.state, "runner", None)
-    if runner is not None:
+    # A story film has nothing to measure until its soundtrack exists.
+    if runner is not None and not story_film:
 
         async def work():
             return await asyncio.to_thread(services.analysis.analyze_project, root)
@@ -468,6 +493,7 @@ async def create_project(
         "slug": created["slug"],
         "title": project.title,
         "kind": project.kind,
+        "spine": project.spine,
         "duration": project.duration,
         "source_duration": project.source_duration,
         "audio_window": (

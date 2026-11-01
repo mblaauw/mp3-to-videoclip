@@ -43,9 +43,9 @@ export function App() {
     return () => window.removeEventListener(PROJECT_CHANGED, changed);
   }, [refresh]);
 
-  const created = async (slug: string) => {
+  const created = async (slug: string, first: "track" | "story" = "track") => {
     await refresh();
-    goFilm(slug, "track");
+    goFilm(slug, first);
   };
 
   const dialog = settingsOpen ? (
@@ -67,7 +67,7 @@ export function App() {
           error={error}
           onOpen={(slug, stage) => goFilm(slug, stage)}
           onArchive={goArchive}
-          onCreated={(slug) => void created(slug)}
+          onCreated={(slug, first) => void created(slug, first)}
           onSettings={openSettings}
           onRetry={() => void refresh()}
         />

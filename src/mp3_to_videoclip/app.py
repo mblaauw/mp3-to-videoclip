@@ -32,6 +32,7 @@ from .api.images import router as images_router
 from .api.jobs import router as jobs_router
 from .api.projects import router as projects_router
 from .api.ratings import router as ratings_router
+from .api.script import router as script_router
 from .api.settings import router as settings_router
 from .api.setup import router as setup_router
 from .api.story import router as story_router
@@ -175,7 +176,10 @@ class StudioGuard:
             content_type = (_header(scope, b"content-type") or "").split(";")[0].strip().lower()
             is_upload = method == "POST" and (
                 path.rstrip("/") == "/api/projects"
-                or (path.startswith("/api/projects/") and path.endswith("/voice/upload"))
+                or (
+                    path.startswith("/api/projects/")
+                    and path.endswith(("/voice/upload", "/narration/upload"))
+                )
             )
             if (
                 not (
@@ -270,6 +274,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
     app.include_router(storyboard_router)
     app.include_router(images_router)
     app.include_router(voice_router)
+    app.include_router(script_router)
     app.include_router(film_router)
     app.include_router(history_router)
     app.include_router(budget_router)

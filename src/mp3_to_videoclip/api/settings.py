@@ -36,7 +36,7 @@ NOTES = {
     "direct_path": "Your own endpoint: any address that speaks OpenAI's chat format.",
     "thinking": "Thinking level and the per-turn token budget are stored but not enforced yet.",
     "pictures": "New films still use each look's own model; these choices are stored for later.",
-    "narrator": "The film's voiceover keeps its current voice until narration arrives.",
+    "narrator": "A story film starts with this voice and can choose another on its Script stage.",
 }
 
 
@@ -54,7 +54,7 @@ def _read(value: dict, path: tuple[str, ...]) -> str:
 
 def _public(settings: Settings) -> dict:
     """Never send a secret back to the browser; expose presence instead."""
-    from mp3_to_videoclip import kinds, shotkinds, signature, styles
+    from mp3_to_videoclip import kinds, shotkinds, signature, structures, styles
 
     value = settings.model_dump()
     has = {}
@@ -82,6 +82,7 @@ def _public(settings: Settings) -> dict:
     value["style_presets"] = styles.public_presets()
     value["kinds"] = kinds.public_kinds()
     value["shot_kinds"] = shotkinds.public_kinds()
+    value["structures"] = structures.public()
     return value
 
 

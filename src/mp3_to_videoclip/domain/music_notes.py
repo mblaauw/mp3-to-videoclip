@@ -56,7 +56,7 @@ def apply_names(music: dict | None, notes: dict) -> dict | None:
         start = item.get("start")
         key = round(float(start), 3) if isinstance(start, (int, float)) else None
         name = names.get(key) if key is not None else None
-        sections.append({**item, "name": name or default_name(index)})
+        sections.append({**item, "name": name or item.get("name") or default_name(index)})
     return {**music, "sections": sections}
 
 

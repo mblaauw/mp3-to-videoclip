@@ -1,0 +1,91 @@
+.script-stage {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .script-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.script-main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.script-main textarea {
+  width: 100%;
+}
+.beat-row {
+  margin-bottom: 12px;
+}
+.beat-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.beat-over {
+  color: var(--danger, #c0392b);
+}
+.beat-bar {
+  height: 4px;
+  margin-top: 4px;
+  background: var(--line, rgba(127, 127, 127, 0.25));
+}
+.beat-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent, currentColor);
+}
+.beat-bar span.over {
+  background: var(--danger, #c0392b);
+}
+.script-line {
+  padding: 10px 0;
+  border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+}
+.script-line.current {
+  background: var(--selected, rgba(127, 127, 127, 0.12));
+}
+.script-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.script-line-fields {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+.script-line-fields input {
+  width: 100%;
+}
+.take {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+.script-caption {
+  min-height: 1.4em;
+  margin: 6px 0;
+}
+.spine-line {
+  display: block;
+  width: 100%;
+  padding: 2px 8px;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}

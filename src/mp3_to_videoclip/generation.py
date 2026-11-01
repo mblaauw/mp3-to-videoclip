@@ -325,7 +325,7 @@ def quote_transcription(
     max_tokens=8192,
     client=None,
 ) -> dict:
-    if load_project(root).music_mode == "instrumental":
+    if load_project(root).music_mode in ("instrumental", "narration-led"):
         raise ValueError(
             "instrumental projects have no lyrics to transcribe; no upload or charge attempted"
         )
@@ -477,6 +477,19 @@ def begin_task(root: Path, quote: dict, task: dict, *, kind=None, admitted=()):
         if any(
             entry.get("kind") == "images"
             and entry.get("shot_id") == task["shot_id"]
+            and (
+                entry.get("version") == task["version"]
+                or entry.get("status") in ("submitted", "result")
+            )
+            for entry in journal.values()
+        ):
+            raise ValueError("a conflicting task/version was submitted; recover or requote")
+    if (kind or quote["kind"]) == "narration":
+        from .narration import check_before_spend
+
+        check_before_spend(root, task)
+        if any(
+            entry.get("line_id") == task["line_id"]
             and (
                 entry.get("version") == task["version"]
                 or entry.get("status") in ("submitted", "result")
@@ -870,6 +883,10 @@ def recover(root: Path, task_uuid: str, client=None):
         from .voice import recover_voice
 
         return recover_voice(root, task_uuid, client)
+    if task and task.get("kind") == "narration":
+        from .narration import recover_take
+
+        return recover_take(root, task_uuid, client)
     if task and task.get("kind") == "music-analysis":
         from .music_analysis import recover_music
 
@@ -922,7 +939,7 @@ def update_task(root: Path, task_uuid: str, **patch) -> dict:
 
 
 def transcribe_quote(root: Path, quote_id: str, transcriber=transcribe, *, client=None):
-    if load_project(root).music_mode == "instrumental":
+    if load_project(root).music_mode in ("instrumental", "narration-led"):
         raise ValueError(
             "instrumental projects have no lyrics to transcribe; no upload or charge attempted"
         )

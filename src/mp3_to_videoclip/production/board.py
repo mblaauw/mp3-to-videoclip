@@ -50,6 +50,7 @@ def load_board(root: Path, *, verify_source: bool = True) -> Storyboard:
 
 
 def validate_board(root: Path, board: Storyboard, *, verify_source: bool = True) -> Storyboard:
+    check_line_bindings(root, board)
     """Validate a candidate board against the project, brief and event map.
 
     Kept separate from ``load_board`` so writers can validate a board before it
@@ -219,6 +220,8 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
     """
     from .approvals import require_approval
 
+    if load_project(root).spine == "soundtrack":
+        return skeleton_from_lines(root)
     require_approval(root, "brief")
     if (root / STAGE_FILES["storyboard"]).exists():
         raise ValueError("storyboard already exists; edit it rather than overwrite")
@@ -335,3 +338,151 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
     )
     write_json(root / STAGE_FILES["storyboard"], board.model_dump())
     return board
+
+
+#: How far ahead of a line a picture comes, so it is there when the word lands.
+LINE_LEAD_FRAMES = 2
+#: Shorter than this and a line shares its shot with the next line of its beat.
+MIN_LINE_SHOT_SECONDS = 2.0
+
+
+def _beat_rules(root: Path) -> dict:
+    from .script import read_beats
+
+    beats = read_beats(root) or {}
+    return {beat["id"]: beat for beat in beats.get("beats", [])}
+
+
+def _shot_starts(project, rows_by_shot: list[list[dict]], rules: dict) -> list[int]:
+    """Where each bound shot begins: a line-lead ahead, or past the pause when a beat holds."""
+    from ..pacing import line_starts
+
+    planned = []
+    for index, rows in enumerate(rows_by_shot):
+        first = rows[0]
+        ahead = LINE_LEAD_FRAMES
+        if index and rules.get(rows_by_shot[index - 1][-1]["beat"], {}).get("hold_after"):
+            ahead = 0
+        if rules.get(first["beat"], {}).get("lead_picture"):
+            ahead += project.fps // 2
+        planned.append((round(first["start"] * project.fps), ahead))
+    return line_starts(planned, total_frames=project.total_frames)
+
+
+@state_mutation
+def skeleton_from_lines(root: Path) -> Storyboard:
+    """One shot per group of lines, with frames from when they are said."""
+    from .. import narration_timing
+    from .approvals import require_approval
+
+    require_approval(root, "script")
+    if (root / STAGE_FILES["storyboard"]).exists():
+        raise ValueError("storyboard already exists; edit it rather than overwrite")
+    project = load_project(root)
+    rows = narration_timing.refresh(root)["lines"]
+    if not rows:
+        raise ValueError("write the script first")
+    if narration_timing.duration(rows) != project.duration:
+        from .soundtrack import set_duration
+
+        project = set_duration(root, narration_timing.duration(rows))
+    groups: list[list[dict]] = []
+    for row in rows:
+        short = groups and sum(r["end"] - r["start"] for r in groups[-1]) < MIN_LINE_SHOT_SECONDS
+        if short and groups[-1][-1]["beat"] == row["beat"]:
+            groups[-1].append(row)
+        else:
+            groups.append([row])
+    starts = _shot_starts(project, groups, _beat_rules(root))
+    ends = [*starts[1:], project.total_frames]
+    shots = [
+        Shot(
+            id=f"s{index + 1:03d}",
+            start_frame=start,
+            duration_frames=end - start,
+            purpose="TODO: what we see while this is said",
+            image_prompt="TODO: compose this shot",
+            line_ids=[row["id"] for row in group],
+        )
+        for index, (group, start, end) in enumerate(zip(groups, starts, ends, strict=True))
+    ]
+    board = Storyboard(
+        aspect=project.aspect, fps=project.fps, total_frames=project.total_frames, shots=shots
+    )
+    write_json(root / STAGE_FILES["storyboard"], board.model_dump())
+    return board
+
+
+def check_line_bindings(root: Path, board: Storyboard) -> None:
+    """A shot binds to consecutive lines of one beat, in a film that has lines."""
+    from .script import load_script
+
+    script = load_script(root)
+    if script is None:
+        return
+    position = {line.id: index for index, line in enumerate(script.lines)}
+    beats = {line.id: line.beat for line in script.lines}
+    for shot in board.shots:
+        if not shot.line_ids:
+            continue
+        unknown = [line_id for line_id in shot.line_ids if line_id not in position]
+        if unknown:
+            raise ValueError(f"shot {shot.id} names lines the script does not have: {unknown}")
+        places = [position[line_id] for line_id in shot.line_ids]
+        if places != list(range(places[0], places[0] + len(places))):
+            raise ValueError(f"shot {shot.id} must bind consecutive lines")
+        if len({beats[line_id] for line_id in shot.line_ids}) > 1:
+            raise ValueError(f"shot {shot.id} crosses a beat")
+
+
+@state_mutation
+def retime_lines(root: Path) -> list[str]:
+    """Re-derive every bound shot's frames from the takes; says what moved and why."""
+    from .. import edits, narration_timing
+
+    path = root / STAGE_FILES["storyboard"]
+    if not path.exists():
+        return []
+    project = load_project(root, verify_source=False)
+    board = Storyboard.model_validate(read_json(path))
+    if not any(shot.line_ids for shot in board.shots):
+        return []
+    rows = {row["id"]: row for row in narration_timing.read(root)["lines"]}
+    edit_before = edits.load_edit(root, board=board)
+    bound = [shot for shot in board.shots if shot.line_ids]
+    planned = _shot_starts(
+        project, [[rows[i] for i in shot.line_ids] for shot in bound], _beat_rules(root)
+    )
+    anchors = {shot.id: start for shot, start in zip(bound, planned, strict=True)}
+    # An unbound shot keeps its length and sits against the bound shot after it.
+    starts: dict[str, int] = {}
+    cursor = project.total_frames
+    for shot in reversed(board.shots):
+        cursor = anchors[shot.id] if shot.id in anchors else cursor - shot.duration_frames
+        starts[shot.id] = cursor
+    first = board.shots[0].id
+    if starts[first] != 0:
+        starts[first] = 0
+    order = [starts[shot.id] for shot in board.shots]
+    if any(b <= a for a, b in zip(order, order[1:], strict=False)) or order[0] != 0:
+        raise ValueError("these takes leave no room for an unbound shot; shorten or move it")
+    ends = [*order[1:], project.total_frames]
+    moved = []
+    shots = []
+    for shot, start, end in zip(board.shots, order, ends, strict=True):
+        if start != shot.start_frame or end - start != shot.duration_frames:
+            lines = ", ".join(shot.line_ids) or "the lines before it"
+            moved.append(
+                f"{shot.id} {start - shot.start_frame:+d} frames at its start, "
+                f"{end - start} frames long: {lines}"
+            )
+        shots.append(shot.model_copy(update={"start_frame": start, "duration_frames": end - start}))
+    updated = Storyboard(
+        aspect=board.aspect, fps=board.fps, total_frames=project.total_frames, shots=shots
+    )
+    write_json(path, updated.model_dump())
+    if edit_before is not None:
+        edits.retime_by_lines(root, edit_before, updated)
+    if moved:
+        write_json(root / "work/retime-notes.json", {"moved": moved})
+    return moved
