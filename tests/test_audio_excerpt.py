@@ -143,7 +143,6 @@ def test_remotion_mux_uses_the_excerpt_and_keeps_the_fade(tmp_path, monkeypatch)
             ],
             check=True,
         )
-        return {"renderer_revision": "test"}
 
     monkeypatch.setattr(remotion, "_render_silent", fake_invoke)
     output = root / "renders" / "excerpt-v001.mp4"

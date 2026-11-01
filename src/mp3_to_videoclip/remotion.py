@@ -2,6 +2,7 @@
 
 import base64
 import fcntl
+import math
 import os
 import shutil
 import signal
@@ -11,7 +12,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from threading import Thread
+from threading import Thread, local
 
 from PIL import Image
 
@@ -32,6 +33,12 @@ WORKING_CAPTURE = {"format": "jpeg", "quality": 95}
 CHUNK_CONCURRENCY = 1
 # The renderer's limit on stills per request.
 MAX_STILLS = 64
+# Several browsers instead of several tabs: one process per list of chunks.
+MAX_WORKERS = 4
+# Chrome took about 400 MB; leave room, and drop a browser for each 600 MB short.
+WORKER_MEMORY = 600 * 1024 * 1024
+WORKERS_ENV = "STUDIO_RENDER_WORKERS"
+GL_ENV = "STUDIO_RENDER_GL"
 
 
 class AssetCacheCorruption(ValueError):
@@ -181,6 +188,24 @@ def request(
     return body
 
 
+def _renderer_argv(kind: str, request_path: Path, progress_path: Path, *extra: str) -> list[str]:
+    argv = [
+        "node",
+        str(ENGINE / "render.mjs"),
+        str(request_path.resolve()),
+        "--progress",
+        str(progress_path.resolve()),
+        *extra,
+    ]
+    if kind != "graphics":
+        # Stills from a loopback server beside a code-only bundle, so a new still never rebundles.
+        argv.append("--serve-assets")
+    gl = os.environ.get(GL_ENV)
+    if gl:
+        argv += ["--gl", gl]
+    return argv
+
+
 def invoke(
     kind: str,
     output: Path,
@@ -214,13 +239,7 @@ def invoke(
     write_json(request_path, request_body)
     progress_path = output.with_name(f".{output.stem}.progress.json")
     operations.phase("validating-request", note=f"{kind} {frames} frames")
-    argv = [
-        "node",
-        str(ENGINE / "render.mjs"),
-        str(request_path.resolve()),
-        "--progress",
-        str(progress_path.resolve()),
-    ]
+    argv = _renderer_argv(kind, request_path, progress_path)
     started = time.perf_counter()
     with _one_render_at_a_time():
         stdout, stderr = _run_streaming(argv, output, progress_path, frames)
@@ -242,13 +261,21 @@ def invoke(
     }
 
 
+_LOCK_STATE = local()
+
+
 @contextmanager
 def _one_render_at_a_time():
     """Hold the machine-wide render lock: two films at once crash their browser pages.
 
     The job runner only serializes per project and the CLI is a separate process,
-    so the lock lives with the renderer. Waiting stays stoppable and says why.
+    so the lock lives with the renderer. Waiting stays stoppable and says why. It is
+    re-entrant within a thread, because a second handle of this file would block on
+    the first, and a render's several steps must hold it as one.
     """
+    if getattr(_LOCK_STATE, "held", False):
+        yield
+        return
     (ENGINE / ".cache").mkdir(parents=True, exist_ok=True)
     with (ENGINE / ".cache/render.lock").open("a") as lock:
         told = False
@@ -263,7 +290,11 @@ def _one_render_at_a_time():
                 if operations.stop_requested():
                     raise ValueError("stopped by the user before rendering began") from None
                 time.sleep(1)
-        yield
+        _LOCK_STATE.held = True
+        try:
+            yield
+        finally:
+            _LOCK_STATE.held = False
 
 
 def _descendants(pid: int) -> list[int]:
@@ -353,6 +384,219 @@ def _run_streaming(argv: list[str], output: Path, progress_path: Path, frames: i
     if process.returncode == 0:
         return _tail(collector.stdout), _tail(collector.stderr)
     return None, _tail(collector.stderr) + _tail(collector.stdout, 1000)
+
+
+def _free_memory() -> int | None:
+    """Bytes free or quickly reclaimable, or None where that can't be read."""
+    try:
+        if shutil.which("vm_stat"):
+            table = subprocess.run(["vm_stat"], capture_output=True, text=True, check=True).stdout
+            size = int(table.split("page size of ")[1].split()[0])
+            names = ("Pages free", "Pages inactive", "Pages speculative")
+            pages = 0
+            for line in table.splitlines():
+                if line.startswith(names):
+                    pages += int(line.split(":")[1].strip().rstrip("."))
+            return pages * size
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError, subprocess.CalledProcessError):
+        pass
+    return None
+
+
+def render_workers(pending: int) -> int:
+    """How many browsers to run at once: never more than there are chunks to render."""
+    chosen = os.environ.get(WORKERS_ENV)
+    if chosen:
+        try:
+            count = int(chosen)
+        except ValueError:
+            raise ValueError(f"{WORKERS_ENV} must be a whole number") from None
+    else:
+        count = min(MAX_WORKERS, (os.cpu_count() or 2) // 2)
+        free = _free_memory()
+        if free is not None:
+            short = count * WORKER_MEMORY - free
+            if short > 0:
+                count -= math.ceil(short / WORKER_MEMORY)
+    return max(1, min(count, pending))
+
+
+def split_chunks(chunks: list, workers: int) -> list[list]:
+    """Disjoint lists of about equal frames: longest first, each to the lightest list."""
+    lists: list[list] = [[] for _ in range(workers)]
+    loads = [0] * workers
+    for chunk in sorted(chunks, key=lambda item: (-item.frames, item.start)):
+        lightest = loads.index(min(loads))
+        lists[lightest].append(chunk)
+        loads[lightest] += chunk.frames
+    return [sorted(items, key=lambda item: item.start) for items in lists if items]
+
+
+def _sum_progress(infos: list[dict], total: int, reused: int, plan_size: int, workers: int) -> dict:
+    """What several browsers have done, as one line for a person watching."""
+    done = sum(int(info.get("done") or 0) for info in infos if info.get("unit") == "frames")
+    finished = sum(int(info.get("chunks_done") or 0) for info in infos)
+    message = f"{reused + finished} of {plan_size} shots, {workers} browsers"
+    return {"done": done, "total": total, "message": message}
+
+
+def _run_many(workers: list[dict], *, total: int, reused: int, plan_size: int) -> None:
+    """Run the renderers together. One failing, stalling or being stopped ends them all.
+
+    Nothing retries here: chunks already published stay, and the caller decides.
+    """
+    running = []
+    for worker in workers:
+        collector = _OutputCollector(worker["output"].with_suffix(".render.log"))
+        process = subprocess.Popen(
+            worker["argv"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
+        )
+        readers = [
+            Thread(target=collector.drain, args=(process.stdout,), daemon=True),
+            Thread(target=collector.drain, args=(process.stderr,), daemon=True),
+        ]
+        for reader in readers:
+            reader.start()
+        running.append(
+            {
+                **worker,
+                "process": process,
+                "collector": collector,
+                "readers": readers,
+                "awake": _keep_awake(process.pid),
+                "watch": _StallWatch(),
+                "info": {},
+            }
+        )
+    failure = None
+    failed = None
+    count = len(running)
+
+    def tick() -> None:
+        for item in running:
+            item["info"] = _read_progress(item["progress"]) or item["info"]
+        operations.tick(
+            phase="rendering-frames",
+            unit="frames",
+            **_sum_progress([item["info"] for item in running], total, reused, plan_size, count),
+        )
+
+    while failure is None and failed is None and any(i["process"].poll() is None for i in running):
+        tick()
+        for number, item in enumerate(running, start=1):
+            if item["process"].poll() is None:
+                item["watch"].saw(item["info"])
+                if item["watch"].stalled():
+                    failure = (
+                        f"browser {number} of {count} stopped moving during "
+                        f"{item['watch'].phase or 'startup'} and was ended after "
+                        f"{item['watch'].limit()} seconds. A Mac that sleeps does this; render "
+                        f"again. See {item['output'].with_suffix('.render.log').name}"
+                    )
+            elif item["process"].returncode != 0:
+                failed = number
+        if operations.stop_requested():
+            failure = "stopped by the user; nothing was published"
+        if failure is None and failed is None:
+            time.sleep(0.5)
+    tick()
+    for number, item in enumerate(running, start=1):
+        if item["process"].poll() is None:
+            _end_renderer(item["process"])
+        elif item["process"].returncode != 0 and failed is None:
+            failed = number
+    for item in running:
+        for reader in item["readers"]:
+            reader.join(timeout=5)
+        item["collector"].close()
+        if item["awake"] is not None:
+            item["awake"].wait()
+        item["progress"].unlink(missing_ok=True)
+    if failure is None and failed is not None:
+        output = running[failed - 1]["collector"]
+        failure = f"browser {failed} of {count} failed: " + _tail(
+            output.stderr + output.stdout, 2000
+        )
+    if failure:
+        raise ValueError(failure)
+
+
+def _read_progress(path: Path) -> dict | None:
+    try:
+        info = read_json(path)
+    except (OSError, ValueError):
+        return None
+    return info if isinstance(info, dict) else None
+
+
+def _render_chunks(kind, store, selected, canvas, fps, frames, inputs, missing, paths, plan_size):
+    """Render the missing chunks, in several browsers where that is worth it."""
+    reused = plan_size - len(missing)
+    count = render_workers(len(missing))
+    run = uuid.uuid4().hex[:12]
+    if count <= 1:
+        invoke(
+            kind,
+            store / f".run-{run}.mp4",
+            selected,
+            canvas,
+            fps,
+            frames,
+            inputs,
+            [{"start": c.start, "frames": c.frames, "output": str(paths[c.key])} for c in missing],
+            reused,
+        )
+        return
+    if not (ENGINE / "node_modules/@remotion/renderer").is_dir():
+        raise ValueError(
+            "Install pinned local renderer first: npm ci --prefix renderers/remotion --ignore-scripts"
+        )
+    workers = []
+    for number, chunks in enumerate(split_chunks(missing, count)):
+        output = store / f".run-{run}-{number}.mp4"
+        body = request(
+            kind,
+            output,
+            selected,
+            canvas,
+            fps,
+            frames,
+            inputs,
+            [{"start": c.start, "frames": c.frames, "output": str(paths[c.key])} for c in chunks],
+            0,
+        )
+        request_path = output.with_suffix(".request.json")
+        write_json(request_path, body)
+        progress = output.with_name(f".{output.stem}.progress.json")
+        workers.append(
+            {
+                "output": output,
+                "progress": progress,
+                "request": request_path,
+                "argv": _renderer_argv(kind, request_path, progress),
+                "chunks": chunks,
+            }
+        )
+    # One bundle first: several renderers building the same one would wait on each other.
+    operations.phase("bundling-assets", note=f"{len(workers)} browsers")
+    _bundle = _renderer_argv(kind, workers[0]["request"], workers[0]["progress"], "--bundle-only")
+    stdout, stderr = _run_streaming(_bundle, workers[0]["output"], workers[0]["progress"], frames)
+    if stdout is None:
+        raise ValueError("Local Remotion render failed: " + stderr[-4000:])
+    _run_many(
+        workers,
+        total=sum(chunk.frames for chunk in missing),
+        reused=reused,
+        plan_size=plan_size,
+    )
+    if not all(paths[chunk.key].is_file() for chunk in missing):
+        raise ValueError("Remotion returned without every chunk")
+    for worker in workers:
+        for leftover in (worker["request"], Path(f"{worker['output']}.render.json")):
+            leftover.unlink(missing_ok=True)
 
 
 def _keep_awake(pid: int) -> subprocess.Popen | None:
@@ -614,8 +858,13 @@ def check_movies(movies: list[tuple[Path, int]], selected, canvas, fps, total, i
 
     if not movies:
         return []
+    planned = framecheck.planned_windows(inputs)
     scanned = [(framecheck.small_frames(movie), start) for movie, start in movies]
-    found = [framecheck.suspects(frames) for frames, _ in scanned]
+    every = [framecheck.suspects(frames) for frames, _ in scanned]
+    found = [
+        [index for index in hits if start + index not in planned]
+        for (_, start), hits in zip(scanned, every, strict=True)
+    ]
     wanted = sorted(
         start + i for (_, start), hits in zip(scanned, found, strict=True) for i in hits
     )
@@ -630,7 +879,7 @@ def check_movies(movies: list[tuple[Path, int]], selected, canvas, fps, total, i
                 wanted, selected, canvas, fps, total, inputs, Path(directory.name)
             )
         checks = []
-        for (frames, start), hits in zip(scanned, found, strict=True):
+        for (frames, start), hits, seen in zip(scanned, found, every, strict=True):
             broken = framecheck.broken_frames(
                 frames, hits, {index: fresh[start + index] for index in hits}
             )
@@ -638,6 +887,7 @@ def check_movies(movies: list[tuple[Path, int]], selected, canvas, fps, total, i
                 {
                     "scanned": len(frames),
                     "suspects": [start + index for index in hits],
+                    "expected": [start + index for index in seen if index not in hits],
                     "broken": [start + index for index in broken],
                 }
             )
@@ -673,8 +923,11 @@ def _trusted_chunk(path: Path, chunk) -> bool:
     return True
 
 
-def _join_chunks(paths: list[Path], output: Path, fps: int) -> None:
-    """Join movies without re-encoding, publishing only a join with even timing."""
+def _join_chunks(paths: list[Path], output: Path, fps: int) -> int:
+    """Join movies without re-encoding, publishing only a join with even timing.
+
+    Returns the packet count that check already had to list.
+    """
     from . import render as R
 
     partial = output.with_name(f".{output.stem}.joining.mp4")
@@ -702,14 +955,15 @@ def _join_chunks(paths: list[Path], output: Path, fps: int) -> None:
                 str(partial),
             ]
         )
-        _require_even_timing(partial, fps)
+        count = _require_even_timing(partial, fps)
         os.link(partial, output)
     finally:
         listing.unlink(missing_ok=True)
         partial.unlink(missing_ok=True)
+    return count
 
 
-def _require_even_timing(movie: Path, fps: int) -> None:
+def _require_even_timing(movie: Path, fps: int) -> int:
     """Every frame one tick after the last: a bad join would show here first."""
     from . import render as R
 
@@ -735,86 +989,105 @@ def _require_even_timing(movie: Path, fps: int) -> None:
         or any(abs(gap - 1 / fps) > 0.25 / fps for gap in gaps)
     ):
         raise ValueError(f"joined chunks have uneven timing in {movie.name}")
+    return len(times)
 
 
-def _render_silent(kind, silent: Path, selected, canvas, fps, frames, inputs, reuse=False) -> None:
-    """Render the film's pictures to ``silent``, shot by shot.
+def _render_silent(kind, silent: Path, selected, canvas, fps, frames, inputs, reuse=False) -> int:
+    """Render the film's pictures to ``silent``, shot by shot, and return its packet count.
 
     With ``reuse``, a shot whose key matches a checked chunk isn't rendered again, and
-    an interrupted render resumes. Without it, as for a final, every chunk is fresh, so
-    a key bug can't reach a delivered film. A chunk with a broken frame is set aside and
-    rendered once more; a second failure fails the render and names the frames.
+    an interrupted render resumes. Without it, as for a final, chunks come only from
+    this same film's own store, so a key bug can't reach a delivered film: a killed
+    final resumes from that store, and any failure it survives to see clears it. A
+    chunk with a broken frame is set aside and rendered once more; a second failure
+    fails the render, names the frames and keeps the store as evidence.
     """
     from .chunks import film_chunks
 
     plan = film_chunks(inputs, canvas, fps, implementation_hash())
     shared = silent.parent / "remotion-chunks"
     shared.mkdir(parents=True, exist_ok=True)
-    store = shared if reuse else Path(tempfile.mkdtemp(prefix="fresh-", dir=shared))
+    store = shared if reuse else shared / f"fresh-{digest([c.key for c in plan])[:32]}"
+    store.mkdir(exist_ok=True)
     paths = {chunk.key: store / f"{chunk.key[:40]}.mp4" for chunk in plan}
-    with (shared / ".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        check = {"scanned": 0, "suspects": [], "broken": [], "chunks": len(plan)}
-        check["reused"] = sum(_trusted_chunk(paths[chunk.key], chunk) for chunk in plan)
-        for attempt in range(2):
-            pending = [c for c in plan if not _chunk_receipt(paths[c.key]).exists()]
-            # Two identical shots can share a key, and only one of them needs rendering.
-            pending = list({chunk.key: chunk for chunk in pending}.values())
-            missing = [c for c in pending if not paths[c.key].exists()]
-            if missing:
-                invoke(
-                    kind,
-                    store / f".run-{uuid.uuid4().hex[:12]}.mp4",
+    keep_store = False
+    try:
+        with _one_render_at_a_time(), (shared / ".lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            check = {
+                "scanned": 0,
+                "suspects": [],
+                "expected": [],
+                "broken": [],
+                "chunks": len(plan),
+            }
+            check["reused"] = sum(_trusted_chunk(paths[chunk.key], chunk) for chunk in plan)
+            for attempt in range(2):
+                pending = [c for c in plan if not _chunk_receipt(paths[c.key]).exists()]
+                # Two identical shots can share a key, and only one of them needs rendering.
+                pending = list({chunk.key: chunk for chunk in pending}.values())
+                missing = [c for c in pending if not paths[c.key].exists()]
+                if missing:
+                    _render_chunks(
+                        kind,
+                        store,
+                        selected,
+                        canvas,
+                        fps,
+                        frames,
+                        inputs,
+                        missing,
+                        paths,
+                        len(plan),
+                    )
+                results = check_movies(
+                    [(paths[c.key], c.start) for c in pending],
                     selected,
                     canvas,
                     fps,
                     frames,
                     inputs,
-                    [
-                        {"start": c.start, "frames": c.frames, "output": str(paths[c.key])}
-                        for c in missing
-                    ],
-                    len(plan) - len(missing),
                 )
-            results = check_movies(
-                [(paths[c.key], c.start) for c in pending], selected, canvas, fps, frames, inputs
-            )
-            broken = []
-            for chunk, result in zip(pending, results, strict=True):
-                check["scanned"] += result["scanned"]
-                check["suspects"] += result["suspects"]
-                if result["scanned"] != chunk.frames:
-                    raise ValueError(
-                        f"Remotion chunk for {chunk.shot_id} has {result['scanned']} frames, "
-                        f"not {chunk.frames}"
+                broken = []
+                for chunk, result in zip(pending, results, strict=True):
+                    check["scanned"] += result["scanned"]
+                    check["suspects"] += result["suspects"]
+                    check["expected"] += result.get("expected", [])
+                    if result["scanned"] != chunk.frames:
+                        raise ValueError(
+                            f"Remotion chunk for {chunk.shot_id} has {result['scanned']} frames, "
+                            f"not {chunk.frames}"
+                        )
+                    if result["broken"]:
+                        broken += result["broken"]
+                        aside = paths[chunk.key].with_suffix(f".broken-{uuid.uuid4().hex[:8]}.mp4")
+                        os.rename(paths[chunk.key], aside)
+                        continue
+                    write_json(
+                        _chunk_receipt(paths[chunk.key]),
+                        {
+                            "sha256": file_hash(paths[chunk.key]),
+                            "key": chunk.key,
+                            "shot_id": chunk.shot_id,
+                            "frames": chunk.frames,
+                        },
                     )
-                if result["broken"]:
-                    broken += result["broken"]
-                    aside = paths[chunk.key].with_suffix(f".broken-{uuid.uuid4().hex[:8]}.mp4")
-                    os.rename(paths[chunk.key], aside)
-                    continue
-                write_json(
-                    _chunk_receipt(paths[chunk.key]),
-                    {
-                        "sha256": file_hash(paths[chunk.key]),
-                        "key": chunk.key,
-                        "shot_id": chunk.shot_id,
-                        "frames": chunk.frames,
-                    },
-                )
-            check["broken"] += broken
-            if not broken:
-                break
-            if attempt == 1:
-                raise ValueError(
-                    f"broken frames at {sorted(broken)} came back after rendering again; "
-                    f"the chunks are kept in {store.name}"
-                )
-        operations.phase("joining-shots", note=f"{len(plan)} shots")
-        _join_chunks([paths[chunk.key] for chunk in plan], silent, fps)
-    write_json(silent.with_suffix(".frames.json"), check)
-    if not reuse:
-        shutil.rmtree(store)
+                check["broken"] += broken
+                if not broken:
+                    break
+                if attempt == 1:
+                    keep_store = True
+                    raise ValueError(
+                        f"broken frames at {sorted(broken)} came back after rendering again; "
+                        f"the chunks are kept in {store.name}"
+                    )
+            operations.phase("joining-shots", note=f"{len(plan)} shots")
+            count = _join_chunks([paths[chunk.key] for chunk in plan], silent, fps)
+        write_json(silent.with_suffix(".frames.json"), check)
+        return count
+    finally:
+        if not reuse and not keep_store:
+            shutil.rmtree(store, ignore_errors=True)
 
 
 def render_base(
@@ -877,7 +1150,7 @@ def render_base(
         else:
             if cached.exists():
                 raise ValueError("Remotion base cache corruption; orphan sidecar preserved")
-            _render_silent(
+            counted = _render_silent(
                 "base",
                 silent,
                 selected,
@@ -887,7 +1160,9 @@ def render_base(
                 inputs,
                 reuse_chunks,
             )
-            if R._count_frames(silent) != project.total_frames:
+            if counted is None:
+                counted = R._count_frames(silent)
+            if counted != project.total_frames:
                 raise ValueError("Remotion silent base has incorrect frame count")
             write_json(cached, {"sha256": file_hash(silent), "key": key})
     partial = output.with_name(f".{output.stem}.partial.mp4")
@@ -926,7 +1201,10 @@ def render_base(
         )
         mux_seconds = time.perf_counter() - mux_started
         verification_started = time.perf_counter()
-        facts = R._validate_output(partial, project, audio, R.audio_seconds(audio))
+        # A final (PNG capture) is counted by decoding it; working renders read packets.
+        facts = R._validate_output(
+            partial, project, audio, R.audio_seconds(audio), decode=capture is None
+        )
         operations.phase("verifying-output", note="frames, fps, dimensions and audio identity")
         if facts["video"]["frames"] != project.total_frames:
             raise ValueError("Remotion mux changed the exact frame count")
@@ -965,6 +1243,7 @@ def render_base(
         "titles": [window["id"] for window in titles["windows"]] if titles else [],
         "dissolves": sum(s.shot.dissolve_frames > 0 for s in shots),
         "preview_placeholders": list(preview_placeholders),
+        "render_gl": os.environ.get(GL_ENV) or None,
         "verification": "Measured exact frames/dimensions/fps/audio/duration/faststart; not artistic acceptance",
     }
     report["video"]["fps"] = project.fps

@@ -24,6 +24,10 @@ MIN_CORRELATION = 0.9
 FLAT_CONTRAST = 2.0
 
 
+#: How long a flash lasts unless the cut says otherwise (accentState in timing.mjs).
+FLASH_FRAMES = 6
+
+
 def small_frames(path: Path | str) -> np.ndarray:
     """Every frame of a movie or image, small and grey, as (frames, height, width)."""
     raw = subprocess.run(
@@ -85,3 +89,29 @@ def disagrees(frame: np.ndarray, fresh: np.ndarray) -> bool:
 def broken_frames(frames: np.ndarray, found: list[int], fresh: dict[int, Path]) -> list[int]:
     """The suspects (indices into ``frames``) that a fresh render contradicts."""
     return [index for index in found if disagrees(frames[index], small_frames(fresh[index])[0])]
+
+
+def planned_windows(inputs: dict) -> set[int]:
+    """Film frames where the cut itself makes a frame unlike its neighbours.
+
+    A dip, a flash and a crop cut all look like a glitch to :func:`suspects`, and
+    rendering them again only proves they were planned. Each window is short, and the
+    report names every suspect found inside one.
+    """
+    frames: set[int] = set()
+    for shot in inputs.get("shots") or []:
+        edit = shot.get("edit")
+        if not isinstance(edit, dict):
+            continue
+        transition = edit.get("transition_in") or {}
+        if transition.get("type") in ("dip_to_black", "dip_to_white"):
+            start = int(shot["start_frame"])
+            handle = int(transition.get("frames") or 0)
+            frames.update(range(start - handle, start + handle + 1))
+        for accent in edit.get("accents") or []:
+            if accent.get("type") == "flash":
+                length = int(accent.get("duration_frames") or FLASH_FRAMES)
+                frames.update(range(int(accent["frame"]), int(accent["frame"]) + length))
+        for crop in edit.get("crops") or []:
+            frames.update(range(int(crop["frame"]) - 1, int(crop["frame"]) + 1))
+    return frames

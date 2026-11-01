@@ -37,7 +37,7 @@ def base_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(render, "_count_frames", lambda *a: project.total_frames)
     monkeypatch.setattr(render, "_binary", lambda x: x)
     monkeypatch.setattr(render, "audio_seconds", lambda *a: 1)
-    monkeypatch.setattr(render, "_validate_output", lambda *a: {"video": {"frames": 24}})
+    monkeypatch.setattr(render, "_validate_output", lambda *a, **k: {"video": {"frames": 24}})
     monkeypatch.setattr(render, "_run", lambda argv: Path(argv[-1]).write_bytes(b"mux"))
 
     def invoke(*args):

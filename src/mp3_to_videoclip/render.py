@@ -142,6 +142,31 @@ def _audio_stream(info: dict) -> dict:
 
 
 def _count_frames(path: Path | str) -> int:
+    """The video stream's packet count, read from the file without decoding it."""
+    out = subprocess.run(
+        [
+            _binary("ffprobe"),
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_packets",
+            "-show_entries",
+            "stream=nb_read_packets",
+            "-of",
+            "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        return int(out.stdout.strip().rstrip(","))
+    except ValueError:
+        raise ValueError(f"could not read frame count from {path}") from None
+
+
+def _decoded_frames(path: Path | str) -> int:
     """Decode every frame and count them; a small picture makes it about 4× faster."""
     width, height = 16, 9
     decoded = subprocess.run(
@@ -541,13 +566,19 @@ def _finalize(
 # validation
 # --------------------------------------------------------------------------- #
 def _validate_output(
-    path: Path, project: Project, source_audio: Path, expected_audio_duration: float
+    path: Path,
+    project: Project,
+    source_audio: Path,
+    expected_audio_duration: float,
+    *,
+    decode: bool = True,
 ) -> dict:
+    """``decode`` counts by decoding every frame, as a delivered film always does."""
     info = probe(path)
     video = _video_stream(info)
     audio = _audio_stream(info)
 
-    frames = _count_frames(path)
+    frames = _decoded_frames(path) if decode else _count_frames(path)
     duration = float(info["format"]["duration"])
     frame_seconds = 1.0 / project.fps
     tolerance = frame_seconds + 1e-3

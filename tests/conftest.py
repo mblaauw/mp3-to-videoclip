@@ -64,6 +64,7 @@ def isolated_user_settings(tmp_path: Path, monkeypatch):
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("MP3_TO_VIDEOCLIP_CATALOG_CACHE", str(tmp_path / "catalog-cache"))
+    monkeypatch.setenv("STUDIO_RENDER_WORKERS", "1")
 
 
 # --------------------------------------------------------------------------- #
