@@ -53,7 +53,14 @@ from collections.abc import Iterable
 from fractions import Fraction
 from typing import Any
 
-__all__ = ["PacingError", "density_plan", "plan_boundaries", "snap_joins"]
+__all__ = [
+    "PacingError",
+    "density_plan",
+    "grid_tiers",
+    "plan_boundaries",
+    "snap_joins",
+    "split_points",
+]
 
 # Candidate tiers; the lowest wins inside a feasible window.
 _EVENT_TIER = 0
@@ -269,3 +276,30 @@ def density_plan(
             target = _CUTS_PER_10S[word]
         targets.append(round(min(target, 10 / _MIN_CUT_SECONDS), 2))
     return targets
+
+
+def grid_tiers(
+    downbeats: Iterable[int], beats: Iterable[int], lead: int = 1
+) -> tuple[list[int], list[int]]:
+    """Downbeats and beats led by a frame, so the picture is there when the hit lands."""
+    return (
+        sorted({max(0, frame - lead) for frame in downbeats}),
+        sorted({max(0, frame - lead) for frame in beats}),
+    )
+
+
+def split_points(
+    start: int, end: int, bars: Iterable[int], every: int, min_frames: int
+) -> list[int]:
+    """Bar lines to cut on inside one shot, at least ``every`` frames apart.
+
+    Each part keeps at least ``min_frames``, including the last. Pure, and it adds a
+    framing change, never a new picture.
+    """
+    points: list[int] = []
+    last = start
+    for frame in sorted(set(bars)):
+        if frame - last >= max(every, min_frames) and end - frame >= min_frames:
+            points.append(frame)
+            last = frame
+    return points
