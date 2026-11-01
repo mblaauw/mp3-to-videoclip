@@ -14,6 +14,7 @@ from mp3_to_videoclip import reviews, services, shotkinds
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.api.errors import ApiError
 from mp3_to_videoclip.domain import budget
+from mp3_to_videoclip.providers import runware_api_key
 from mp3_to_videoclip.read_snapshots import read_endpoint
 from mp3_to_videoclip.storage import digest, inside, read_json
 
@@ -148,6 +149,8 @@ async def estimate_images(slug: str, request: Request, payload: dict):
     shot_ids = payload.get("shot_ids") or []
     if not shot_ids:
         raise HTTPException(status_code=400, detail="select at least one shot")
+    # Before a price is even shown: nothing can be bought without the key.
+    runware_api_key()
     # Say so plainly while the owner can still act, instead of a refused quote.
     board = P.load_board(root)
     owners = {shot.id: shot.asset_shot_id or shot.id for shot in board.shots}
