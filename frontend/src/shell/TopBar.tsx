@@ -100,8 +100,8 @@ function BudgetPopover({
         </b>
       </div>
       <p className="pop-hint">
-        The app spends inside this budget without asking. When it runs out, jobs pause and ask
-        you.
+        Every purchase shows its price first and has to fit this budget. When it runs out, jobs
+        pause and ask you.
       </p>
       <div className="pop-add">
         <input

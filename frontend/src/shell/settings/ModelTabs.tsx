@@ -50,7 +50,7 @@ export function RolesTab() {
     <>
       <Section
         title="Who answers"
-        note={`${catalog.notes.direct_path} ${catalog.notes.thinking}`}
+        note={catalog.notes.thinking}
         action={<Reset patch={recommendedRoles(catalog)} />}
       >
         {ROLES.map((role) => {

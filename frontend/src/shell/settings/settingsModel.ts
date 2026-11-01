@@ -136,16 +136,16 @@ export type Missing = { id: string; label: string; tab: TabId; field: string };
 
 /** What stands between this computer and a first film, each with where to fix it. */
 export function missingForFilm(
-  settings: { computer?: { gateway?: string }; has_openai_compatible_key?: unknown; has_runware_key?: unknown },
+  settings: { role_keys?: { writer?: boolean }; roles?: { writer?: { provider?: string } }; has_runware_key?: unknown },
   computer: Record<string, boolean>,
 ): Missing[] {
   const missing: Missing[] = [];
-  if (settings.computer?.gateway !== "opencode" && !settings.has_openai_compatible_key) {
+  if (!settings.role_keys?.writer) {
     missing.push({
       id: "writer-key",
       label: "A Writer key, so the Director can answer",
       tab: "keys",
-      field: "key-openai",
+      field: `key-${settings.roles?.writer?.provider || "direct"}`,
     });
   }
   if (!settings.has_runware_key) {

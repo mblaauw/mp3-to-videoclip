@@ -13,76 +13,19 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip import promptlog
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.api.errors import ApiError
-from mp3_to_videoclip.config import effective_settings, split_model
+from mp3_to_videoclip.config import effective_settings
 from mp3_to_videoclip.director import prompts as prompt_suite
 from mp3_to_videoclip.director.context import build_context
 from mp3_to_videoclip.director.llm import DirectorLLM
 from mp3_to_videoclip.director.loop import run_turn
-from mp3_to_videoclip.director.opencode import (
-    OpenCodeError,
-    OpenCodeGateway,
-    discover_binary,
-    gateway_workspace,
-    run_gateway_turn,
-)
+from mp3_to_videoclip.director.routing import ROLE_LABEL, Route, route_for
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["director"])
 
 # A pasted treatment is legitimate context, not a chat message we should reject
 # at the old 8k convenience cap. Keep a bound so one turn cannot become a dump.
 MAX_CHAT_MESSAGE = 24_000
-
-GATEWAYS: dict[tuple[str, str, str, str, str], OpenCodeGateway] = {}
-
-
-def _workspace(settings) -> Path:
-    value = settings.opencode_workspace.strip()
-    return Path(value).expanduser() if value else gateway_workspace()
-
-
-async def get_gateway(settings, projects_dir: Path) -> OpenCodeGateway:
-    """One gateway per binary/workspace/projects/models combination."""
-    workspace = _workspace(settings)
-    binary = discover_binary(settings.opencode_bin)
-    key = (
-        binary,
-        str(workspace),
-        str(projects_dir.resolve()),
-        settings.writer_model,
-        settings.editor_model,
-        settings.critic_model,
-    )
-    gateway = GATEWAYS.get(key)
-    if gateway is None:
-        gateway = OpenCodeGateway(
-            binary=binary,
-            workspace=workspace,
-            projects_dir=projects_dir,
-            writer_model=settings.writer_model,
-            editor_model=settings.editor_model,
-            critic_model=settings.critic_model,
-        )
-        GATEWAYS[key] = gateway
-    try:
-        await gateway.start()
-    except Exception:
-        GATEWAYS.pop(key, None)
-        raise
-    return gateway
-
-
-def close_gateways() -> None:
-    for gateway in list(GATEWAYS.values()):
-        gateway.stop()
-    GATEWAYS.clear()
-
-
-def _role_model(settings, role: str) -> str:
-    return {
-        "writer": settings.writer_model,
-        "editor": settings.editor_model,
-        "critic": settings.critic_model,
-    }[role]
+KEEP_GOING = "Keep going from where you stopped."
 
 
 def _role(payload: dict, stage: str | None) -> str:
@@ -97,8 +40,8 @@ def _role(payload: dict, stage: str | None) -> str:
 def _announce_tool(request: Request, slug: str, event) -> None:
     """A finished tool that may have written the production: tell every open view.
 
-    The director's tools can run in the OpenCode MCP process, outside any Studio
-    request, so the turn itself announces each finished write while it streams.
+    The watcher sees files, not meaning, so the turn itself announces each finished write
+    while it streams.
     """
     if getattr(event, "kind", None) != "tool" or not getattr(event, "result", None):
         return
@@ -168,35 +111,39 @@ def _context(payload: dict) -> dict | None:
     return context
 
 
+def _can_see(route: Route) -> bool | None:
+    """Whether the catalogue knows this model takes pictures. Unknown stays unknown."""
+    from mp3_to_videoclip import catalog
+
+    known = next(
+        (m for m in catalog.load().models if m.id == route.model and m.provider == route.provider),
+        None,
+    )
+    return None if known is None or not known.capabilities else "vision" in known.capabilities
+
+
 @router.get("/director/model")
 async def get_director_model(slug: str, request: Request, role: str = "writer"):
     """Who actually answers for this role, and whether it can look at a still."""
     if role not in prompt_suite.TASKS:
         raise HTTPException(status_code=400, detail="role must be writer, editor or critic")
-    root = project_root(request, slug)
-    settings = effective_settings()
-    if settings.gateway != "opencode":
-        # The direct API doesn't report what a model takes, so this stays honest.
-        return {"model": settings.llm_model, "gateway": "direct", "can_see": None}
-    model = _role_model(settings, role)
-    try:
-        gateway = await get_gateway(settings, root.parent)
-        client = gateway.client()
-        try:
-            can_see = await client.model_can_see(model)
-        finally:
-            await client.aclose()
-    except Exception:  # noqa: BLE001 - gateway boundary; the chat route reports the failure
-        can_see = None
-    return {"model": model, "gateway": "opencode", "can_see": can_see}
+    project_root(request, slug)
+    route = route_for(effective_settings(), role)
+    return {
+        "model": route.model,
+        "provider": route.provider,
+        "provider_label": route.label,
+        "has_key": bool(route.key),
+        "can_see": _can_see(route),
+    }
 
 
-def _answering(settings, role: str) -> dict:
-    """The provider and model this turn will really use, on whichever path."""
-    if settings.gateway != "opencode":
-        return {"provider": "direct", "model": settings.llm_model}
-    model = _role_model(settings, role)
-    return {"provider": split_model(model)["provider"], "model": split_model(model)["model"]}
+@router.get("/model-usage")
+async def get_model_usage(slug: str, request: Request):
+    """What the Director's models have used on this film. Beside picture spend, not in it."""
+    from mp3_to_videoclip.director import usage
+
+    return usage.summary(project_root(request, slug))
 
 
 @router.get("/chat")
@@ -212,7 +159,8 @@ async def get_chat(slug: str, request: Request, role: str | None = None):
 @router.post("/chat")
 async def post_chat(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    message = payload.get("message", "")
+    # Keep going after the step limit: the same turn's work, with the same prompt.
+    message = KEEP_GOING if payload.get("continue") else payload.get("message", "")
     if not isinstance(message, str) or not message.strip():
         raise HTTPException(status_code=400, detail="message required")
     if len(message) > MAX_CHAT_MESSAGE:
@@ -240,73 +188,24 @@ async def post_chat(slug: str, request: Request, payload: dict):
     )
     # Written down per turn, so the model that answered is known afterwards. Approval
     # hashes never read this, so changing a model un-approves nothing.
-    meta = {**bundle.meta, **_answering(settings, role)}
+    route = route_for(settings, role)
+    if not route.key:
+        raise ApiError(
+            503,
+            f"The {ROLE_LABEL[role]} uses {route.model} from {route.label}, which has no key yet. "
+            "Add one in Settings, or choose another model for it.",
+            "no_llm_key",
+        )
+    meta = {**bundle.meta, "provider": route.provider, "model": route.model}
     promptlog.remember(root, meta)
     snapshot = build_context(slug, root.parent, stage=stage, context=context, task=bundle.task)
     system = bundle.text + "\n\n---\n\n" + snapshot
 
-    if settings.gateway == "opencode":
-        try:
-            gateway = await get_gateway(settings, root.parent)
-        except OpenCodeError as exc:
-            if not settings.llm_api_key:
-                raise ApiError(
-                    503, f"OpenCode gateway unavailable: {exc}", "director_unavailable"
-                ) from exc
-            gateway = None
-        if gateway is not None:
-            client = gateway.client()
-            model = _role_model(settings, role)
-            try:
-                available = await client.model_available(model)
-            except Exception as exc:  # noqa: BLE001 - gateway boundary
-                await client.aclose()
-                raise ApiError(
-                    503, f"OpenCode gateway unavailable: {exc}", "director_unavailable"
-                ) from exc
-            if not available:
-                await client.aclose()
-                raise ApiError(
-                    503,
-                    f"model {model} is not available in OpenCode; check Settings",
-                    "director_model_unavailable",
-                )
-            if hasattr(client, "wait_for_mcp"):
-                try:
-                    await client.wait_for_mcp()
-                except Exception as exc:  # noqa: BLE001 - gateway boundary
-                    await client.aclose()
-                    raise ApiError(
-                        503,
-                        f"clipstudio MCP server did not connect: {exc}",
-                        "director_unavailable",
-                    ) from exc
-
-            async def gateway_stream():
-                try:
-                    async for event in run_gateway_turn(
-                        client,
-                        root,
-                        slug,
-                        role,
-                        message,
-                        system,
-                        model=model,
-                        prompt_meta=meta,
-                    ):
-                        _announce_tool(request, slug, event)
-                        yield _line(event)
-                finally:
-                    await client.aclose()
-
-            return StreamingResponse(gateway_stream(), media_type="application/x-ndjson")
-
-    if not settings.llm_api_key:
-        raise ApiError(503, "no LLM key configured; open Settings", "no_llm_key")
     llm = DirectorLLM(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key,
-        model=settings.llm_model,
+        base_url=route.base_url,
+        api_key=route.key,
+        model=route.model,
+        kind=route.kind,
         session_id=f"studio-{slug}-{role}",
     )
 
@@ -322,6 +221,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
             projects_dir=root.parent,
             prompt_meta=meta,
             role=role,
+            provider=route.provider,
         ):
             _announce_tool(request, slug, event)
             yield _line(event)

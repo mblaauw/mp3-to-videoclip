@@ -6,10 +6,18 @@
 
 [[providers]]
 id = "openai"
-label = "OpenAI or a compatible endpoint"
+label = "OpenAI"
+kind = "openai-compatible"
+key_setting = "keys.openai"
+env_var = "OPENAI_API_KEY"
+lists_models = true
+unlocks = ["writer", "editor", "critic"]
+
+[[providers]]
+id = "direct"
+label = "Your own endpoint"
 kind = "openai-compatible"
 key_setting = "keys.openai_compatible.key"
-env_var = "OPENAI_API_KEY"
 lists_models = true
 unlocks = ["writer", "editor", "critic"]
 

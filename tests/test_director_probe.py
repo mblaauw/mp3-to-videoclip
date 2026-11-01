@@ -175,8 +175,9 @@ def test_scripted_provider_session_import_board_batch_and_regeneration(probe_pro
     assert P.load_brief(root).creative.proof_shot_ids == ["s001"]
     assert estimates[0]["regenerate"] is False
     assert estimates[1]["regenerate"] is True
-    assert authorized == ["quote-1", "quote-2"]
-    assert runner.submitted == [("images", slug), ("images", slug)]
+    # The Director priced both batches and bought neither: that is the owner's click.
+    assert authorized == []
+    assert runner.submitted == []
 
     stored = [
         json.loads(line)

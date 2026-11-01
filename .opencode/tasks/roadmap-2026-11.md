@@ -228,8 +228,8 @@ Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both a
 
 ## Where the roadmap stands, 1 Nov 2026
 
-Merged: A (#69), H (#73, #74), B and D (#75). C-1 and C-2 are in the PR after #75, with debt
-from those phases. Next in the final order: E-1.
+Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76).
+E-1 is in the PR after #76. Next in the final order: E-2.
 
 Differences from the plans, where the plan was wrong or could not hold:
 
@@ -244,6 +244,12 @@ Differences from the plans, where the plan was wrong or could not hold:
   $0.0006. No paid batch has happened; it needs the owner. Real depth ran on a scratch copy and
   the owner chose 0.6 as a new film's start, where the tools are set up. Existing films stay off.
 
-Still open by decision: the OpenAI major version waits for E-1, whose adapter replaces that code.
+- **E-1:** the plan mapped `gateway: "opencode"` to the OpenCode Go provider. That would send
+  `gpt-6.1-sol` to a provider that may not offer it, so a role keeps its own provider and is
+  refused by name if it has no key. `continue` and the model record replace the plan's `/costs`
+  route with `/model-usage`. No text model has a verified price yet, so costs read "no price known".
+
+Still open by decision: the OpenAI major version; E-1 still uses that SDK's streaming, and no live
+call has proven the adapter.
 The narrator voice in Settings is not used until Phase I; `voice.py` keeps its own default.
 `_final_state` keeps its mtime check. Parts of C not yet done: C-3 and C-4.

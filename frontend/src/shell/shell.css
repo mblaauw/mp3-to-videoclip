@@ -1279,3 +1279,10 @@ body {
     bottom: calc(var(--spine-h) + 12px);
   }
 }
+
+.msg-usage {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--t-12);
+  font-variant-numeric: tabular-nums;
+}

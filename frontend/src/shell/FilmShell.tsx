@@ -393,7 +393,7 @@ function FilmShellContent({
       const kinds = settingsResult.value.shot_kinds;
       if (kinds && kinds.length) setShotKinds(kinds);
       setHasModelKey(
-        settingsResult.value.gateway !== "direct" || Boolean(settingsResult.value.has_llm_api_key),
+        Boolean(settingsResult.value.role_keys?.writer),
       );
     }
   }, [slug, project.shots]);

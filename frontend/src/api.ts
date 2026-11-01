@@ -4,6 +4,7 @@ import { readApiError } from "./api/errors.ts";
 import type { PreviewShot } from "./baseFilm";
 import { toast } from "./toast.ts";
 import { bindRevision, resources, revisionHeaders } from "./api/resources.ts";
+import type { FilmUsage } from "./shell/modelCost.ts";
 
 export { ApiError } from "./api/errors.ts";
 
@@ -406,16 +407,9 @@ export type Settings = {
     brand: { name: string; partner: string; logo: string; palette: string[]; font: string };
   };
   prices: Record<string, string>;
-  computer: {
-    gateway: "opencode" | "direct";
-    opencode_bin: string;
-    opencode_workspace: string;
-    render_workers: number;
-  };
+  computer: { render_workers: number };
+  role_keys: Record<"writer" | "editor" | "critic", boolean>;
   notes: Record<string, string>;
-  gateway?: "opencode" | "direct";
-  opencode_bin?: string;
-  opencode_workspace?: string;
   writer_model?: string;
   editor_model?: string;
   critic_model?: string;
@@ -743,7 +737,7 @@ export type DeliveryChecklist = {
 
 export type SettingsTest = {
   ok: boolean;
-  kind: "runware" | "opencode" | "provider" | "voice";
+  kind: "runware" | "provider" | "voice";
   message: string;
   version?: string;
   preview_url?: string;
@@ -1119,7 +1113,7 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
-  testSettings: (kind: "runware" | "opencode") =>
+  testSettings: (kind: "runware") =>
     request<SettingsTest>("/api/settings/test", {
       method: "POST",
       body: JSON.stringify({ kind }),
@@ -1169,9 +1163,14 @@ export const api = {
     ),
   critique: (slug: string) => request<{ critique: Critique | null }>(`/api/projects/${slug}/critique`),
   directorModel: (slug: string, role: "writer" | "editor" | "critic") =>
-    request<{ model: string; gateway: string; can_see: boolean | null }>(
-      `/api/projects/${slug}/director/model?role=${role}`,
-    ),
+    request<{
+      model: string;
+      provider: string;
+      provider_label: string;
+      has_key: boolean;
+      can_see: boolean | null;
+    }>(`/api/projects/${slug}/director/model?role=${role}`),
+  modelUsage: (slug: string) => request<FilmUsage>(`/api/projects/${slug}/model-usage`),
   chat: (slug: string, role?: "writer" | "editor" | "critic") =>
     request<{ messages: unknown[] }>(
       `/api/projects/${slug}/chat${role ? `?role=${role}` : ""}`,

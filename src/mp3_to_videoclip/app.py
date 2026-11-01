@@ -24,7 +24,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api.approvals import router as approvals_router
 from .api.budget import router as budget_router
-from .api.director import close_gateways
 from .api.director import router as director_router
 from .api.errors import engine_error, error_code, error_payload
 from .api.film import router as film_router
@@ -80,7 +79,6 @@ async def lifespan(app: FastAPI):
     app.state.watcher = watcher
     await watcher.start()
     yield
-    close_gateways()
     await watcher.stop()
     await runner.stop()
 

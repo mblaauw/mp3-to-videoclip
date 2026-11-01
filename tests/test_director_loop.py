@@ -379,7 +379,9 @@ def test_a_stalled_tool_call_ends_the_turn_with_a_plain_error_and_writes_nothing
         ("assistant", "Rewriting the story. "),
     ]
     after = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
-    assert {path: data for path, data in after.items() if path != chat} == before
+    # The log and the record of what the turn used; nothing that belongs to the film.
+    used = root / "work/model-usage.jsonl"
+    assert {path: data for path, data in after.items() if path not in (chat, used)} == before
 
 
 def test_a_model_that_never_answers_is_bounded_too(tmp_path, monkeypatch):

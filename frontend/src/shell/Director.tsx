@@ -5,6 +5,7 @@ import { usePlayerClock } from "../spine/player";
 import { AutoTextarea, Button, Markdown, StatusDot } from "../ui";
 import { CloseIcon } from "../ui/icons";
 import { quietLine, writingLine, type Writing } from "./directorActivity";
+import { filmUsageLine, usageLine, type FilmUsage, type TurnUsage } from "./modelCost";
 import { stageLabel } from "./stages";
 import type { Stage } from "./nextStep";
 import { notifyProjectChanged } from "./projectEvents";
@@ -28,7 +29,7 @@ type ToolItem = {
 
 type ChatItem =
   | { kind: "user"; text: string }
-  | { kind: "assistant"; text: string; role?: Role; options?: string[] }
+  | { kind: "assistant"; text: string; role?: Role; options?: string[]; usage?: TurnUsage }
   | ToolItem;
 
 type StreamEvent = {
@@ -233,7 +234,45 @@ function argumentSummary(tool: string, args: string): string {
   return "";
 }
 
-function ToolRow({ item, onUndo }: { item: ToolItem; onUndo: (item: ToolItem) => void }) {
+/** The Director only prices stills. This is the owner's click on that price. */
+function BuyStills({ slug, estimate }: { slug: string; estimate: { quote_id: string; reserve_usd: string; tasks: number } }) {
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const buy = async () => {
+    setState("busy");
+    setError(null);
+    try {
+      const started = await api.generateImages(slug, {
+        quote_id: estimate.quote_id,
+        note: "bought from the Director's price",
+        uploads_confirmed: false,
+      });
+      if (started.needs_budget) throw new Error("The budget has no room for this.");
+      setState("done");
+    } catch (caught) {
+      setError(String(caught));
+      setState("idle");
+    }
+  };
+  return (
+    <div className="tool-actions">
+      <Button size="small" variant="primary" disabled={state !== "idle"} onClick={() => void buy()}>
+        {state === "done" ? "Started" : `Buy ${estimate.tasks} stills · $${estimate.reserve_usd}`}
+      </Button>
+      {error && <span className="tool-error">{error}</span>}
+    </div>
+  );
+}
+
+function ToolRow({
+  item,
+  slug,
+  onUndo,
+}: {
+  item: ToolItem;
+  slug: string;
+  onUndo: (item: ToolItem) => void;
+}) {
   const data = parse(item.result);
   const failed = typeof data?.error === "string";
   const money = MONEY_TOOLS.has(item.tool) && !failed;
@@ -268,6 +307,12 @@ function ToolRow({ item, onUndo }: { item: ToolItem; onUndo: (item: ToolItem) =>
             )}
           </details>
         )}
+        {data?.needs_owner === true && !item.past && (
+          <BuyStills
+            slug={slug}
+            estimate={data.estimate as { quote_id: string; reserve_usd: string; tasks: number }}
+          />
+        )}
         {undoable && item.done && !failed && (
           <div className="tool-actions">
             <Button size="small" variant="quiet" disabled={item.undone} onClick={() => onUndo(item)}>
@@ -284,7 +329,15 @@ function ToolRow({ item, onUndo }: { item: ToolItem; onUndo: (item: ToolItem) =>
 }
 
 /** Consecutive tool calls read as one compact activity log, not a wall of cards. */
-function ToolGroup({ items, onUndo }: { items: ToolItem[]; onUndo: (item: ToolItem) => void }) {
+function ToolGroup({
+  items,
+  slug,
+  onUndo,
+}: {
+  items: ToolItem[];
+  slug: string;
+  onUndo: (item: ToolItem) => void;
+}) {
   const running = items.some((item) => !item.done);
   const writes = items.filter((item) => !item.tool.startsWith("get_"));
   const reads = items.length - writes.length;
@@ -296,7 +349,7 @@ function ToolGroup({ items, onUndo }: { items: ToolItem[]; onUndo: (item: ToolIt
       {shown.length > 0 && (
         <ul>
           {shown.map((item) => (
-            <ToolRow key={`tool-${item.id}`} item={item} onUndo={onUndo} />
+            <ToolRow key={`tool-${item.id}`} item={item} slug={slug} onUndo={onUndo} />
           ))}
         </ul>
       )}
@@ -364,9 +417,11 @@ export function Director({
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<Role>(defaultRole);
   const [historyFor, setHistoryFor] = useState<Role | null>(null);
-  const [gateway, setGateway] = useState("opencode");
-  // Undefined until the gateway answers, so nothing warns about a model it hasn't asked about.
+  // Undefined until the answer arrives, so nothing warns about a model not asked about yet.
   const [canSee, setCanSee] = useState<boolean | null | undefined>(undefined);
+  const [providerLabel, setProviderLabel] = useState("");
+  const [limit, setLimit] = useState<number | null>(null);
+  const [filmUsage, setFilmUsage] = useState<FilmUsage | null>(null);
   const [models, setModels] = useState<Record<Role, string>>({
     writer: "the configured Writer",
     editor: "the configured Editor",
@@ -405,7 +460,7 @@ export function Director({
       .then((value) => {
         if (!current) return;
         setModels((before) => ({ ...before, [role]: modelLabel(value.model) }));
-        setGateway(value.gateway === "direct" ? "direct" : "opencode");
+        setProviderLabel(value.provider_label);
         setCanSee(value.can_see);
       })
       .catch(() => {});
@@ -590,7 +645,8 @@ export function Director({
     });
   };
 
-  const send = async (override?: string, task?: string) => {
+  const send = async (override?: string, task?: string, keepGoing = false) => {
+    setLimit(null);
     const message = (override ?? text).trim();
     if (!message || busy) return;
     if (override === undefined) setText("");
@@ -620,6 +676,7 @@ export function Director({
           message,
           stage,
           role,
+          ...(keepGoing ? { continue: true } : {}),
           ...(task ? { task } : {}),
           context: {
             stage,
@@ -653,6 +710,17 @@ export function Director({
         if (event.kind !== "done") setWriting(null);
         if (event.kind === "text") appendAssistant(event.text || "");
         else if (event.kind === "done") {
+          const used = event.payload?.usage as TurnUsage | undefined;
+          if (used) {
+            setItems((current) => {
+              const copy = [...current];
+              const last = copy[copy.length - 1];
+              if (last?.kind === "assistant") copy[copy.length - 1] = { ...last, usage: used };
+              return copy;
+            });
+            api.modelUsage(slug).then(setFilmUsage, () => undefined);
+          }
+          if (event.payload?.limit) setLimit(Number(event.payload.steps) || 0);
           const failure = event.payload?.error;
           if (typeof failure === "string" && failure) {
             if (event.payload?.stalled) setStalled(failure);
@@ -740,7 +808,7 @@ export function Director({
   };
 
   const model = models[role];
-  const missingKey = /no llm key|llm key|model key|api key|unauthor/i.test(error || "");
+  const missingKey = /no llm key|llm key|model key|api key|no key|unauthor/i.test(error || "");
 
   // Group consecutive tool calls so a turn reads: question → activity → answer.
   const blocks: ({ type: "item"; item: ChatItem; index: number } | { type: "tools"; items: ToolItem[]; key: string })[] = [];
@@ -763,8 +831,11 @@ export function Director({
           <h2>Director</h2>
           <div className="director-model">
             {ROLE_NAME[role]} · {model}
-            {gateway === "direct" && <span className="director-gateway">Direct API</span>}
+            {providerLabel && <span className="director-gateway">{providerLabel}</span>}
           </div>
+          {filmUsageLine(filmUsage) && (
+            <div className="director-sight">This film so far: {filmUsageLine(filmUsage)}</div>
+          )}
           {(canSee === false || canSee === null) && (
             <div className="director-sight">
               {canSee === false
@@ -812,7 +883,7 @@ export function Director({
       <div className="messages" aria-live="polite" ref={listRef} onScroll={onScroll}>
         {blocks.map((block) =>
           block.type === "tools" ? (
-            <ToolGroup key={block.key} items={block.items} onUndo={(value) => void undo(value)} />
+            <ToolGroup key={block.key} items={block.items} slug={slug} onUndo={(value) => void undo(value)} />
           ) : block.item.kind === "user" ? (
             <div className="msg user" key={`m-${block.index}`}>
               <div className="body">{block.item.text}</div>
@@ -825,6 +896,9 @@ export function Director({
                     ? "Writer"
                     : "Editor"
                   : "Director"}
+                {block.item.kind === "assistant" && usageLine(block.item.usage) && (
+                  <span className="msg-usage">{usageLine(block.item.usage)}</span>
+                )}
                 {block.item.kind === "assistant" && block.item.text && (
                   <CopyButton text={block.item.text} />
                 )}
@@ -875,6 +949,14 @@ export function Director({
         {stalled && (
           <div className="director-error" role="alert">
             <p>{stalled}</p>
+            {!busy && limit !== null && (
+              <div className="tool-actions">
+                <span className="tool-summary">Stopped after {limit} steps.</span>
+                <Button size="small" onClick={() => void send("Keep going", undefined, true)}>
+                  Keep going
+                </Button>
+              </div>
+            )}
             {!busy && lastAsked.current && (
               <Button
                 size="small"

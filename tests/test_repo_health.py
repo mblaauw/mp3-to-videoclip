@@ -9,11 +9,11 @@ from mp3_to_videoclip import config, signature
 
 def test_settings_survive_quotes_and_backslashes_and_stay_private(tmp_path, monkeypatch):
     monkeypatch.setattr(config.Path, "home", lambda: tmp_path)
-    saved = config.Settings(llm_api_key='a"b\\c', opencode_bin="C:\\tools\\opencode")
+    saved = config.Settings(llm_api_key='a"b\\c', keys={"anthropic": "C:\\tools\\key"})
     config.save_settings(saved)
     loaded = config.load_settings()
     assert loaded.llm_api_key == 'a"b\\c'
-    assert loaded.opencode_bin == "C:\\tools\\opencode"
+    assert loaded.keys.anthropic == "C:\\tools\\key"
     assert loaded.brand_name == saved.brand_name
     assert stat.S_IMODE(config.settings_path().stat().st_mode) == 0o600
 

@@ -15,6 +15,8 @@ from typing import Any
 MAX_CONTEXT_MESSAGES = 60
 KEEP_RECENT_MESSAGES = 24
 SUMMARY_SNIPPET = 160
+REASON_SNIPPET = 200
+KEEP_REASONS = 8
 ROLES = ("writer", "editor", "critic")
 
 
@@ -38,7 +40,7 @@ def _for_role(messages: list[dict[str, Any]], role: str) -> list[dict[str, Any]]
     """Keep one role's turns; rows from before the split stay visible to both.
 
     New rows carry ``agent``. Older rows are attributed through their user turn's
-    recorded prompt files (or a gateway reply's ``name``) and the rows after it;
+    recorded prompt files (or an older reply's ``name``) and the rows after it;
     a turn that recorded neither predates the two roles and is shared.
     """
     kept: list[dict[str, Any]] = []
@@ -82,6 +84,22 @@ def append_message(root: Path, message: dict[str, Any], *, agent: str | None = N
         handle.write(json.dumps(message, ensure_ascii=False) + "\n")
 
 
+def history_for_model(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What earlier turns a model is sent: what was asked and what it said.
+
+    Only role and content, because the log's bookkeeping is refused by real APIs. A logged tool
+    result has lost the call it answered, which real APIs refuse too; the snapshot rebuilt each
+    turn is the current state. An empty reply is refused by some, so it is left out.
+    """
+    return [
+        {"role": message["role"], "content": message["content"]}
+        for message in messages
+        if message.get("role") in ("user", "assistant")
+        and isinstance(message.get("content"), str)
+        and message["content"].strip()
+    ]
+
+
 def compact_messages(
     messages: list[dict[str, Any]],
     *,
@@ -90,9 +108,9 @@ def compact_messages(
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Return a bounded prompt and a summary of the dropped history.
 
-    Only user request snippets and tool names enter the summary; tool outputs and
-    assistant prose can be large or stale, while the current project state is
-    rebuilt into the system prompt on every turn anyway.
+    User requests, tool names and the reasoning given between tool calls enter the summary,
+    so a long film keeps why it did things as well as what. Tool outputs can be large and
+    stale, and the current project state is rebuilt into the system prompt every turn.
     """
     if len(messages) <= max_messages:
         return messages, None
@@ -122,4 +140,11 @@ def compact_messages(
         summary += " User requests: " + " | ".join(requests[-8:]) + "."
     if tools:
         summary += " Tools used: " + ", ".join(tools) + "."
+    reasons = [
+        " ".join(message["content"].split())[:REASON_SNIPPET]
+        for message in older
+        if message.get("with_tools") and isinstance(message.get("content"), str)
+    ]
+    if reasons:
+        summary += " Reasoning along the way: " + " | ".join(reasons[-KEEP_REASONS:]) + "."
     return recent, summary

@@ -2,9 +2,9 @@
 
 A turn is a job. It streams text deltas to the UI, executes tool calls through
 ``tools.dispatch``, appends the results and continues, and stops at end_turn, an
-``ask_user`` call, a max of 25 tool calls, user cancellation, or a stalled stream.
-Tool calls only run once their stream has finished, so a stall never applies a
-half-written one.
+``ask_user`` call, a limit of tool calls the owner can extend, the same call failing
+twice, user cancellation, or a stalled stream. Tool calls only run once their stream has
+finished, so a stall never applies a half-written one.
 """
 
 from __future__ import annotations
@@ -14,13 +14,16 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import uuid4
 
 from openai import APIError
 
-from .conversation import append_message, compact_messages, load_messages
+from . import pricing, usage
+from .conversation import append_message, compact_messages, history_for_model, load_messages
 from .llm import (
     DirectorLLM,
     Progress,
+    ProviderFailure,
     StreamStalled,
     TextDelta,
     ToolCall,
@@ -28,9 +31,10 @@ from .llm import (
     service_failed_message,
     stall_message,
 )
+from .llm import Usage as ModelUsage
 from .tools import CRITIC_TOOLS, ToolResult, dispatch, tools_for
 
-MAX_TOOL_CALLS = 25
+MAX_TOOL_CALLS = 40
 
 
 @dataclass
@@ -55,13 +59,12 @@ async def run_turn(
     projects_dir=None,
     prompt_meta: dict | None = None,
     role: str | None = None,
+    provider: str = "",
 ) -> AsyncIterator[TurnEvent]:
-    # Each role keeps its own thread; the tag is bookkeeping, not model input.
-    messages = [
-        {key: value for key, value in message.items() if key != "agent"}
-        for message in load_messages(root, role)
-    ]
-    messages, summary = compact_messages(messages)
+    # A Critic reads with fresh eyes every time, as its own session always did.
+    history = [] if role == "critic" else load_messages(root, role)
+    messages, summary = compact_messages(history)
+    messages = history_for_model(messages)
     if summary:
         system = (system + "\n\n" + summary).strip()
     messages.append({"role": "user", "content": user_message})
@@ -71,6 +74,43 @@ async def run_turn(
     append_message(root, entry, agent=role)
 
     tool_calls = 0
+    turn_id = uuid4().hex
+    model = getattr(llm, "model", "")
+    spent = ModelUsage()
+    failures: dict[tuple[str, str], int] = {}
+
+    def finished(payload: dict | None = None) -> dict:
+        """Write down what this turn used, and say so with the turn's last event."""
+        cost, basis = pricing.cost_of(provider, model, spent)
+        usage.record(
+            root,
+            turn_id=turn_id,
+            role=role,
+            provider=provider,
+            model=model,
+            usage=spent,
+            cost_usd=cost,
+            cost_basis=basis,
+            prompt_hash=(prompt_meta or {}).get("hash"),
+        )
+        counts = {
+            "prompt_tokens": spent.prompt_tokens,
+            "completion_tokens": spent.completion_tokens,
+            "cost_usd": cost,
+            "cost_basis": basis,
+            "model": model,
+        }
+        return {**(payload or {}), "usage": counts}
+
+    def count(event: ModelUsage) -> None:
+        spent.prompt_tokens += event.prompt_tokens
+        spent.completion_tokens += event.completion_tokens
+        spent.cached_tokens += event.cached_tokens
+        # One call with no counts makes the whole turn's total an underestimate.
+        spent.reported = event.reported and (spent.reported or not calls_counted[0])
+        calls_counted[0] += 1
+
+    calls_counted = [0]
     while tool_calls < max_tool_calls:
         result: TurnResult | None = None
         assistant_text = ""
@@ -89,6 +129,8 @@ async def run_turn(
                         )
                     elif isinstance(event, ToolCall):
                         pending.append(event)
+                    elif isinstance(event, ModelUsage):
+                        count(event)
                     elif isinstance(event, TurnResult):
                         result = event
         except StreamStalled as stalled:
@@ -97,10 +139,10 @@ async def run_turn(
             yield TurnEvent(
                 kind="done",
                 text=assistant_text,
-                payload={"error": stall_message(role, stalled.seconds), "stalled": True},
+                payload=finished({"error": stall_message(role, stalled.seconds), "stalled": True}),
             )
             return
-        except APIError as failure:
+        except (APIError, ProviderFailure) as failure:
             # The model service refused or dropped the call. Tools already run keep
             # their results, and the owner hears why instead of an empty reply.
             if assistant_text.strip():
@@ -108,7 +150,7 @@ async def run_turn(
             yield TurnEvent(
                 kind="done",
                 text=assistant_text,
-                payload={"error": service_failed_message(role, failure)},
+                payload=finished({"error": service_failed_message(role, failure, model)}),
             )
             return
 
@@ -117,10 +159,22 @@ async def run_turn(
 
         if not pending:
             messages.append({"role": "assistant", "content": assistant_text})
-            append_message(root, {"role": "assistant", "content": assistant_text}, agent=role)
-            yield TurnEvent(kind="done", text=assistant_text)
+            payload = finished()
+            append_message(
+                root,
+                {"role": "assistant", "content": assistant_text, "usage": payload["usage"]},
+                agent=role,
+            )
+            yield TurnEvent(kind="done", text=assistant_text, payload=payload)
             return
 
+        # What it said between calls is its reasoning, and the log keeps it.
+        if assistant_text.strip():
+            append_message(
+                root,
+                {"role": "assistant", "content": assistant_text, "with_tools": True},
+                agent=role,
+            )
         messages.append(
             {
                 "role": "assistant",
@@ -130,6 +184,7 @@ async def run_turn(
                         "id": tc.id,
                         "type": "function",
                         "function": {"name": tc.name, "arguments": tc.arguments},
+                        **({"signature": tc.signature} if tc.signature else {}),
                     }
                     for tc in pending
                 ],
@@ -161,7 +216,9 @@ async def run_turn(
                 result_text = tool_result
                 images = ()
             yield TurnEvent(kind="tool", tool=tc.name, result=result_text)
-            messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_text})
+            messages.append(
+                {"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": result_text}
+            )
             append_message(
                 root,
                 {"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": result_text},
@@ -170,6 +227,21 @@ async def run_turn(
             if images:
                 pending_images.extend(images)
                 image_tool = tc.name
+            if _failed(result_text):
+                attempt = (tc.name, tc.arguments or "")
+                failures[attempt] = failures.get(attempt, 0) + 1
+                if failures[attempt] >= 2:
+                    who = (role or "director").capitalize()
+                    yield TurnEvent(
+                        kind="done",
+                        text=assistant_text,
+                        payload=finished(
+                            {
+                                "error": f"The {who} is repeating a failed call to {tc.name}, so this turn was stopped."
+                            }  # noqa: E501
+                        ),
+                    )
+                    return
         if pending_images:
             content: list[dict[str, Any]] = [
                 {
@@ -188,4 +260,17 @@ async def run_turn(
             # chat.jsonl keeps bounded text, never base64 image bytes.
             messages.append({"role": "user", "content": content})
 
-    yield TurnEvent(kind="done", text="Stopped after the tool-call limit.")
+    yield TurnEvent(
+        kind="done",
+        text=f"Stopped after {tool_calls} steps.",
+        payload=finished({"limit": True, "steps": tool_calls}),
+    )
+
+
+def _failed(result: str) -> bool:
+    """Whether a tool answered with an error rather than a result."""
+    try:
+        value = json.loads(result)
+    except (TypeError, ValueError):
+        return False
+    return isinstance(value, dict) and bool(value.get("error"))
