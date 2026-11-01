@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type AudioWindow, type IntakePayload, type Intent, type StylePreset } from "../api";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { Button, Field } from "../ui";
+import { latestSave } from "./latestSave";
 
 function listText(values: string[] | undefined): string {
   return (values || []).join("\n");
@@ -61,8 +62,13 @@ export function BriefCard({
   const [error, setError] = useState<string | null>(null);
   const savedTimer = useRef<number | null>(null);
   const lastSaved = useRef(JSON.stringify(intake.intent || {}));
+  // Counts keystrokes, so a save coming back can't erase what was typed since.
+  const edits = useRef(0);
+  const settledEdits = useRef(0);
 
   useEffect(() => {
+    lastSaved.current = JSON.stringify(intake.intent || {});
+    if (edits.current !== settledEdits.current) return;
     setIntent(intake.intent || { kind: intake.kind });
     setLists({
       reasons: listText(intake.intent?.reasons),
@@ -70,7 +76,6 @@ export function BriefCard({
       avoid: listText(intake.intent?.avoid),
       tone: (intake.intent?.tone || []).join(", "),
     });
-    lastSaved.current = JSON.stringify(intake.intent || {});
   }, [intake]);
 
   useEffect(() => {
@@ -92,11 +97,40 @@ export function BriefCard({
     savedTimer.current = window.setTimeout(() => setSaved(false), 2000);
   };
 
-  const change = (key: keyof Intent, value: unknown) =>
+  const change = (key: keyof Intent, value: unknown) => {
+    edits.current += 1;
     setIntent((current) => ({ ...current, [key]: value }));
+  };
+
+  const editList = (key: keyof typeof lists, value: string) => {
+    edits.current += 1;
+    setLists((current) => ({ ...current, [key]: value }));
+  };
+
+  const report = useRef(onIntakeChange);
+  report.current = onIntakeChange;
+  const send = useRef(
+    latestSave(async (clean: Intent) => {
+      if (JSON.stringify(clean) === lastSaved.current) return;
+      setSaving(true);
+      setError(null);
+      const started = edits.current;
+      try {
+        const updated = await api.updateIntake(slug, { intent: clean });
+        lastSaved.current = JSON.stringify(updated.intent || {});
+        if (edits.current === started) settledEdits.current = started;
+        report.current(updated);
+        flash();
+        notifyProjectChanged();
+      } catch (caught) {
+        setError(String(caught));
+      } finally {
+        setSaving(false);
+      }
+    }),
+  );
 
   const save = async (override?: Intent) => {
-    if (saving) return;
     const source = override || intent;
     const clean: Intent = {
       ...source,
@@ -106,21 +140,7 @@ export function BriefCard({
       cta: source.cta,
     };
     if (!clean.cta?.text?.trim() && !clean.cta?.url?.trim()) clean.cta = null;
-    const bytes = JSON.stringify(clean);
-    if (bytes === lastSaved.current) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const updated = await api.updateIntake(slug, { intent: clean });
-      lastSaved.current = JSON.stringify(updated.intent || {});
-      onIntakeChange(updated);
-      flash();
-      notifyProjectChanged();
-    } catch (caught) {
-      setError(String(caught));
-    } finally {
-      setSaving(false);
-    }
+    await send.current(clean);
   };
 
   const commitList = (key: "reasons" | "mandatories" | "avoid", limit?: number) => {
@@ -207,9 +227,7 @@ export function BriefCard({
               <textarea
                 rows={3}
                 value={lists.reasons}
-                onChange={(event) =>
-                  setLists((current) => ({ ...current, reasons: event.target.value }))
-                }
+                onChange={(event) => editList("reasons", event.target.value)}
                 onBlur={() => commitList("reasons", 3)}
                 placeholder="Facts that support the message"
               />
@@ -228,9 +246,7 @@ export function BriefCard({
             <Field label="Tone (up to three, comma separated)">
               <input
                 value={lists.tone}
-                onChange={(event) =>
-                  setLists((current) => ({ ...current, tone: event.target.value }))
-                }
+                onChange={(event) => editList("tone", event.target.value)}
                 onBlur={commitTone}
                 placeholder="warm, wry, direct"
               />
@@ -239,9 +255,7 @@ export function BriefCard({
               <textarea
                 rows={3}
                 value={lists.mandatories}
-                onChange={(event) =>
-                  setLists((current) => ({ ...current, mandatories: event.target.value }))
-                }
+                onChange={(event) => editList("mandatories", event.target.value)}
                 onBlur={() => commitList("mandatories")}
                 placeholder="A product, line or fact that must appear"
               />
@@ -250,9 +264,7 @@ export function BriefCard({
               <textarea
                 rows={2}
                 value={lists.avoid}
-                onChange={(event) =>
-                  setLists((current) => ({ ...current, avoid: event.target.value }))
-                }
+                onChange={(event) => editList("avoid", event.target.value)}
                 onBlur={() => commitList("avoid")}
                 placeholder="Claims, images or words to leave out"
               />

@@ -22,7 +22,7 @@ const FALLBACK_KINDS: KindProfile[] = [
     id: "promo",
     label: "Promo",
     purpose: "",
-    lengths: [30, 60, 90],
+    lengths: [30, 60, 90, 120],
     default_length: 60,
     allows_full_track: true,
     structures: [],
@@ -35,7 +35,7 @@ const FALLBACK_KINDS: KindProfile[] = [
     id: "advert",
     label: "Advert",
     purpose: "",
-    lengths: [6, 15, 30, 60],
+    lengths: [6, 15, 20, 30, 60],
     default_length: 30,
     allows_full_track: false,
     structures: [],
@@ -46,14 +46,12 @@ const FALLBACK_KINDS: KindProfile[] = [
   },
 ];
 
-const LENGTHS: Record<string, number[]> = {
-  promo: [30, 60, 90],
-  advert: [6, 15, 30, 60],
-};
+/** The whole track, as a length choice for kinds that allow it. */
+const WHOLE_TRACK = 0;
 
 const KIND_HINT: Record<string, string> = {
   music_video: "The song leads. Look, lyrics and story are decided next.",
-  promo: "One message, a short excerpt and an ending. Everything else moves to Story.",
+  promo: "One message and an ending, on the whole track or an excerpt. Everything else moves to Story.",
   advert: "One message, a call to action and a length. The rest of the brief is on Story.",
 };
 
@@ -77,7 +75,7 @@ export function NewProduction({
   const [budget, setBudget] = useState("5.00");
   const [message, setMessage] = useState("");
   const [cta, setCta] = useState("");
-  const [length, setLength] = useState(30);
+  const [length, setLength] = useState(WHOLE_TRACK);
   const [kinds, setKinds] = useState<KindProfile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,19 +111,20 @@ export function NewProduction({
 
   const options = kinds.length ? kinds : FALLBACK_KINDS;
   const profile = options.find((item) => item.id === kind);
-  const allowed = LENGTHS[kind] || [];
-  const lengths = allowed.filter(
-    (value) => !profile?.lengths?.length || profile.lengths.includes(value),
-  );
-  const lengthOptions = lengths.length ? lengths : allowed;
+  const lengthOptions = [
+    ...(profile?.allows_full_track ? [WHOLE_TRACK] : []),
+    ...(profile?.lengths ?? []),
+  ];
   const isVideo = kind === "music_video";
+  const wholeTrack = isVideo || length === WHOLE_TRACK;
 
   const changeKind = (next: string) => {
     setKind(next);
     const nextProfile = options.find((item) => item.id === next);
-    const nextLengths = LENGTHS[next] || [];
-    const preferred = nextProfile?.default_length || nextLengths[0] || 30;
-    setLength(nextLengths.includes(preferred) ? preferred : nextLengths[0] || 30);
+    // A kind that can use the whole track starts there; an excerpt is a choice.
+    setLength(
+      nextProfile?.allows_full_track ? WHOLE_TRACK : nextProfile?.default_length || nextProfile?.lengths[0] || 30,
+    );
     setError(null);
   };
 
@@ -146,13 +145,13 @@ export function NewProduction({
       const created = await api.createProject(file, {
         title: title.trim(),
         aspect: "16:9",
-        music_mode: isVideo ? mode : "vocal",
+        music_mode: mode,
         budget,
         kind,
         message: isVideo ? undefined : message.trim(),
         cta_text: kind === "advert" ? cta.trim() : undefined,
-        length_seconds: isVideo ? undefined : length,
-        fade_out: isVideo ? undefined : 1.5,
+        length_seconds: wholeTrack ? undefined : length,
+        fade_out: wholeTrack ? undefined : 1.5,
       });
       onCreated(created.slug);
     } catch (caught) {
@@ -226,15 +225,13 @@ export function NewProduction({
             maxLength={120}
           />
         </label>
-        {isVideo && (
-          <label>
-            Music
-            <select value={mode} onChange={(event) => setMode(event.target.value)}>
-              <option value="vocal">Vocals</option>
-              <option value="instrumental">Instrumental</option>
-            </select>
-          </label>
-        )}
+        <label>
+          Music
+          <select value={mode} onChange={(event) => setMode(event.target.value)}>
+            <option value="vocal">Vocals</option>
+            <option value="instrumental">Instrumental</option>
+          </select>
+        </label>
         {!isVideo && (
           <label>
             One message
@@ -252,7 +249,7 @@ export function NewProduction({
             <select value={length} onChange={(event) => setLength(Number(event.target.value))}>
               {lengthOptions.map((value) => (
                 <option key={value} value={value}>
-                  {value} s
+                  {value === WHOLE_TRACK ? "Whole track" : `${value} s`}
                 </option>
               ))}
             </select>

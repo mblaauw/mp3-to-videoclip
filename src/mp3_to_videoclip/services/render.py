@@ -73,7 +73,7 @@ def render_base(root: Path, output: Path | None = None) -> dict:
     report = _render(
         project,
         shots,
-        P.render_audio(root, project),
+        P.film_audio(root, project),
         output,
         root / "work",
         brand=brand,
@@ -117,7 +117,7 @@ def _render_titled_final(
     report = _render(
         project,
         inputs["shots"],
-        P.render_audio(root, project),
+        P.film_audio(root, project, strict=True),
         output,
         root / "work",
         brand=inputs["brand"],
@@ -189,7 +189,7 @@ def render_final(root: Path, output: Path | None = None) -> dict:
     report = _render(
         project,
         shots,
-        P.render_audio(root, project),
+        P.film_audio(root, project, strict=True),
         output,
         root / "work",
         brand=brand,
@@ -215,7 +215,7 @@ def render_preview(root: Path, output: Path | None = None) -> dict:
     report = _render(
         project,
         shots,
-        P.render_audio(root, project),
+        P.film_audio(root, project),
         output,
         root / "work",
         preview_banner=True,

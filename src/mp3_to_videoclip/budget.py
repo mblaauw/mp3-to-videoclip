@@ -383,6 +383,17 @@ def require_correction_cycles(root: Path, shot_ids):
         check_correction_cycle(root, shot_id)
 
 
+def used_up_corrections(root: Path, shot_ids) -> list[str]:
+    """The named shots that need a new correction cycle before another image."""
+    used = []
+    for shot_id in shot_ids:
+        try:
+            check_correction_cycle(root, shot_id)
+        except ValueError:
+            used.append(shot_id)
+    return used
+
+
 @state_mutation
 def authorize_restaging(root: Path, shot_ids, note: str) -> dict:
     """Explicit new correction cycle for named shots; grants no spending.

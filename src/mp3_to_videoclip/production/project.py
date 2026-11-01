@@ -101,3 +101,10 @@ def render_audio(root: Path, project: Project | None = None) -> Path:
     from .. import audio
 
     return audio.render_audio(root, project or load_project(root))
+
+
+def film_audio(root: Path, project: Project | None = None, *, strict: bool = False) -> Path:
+    """What a film sounds like: the music, mixed with its voiceover when it has any."""
+    from .. import voice
+
+    return voice.film_audio(root, project or load_project(root), strict=strict)

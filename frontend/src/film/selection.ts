@@ -4,6 +4,7 @@ export type FilmSelection =
   | { kind: "shot"; id: string }
   | { kind: "note"; index: number }
   | { kind: "delivery" }
+  | { kind: "voice" }
   | null;
 
 /**

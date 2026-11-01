@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip import shotkinds
+from mp3_to_videoclip import shotkinds, voice
 from mp3_to_videoclip.branding import pack_hash, render_brand_plate
 from mp3_to_videoclip.read_snapshots import read_operation
 from mp3_to_videoclip.remotion import data_url
@@ -138,7 +138,9 @@ def player_input(root: Path, slug: str) -> dict:
         "shots": shots,
         "grade": grade,
         "audio": (
-            f"/api/projects/{slug}/audio-excerpt"
+            f"/api/projects/{slug}/film-audio?v={mix}"
+            if (mix := voice.audio_version(root, project))
+            else f"/api/projects/{slug}/audio-excerpt"
             if project.audio_window is not None
             else f"/api/projects/{slug}/audio"
         ),

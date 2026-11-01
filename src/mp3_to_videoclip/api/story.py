@@ -5,11 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import idea, story_beats
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
-from mp3_to_videoclip.storage import RevisionConflict, digest
+from mp3_to_videoclip.storage import RevisionConflict, digest, inside
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["story"])
 
@@ -37,6 +38,45 @@ async def update_brief(slug: str, request: Request, payload: dict, response: Res
     value = brief.model_dump()
     response.headers["ETag"] = f'"{digest(value)}"'
     return value
+
+
+@router.post("/characters/{character_id}/references")
+async def add_character_reference(slug: str, character_id: str, request: Request, payload: dict):
+    """A still of this film becomes the reference that keeps a character the same."""
+    root = project_root(request, slug)
+    try:
+        brief = P.add_character_reference(
+            root,
+            character_id,
+            str(payload.get("shot_id")),
+            int(payload.get("version")),
+            payload.get("box"),
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return brief.model_dump()
+
+
+@router.post("/characters/{character_id}/references/remove")
+async def remove_character_reference(slug: str, character_id: str, request: Request, payload: dict):
+    root = project_root(request, slug)
+    try:
+        brief = P.remove_character_reference(root, character_id, str(payload.get("path")))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return brief.model_dump()
+
+
+@router.get("/references/{name}")
+async def get_reference_image(slug: str, name: str, request: Request):
+    root = project_root(request, slug)
+    try:
+        target = inside(root, f"media/references/{name}")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="that reference does not exist")
+    return FileResponse(target)
 
 
 @router.post("/proof-shots")

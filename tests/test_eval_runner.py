@@ -104,6 +104,7 @@ def _edit() -> EditDecisionList:
         shots=[
             EditShot(
                 shot_id="s001",
+                text=[EditText(id="title", text="THE RECORD", in_frame=0, out_frame=120)],
                 start_frame=0,
                 duration_frames=240,
                 motion=EditMotion(type="hold", reason="let the record land"),

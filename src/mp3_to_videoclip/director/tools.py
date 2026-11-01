@@ -48,6 +48,21 @@ def _tool(
 # A skeleton cannot be rebuilt, and one giant shot cannot be split by update_shots.
 MAX_SKELETON_SHOT_SECONDS = 30
 
+#: What the Critic may call. It reads, looks and leaves notes; it can change nothing.
+CRITIC_TOOLS = frozenset(
+    {
+        "get_project",
+        "get_brief",
+        "get_storyboard",
+        "get_edit",
+        "get_cut_material",
+        "get_music_summary",
+        "get_images",
+        "get_film_frames",
+        "save_critique",
+    }
+)
+
 TOOLS: list[dict] = [
     _tool("get_project", "Read the project summary.", {"slug": {"type": "string"}}, ["slug"]),
     _tool("get_brief", "Read the brief.", {"slug": {"type": "string"}}, ["slug"]),
@@ -60,6 +75,28 @@ TOOLS: list[dict] = [
         ["slug"],
     ),
     _tool(
+        "get_film_frames",
+        "Look at the newest render as delivered, with grade, crops and type: up to eight "
+        "film frames per call. Frames are 24 per second unless the project says otherwise.",
+        {
+            "slug": {"type": "string"},
+            "frames": {"type": "array", "items": {"type": "integer"}, "maxItems": 8},
+        },
+        ["slug", "frames"],
+    ),
+    _tool(
+        "save_critique",
+        "Save the Critic's review of the newest render: a verdict and up to twelve notes, "
+        "each with severity (must_fix, should_fix or consider), note, and optional shot_id, "
+        "frame and suggestion. Advice only; it changes nothing.",
+        {
+            "slug": {"type": "string"},
+            "verdict": {"type": "string"},
+            "notes": {"type": "array", "items": {"type": "object"}, "maxItems": 12},
+        },
+        ["slug", "verdict", "notes"],
+    ),
+    _tool(
         "update_edit_shots",
         "Change motion, crops, accents, text or transition_in on named shots, leaving the "
         "rest of the cut alone. Returns the report.",
@@ -68,6 +105,17 @@ TOOLS: list[dict] = [
             "shots": {"type": "array", "items": {"type": "object"}},
         },
         ["slug", "shots"],
+    ),
+    _tool(
+        "update_voice_lines",
+        "Set the film's spoken voiceover lines: id, text, start_frame, optional gain_db and "
+        "reason, ordered by start_frame. Replaces the list. Use the user's words exactly. "
+        "Making the audio is the user's decision in Studio; this only places the lines.",
+        {
+            "slug": {"type": "string"},
+            "lines": {"type": "array", "items": {"type": "object"}},
+        },
+        ["slug", "lines"],
     ),
     _tool(
         "update_edit",
@@ -289,8 +337,8 @@ TOOLS: list[dict] = [
             "avoid": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
             "look": {
                 "type": "string",
-                "description": "Rendering only, 90-150 words. Protected preset: core verbatim "
-                "plus at most 60 words.",
+                "description": "Rendering only, 90-150 words. With a style preset: send the current "
+                "look unchanged, or the preset's words verbatim plus at most 60 words.",
             },
         },
         ["slug", "characters", "scenes", "arc", "image_rules", "avoid", "look"],
@@ -298,9 +346,19 @@ TOOLS: list[dict] = [
     _tool(
         "update_shots",
         "Edit content fields of named shots. Timing and motion are refused once an edit exists. "
-        "Returns the changed IDs and the new storyboard.",
+        "It cannot add or remove shots; use write_storyboard for that. Returns the changed "
+        "shots and the board's size.",
         {"slug": {"type": "string"}, "changes": {"type": "array", "items": {"type": "object"}}},
         ["slug", "changes"],
+    ),
+    _tool(
+        "write_storyboard",
+        "Replace the whole shot list so the board has the shots its story needs, adding, "
+        "removing or retiming freely. Send every shot; together they must cover the film "
+        "exactly. Refused once a cut exists, or if it drops a shot with paid stills. "
+        "Returns the board's size and each shot's id, span and kind.",
+        {"slug": {"type": "string"}, "shots": {"type": "array", "items": {"type": "object"}}},
+        ["slug", "shots"],
     ),
     _tool(
         "create_storyboard",
@@ -402,10 +460,28 @@ def _dispatch(
 
         return edits.tool_page(root, arguments.get("first") or 0, arguments.get("count") or 30)
 
+    if name == "get_film_frames":
+        return _get_film_frames(root, arguments.get("frames") or [])
+
+    if name == "save_critique":
+        from mp3_to_videoclip import critique
+
+        return critique.save(
+            root,
+            arguments.get("verdict") or "",
+            arguments.get("notes") or [],
+            P.load_project(root).fps,
+        )
+
     if name == "update_edit_shots":
         from mp3_to_videoclip import edits
 
         return edits.patch_shots(root, arguments.get("shots") or [])
+
+    if name == "update_voice_lines":
+        from mp3_to_videoclip import edits
+
+        return edits.set_voice_lines(root, arguments.get("lines") or [])
 
     if name == "get_cut_material":
         from mp3_to_videoclip import edits
@@ -489,24 +565,60 @@ def _dispatch(
         for field in ("direction", "style", "treatment"):
             if field in patch and (not isinstance(patch[field], str) or not patch[field].strip()):
                 raise ValueError(f"brief {field} cannot be blank; omit it to keep the current text")
-        return _brief_result(P.update_brief(root, patch))
+        before = P.out_of_date_stills(root) if (root / "work/storyboard.json").is_file() else []
+        return _with_still_cost(root, before, _brief_result(P.update_brief(root, patch)))
 
     if name == "set_creative_profile":
-        return _brief_result(
-            P.set_creative_profile(
-                root,
-                characters=arguments.get("characters") or [],
-                scenes=arguments.get("scenes") or [],
-                arc=arguments.get("arc") or [],
-                image_rules=arguments.get("image_rules") or [],
-                avoid=arguments.get("avoid") or [],
-                look=arguments.get("look") or "",
-            )
+        before = P.out_of_date_stills(root) if (root / "work/storyboard.json").is_file() else []
+        return _with_still_cost(
+            root,
+            before,
+            _brief_result(
+                P.set_creative_profile(
+                    root,
+                    characters=arguments.get("characters") or [],
+                    scenes=arguments.get("scenes") or [],
+                    arc=arguments.get("arc") or [],
+                    image_rules=arguments.get("image_rules") or [],
+                    avoid=arguments.get("avoid") or [],
+                    look=arguments.get("look") or "",
+                )
+            ),
         )
 
     if name == "update_shots":
+        before = P.out_of_date_stills(root)
         board, changed = P.update_shots(root, arguments.get("changes") or [])
-        return {"changed": changed, "storyboard": board.model_dump()}
+        # A whole board can outgrow what a gateway carries back to the model.
+        return _with_still_cost(
+            root,
+            before,
+            {
+                "changed": changed,
+                "shots": [shot.model_dump() for shot in board.shots if shot.id in changed],
+                "shot_total": len(board.shots),
+            },
+        )
+
+    if name == "write_storyboard":
+        from mp3_to_videoclip import shotkinds
+
+        board = P.write_storyboard(root, arguments.get("shots") or [])
+        return {
+            "saved": True,
+            "shot_total": len(board.shots),
+            "paid": sum(1 for shot in board.shots if shotkinds.is_paid(shot)),
+            "total_frames": board.total_frames,
+            "shots": [
+                {
+                    "id": shot.id,
+                    "start_frame": shot.start_frame,
+                    "duration_frames": shot.duration_frames,
+                    "kind": shot.kind,
+                }
+                for shot in board.shots
+            ],
+        }
 
     if name == "create_storyboard":
         seconds = arguments.get("seconds")
@@ -541,6 +653,23 @@ def _dispatch(
         return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}
 
     raise ValueError(f"unknown tool: {name}")
+
+
+def _with_still_cost(root: Path, before: list[str], value: dict) -> dict:
+    """Say plainly when a change just made kept stills out of date."""
+    from mp3_to_videoclip import production as P
+
+    try:
+        lost = [shot for shot in P.out_of_date_stills(root) if shot not in before]
+    except (OSError, ValueError):
+        return value
+    if lost:
+        value["stills_now_out_of_date"] = lost
+        value["warning"] = (
+            f"This change made {len(lost)} kept stills out of date, and each costs money to remake. "
+            "Tell the user. If only some shots need it, undo this and change those shots' prompts."
+        )
+    return value
 
 
 def _brief_result(brief) -> dict:
@@ -620,6 +749,34 @@ def _get_images(root: Path, shot_ids) -> ToolResult:
     return ToolResult(text=text, images=tuple(images))
 
 
+def _get_film_frames(root: Path, frames) -> ToolResult:
+    from mp3_to_videoclip import critique
+    from mp3_to_videoclip import production as P
+
+    try:
+        value = critique.film_frames(root, frames, P.load_project(root).fps)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return ToolResult(json.dumps({"error": str(exc)}))
+    images = tuple(
+        "data:image/jpeg;base64," + base64.b64encode(item["jpeg"]).decode("ascii")
+        for item in value["frames"]
+    )
+    return ToolResult(
+        text=json.dumps(
+            {
+                "render": value["render"],
+                "cut_is_current": value["cut_is_current"],
+                "frames": [
+                    {"frame": item["frame"], "seconds": item["seconds"]} for item in value["frames"]
+                ],
+                "image_count": len(images),
+                "note": "Frames are attached in this order.",
+            }
+        ),
+        images=images,
+    )
+
+
 def _generate_images(root, arguments, runner):
     from mp3_to_videoclip import services
     from mp3_to_videoclip.domain import budget
@@ -696,3 +853,10 @@ def _render(root, arguments, runner):
 
     job_id = runner.submit("render", root.name, work, blocking=True, render_kind=kind)
     return {"job_id": job_id, "kind": kind, "status": "queued"}
+
+
+def tools_for(role: str | None) -> list[dict]:
+    """The tool list one role is offered."""
+    if role != "critic":
+        return TOOLS
+    return [tool for tool in TOOLS if tool["function"]["name"] in CRITIC_TOOLS]

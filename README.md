@@ -48,10 +48,21 @@ yet (transcription, listening, backups, signing, maintenance). Start with
 - Shared Remotion primitives for dips, whip pans, pushes, slides, punch-ins,
   flashes, light leaks, split layouts, five text animations and six grade
   presets; two-second visual samples are in `docs/primitives/`.
-- A local evaluation harness (`uv run python -m tests.evals`) over three frozen
-  fixtures, with one prompt-version page per report hash, automatic Writer/Editor
+- A local evaluation harness (`uv run python -m tests.evals`), and a by-hand live runner
+  (`tests/evals/live.py`), over three frozen fixtures, with one prompt-version page per report hash, automatic Writer/Editor
   checks, a cross-review rubric and Studio thumbs stored against the prompt
   revision. See `docs/EVALUATION.md`.
+- Voiceover: lines placed in the cut, takes made through the money journal (MiniMax
+  Speech 2.8 HD by default) or your own recording, and a derived mix that lowers the music
+  under speech and never changes the source MP3 (`voice.py`).
+- A Critic beside the Writer and Editor: it looks at frames of the newest render against
+  the brief and leaves notes on Film. It can change nothing, and it can't hear or see motion
+  (`critique.py`).
+- Character references set from a cropped still in Images, so a face holds across shots.
+- Renders one chunk per shot, reusing unchanged ones for working renders, with a
+  broken-frame check on every film. A final always renders fresh.
+- Parked films: a collapsed group in the library, with no project folder touched.
+- `scripts/clean_caches.py` lists rebuildable caches and removes them only with `--yes`.
 - Read-only archive view of frozen productions (`domain/archive.py`).
 - Image reviews bound to exact versions and bytes, plus content-bound brief,
   storyboard, proof, preview, stills and graphics approvals in the Studio.

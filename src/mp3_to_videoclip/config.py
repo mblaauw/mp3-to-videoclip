@@ -26,6 +26,7 @@ class Settings(BaseModel):
     opencode_bin: str = "opencode"
     writer_model: str = "openai/gpt-6.1-sol"
     editor_model: str = "opencode-go/deepseek-v4.1-flash"
+    critic_model: str = "openai/gpt-6.1-sol"
     opencode_workspace: str = ""
     llm_base_url: str = "https://opencode.ai/inference/go/openai/v1"
     llm_api_key: str = ""

@@ -371,6 +371,7 @@ export type Settings = {
   opencode_workspace?: string;
   writer_model?: string;
   editor_model?: string;
+  critic_model?: string;
   llm_model?: string;
   llm_base_url?: string;
   has_llm_api_key?: boolean;
@@ -541,12 +542,58 @@ export type EditReport = {
   ad?: { applicable: boolean; checks: { id: string; ok: boolean; message: string }[] };
 };
 
+export type EditVoiceLine = {
+  id: string;
+  text: string;
+  start_frame: number;
+  gain_db?: number;
+  reason?: string;
+};
+
 export type EditPayload = {
   schema_version?: 1;
   sections: unknown[];
   shots: import("./baseFilm").EditShot[];
   grade: import("./baseFilm").Grade;
   notes?: string;
+  voice?: EditVoiceLine[];
+};
+
+export type VoiceLine = {
+  id: string;
+  text: string;
+  start_frame: number;
+  gain_db: number;
+  selected: number | null;
+  current: boolean;
+  end_seconds: number | null;
+  runs_into_next: boolean;
+  runs_past_end: boolean;
+  takes: { version: number; source: string; seconds: number; text: string }[];
+};
+
+export type CritiqueNote = {
+  severity: "must_fix" | "should_fix" | "consider";
+  note: string;
+  suggestion?: string;
+  shot_id?: string;
+  frame?: number;
+};
+
+export type Critique = {
+  at: string;
+  render: string;
+  verdict: string;
+  notes: CritiqueNote[];
+  current: boolean;
+};
+
+export type VoiceEstimate = {
+  quote_id: string;
+  voice: string;
+  tasks: number;
+  characters: number;
+  reserve_usd: string;
 };
 
 export type EditSummary = {
@@ -706,6 +753,7 @@ export type ImageEstimate = {
 };
 
 export type ImageEstimateResponse = {
+  needs_new_round?: string[];
   estimate?: ImageEstimate;
   decision?: BudgetDecision;
   budget?: Omit<Budget, "history">;
@@ -752,6 +800,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   projects: () => request<ProjectSummary[]>("/api/projects"),
+  setParked: (slug: string, parked: boolean) =>
+    request<{ slug: string; parked: boolean }>(`/api/projects/${slug}/parked`, {
+      method: "PUT",
+      body: JSON.stringify({ parked }),
+    }),
   createProject: async (
     file: File,
     meta: {
@@ -922,6 +975,32 @@ export const api = {
       headers: revisionHeaders(base, slug, "edit"),
       body: JSON.stringify({ edit }),
     }),
+  voice: (slug: string) =>
+    request<{ voice: string; lines: VoiceLine[] }>(`/api/projects/${slug}/voice`),
+  estimateVoice: (slug: string) =>
+    request<VoiceEstimate | { error: string }>(`/api/projects/${slug}/voice/estimate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  generateVoice: (slug: string, quoteId: string) =>
+    request<{ job_id: string } | { error: string } | { needs_budget: true }>(
+      `/api/projects/${slug}/voice/generate`,
+      { method: "POST", body: JSON.stringify({ quote_id: quoteId }) },
+    ),
+  selectVoiceTake: (slug: string, lineId: string, version: number) =>
+    request<{ voice: string; lines: VoiceLine[] }>(`/api/projects/${slug}/voice/select`, {
+      method: "POST",
+      body: JSON.stringify({ line_id: lineId, version }),
+    }),
+  uploadVoiceTake: (slug: string, lineId: string, file: File) =>
+    request<{ voice: string; lines: VoiceLine[] }>(
+      `/api/projects/${slug}/voice/upload?line_id=${encodeURIComponent(lineId)}&filename=${encodeURIComponent(file.name)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      },
+    ),
   exports: (slug: string) =>
     request<FilmExports>(
       `/api/projects/${slug}/exports`,
@@ -956,7 +1035,26 @@ export const api = {
       "/api/setup/renderer",
       { method: "POST", body: JSON.stringify({}) },
     ),
-  chat: (slug: string, role?: "writer" | "editor") =>
+  addCharacterReference: (
+    slug: string,
+    character: string,
+    body: { shot_id: string; version: number; box: number[] | null },
+  ) =>
+    request<Brief>(`/api/projects/${slug}/characters/${encodeURIComponent(character)}/references`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  removeCharacterReference: (slug: string, character: string, path: string) =>
+    request<Brief>(
+      `/api/projects/${slug}/characters/${encodeURIComponent(character)}/references/remove`,
+      { method: "POST", body: JSON.stringify({ path }) },
+    ),
+  critique: (slug: string) => request<{ critique: Critique | null }>(`/api/projects/${slug}/critique`),
+  directorModel: (slug: string, role: "writer" | "editor" | "critic") =>
+    request<{ model: string; gateway: string; can_see: boolean | null }>(
+      `/api/projects/${slug}/director/model?role=${role}`,
+    ),
+  chat: (slug: string, role?: "writer" | "editor" | "critic") =>
     request<{ messages: unknown[] }>(
       `/api/projects/${slug}/chat${role ? `?role=${role}` : ""}`,
     ),
@@ -1043,6 +1141,11 @@ export const api = {
     request<ImageEstimateResponse>(`/api/projects/${slug}/images/estimate`, {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  startNewRound: (slug: string, shotIds: string[], note: string) =>
+    request<{ started: string[] }>(`/api/projects/${slug}/images/new-round`, {
+      method: "POST",
+      body: JSON.stringify({ shot_ids: shotIds, note }),
     }),
   generateImages: (
     slug: string,

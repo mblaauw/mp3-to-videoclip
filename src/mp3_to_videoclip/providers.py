@@ -155,6 +155,14 @@ def _image_format(data: bytes) -> str:
     return fmt
 
 
+def _check_speech(data: bytes) -> None:
+    """Refuse anything that is not plainly an audio file before it is saved."""
+    if not (
+        data[:4] in (b"RIFF", b"fLaC", b"OggS") or data[:3] == b"ID3" or data[:2] == b"\xff\xfb"
+    ):
+        raise ProviderError("invalid_audio")
+
+
 def _atomic_write(path: Path, data: bytes) -> None:
     """Write bytes atomically without ever replacing an existing asset file."""
     if path.exists():
@@ -343,6 +351,13 @@ class RunwareClient:
 
     def download(self, url: str, path: Path) -> None:
         """Stream a verified image to ``path`` without overwriting an existing asset."""
+        self._download(url, path, _image_format)
+
+    def download_audio(self, url: str, path: Path) -> None:
+        """Stream a verified audio file to ``path`` without overwriting an existing asset."""
+        self._download(url, path, _check_speech)
+
+    def _download(self, url: str, path: Path, check) -> None:
         path = Path(path)
         if path.exists():
             raise ProviderError("asset_exists")
@@ -373,7 +388,7 @@ class RunwareClient:
         except _network_errors() as exc:
             raise ProviderError("network_error") from exc
         data = b"".join(chunks)
-        _image_format(data)
+        check(data)
         _atomic_write(path, data)
 
     def reference_image(self, path: Path) -> str:
@@ -501,6 +516,48 @@ class RunwareClient:
         if original.get("status") in _PENDING or original.get("mediaUUID") is None:
             return None
         return self._upload_result(original, task_uuid)
+
+    # ------------------------------------------------------------------ speech
+
+    @staticmethod
+    def _speech_result(task: dict | None, task_uuid: str) -> dict | None:
+        """The canonical finished result, or ``None`` while the task is still pending."""
+        if task is None:
+            return None
+        if task.get("status") == "error":
+            raise ProviderError(_safe_code(task.get("code")))
+        if task.get("status") in _PENDING or task.get("audioURL") is None:
+            return None
+        cost = task.get("cost")
+        if (
+            isinstance(cost, bool)
+            or not isinstance(cost, (int, float))
+            or not math.isfinite(cost)
+            or cost < 0
+        ):
+            raise ProviderError("invalid_cost")
+        url = _safe_media_url(task.get("audioURL"))
+        return {"taskUUID": task_uuid, "audioURL": url, "cost": float(cost)}
+
+    def submit_speech(self, request: dict) -> dict:
+        """Submit one speech task. Returns the finished result or ``{taskUUID}``."""
+        if not isinstance(request, dict) or request.get("taskType") != "audioInference":
+            raise ProviderError("invalid_request")
+        task_uuid = request.get("taskUUID")
+        if not isinstance(task_uuid, str) or not task_uuid:
+            raise ProviderError("invalid_request")
+        data = self._post_json([{**request, "includeCost": True}])
+        task = self._match(data, task_uuid)
+        if task is None:
+            raise ProviderError("mismatched_task")
+        return self._speech_result(task, task_uuid) or {"taskUUID": task_uuid}
+
+    def recover_speech(self, task_uuid: str) -> dict | None:
+        """Read-only ``getResponse`` poll. Returns the finished result, or ``None``."""
+        if not isinstance(task_uuid, str) or not task_uuid:
+            raise ProviderError("invalid_request")
+        data = self._post_json([{"taskType": "getResponse", "taskUUID": task_uuid}])
+        return self._speech_result(self._match(data, task_uuid), task_uuid)
 
     # ------------------------------------------------------------------ text inference
 

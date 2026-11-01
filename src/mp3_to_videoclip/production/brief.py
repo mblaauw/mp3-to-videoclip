@@ -13,6 +13,7 @@ from ..models import (
 )
 from ..storage import (
     digest,
+    inside,
     read_json,
     read_optional,
     require_revision,
@@ -48,13 +49,36 @@ def _merge_patch(target, patch):
     return result
 
 
+def _keep_owner_character_fields(previous, value):
+    """A model's rewrite keeps what only the owner sets: permission and reference images."""
+    stored = previous.get(value.id)
+    if stored is None:
+        return value.model_copy(update={"permission_confirmed": False})
+    states = {
+        state_id: state.model_copy(
+            update={
+                "references": stored.states[state_id].references
+                if state_id in stored.states
+                else state.references
+            }
+        )
+        for state_id, state in value.states.items()
+    }
+    return value.model_copy(
+        update={
+            "permission_confirmed": stored.permission_confirmed,
+            "references": stored.references,
+            "states": states,
+        }
+    )
+
+
 def _keep_stored_permissions(previous: Brief, brief: Brief) -> Brief:
-    """Only the owner sets the permission gate: keep what is stored, new entries start false."""
-    characters = {value.id: value.permission_confirmed for value in previous.characters}
+    """Only the owner sets the permission gate and a character's references."""
+    characters = {value.id: value for value in previous.characters}
     update: dict = {
         "characters": [
-            value.model_copy(update={"permission_confirmed": characters.get(value.id, False)})
-            for value in brief.characters
+            _keep_owner_character_fields(characters, value) for value in brief.characters
         ]
     }
     if brief.creative is not None:
@@ -184,6 +208,13 @@ def set_creative_profile(
             raise ValueError(
                 f"keep film-specific look additions to {PROFILE_MAX_LOOK_ADDITIONS} words"
             )
+    elif (preset := _preset_with_note(look_text)) is not None:
+        # The preset's words are approved already; only the film's own note is counted.
+        additions = look_text[len(preset.look) :].strip()
+        if len(additions.split()) > PROFILE_MAX_LOOK_ADDITIONS:
+            raise ValueError(
+                f"keep film-specific look additions to {PROFILE_MAX_LOOK_ADDITIONS} words"
+            )
     elif len(look_text.split()) > PROFILE_MAX_LOOK_WORDS:
         raise ValueError(
             f"keep the custom look to {PROFILE_MAX_LOOK_WORDS} words; "
@@ -273,3 +304,60 @@ def _record_prompt_write(root: Path, artifact: str) -> None:
 
 def is_creative(root: Path) -> bool:
     return load_brief(root).creative is not None
+
+
+def _preset_with_note(look: str):
+    from .intake import _matching_preset
+
+    return _matching_preset(look)
+
+
+def add_character_reference(
+    root: Path, character_id: str, shot_id: str, version: int, box: list[int] | None = None
+) -> Brief:
+    """Make a still from this film the reference that keeps a character consistent."""
+    from ..references import import_reference
+    from .image_specs import _character_refusal
+
+    brief = load_brief(root)
+    character = next((item for item in brief.characters if item.id == character_id), None)
+    if character is None:
+        raise ValueError(f"unknown character {character_id}")
+    if not character.permission_confirmed:
+        raise _character_refusal(character_id)
+    entry = read_json(root / "work/assets.json").get(shot_id) or {}
+    still = next((item for item in entry.get("versions", []) if item["version"] == version), None)
+    if still is None:
+        raise ValueError(f"shot {shot_id} has no version {version}")
+    imported = import_reference(
+        root,
+        inside(root, still["path"]),
+        note=f"Still {shot_id} v{version} of this film, chosen by the owner",
+        permission_confirmed=True,
+        box=box,
+    )
+    if imported["path"] in character.references:
+        return brief
+    return _set_character_references(
+        root, brief, character_id, [*character.references, imported["path"]]
+    )
+
+
+def remove_character_reference(root: Path, character_id: str, path: str) -> Brief:
+    brief = load_brief(root)
+    character = next((item for item in brief.characters if item.id == character_id), None)
+    if character is None or path not in character.references:
+        raise ValueError(f"{character_id} has no such reference")
+    return _set_character_references(
+        root, brief, character_id, [item for item in character.references if item != path]
+    )
+
+
+def _set_character_references(
+    root: Path, brief: Brief, character_id: str, paths: list[str]
+) -> Brief:
+    characters = [
+        {**item.model_dump(), "references": paths} if item.id == character_id else item.model_dump()
+        for item in brief.characters
+    ]
+    return update_brief(root, {"characters": characters}, owner=True)

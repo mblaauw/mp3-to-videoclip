@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from api_support import add_assets, api_client, make_api_project
 
-from mp3_to_videoclip import services
+from mp3_to_videoclip import budget, services
 
 
 @pytest.fixture
@@ -454,3 +454,33 @@ def test_estimate_quotes_the_alias_owner_once(project, monkeypatch):
     result = generation.estimate(project, ["s002", "s001"])
     assert captured["ids"] == ["s001"]
     assert result["quote_id"] == "quote-alias"
+
+
+def test_a_used_correction_asks_for_a_new_round_with_a_reason(tmp_path):
+    from mp3_to_videoclip.storage import write_json
+
+    root = make_api_project(tmp_path)
+    budget.set_budget(root, "5.00", "test budget")
+    journal = {
+        f"t{i}": {
+            "kind": "images",
+            "shot_id": "s001",
+            "status": "ready",
+            "version": i,
+            "quote_id": "q",
+            "cost_usd": "0.03",
+        }
+        for i in (1, 2)
+    }
+    write_json(root / "work/tasks.json", journal)
+    with api_client(tmp_path) as client:
+        base = f"/api/projects/{root.name}/images"
+        asked = client.post(f"{base}/estimate", json={"shot_ids": ["s001"]}).json()
+        assert asked == {"needs_new_round": ["s001"]}
+        refused = client.post(f"{base}/new-round", json={"shot_ids": ["s001"], "note": " "})
+        assert refused.status_code == 400
+        started = client.post(
+            f"{base}/new-round", json={"shot_ids": ["s001"], "note": "A new reference"}
+        )
+        assert started.status_code == 200
+    assert budget.used_up_corrections(root, ["s001"]) == []

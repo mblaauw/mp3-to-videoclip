@@ -797,3 +797,179 @@ def test_instrumental_init_and_stage_gates(tmp_path, monkeypatch):
     P.require_approval(root, "brief")
     with pytest.raises(ValueError, match="instrumental"):
         P.require_approval(root, "lyrics")
+
+
+def test_the_owners_avoid_list_reaches_the_picture_prompt(tmp_path):
+    root = make_root(tmp_path)
+    brief = read_json(root / "brief.json")
+    brief["avoid"] = ["Captions", "Alcohol"]
+    brief["intent"] = {"kind": "promo", "avoid": ["Alcohol", "Mocktails only"]}
+    write_json(root / "brief.json", brief)
+    board = P.load_board(root)
+    prompt = P.image_spec(root, board.shots[0])["positivePrompt"]
+    assert "Avoid: Captions; Alcohol; Mocktails only" in prompt
+
+
+def _with_still(root):
+    from PIL import Image as Picture
+
+    path = root / "assets/s001/v001-test.jpg"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Picture.new("RGB", (64, 48), "navy").save(path)
+    write_json(
+        root / "work/assets.json",
+        {
+            "s001": {
+                "selected": 1,
+                "versions": [{"version": 1, "path": "assets/s001/v001-test.jpg"}],
+            }
+        },
+    )
+    return path
+
+
+def _character_id(root, *, permission=True):
+    brief = read_json(root / "brief.json")
+    brief["characters"] = [
+        {
+            "id": "hero",
+            "identity": "A tall black cat",
+            "permission_confirmed": permission,
+            "references": [],
+        }
+    ]
+    write_json(root / "brief.json", brief)
+    return "hero"
+
+
+def test_a_still_can_become_a_characters_reference_and_leaves_the_still_alone(tmp_path):
+    root = make_root(tmp_path)
+    still = _with_still(root)
+    before = still.read_bytes()
+    who = _character_id(root)
+    brief = P.add_character_reference(root, who, "s001", 1, [8, 8, 40, 40])
+    reference = brief.characters[0].references[0]
+    assert reference.startswith("media/references/")
+    with Image.open(root / reference) as picture:
+        assert picture.size == (32, 32)
+    assert still.read_bytes() == before
+    # Asking again changes nothing, and the reference can be removed.
+    assert P.add_character_reference(root, who, "s001", 1, [8, 8, 40, 40]).characters[
+        0
+    ].references == [reference]
+    assert P.remove_character_reference(root, who, reference).characters[0].references == []
+
+
+def test_a_reference_needs_the_owners_permission_and_a_real_still(tmp_path):
+    root = make_root(tmp_path)
+    _with_still(root)
+    who = _character_id(root, permission=False)
+    with pytest.raises(ValueError, match="permission"):
+        P.add_character_reference(root, who, "s001", 1)
+    who = _character_id(root)
+    with pytest.raises(ValueError, match="no version"):
+        P.add_character_reference(root, who, "s001", 9)
+
+
+def _two_versions(root, first_hash, second_hash):
+    write_json(
+        root / "work/assets.json",
+        {
+            "s001": {
+                "selected": 1,
+                "versions": [
+                    {"version": 1, "input_hash": first_hash},
+                    {"version": 2, "input_hash": second_hash},
+                ],
+            }
+        },
+    )
+
+
+def _selected_after(root, input_hash):
+    G._replace_outdated_selection(root, {"shot_id": "s001", "version": 2, "input_hash": input_hash})
+    return read_json(root / "work/assets.json")["s001"]["selected"]
+
+
+def test_a_remake_from_the_current_prompt_replaces_an_outdated_selection(tmp_path):
+    root = make_root(tmp_path)
+    shot = P.load_board(root).shots[0]
+    model = P.load_project(root).image_model or profiles.LEGACY_MODEL
+    current = digest(G.effective_image_spec(P.image_spec(root, shot), model))
+    _two_versions(root, "old-prompt", current)
+    assert _selected_after(root, current) == 2
+
+
+def test_an_alternative_from_the_same_prompt_waits_for_the_owner(tmp_path):
+    root = make_root(tmp_path)
+    shot = P.load_board(root).shots[0]
+    model = P.load_project(root).image_model or profiles.LEGACY_MODEL
+    current = digest(G.effective_image_spec(P.image_spec(root, shot), model))
+    _two_versions(root, current, current)
+    assert _selected_after(root, current) == 1
+
+
+def test_a_still_from_a_prompt_that_has_since_changed_never_takes_over(tmp_path):
+    root = make_root(tmp_path)
+    _two_versions(root, "older", "also-older")
+    assert _selected_after(root, "also-older") == 1
+
+
+def test_a_models_rewrite_of_the_cast_keeps_the_owners_references(tmp_path):
+    root = make_root(tmp_path)
+    _with_still(root)
+    who = _character_id(root)
+    reference = P.add_character_reference(root, who, "s001", 1).characters[0].references[0]
+    rewritten = read_json(root / "brief.json")
+    rewritten["characters"][0]["references"] = []
+    rewritten["characters"][0]["identity"] = "A tall black cat with amber eyes"
+    kept = P._keep_stored_permissions(P.load_brief(root), Brief.model_validate(rewritten))
+    assert kept.characters[0].references == [reference]
+    assert kept.characters[0].identity == "A tall black cat with amber eyes"
+    assert kept.characters[0].permission_confirmed is True
+
+
+def test_out_of_date_stills_names_a_paid_shot_whose_prompt_moved(tmp_path):
+    root = make_root(tmp_path)
+    shot = P.load_board(root).shots[0]
+    write_json(
+        root / "work/assets.json",
+        {
+            shot.id: {
+                "selected": 1,
+                "versions": [{"version": 1, "input_hash": digest(P.image_spec(root, shot))}],
+            }
+        },
+    )
+    assert P.out_of_date_stills(root) == []
+    P.update_shots(root, [{"id": shot.id, "image_prompt": "A different picture"}])
+    assert P.out_of_date_stills(root) == [shot.id]
+
+
+def test_a_preset_look_with_its_film_note_passes_the_word_limit(tmp_path):
+    from mp3_to_videoclip import styles
+
+    root = make_root(tmp_path)
+    look = styles.preset("painted-comic-noir-v1").look + "\n\nPainted in oil and gouache."
+    assert P._matching_preset(look) is not None
+    brief = P.load_brief(root)
+    saved = P.set_creative_profile(
+        root,
+        characters=[item.model_dump() for item in brief.characters],
+        scenes=[item.model_dump() for item in brief.creative.scenes],
+        arc=[],
+        image_rules=[],
+        avoid=[],
+        look=look,
+    )
+    assert saved.creative.look == look
+    with pytest.raises(ValueError, match="additions"):
+        P.set_creative_profile(
+            root,
+            characters=[item.model_dump() for item in brief.characters],
+            scenes=[item.model_dump() for item in brief.creative.scenes],
+            arc=[],
+            image_rules=[],
+            avoid=[],
+            look=styles.preset("painted-comic-noir-v1").look + "\n\n" + "word " * 61,
+        )
