@@ -6,6 +6,7 @@ import { DELIVERY_STAGES } from "../film/deliveryWorkflow";
 
 const TITLE: Record<string, string> = {
   images: "Making stills",
+  voice: "Making the voiceover",
   render: "Rendering",
   analysis: "Measuring the song",
   transcription: "Transcribing the lyrics",
@@ -37,7 +38,7 @@ const PHASE: Record<string, string> = {
   "rendering-visuals": "Rendering frames",
   rendering: "Rendering frames",
   encoding: "Encoding",
-  "muxing-audio": "Adding the music",
+  "muxing-audio": "Adding the sound",
   "verifying-output": "Checking the file",
   "sampling-graphics": "Preparing actual composited samples",
   "awaiting-owner-review": "Samples prepared — your intro/credits review is next",

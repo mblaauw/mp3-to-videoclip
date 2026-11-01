@@ -107,6 +107,7 @@ def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
             "clean-photographic-v1",
             "product-studio-v1",
             "brand-graphic-v1",
+            "painted-comic-noir-v1",
         }
         assert {item["id"] for item in first["kinds"]} == {
             "music_video",
@@ -595,7 +596,7 @@ def test_events_stream_starts_with_json_hello(client):
 def test_director_chat_reads_and_streams(client, monkeypatch):
     assert client.get("/api/projects/production/chat").json() == {"messages": []}
     assert client.get("/api/projects/production/chat?role=editor").json() == {"messages": []}
-    assert client.get("/api/projects/production/chat?role=critic").status_code == 400
+    assert client.get("/api/projects/production/chat?role=nobody").status_code == 400
     empty = client.post("/api/projects/production/chat", json={"message": ""})
     assert empty.status_code == 400
     assert empty.json()["detail"] == "message required"
@@ -664,10 +665,10 @@ def test_director_context_is_bounded_and_typed(client):
         assert response.status_code == 400, response.text
         assert needle in response.text
     bad_role = client.post(
-        "/api/projects/production/chat", json={"message": "hi", "role": "critic"}
+        "/api/projects/production/chat", json={"message": "hi", "role": "nobody"}
     )
     assert bad_role.status_code == 400
-    assert "writer or editor" in bad_role.text
+    assert "writer, editor or critic" in bad_role.text
 
 
 def test_intake_keeps_a_custom_look_when_no_preset_is_selected(client, project):

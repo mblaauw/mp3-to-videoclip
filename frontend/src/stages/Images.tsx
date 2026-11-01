@@ -10,6 +10,8 @@ import {
   type Storyboard,
 } from "../api";
 import { ApprovalBar, useApprovals } from "../ApprovalBar";
+import { ReferencePicker } from "../images/ReferencePicker";
+import { NewRoundCard } from "../images/NewRoundCard";
 import { PaidCard } from "../images/PaidCard";
 import { usePaidImages } from "../images/paid";
 import { JobBanner } from "../jobs/JobBanner";
@@ -151,6 +153,13 @@ export function ImagesStage({
   const paid = usePaidImages(slug, reserve, () => {
     void load();
   });
+
+  // Whatever a paid request needs answered must be on screen, not above the fold.
+  const answerRef = useRef<HTMLDivElement>(null);
+  const waitingForAnswer = Boolean(paid.quote || paid.newRound || paid.error);
+  useEffect(() => {
+    if (waitingForAnswer) answerRef.current?.scrollIntoView({ block: "center" });
+  }, [waitingForAnswer, paid.quote, paid.newRound, paid.error]);
 
   const scheduleRefresh = () => {
     if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
@@ -577,6 +586,7 @@ export function ImagesStage({
         </div>
       </div>
 
+      <div ref={answerRef}>
       {paid.quote && (
         <div className="paid-dock">
           <PaidCard
@@ -588,9 +598,20 @@ export function ImagesStage({
           />
         </div>
       )}
+      {paid.newRound && (
+        <div className="paid-dock">
+          <NewRoundCard
+            shots={paid.newRound.used}
+            busy={paid.busy}
+            onStart={(note) => void paid.startNewRound(note)}
+            onCancel={paid.clear}
+          />
+        </div>
+      )}
       {(paid.message || paid.error) && (
         <p className={paid.error ? "error" : "message"}>{paid.error || paid.message}</p>
       )}
+      </div>
 
       {visible.length ? (
         <div className="contact-sheet">
@@ -774,6 +795,16 @@ export function ImagesStage({
                   </button>
                 ))}
               </div>
+            )}
+
+            {!current.local && current.selected !== null && (
+              <ReferencePicker
+                key={`${current.owner}-${current.selected}`}
+                slug={slug}
+                shotId={current.owner}
+                version={current.selected}
+                src={`/api/projects/${slug}/images/${encodeURIComponent(current.owner)}/${current.selected}`}
+              />
             )}
 
             {!current.local && current.selected !== null && (

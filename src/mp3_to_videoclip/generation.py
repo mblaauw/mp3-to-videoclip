@@ -498,7 +498,30 @@ def finish_image(root: Path, task_uuid: str, result: dict, client: RunwareClient
         record_asset(root, task["shot_id"], task["version"], path, task["input_hash"], task_uuid)
         current.update(status="ready", path=relative, sha256=file_hash(path), completed_at=now())
         write_json(root / "work/tasks.json", journal)
+        _replace_outdated_selection(root, task)
     return True
+
+
+def _replace_outdated_selection(root: Path, task: dict) -> None:
+    """A still from the current prompt replaces a selection made from an older one.
+
+    An alternative from the same prompt never takes over: that choice is the owner's.
+    """
+    assets = read_json(root / "work/assets.json")
+    entry = assets[task["shot_id"]]
+    selected = next(
+        (item for item in entry["versions"] if item["version"] == entry["selected"]), None
+    )
+    if selected is None or selected["input_hash"] == task["input_hash"]:
+        return
+    shot = next((item for item in load_board(root).shots if item.id == task["shot_id"]), None)
+    if shot is None:
+        return
+    model = load_project(root).image_model or LEGACY_MODEL
+    if digest(effective_image_spec(image_spec(root, shot), model)) != task["input_hash"]:
+        return
+    entry["selected"] = task["version"]
+    write_json(root / "work/assets.json", assets)
 
 
 def _submit_only(client, request: dict) -> dict:
@@ -748,6 +771,10 @@ def generate(root: Path, quote_id: str, client=None, *, concurrency: int = 1):
 
 def recover(root: Path, task_uuid: str, client=None):
     task = read_json(root / "work/tasks.json").get(task_uuid)
+    if task and task.get("kind") == "voice":
+        from .voice import recover_voice
+
+        return recover_voice(root, task_uuid, client)
     if task and task.get("kind") == "music-analysis":
         from .music_analysis import recover_music
 

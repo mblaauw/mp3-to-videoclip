@@ -83,7 +83,12 @@ KINDS: dict[Kind, KindProfile] = {
         pacing="Medium; builds to the reveal without inventing a second idea",
         opening_closing="Short title and end card; credits optional",
         signature_required=False,
-        style_presets=("clean-photographic-v1", "product-studio-v1", "brand-graphic-v1"),
+        style_presets=(
+            "clean-photographic-v1",
+            "product-studio-v1",
+            "brand-graphic-v1",
+            "painted-comic-noir-v1",
+        ),
         default_style="clean-photographic-v1",
     ),
     "advert": KindProfile(
@@ -107,7 +112,12 @@ KINDS: dict[Kind, KindProfile] = {
         pacing="Brand visible in the first 5 s; tight; end card holds at least 3 s",
         opening_closing="Logo lockup and CTA end card; no credits roll",
         signature_required=False,
-        style_presets=("clean-photographic-v1", "product-studio-v1", "brand-graphic-v1"),
+        style_presets=(
+            "clean-photographic-v1",
+            "product-studio-v1",
+            "brand-graphic-v1",
+            "painted-comic-noir-v1",
+        ),
         default_style="clean-photographic-v1",
     ),
 }

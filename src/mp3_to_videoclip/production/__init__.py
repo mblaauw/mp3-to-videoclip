@@ -63,7 +63,15 @@ from .assets import (
     select_asset,
     set_proof_ids,
 )
-from .board import init_events, load_board, load_events, skeleton, update_shots, validate_board
+from .board import (
+    init_events,
+    load_board,
+    load_events,
+    skeleton,
+    update_shots,
+    validate_board,
+    write_storyboard,
+)
 from .brief import (
     PROFILE_MAX_ARC,
     PROFILE_MAX_AVOID,
@@ -73,10 +81,12 @@ from .brief import (
     _keep_stored_permissions,
     _merge_patch,
     _record_prompt_write,
+    add_character_reference,
     is_creative,
     legacy_brief_hash,
     load_brief,
     load_treatments,
+    remove_character_reference,
     set_creative_profile,
     unconfirmed_permissions,
     update_brief,
@@ -95,6 +105,7 @@ from .image_specs import (
     character_refs,
     creative_profile_version,
     image_spec,
+    out_of_date_stills,
     reference_refs,
 )
 from .intake import (
@@ -110,6 +121,7 @@ from .project import (
     STAGE_FILES,
     UPSTREAM,
     creative_workflow,
+    film_audio,
     load_project,
     now,
     project_payload,
@@ -205,7 +217,12 @@ __all__ = [
     "read_optional",
     "record_asset",
     "reference_refs",
+    "add_character_reference",
+    "film_audio",
+    "out_of_date_stills",
+    "remove_character_reference",
     "render_audio",
+    "write_storyboard",
     "require_approval",
     "require_revision",
     "requires_signature",
