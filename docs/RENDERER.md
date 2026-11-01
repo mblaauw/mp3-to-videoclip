@@ -160,8 +160,11 @@ Apache-2.0, at a pinned revision), set up only on the owner's click. `work/depth
 sha>-<tools>-v<n>/` holds three feathered layers. Far covers the frame, so moving the others
 never shows a hole, and behind each nearer layer the picture is replaced by the pixels
 around it, so what a move uncovers is background and not the subject's edge a second time. `grade.look.depth` turns it on for a film and `depth: false` keeps one
-shot flat. A film with depth refuses to render a still without layers rather than draw it
-flat without saying so; the Player plays such a shot flat, because it is only a preview.
+shot flat. A render makes any missing layers itself where the tools are set up, and otherwise refuses
+rather than draw a still flat without saying so; a preview's stand-in plate and the Player stay
+flat. A new film starts at `new_films.depth` (0.6, the owner's choice from the real comparison)
+only where the tools are set up, recorded at intake in `work/starting-look.json`, so an existing
+film stays off.
 
 A sharper still (`upscale.py`) is a journaled 2× version of a selected still with the same
 `input_hash`, so the renderer simply stages whichever is selected.

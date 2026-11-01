@@ -241,7 +241,8 @@ Differences from the plans, where the plan was wrong or could not hold:
   opening the library writes nothing into a film. The 0.999 parity number cannot be met:
   full-size renders do not repeat exactly even with one browser.
 - **C:** the type face lives in `grade.typeface`. Upscaling uses Real-ESRGAN at a published
-  $0.0006. No paid batch and no real depth run have happened; both need the owner.
+  $0.0006. No paid batch has happened; it needs the owner. Real depth ran on a scratch copy and
+  the owner chose 0.6 as a new film's start, where the tools are set up. Existing films stay off.
 
 Still open by decision: the OpenAI major version waits for E-1, whose adapter replaces that code.
 The narrator voice in Settings is not used until Phase I; `voice.py` keeps its own default.
