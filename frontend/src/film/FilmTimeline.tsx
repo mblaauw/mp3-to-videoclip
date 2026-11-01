@@ -307,6 +307,14 @@ export function FilmTimeline({
                 />
               )),
             )}
+            {edit?.voice?.map((line) => (
+              <span
+                key={line.id}
+                className="film-voice-tick"
+                style={{ left: `${(line.start_frame / total) * 100}%` }}
+                title={`Voice: ${line.text}`}
+              />
+            ))}
             {edit &&
               shots.slice(1).map(({ shot, start }, offset) => {
                 const styled =

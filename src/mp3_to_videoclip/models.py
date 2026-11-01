@@ -789,8 +789,10 @@ EditTransitionType = Literal[
 ]
 EditMotionType = Literal["hold", "push_in", "pull_back", "pan_left", "pan_right"]
 EditAccentType = Literal["punch_in", "flash", "light_leak"]
-EditTextAnimation = Literal["fade", "type_on", "slide_up", "pop", "kinetic_words"]
-EditTextStyle = Literal["super", "title", "lower_third", "lyric", "card"]
+EditTextAnimation = Literal["fade", "fade_in", "type_on", "slide_up", "pop", "kinetic_words"]
+EditTextStyle = Literal[
+    "super", "title", "lower_third", "lyric", "card", "logotype", "tagline", "cta"
+]
 GradePreset = Literal["neutral", "warm-night", "clean-day", "monochrome", "vivid", "film-fade"]
 
 
@@ -898,6 +900,7 @@ class EditText(Model):
     out_frame: int = Field(gt=0)
     animation: EditTextAnimation = "fade"
     reason: str = Field(default="", max_length=240)
+    color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
     @model_validator(mode="after")
     def check_window(self):
@@ -910,6 +913,9 @@ class EditText(Model):
         value = handler(self)
         if value.get("reason") == "":
             value.pop("reason", None)
+        # Absent when unused, so existing text hashes as it always has.
+        if value.get("color") is None:
+            value.pop("color", None)
         return value
 
 
@@ -946,7 +952,8 @@ class EditShot(Model):
         if frames != sorted(set(frames)):
             raise ValueError(f"crop cuts in shot {self.shot_id} must be in order, one per frame")
         for frame in frames:
-            if not self.start_frame < frame < end:
+            # A crop on the first frame reframes the whole shot, which a reprise needs.
+            if not self.start_frame <= frame < end:
                 raise ValueError(f"crop cut at {frame} is outside shot {self.shot_id}")
         ids = {item.id for item in self.text}
         if len(ids) != len(self.text):
@@ -955,6 +962,25 @@ class EditShot(Model):
             if not self.start_frame <= item.in_frame < item.out_frame <= end:
                 raise ValueError(f"text {item.id} is outside shot {self.shot_id}")
         return self
+
+
+class EditVoice(Model):
+    """One spoken line of voiceover; the takes themselves live in work/voice.json."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    text: str = Field(min_length=1, max_length=400)
+    start_frame: int = Field(ge=0)
+    gain_db: float = Field(default=0, ge=-12, le=12)
+    reason: str = Field(default="", max_length=240)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        if value.get("reason") == "":
+            value.pop("reason", None)
+        if value.get("gain_db") == 0:
+            value.pop("gain_db", None)
+        return value
 
 
 class EditSection(Model):
@@ -1016,9 +1042,24 @@ class EditDecisionList(Model):
     shots: list[EditShot] = Field(min_length=1)
     grade: Grade = Field(default_factory=Grade)
     notes: str = Field(default="", max_length=2000)
+    voice: list[EditVoice] = Field(default_factory=list, max_length=64)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        value = handler(self)
+        # Absent when unused, so a cut without voiceover hashes as it always has.
+        if not value.get("voice"):
+            value.pop("voice", None)
+        return value
 
     @model_validator(mode="after")
     def check_order(self):
+        voice_ids = [line.id for line in self.voice]
+        if len(set(voice_ids)) != len(voice_ids):
+            raise ValueError("voice line IDs must be unique")
+        voice_starts = [line.start_frame for line in self.voice]
+        if voice_starts != sorted(voice_starts):
+            raise ValueError("voice lines must be ordered by start_frame")
         shot_ids = [shot.shot_id for shot in self.shots]
         if len(set(shot_ids)) != len(shot_ids):
             raise ValueError("edit shot IDs must be unique")
@@ -1065,6 +1106,9 @@ class EditDecisionList(Model):
             end = section.end_frame if section.end_frame is not None else board.total_frames
             if end > board.total_frames:
                 raise ValueError(f"edit section {section.id} extends past the film")
+        for line in self.voice:
+            if line.start_frame >= board.total_frames:
+                raise ValueError(f"voice line {line.id} starts after the film ends")
         return self
 
     def effective_board(self, board: Storyboard) -> Storyboard:

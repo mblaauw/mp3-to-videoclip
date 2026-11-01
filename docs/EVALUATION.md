@@ -56,6 +56,38 @@ ratings.jsonl       # optional
 is in `tests/evals/runs/README.md`. Runs are deliberately not committed: a live
 run can contain production material and is only evidence when the owner made it.
 
+## Live runs
+
+`tests/evals/live.py` is the one part of the harness that calls a model, and only with
+`--authorized`. It builds a throwaway production from a frozen fixture, runs one real turn,
+draws stand-in stills so nothing is spent on images, and writes a run bundle.
+
+```sh
+uv run python -m tests.evals.live --fixture advert-30s --role writer --authorized
+```
+
+### Baseline, 31 Oct 2026
+
+The first live runs, all on `gpt-6.1-sol` through OpenCode. They set the mark for later prompt
+changes, and they are thin: one run each, two of three fixtures. The slow instrumental wasn't run.
+
+| Fixture | Role | Automatic checks | What a reader sees |
+| --- | --- | --- | --- |
+| `advert-30s` | Writer | Pass | Three concepts, then six text cards and no pictures. Valid, but a thin advert. |
+| `advert-30s` | Editor | Pass | A hold on every shot, so no motion at all, and 2 warnings on density. The film is words on cards. |
+| `energetic-vocal` | Writer | **Fail** | Three concepts, then it stopped to ask for permission to depict its fictional lead, so no storyboard exists. |
+| `energetic-vocal` | Editor | **Fail** | Cut one 180 s placeholder and said so. Nothing was there to cut. |
+
+**What it showed.**
+- **The harness passed a board that was never written.** It now fails placeholders; the two Fail rows
+  above passed before that.
+- **The Writer can stop at the permission gate in the middle of a turn,** which a real owner answers,
+  so a live run needs that answered up front. Until then the vocal rows measure the gate, not the writing.
+- **The advert prompt can reach "valid" with no pictures.** The automatic checks can't see that this is a
+  poor advert. Only a person or the Critic can.
+
+Not measured: taste, cross-review, or any comparison between models. Nobody has rated these runs.
+
 ## Ratings in the Studio
 
 `ratings.py` owns the append-only `work/ratings.jsonl` store. `promptlog.latest`

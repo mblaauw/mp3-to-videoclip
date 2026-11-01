@@ -188,3 +188,64 @@ def test_chat_reports_a_gateway_failure_without_direct_credentials(tmp_path, mon
     )
     assert response.status_code == 503
     assert "OpenCode gateway unavailable" in response.json()["detail"]
+
+
+def _model_report(tmp_path, monkeypatch, settings, can_see=None, fails=False):
+    root = make_api_project(tmp_path)
+
+    class SightClient(FakeClient):
+        async def model_can_see(self, model):
+            if fails:
+                raise OpenCodeError("gateway down")
+            return can_see
+
+    class Gateway:
+        def client(self):
+            return SightClient()
+
+    async def get_gateway(_settings, _projects):
+        return Gateway()
+
+    monkeypatch.setattr(director_api, "effective_settings", lambda: settings)
+    monkeypatch.setattr(director_api, "get_gateway", get_gateway)
+    with api_client(root.parent) as client:
+        return client.get(f"/api/projects/{root.name}/director/model", params={"role": "editor"})
+
+
+def test_direct_gateway_names_the_model_that_really_answers(tmp_path, monkeypatch):
+    settings = Settings(gateway="direct", editor_model="openai/gpt-6.1-sol", llm_model="flash")
+    report = _model_report(tmp_path, monkeypatch, settings).json()
+    assert report == {"model": "flash", "gateway": "direct", "can_see": None}
+
+
+def test_opencode_reports_whether_the_editor_can_see(tmp_path, monkeypatch):
+    settings = Settings(gateway="opencode", editor_model="openai/gpt-6.1-sol")
+    report = _model_report(tmp_path, monkeypatch, settings, can_see=True).json()
+    assert report == {"model": "openai/gpt-6.1-sol", "gateway": "opencode", "can_see": True}
+
+
+def test_a_gateway_failure_never_claims_sight(tmp_path, monkeypatch):
+    settings = Settings(gateway="opencode", editor_model="openai/gpt-6.1-sol")
+    report = _model_report(tmp_path, monkeypatch, settings, fails=True)
+    assert report.status_code == 200 and report.json()["can_see"] is None
+
+
+def test_model_can_see_reads_the_gateways_capabilities():
+    from mp3_to_videoclip.director.opencode import OpenCodeClient
+
+    async def run():
+        client = OpenCodeClient.__new__(OpenCodeClient)
+
+        async def models():
+            return [
+                {"providerID": "a", "id": "sees", "capabilities": {"input": ["text", "image"]}},
+                {"providerID": "a", "id": "blind", "capabilities": {"input": ["text"]}},
+                {"providerID": "a", "id": "quiet"},
+            ]
+
+        client.models = models
+        return [
+            await client.model_can_see(f"a/{name}") for name in ("sees", "blind", "quiet", "no")
+        ]
+
+    assert asyncio.run(run()) == [True, False, None, None]

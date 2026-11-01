@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from "react";
-import type { ProjectSummary } from "../api";
+import { api, type ProjectSummary } from "../api";
 import { NewProduction } from "../NewProduction";
 import { Button, EmptyState, ErrorState, LoadingState, StatusDot, useFocusTrap, type StatusTone } from "../ui";
 import { PlusIcon } from "../ui/icons";
+import { notifyProjectChanged } from "./projectEvents";
 import { stageLabel } from "./stages";
 import type { Stage } from "./nextStep";
 
@@ -116,6 +117,59 @@ function FilmCard({
   );
 }
 
+function ParkButton({ project }: { project: ProjectSummary }) {
+  const [busy, setBusy] = useState(false);
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await api.setParked(project.slug, !project.parked);
+      notifyProjectChanged();
+    } catch {
+      // The request helper has already shown what went wrong.
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      className="card-aside"
+      disabled={busy}
+      aria-label={`${project.parked ? "Bring back" : "Park"} ${project.title}`}
+      onClick={() => void toggle()}
+    >
+      {project.parked ? "Bring back" : "Park"}
+    </button>
+  );
+}
+
+function DeliveredCard({
+  project,
+  onArchive,
+}: {
+  project: ProjectSummary;
+  onArchive: (slug: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="film-card"
+      data-slug={project.slug}
+      onClick={() => onArchive(project.slug)}
+    >
+      <Poster project={project} />
+      <h3>{project.title}</h3>
+      <div className="facts">
+        <span>{clock(project.duration)}</span>
+        <span>{project.render || "Final render"}</span>
+        {project.updated_at && (
+          <span>Delivered {new Date(project.updated_at).toLocaleDateString()}</span>
+        )}
+      </div>
+    </button>
+  );
+}
+
 export function Library({
   projects,
   loading,
@@ -148,13 +202,15 @@ export function Library({
     return () => window.removeEventListener("keydown", onKey);
   }, [newOpen]);
 
-  const active = projects.filter((project) => !project.archived);
-  const delivered = projects.filter((project) => project.archived);
+  const active = projects.filter((project) => !project.archived && !project.parked);
+  const delivered = projects.filter((project) => project.archived && !project.parked);
+  const parked = projects.filter((project) => project.parked);
   const finished = active.filter((project) => !project.next_step).length;
   const summary = [
     `${active.length - finished} in progress`,
     finished ? `${finished} final ready` : "",
     delivered.length ? `${delivered.length} delivered` : "",
+    parked.length ? `${parked.length} parked` : "",
   ]
     .filter(Boolean)
     .join(", ")
@@ -186,7 +242,7 @@ export function Library({
         </div>
         {error && <ErrorState what="reading your films" error={error} onRetry={onRetry} />}
         {loading && !projects.length && <LoadingState>Reading the library…</LoadingState>}
-        {!loading && !error && !active.length && !delivered.length && (
+        {!loading && !error && !projects.length && (
           <EmptyState title="No films yet.">
             Drop an MP3 below to start one. It stays on this computer; nothing is spent
             until you make pictures.
@@ -194,7 +250,10 @@ export function Library({
         )}
         <div className="film-grid">
           {active.map((project) => (
-            <FilmCard key={project.slug} project={project} onOpen={onOpen} />
+            <div className="film-card-wrap" key={project.slug}>
+              <FilmCard project={project} onOpen={onOpen} />
+              <ParkButton project={project} />
+            </div>
           ))}
           <div
             className={`new-card ${dragging ? "dragging" : ""}`}
@@ -219,26 +278,30 @@ export function Library({
             <h2>Delivered</h2>
             <div className="film-grid">
               {delivered.map((project) => (
-                <button
-                  type="button"
-                  className="film-card"
-                  data-slug={project.slug}
-                  key={project.slug}
-                  onClick={() => onArchive(project.slug)}
-                >
-                  <Poster project={project} />
-                  <h3>{project.title}</h3>
-                  <div className="facts">
-                    <span>{clock(project.duration)}</span>
-                    <span>{project.render || "Final render"}</span>
-                    {project.updated_at && (
-                      <span>Delivered {new Date(project.updated_at).toLocaleDateString()}</span>
-                    )}
-                  </div>
-                </button>
+                <div className="film-card-wrap" key={project.slug}>
+                  <DeliveredCard project={project} onArchive={onArchive} />
+                  <ParkButton project={project} />
+                </div>
               ))}
             </div>
           </section>
+        )}
+        {!!parked.length && (
+          <details className="library-section parked-films">
+            <summary>Parked ({parked.length})</summary>
+            <div className="film-grid">
+              {parked.map((project) => (
+                <div className="film-card-wrap" key={project.slug}>
+                  {project.archived ? (
+                    <DeliveredCard project={project} onArchive={onArchive} />
+                  ) : (
+                    <FilmCard project={project} onOpen={onOpen} />
+                  )}
+                  <ParkButton project={project} />
+                </div>
+              ))}
+            </div>
+          </details>
         )}
       </div>
       {newOpen && (

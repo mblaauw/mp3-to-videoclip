@@ -132,3 +132,24 @@ def test_claims_must_trace_to_the_intent():
     bad = checks.claim_report(["Out 18 Dec for $9.99 at https://other.example"], allowed)
     assert bad["ok"] is False
     assert len(bad["invented"]) == 3
+
+
+def test_a_board_still_holding_placeholders_never_passes():
+    board = {
+        "schema_version": 1,
+        "aspect": "16:9",
+        "fps": 24,
+        "total_frames": 24,
+        "shots": [
+            {
+                "id": "s001",
+                "start_frame": 0,
+                "duration_frames": 24,
+                "purpose": "TODO: approved story purpose",
+                "image_prompt": "TODO: compose this shot",
+            }
+        ],
+    }
+    result = checks.storyboard_report(board, kind="music_video")
+    assert result["ok"] is False
+    assert "placeholder" in result["issues"][0]

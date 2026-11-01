@@ -118,7 +118,16 @@ export function CharactersCard({
         const states = Object.entries(character.states || {});
         return (
         <div className="character-row" key={character.id}>
-          <div className="character-avatar">No photo</div>
+          <div className="character-avatar">
+            {character.references?.[0] ? (
+              <img
+                src={`/api/projects/${slug}/references/${character.references[0].split("/").pop()}`}
+                alt={`Reference for ${displayName(character.id)}`}
+              />
+            ) : (
+              "No reference"
+            )}
+          </div>
           <div className="character-fields">
             <b>{displayName(character.id)}</b>
             {states.length > 0 && (

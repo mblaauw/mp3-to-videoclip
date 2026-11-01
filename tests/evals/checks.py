@@ -13,6 +13,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from mp3_to_videoclip import production as P
 from mp3_to_videoclip import shotkinds
 from mp3_to_videoclip.models import Storyboard, Treatments
 
@@ -87,6 +88,8 @@ def storyboard_report(value: dict | Storyboard, *, kind: str) -> dict:
         if shot.start_frame != cursor:
             issues.append(f"{shot.id}: frame gap or overlap at {shot.start_frame}")
         cursor += shot.duration_frames
+        if P.has_placeholders(shot):
+            issues.append(f"{shot.id}: still a timing placeholder, so the board was never written")
         if not shot.message.strip() and shot.kind != "scene":
             issues.append(f"{shot.id}: {shot.kind} needs a message")
         if _TEXT_CARD.match(shot.kind):
