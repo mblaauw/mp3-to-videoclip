@@ -13,12 +13,9 @@ router = APIRouter(prefix="/api/projects/{slug}", tags=["ratings"])
 @router.get("/ratings")
 async def get_ratings(slug: str, request: Request, artifact: str | None = None):
     root = project_root(request, slug)
-    try:
-        if artifact is None:
-            return {"artifacts": ratings.all_summary(root)}
-        return ratings.summary(root, artifact)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if artifact is None:
+        return {"artifacts": ratings.all_summary(root)}
+    return ratings.summary(root, artifact)
 
 
 @router.post("/ratings")
@@ -33,8 +30,5 @@ async def post_rating(slug: str, request: Request, payload: dict):
         raise HTTPException(status_code=400, detail="rating is required")
     if not isinstance(note, str):
         raise HTTPException(status_code=400, detail="note must be text")
-    try:
-        entry = ratings.add(root, artifact, rating, note)
-        return {"entry": entry, "summary": ratings.summary(root, artifact)}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    entry = ratings.add(root, artifact, rating, note)
+    return {"entry": entry, "summary": ratings.summary(root, artifact)}

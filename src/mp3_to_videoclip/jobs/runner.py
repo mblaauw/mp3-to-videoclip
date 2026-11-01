@@ -58,6 +58,7 @@ class Job:
     started_at: float | None = None
     finished_at: float | None = None
     error: str | None = None
+    code: str | None = None
     historical: bool = False
     blocking: bool = False
     render_kind: str | None = None
@@ -406,9 +407,13 @@ class JobRunner:
         except Exception as exc:  # noqa: BLE001
             job.status = "cancelled" if job.status == "stopping" else "failed"
             job.error = str(exc)
+            job.code = getattr(exc, "code", None)
             job.finished_at = time.time()
             self._event(
-                "job.cancelled" if job.status == "cancelled" else "job.failed", job, error=str(exc)
+                "job.cancelled" if job.status == "cancelled" else "job.failed",
+                job,
+                error=str(exc),
+                **({"code": job.code} if job.code else {}),
             )
         finally:
             if token is not None:

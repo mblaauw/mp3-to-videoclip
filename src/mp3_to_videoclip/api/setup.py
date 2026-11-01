@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from mp3_to_videoclip import setup
 
@@ -18,7 +18,4 @@ async def get_setup():
 
 @router.post("/renderer")
 async def install_renderer():
-    try:
-        return await asyncio.to_thread(setup.install_renderer)
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return await asyncio.to_thread(setup.install_renderer)

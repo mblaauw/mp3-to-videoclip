@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
-from mp3_to_videoclip.storage import RevisionConflict, digest
+from mp3_to_videoclip.storage import digest
 
 router = APIRouter(prefix="/api/projects/{slug}", tags=["storyboard"])
 
@@ -27,15 +27,8 @@ async def update_shots(slug: str, request: Request, payload: dict, response: Res
     root = project_root(request, slug)
     changes = payload.get("changes", [])
     if not isinstance(changes, list):
-        return {"error": "changes must be a list"}
-    try:
-        board, _changed = P.update_shots(
-            root, changes, expected_hash=request.headers.get("if-match")
-        )
-    except RevisionConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="changes must be a list")
+    board, _changed = P.update_shots(root, changes, expected_hash=request.headers.get("if-match"))
     value = board.model_dump()
     response.headers["ETag"] = f'"{digest(value)}"'
     return value

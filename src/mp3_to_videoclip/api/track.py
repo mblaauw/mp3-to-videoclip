@@ -81,10 +81,7 @@ async def get_music_notes(slug: str, request: Request):
 @router.put("/music-notes")
 async def put_music_notes(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    try:
-        return music_notes.save(root, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return music_notes.save(root, payload)
 
 
 @router.get("/embedded-lyrics")
@@ -155,19 +152,13 @@ async def get_lyric_timing(slug: str, request: Request):
 @router.put("/lyric-timing")
 async def put_lyric_timing(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    try:
-        return lyric_timing.save(root, payload, P.load_project(root).duration)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return lyric_timing.save(root, payload, P.load_project(root).duration)
 
 
 @router.put("/section-map")
 async def put_section_map(slug: str, request: Request, payload: dict):
     root = project_root(request, slug)
-    try:
-        return section_map.save(root, payload, P.load_project(root).duration)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return section_map.save(root, payload, P.load_project(root).duration)
 
 
 @router.post("/section-map/propose")
@@ -178,19 +169,13 @@ async def propose_section_map(slug: str, request: Request):
     if not (root / "work" / "music-deep.json").is_file() and (root / "work/music.json").is_file():
         # Local and free: a finer set of edges for the tags to land on.
         await asyncio.to_thread(services.analysis.deep_analyze_project, root)
-    try:
-        return {"sections": section_map.propose(root, P.load_project(root).duration)}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"sections": section_map.propose(root, P.load_project(root).duration)}
 
 
 @router.post("/section-map/reset")
 async def reset_section_map(slug: str, request: Request):
     root = project_root(request, slug)
-    try:
-        section_map.reset(root)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    section_map.reset(root)
     return {"status": "reset"}
 
 
@@ -252,25 +237,16 @@ async def update_lyrics(slug: str, request: Request, payload: dict):
         raw = payload["text"]
         if not isinstance(raw, str) or len(raw.encode("utf-8")) > MAX_LYRICS_BYTES:
             raise HTTPException(status_code=400, detail="paste a reasonable amount of lyrics")
-        try:
-            lyrics = parse_lyrics_text(raw, project.duration)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        lyrics = parse_lyrics_text(raw, project.duration)
     elif "lrc" in payload:
         if (
             not isinstance(payload["lrc"], str)
             or len(payload["lrc"].encode("utf-8")) > MAX_LYRICS_BYTES
         ):
-            return {"error": "paste a reasonable amount of lyrics"}
-        try:
-            lyrics = parse_lrc(payload["lrc"], project.duration)
-        except ValueError as exc:
-            return {"error": str(exc)}
+            raise HTTPException(status_code=400, detail="paste a reasonable amount of lyrics")
+        lyrics = parse_lrc(payload["lrc"], project.duration)
     else:
-        try:
-            lyrics = Lyrics.model_validate(payload)
-        except ValueError as exc:
-            return {"error": str(exc)}
+        lyrics = Lyrics.model_validate(payload)
     save_lyrics(root, lyrics)
     result = {"status": "saved", "segments": len(lyrics.segments)}
     if lyrics.lines:

@@ -30,6 +30,7 @@ class JobOut(BaseModel):
     progress: JobProgress
     cost_usd: float
     error: str | None = None
+    code: str | None = None
     queued_at: float | None = None
     started_at: float | None = None
     finished_at: float | None = None
