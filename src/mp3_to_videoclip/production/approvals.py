@@ -211,7 +211,15 @@ def stage_hash(root: Path, stage: str) -> str:
         board = load_board(root)
         if stage == "proof":
             shots = resolved_assets(root, _current_proof_ids(root, board))
-            value = [{"id": s.shot.id, "image": file_hash(Path(s.image))} for s in shots]
+            # A clip is named only when one is selected, so every other film hashes as before.
+            value = [
+                {
+                    "id": s.shot.id,
+                    "image": file_hash(Path(s.image)),
+                    **({"clip": s.clip.sha256} if s.clip else {}),
+                }
+                for s in shots
+            ]
             if creative_workflow(project):
                 value = [
                     {**item, "input_hash": digest(image_spec(root, rs.shot))}

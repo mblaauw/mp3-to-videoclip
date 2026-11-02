@@ -4,7 +4,7 @@ import {tmpdir} from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import {bundleKey, servedFile, startAssetServer, withServedAssets} from "../src/asset-server.mjs";
+import {bundleKey, clipFiles, isOwnClip, servedFile, startAssetServer, withServedAssets} from "../src/asset-server.mjs";
 
 function folder() {
   const root = mkdtempSync(path.join(tmpdir(), "assets-"));
@@ -97,4 +97,15 @@ test("a code-only key ignores the stills, and a bundled key does not", () => {
   assert.equal(bundleKey(src, lock), code);
   writeFileSync(path.join(src, "a.jsx"), "changed");
   assert.notEqual(bundleKey(src, lock), code);
+});
+
+test("only a clip the request names, on this computer, may be fetched", () => {
+  const names = clipFiles({shots: [{clip: {file: "abc.mp4"}}, {image: "x.jpg"}]});
+  assert.equal(isOwnClip("http://127.0.0.1:9/abc.mp4", names), true);
+  assert.equal(isOwnClip("http://localhost:3000/public/abc.mp4", names), true);
+  assert.equal(isOwnClip("http://127.0.0.1:9/other.mp4", names), false);
+  assert.equal(isOwnClip("https://127.0.0.1:9/abc.mp4", names), false);
+  assert.equal(isOwnClip("http://evil.test/abc.mp4", names), false);
+  assert.equal(isOwnClip("not a url", names), false);
+  assert.equal(clipFiles({}).size, 0);
 });

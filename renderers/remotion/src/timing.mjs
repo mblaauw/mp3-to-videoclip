@@ -687,6 +687,27 @@ export function validateEditCrops(crops, start, duration, id) {
   }
 }
 
+export function validateClip(clip, label) {
+  if (clip === undefined || clip === null) return;
+  if (typeof clip !== "object" || Array.isArray(clip)) fail(`${label} clip must be an object`);
+  if (typeof clip.file !== "string" || !SAFE_ASSET_RE.test(clip.file) || !clip.file.endsWith(".mp4")) {
+    fail(`${label} clip needs a flat .mp4 file name`);
+  }
+  if (!Number.isInteger(clip.frames) || clip.frames <= 0) fail(`${label} clip needs its frame count`);
+  if (typeof clip.fps !== "number" || !(clip.fps > 0)) fail(`${label} clip needs its frame rate`);
+}
+
+/**
+ * Which frame of the film's own rate to show from a clip at one frame of its shot, and
+ * whether the clip has run out. A clip shorter than its shot holds its last frame; it is
+ * never stretched, and a longer one is simply cut by the shot's end.
+ */
+export function clipFrame(clip, localFrame, fps) {
+  const last = Math.max(0, Math.floor((clip.frames / clip.fps) * fps) - 1);
+  const frame = Math.max(0, localFrame);
+  return {frame: Math.min(frame, last), held: frame >= last, last};
+}
+
 export function validateDepthLayers(depth, label) {
   if (depth === undefined || depth === null) return;
   if (typeof depth !== "object" || Array.isArray(depth)) fail(`${label} depth must be an object`);

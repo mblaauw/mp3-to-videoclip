@@ -138,7 +138,16 @@ def player_input(root: Path, slug: str) -> dict:
             path = inside(root, chosen["path"])
             value["image"] = path.name
             value["src"] = f"/api/projects/{slug}/images/{owner}/{chosen['version']}"
-            _player_depth(root, slug, value, path, decisions.get(shot.id), grade)
+            clip = None if shot.asset_shot_id else P.selected_clip(assets.get(owner, {}))
+            if clip is None:
+                _player_depth(root, slug, value, path, decisions.get(shot.id), grade)
+            else:
+                value["clip"] = {
+                    "file": Path(clip["path"]).name,
+                    "frames": clip["frames"],
+                    "fps": clip["fps"],
+                    "src": f"/api/projects/{slug}/clips/{owner}/{clip['version']}",
+                }
             value["still_current"] = chosen.get("input_hash") == digest(P.image_spec(root, shot))
             if not value["still_current"]:
                 stale.append(shot.id)

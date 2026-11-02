@@ -47,7 +47,7 @@ import {createProgressWriter} from "./src/progress.mjs";
 import {createDiagnostics} from "./src/diagnostics.mjs";
 import {benchmarkOptions as resolveBenchmarkOptions} from "./src/benchmark-profiles.mjs";
 import {ensureBundleCache} from "./src/bundle-cache.mjs";
-import {bundleKey, startAssetServer, withServedAssets} from "./src/asset-server.mjs";
+import {bundleKey, clipFiles, isOwnClip, startAssetServer, withServedAssets} from "./src/asset-server.mjs";
 
 const RENDERER_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ENTRY_POINT = path.join(RENDERER_ROOT, "src", "index.jsx");
@@ -222,9 +222,14 @@ function refuseBrowserDownload() {
   );
 }
 
+// One process renders one request, so its clips are set once, before anything is drawn.
+let ownClips = new Set();
+
 /** The renderer only reads local loopback/data assets; a real fetch is refused. */
 function refuseRemoteAsset(src) {
   if (typeof src === "string" && src.startsWith("data:")) return;
+  // A video is fetched by the compositor, even from this computer's own asset server.
+  if (isOwnClip(src, ownClips)) return;
   fail(`remote asset fetch is disabled for this renderer; refusing ${JSON.stringify(src)}`);
 }
 
@@ -249,6 +254,7 @@ async function render(progress, {requestPath, cacheRoot, benchmarkProfile, serve
   const diagnostics = createDiagnostics();
   const request = loadRequest(requestPath);
   const normalized = validateRequest(request);
+  ownClips = clipFiles(normalized.input);
   // Explicit experimental policy, never a fallback or a production default.
   // No CRF: 20 Mbit/s target is not quality-equivalent to the default libx264.
   const benchmarkOptions = resolveBenchmarkOptions(benchmarkProfile, normalized.kind);

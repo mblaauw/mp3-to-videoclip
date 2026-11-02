@@ -12,6 +12,7 @@ const TYPES = {
   ".jpeg": "image/jpeg",
   ".png": "image/png",
   ".webp": "image/webp",
+  ".mp4": "video/mp4",
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -69,6 +70,24 @@ export function startAssetServer(root) {
   });
 }
 
+/** The content-addressed clip files a film's own request names. */
+export function clipFiles(input) {
+  return new Set((input?.shots ?? []).flatMap((shot) => (shot.clip ? [shot.clip.file] : [])));
+}
+
+/** True only for a file this request named, on this computer. Everything else stays refused. */
+export function isOwnClip(src, names) {
+  let url;
+  try {
+    url = new URL(src);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname)) return false;
+  const name = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+  return names.has(name);
+}
+
 function withSource(item, url) {
   return item.image ? {...item, src: `${url}/${encodeURIComponent(item.image)}`} : item;
 }
@@ -87,6 +106,7 @@ export function withServedAssets(input, url) {
       ...withSource(shot, url),
       ...(shot.split_panes ? {split_panes: shot.split_panes.map((pane) => withSource(pane, url))} : {}),
       ...(shot.depth ? {depth: withLayerSources(shot.depth, url)} : {}),
+      ...(shot.clip ? {clip: {...shot.clip, src: `${url}/${encodeURIComponent(shot.clip.file)}`}} : {}),
     })),
   };
 }
