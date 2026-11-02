@@ -88,3 +88,24 @@
 @media (prefers-reduced-motion: reduce) {
   :root { --dur: 0ms; }
 }
+
+/*
+ * UX polish layer (Oct 2026). Loaded last; it keeps the existing look and adds:
+ * the missing type tokens, one form baseline, readable long text, the sign-off
+ * strip, live job progress, the chat refresh and the new transport.
+ */
+
+:root {
+  /* These three were used across the CSS but never defined. */
+  --t-11: 11px;
+  --t-20: 20px;
+  --t-28: 28px;
+  --spine-transport-w: 232px;
+  --focus-ring: 0 0 0 3px rgba(217, 179, 108, 0.22);
+}
+
+@media (max-width: 900px) and (min-width: 701px) {
+  :root {
+    --spine-transport-w: 168px;
+  }
+}

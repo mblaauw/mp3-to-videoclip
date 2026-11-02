@@ -619,3 +619,24 @@
   width: 100%;
   display: block;
 }
+
+.ui-field > span {
+  letter-spacing: 0.01em;
+}
+
+.still-tile {
+  position: relative;
+}
+
+.still-tile.making img,
+.still-tile.making .still-missing {
+  filter: saturate(0.4) brightness(0.6);
+}
+
+/* ------------------------------------------------------------ lightbox copy */
+.lightbox-copy .lightbox-prompt {
+  max-width: 96ch;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.6;
+}

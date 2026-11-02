@@ -1299,3 +1299,249 @@ body {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.job-banner .job-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+}
+
+.job-banner .job-bar i {
+  transition: width 400ms var(--ease);
+}
+
+/* ------------------------------------------------------------ toasts */
+/* Centred over the work area, clear of the director's composer. */
+.toasts {
+  right: auto;
+  left: 50%;
+  bottom: calc(var(--spine-h) + 12px);
+  transform: translateX(-50%);
+}
+
+.library-shell ~ .toasts {
+  bottom: 16px;
+}
+
+.composer-row textarea {
+  min-height: 40px;
+  max-height: none;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tool-row .tool-dot {
+  margin-top: 5px;
+}
+
+.tool-row.money {
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: var(--r-control);
+  background: var(--gold-wash);
+}
+
+.tool-row .tool-summary {
+  margin: 1px 0 0;
+}
+
+.tool-row.failed .tool-summary,
+.tool-state.failed {
+  color: var(--red);
+}
+
+.tool-row .tool-detail {
+  margin-top: 2px;
+}
+
+.tool-group.running {
+  border-color: rgba(217, 179, 108, 0.35);
+}
+
+/* ------------------------------------------------------------ spine transport */
+.spine {
+  grid-template-columns: var(--spine-transport-w) minmax(0, 1fr);
+}
+
+.spine-transport {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 5px;
+  padding: 0 var(--s-3) 0 var(--s-4);
+}
+
+.spine-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spine-btn {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.spine-btn:hover {
+  border-color: var(--line);
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.spine-play {
+  width: 38px;
+  height: 38px;
+  cursor: pointer;
+}
+
+.spine-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.spine-now {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 16px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--t-12);
+  white-space: nowrap;
+}
+
+.spine-now b {
+  color: var(--gold);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--t-11);
+  font-weight: var(--w-medium);
+}
+
+.spine-now span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spine-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.spine-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--t-11);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.spine-chip:hover {
+  border-color: var(--ink-2);
+  color: var(--ink);
+}
+
+.spine-volume {
+  width: 52px;
+  height: 22px;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+
+/* The lane is the exact box every overlay is measured against: before, the
+   playhead, the cut handles and click-to-seek used the padded track and sat up
+   to 16 px off the waveform and the shot strip at either end. */
+.spine-track {
+  display: block;
+  cursor: default;
+}
+
+.spine-lane {
+  position: relative;
+  display: grid;
+  grid-template-rows: 16px 52px 40px;
+  gap: 4px;
+  height: 100%;
+  min-width: 0;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.spine-lane .spine-playhead {
+  top: 18px;
+  bottom: 0;
+}
+
+.spine-lane .spine-cut {
+  top: 20px;
+  bottom: 44px;
+}
+
+.spine-lane .spine-window {
+  top: 20px;
+  bottom: 0;
+}
+
+.spine-lane .spine-window-handle {
+  top: 16px;
+  bottom: 0;
+}
+
+.spine-lane .spine-empty {
+  top: 36px;
+}
+
+.spine-loop {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  z-index: 1;
+  border-left: 1px dashed var(--gold);
+  border-right: 1px dashed var(--gold);
+  background: rgba(217, 179, 108, 0.08);
+  pointer-events: none;
+}
+
+.spine-ghost {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  z-index: 3;
+  width: 1px;
+  background: rgba(236, 234, 229, 0.45);
+  pointer-events: none;
+}
+
+.spine-ghost span {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--ink);
+  color: var(--surround);
+  font-size: var(--t-11);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
