@@ -222,7 +222,7 @@ export function StoryboardStage({
 
       {loaded && !board && !error && (
         <section className="card empty-card">
-          <p className="empty">No storyboard yet. The brief must be approved first.</p>
+          <p className="empty">No storyboard yet. It is built from the approved brief.</p>
           <Button variant="primary" onClick={() => void create()} disabled={creating}>
             {creating ? "Planning…" : "Create timing skeleton"}
           </Button>

@@ -1,7 +1,8 @@
 """One song map from everything already measured: what the song does, in film frames.
 
 It merges the quick and the deep measurements with the owner's section layer and the
-timed words into ``work/song-map.json``, a cache keyed by the hashes of its inputs.
+timed words, held in memory and keyed by the hashes of its inputs, so reading a film
+never changes it. A ``work/song-map.json`` from an older build is ignored.
 ``work/music.json`` is never rewritten, so no approval moves. Nothing here hears
 anything new: no model, no network, and every value is an estimate unless it says the
 owner made it. (``music_map.py`` is a different thing: the paid listening draft.)
@@ -9,13 +10,13 @@ owner made it. (``music_map.py`` is a different thing: the paid listening draft.
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any
 
 from . import pacing, timeline
-from .storage import digest, file_hash, read_optional, write_json
+from .storage import digest, file_hash, read_optional
 
-FILE = "work/song-map.json"
 VERSION = 1
 INPUTS = (
     "work/music.json",
@@ -25,6 +26,9 @@ INPUTS = (
     "work/lyric-timing.json",
     "work/lyrics.json",
 )
+#: Built maps by film and inputs; a handful of open films at a time.
+_BUILT: dict[tuple[str, str], dict[str, Any]] = {}
+_BUILT_LIMIT = 16
 #: Fewer boundaries than this and the novelty curve found no structure worth using.
 MIN_BOUNDARIES = 2
 MIN_SECTION_SECONDS = 2.0
@@ -243,7 +247,7 @@ def _build(root: Path, project) -> dict[str, Any]:
 
 
 def song_map(root: Path) -> dict[str, Any]:
-    """The cached map, rebuilt only when one of its inputs changed."""
+    """The map, rebuilt only when one of its inputs changed. Reading a film writes nothing to it."""
     from . import production as P
 
     root = Path(root)
@@ -252,9 +256,9 @@ def song_map(root: Path) -> dict[str, Any]:
         return {"available": False}
     project = P.load_project(root, verify_source=False)
     inputs = digest({"version": VERSION, "fps": project.fps, "files": _inputs(root)})
-    cached = read_optional(root / FILE)
-    if isinstance(cached, dict) and cached.get("inputs") == inputs:
-        return cached
-    value = {**_build(root, project), "inputs": inputs}
-    write_json(root / FILE, value)
-    return value
+    key = (str(root.resolve()), inputs)
+    if key not in _BUILT:
+        if len(_BUILT) >= _BUILT_LIMIT:
+            _BUILT.pop(next(iter(_BUILT)))
+        _BUILT[key] = {**_build(root, project), "inputs": inputs}
+    return copy.deepcopy(_BUILT[key])

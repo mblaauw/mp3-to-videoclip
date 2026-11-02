@@ -1146,13 +1146,29 @@ def _grid_findings(root: Path, edit: EditDecisionList, windows: list) -> list[di
     return findings
 
 
+#: Where each text style sits on the frame, as ``BaseFilm.jsx`` draws it. Styles in different
+#: places can share the screen; the brand card's logotype, tagline and CTA are made to.
+_TEXT_PLACE = {
+    "gallery_title": "top",
+    "logotype": "logotype",
+    "tagline": "tagline",
+    "cta": "cta",
+    "title": "middle",
+    "card": "middle",
+}
+
+
 def _caption_findings(edit: EditDecisionList) -> list[dict]:
-    """Two text layers on screen at once, within one shot or across a dissolve."""
+    """Two text layers in the same place at once, within one shot or across a dissolve."""
     findings = []
     for shot in edit.shots:
         layers = sorted(shot.text, key=lambda item: item.in_frame)
-        for earlier, later in zip(layers, layers[1:], strict=False):
-            if later.in_frame < earlier.out_frame:
+        for index, later in enumerate(layers):
+            for earlier in layers[:index]:
+                if later.in_frame >= earlier.out_frame:
+                    continue
+                if _TEXT_PLACE.get(earlier.style, "low") != _TEXT_PLACE.get(later.style, "low"):
+                    continue
                 findings.append(
                     {
                         "code": "caption_overlap",
@@ -1161,6 +1177,7 @@ def _caption_findings(edit: EditDecisionList) -> list[dict]:
                         "message": f"text {later.id} starts while {earlier.id} is on screen",
                     }
                 )
+                break
     return findings
 
 

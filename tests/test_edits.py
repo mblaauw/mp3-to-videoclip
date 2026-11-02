@@ -748,3 +748,26 @@ def test_a_layer_over_a_card_that_draws_its_own_words_is_named():
     assert [w["code"] for w in edits._unseen_words_findings(edit, board)] == ["text_over_card"]
     edit.shots[0].text = []
     assert edits._unseen_words_findings(edit, board) == []
+
+
+def _layers(*styles):
+    return SimpleNamespace(
+        shots=[
+            SimpleNamespace(
+                shot_id="s",
+                text=[
+                    EditText(id=f"t{i}", style=style, text="x", in_frame=i, out_frame=40)
+                    for i, style in enumerate(styles)
+                ],
+            )
+        ]
+    )
+
+
+def test_text_overlaps_only_where_it_would_land_on_itself():
+    assert edits._caption_findings(_layers("gallery_title", "gallery_label")) == []
+    assert edits._caption_findings(_layers("logotype", "tagline", "cta")) == []
+    assert [f["text_id"] for f in edits._caption_findings(_layers("super", "lower_third"))] == [
+        "t1"
+    ]
+    assert [f["text_id"] for f in edits._caption_findings(_layers("title", "card"))] == ["t1"]

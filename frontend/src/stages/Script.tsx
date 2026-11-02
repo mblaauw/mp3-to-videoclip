@@ -25,6 +25,7 @@ function BeatSheet({ data }: { data: ScriptPayload }) {
         budget: beat.budget,
         estimate: 0,
         measured: null,
+        spoken: null,
         over: null,
       }));
   const rules = new Map(data.beats.beats.map((beat) => [beat.id, beat.rule]));
@@ -35,18 +36,22 @@ function BeatSheet({ data }: { data: ScriptPayload }) {
       </h2>
       {rows.map((beat) => {
         const used = beat.measured ?? beat.estimate;
-        const share = beat.budget ? Math.min(100, (used / beat.budget) * 100) : 0;
+        const spoken = beat.spoken;
+        // Pauses are chosen, so only speech overruns: a long held pause is not a fault.
+        const over = (beat.over ?? 0) > 0;
+        const share = beat.budget ? Math.min(100, ((spoken ?? used) / beat.budget) * 100) : 0;
         return (
           <div className="beat-row" key={beat.id}>
             <div className="beat-head">
               <b>{beat.label}</b>
-              <span className={used > beat.budget ? "beat-over" : undefined}>
-                {used.toFixed(1)} of {beat.budget.toFixed(0)} s
-                {beat.measured === null ? " estimated" : " measured"}
+              <span className={over ? "beat-over" : undefined}>
+                {spoken === null
+                  ? `${used.toFixed(1)} of ${beat.budget.toFixed(0)} s estimated`
+                  : `${spoken.toFixed(1)} of ${beat.budget.toFixed(0)} s spoken, ${used.toFixed(1)} s with pauses`}
               </span>
             </div>
             <div className="beat-bar" aria-hidden="true">
-              <span style={{ width: `${share}%` }} className={used > beat.budget ? "over" : undefined} />
+              <span style={{ width: `${share}%` }} className={over ? "over" : undefined} />
             </div>
             {rules.get(beat.id) && <p className="hint">{rules.get(beat.id)}</p>}
           </div>

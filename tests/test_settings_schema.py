@@ -31,8 +31,8 @@ EFFECTIVE = {
     "runware_api_key": "rw-secret",
     "writer_model": "openai/gpt-6.1-sol",
     "editor_model": "openrouter/deep/seek",
-    # A file without this name got the default, and still does.
-    "critic_model": "openai/gpt-6.1-sol",
+    # A file without this name gets the default.
+    "critic_model": "opencode-go/gpt-6-luna",
     "llm_base_url": "https://example.test/v1",
     "llm_api_key": "llm-secret",
     "llm_model": "bare-model",
@@ -66,9 +66,9 @@ def test_an_old_file_loads_to_the_same_values(path):
 def test_a_fresh_install_keeps_todays_defaults(path):
     assert _effective(config.Settings()) == {
         "runware_api_key": "",
-        "writer_model": "openai/gpt-6.1-sol",
-        "editor_model": "opencode-go/deepseek-v4.1-flash",
-        "critic_model": "openai/gpt-6.1-sol",
+        "writer_model": "opencode-go/gpt-6-luna",
+        "editor_model": "opencode-go/gpt-6-luna",
+        "critic_model": "opencode-go/gpt-6-luna",
         "llm_base_url": "https://opencode.ai/inference/go/openai/v1",
         "llm_api_key": "",
         "llm_model": "deepseek-v4.1-flash",

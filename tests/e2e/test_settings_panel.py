@@ -37,7 +37,7 @@ def test_a_model_chosen_through_other_saves_and_reset_restores_it(page: Page, pa
     typed.blur()
     expect(panel.locator(".save-state.saved").first).to_contain_text("Saved")
     panel.get_by_role("button", name="Reset to recommended").click()
-    expect(panel.get_by_label("Writer model")).to_have_value("gpt-6.1-sol")
+    expect(panel.get_by_label("Writer model")).to_have_value("gpt-6-luna")
 
 
 def test_elevenlabs_voices_appear_only_with_a_key(page: Page, panel):

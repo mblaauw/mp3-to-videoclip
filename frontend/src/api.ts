@@ -92,6 +92,13 @@ export type Budget = {
   paid_stills: number;
   remaining_usd: string | null;
   history: { at: string; cap_usd: string; reason: string }[];
+  unresolved?: {
+    id: string;
+    kind: string | null;
+    shot_id: string | null;
+    reserve_usd: string | null;
+    at: string | null;
+  }[];
 };
 
 export type ShotKind =
@@ -975,6 +982,7 @@ export type ScriptPayload = {
       budget: number;
       estimate: number;
       measured: number | null;
+      spoken: number | null;
       over: number | null;
     }[];
     invented: { line: string; text: string }[];
@@ -1430,6 +1438,16 @@ export const api = {
       `/api/projects/${slug}/exports`,
     ),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
+  recoverTask: (slug: string, task: string) =>
+    request<{ recovered: boolean; answered: boolean }>(
+      `/api/projects/${slug}/tasks/${task}/recover`,
+      { method: "POST", body: "{}" },
+    ),
+  resolveTask: (slug: string, task: string, cost: string, note: string) =>
+    request<{ resolved: string }>(`/api/projects/${slug}/tasks/${task}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ cost, note }),
+    }),
   addBudget: (slug: string, amount: string, reason: string) =>
     request<{ entry: { at: string; cap_usd: string; reason: string }; cap_usd: string }>(
       `/api/projects/${slug}/budget`,

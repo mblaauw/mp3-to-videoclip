@@ -704,12 +704,12 @@ def test_settings_nested_patch_keeps_keys_and_never_returns_one(monkeypatch, tmp
         body = saved.json()
         assert body["schema_version"] == 3
         assert body["roles"]["writer"] == {
-            "provider": "openai",
+            "provider": "opencode-go",
             "model": "chosen",
             "thinking": "medium",
             "max_tokens_per_turn": 0,
         }
-        assert body["writer_model"] == "openai/chosen"
+        assert body["writer_model"] == "opencode-go/chosen"
         assert body["has_runware_key"] is body["has_elevenlabs_key"] is True
         assert body["has_openai_compatible_key"] is True
         assert body["has_gemini_key"] is False

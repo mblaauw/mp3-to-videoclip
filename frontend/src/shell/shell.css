@@ -1171,6 +1171,10 @@ body {
       "main"
       "spine";
   }
+  /* The drawer floats over the stage, so a next step on the stage stays left of it. */
+  .shell:has(.director) .shell-main > .next-bar {
+    padding-right: calc(var(--director-w) + var(--s-4));
+  }
   .director {
     position: fixed;
     top: var(--topbar-h);
@@ -1216,6 +1220,9 @@ body {
   :root {
     --spine-h: 96px;
     --topbar-h: 104px;
+  }
+  .shell:has(.director) .shell-main > .next-bar {
+    padding-right: var(--s-4);
   }
   .library-shell {
     grid-template-rows: 56px minmax(0, 1fr);
@@ -1544,4 +1551,25 @@ body {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   transform: translateX(-50%);
+}
+
+.stuck-task {
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.stuck-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.stuck-task-settle {
+  display: grid;
+  gap: 8px;
+}
+.stuck-task-settle label {
+  display: grid;
+  gap: 4px;
 }

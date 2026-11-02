@@ -326,9 +326,25 @@ def require_reconciled(root: Path, admitted=()):
     ]
     if unresolved:
         raise ValueError(
-            "unresolved tasks need recovery/reconciliation before new spending: "
-            + ", ".join(unresolved)
+            "A paid task hasn't come back, so nothing new can be bought on this film. Open the "
+            "budget to check it again or record what it billed (unresolved tasks need "
+            "recovery/reconciliation before new spending: " + ", ".join(unresolved) + ")"
         )
+
+
+def unresolved_tasks(root: Path) -> list[dict]:
+    """The paid tasks holding a film's spending, in words the owner can act on."""
+    return [
+        {
+            "id": t.get("uuid", key),
+            "kind": t.get("kind"),
+            "shot_id": t.get("shot_id"),
+            "reserve_usd": t.get("reserve_usd"),
+            "at": t.get("submitted_at") or t.get("at"),
+        }
+        for key, t in _journal(root).items()
+        if t.get("status") in UNRESOLVED_STATUSES
+    ]
 
 
 # --------------------------------------------------------------------------- #

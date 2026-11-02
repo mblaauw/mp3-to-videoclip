@@ -396,7 +396,9 @@ def generate_clips(root: Path, quote_id: str, client=None, *, sleep=time.sleep) 
             if finish_clip(root, task["uuid"], result, client):
                 done.append(task["shot_id"])
             else:
+                # Later clips would only be refused: a task still out holds the film's spending.
                 pending.append(task["shot_id"])
+                break
     finally:
         if own:
             client.close()

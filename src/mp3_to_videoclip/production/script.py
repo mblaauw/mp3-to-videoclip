@@ -123,7 +123,9 @@ def script_report(root: Path) -> dict:
         estimate = sum(line_seconds(line, script.reading_rate_wps) + line.pause_after for line in lines)  # fmt: skip
         measured_rows = [row for row in placed if row["source"] != "estimate"]
         span = sum(row["end"] - row["start"] + row["pause_after"] for row in placed)
-        over = round(span - beat["budget"], 2)
+        # A pause is a choice, so only speech can overrun: the same rule that refuses a script.
+        spoken = sum(row["end"] - row["start"] for row in placed)
+        over = round(spoken - beat["budget"], 2)
         complete = bool(placed) and len(measured_rows) == len(placed)
         entry = {
             "id": beat["id"],
@@ -131,6 +133,7 @@ def script_report(root: Path) -> dict:
             "budget": beat["budget"],
             "estimate": round(estimate, 2),
             "measured": round(span, 2) if complete else None,
+            "spoken": round(spoken, 2) if complete else None,
             "over": over if complete else None,
             "lines": [line.id for line in lines],
         }
@@ -138,7 +141,7 @@ def script_report(root: Path) -> dict:
         if complete and over > 0:
             longest = max(placed, key=lambda row: row["end"] - row["start"])
             notes.append(
-                f"{beat['label']} runs {over:.1f} s over its {beat['budget']:.0f} s budget; "
+                f"{beat['label']} runs {over:.1f} s of speech over its {beat['budget']:.0f} s budget; "
                 f"{longest['id']} is its longest line."
             )
     moved = read_optional(root / "work/retime-notes.json")
