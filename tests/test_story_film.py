@@ -309,8 +309,9 @@ def test_the_report_names_a_beat_over_its_budget(tmp_path):
     report = scripts.script_report(root)
     hook = report["beats"][0]
     assert hook["measured"] == 12.5
-    assert hook["over"] == 4.5
-    assert "Hook runs 4.5 s over" in report["notes"][0]
+    assert hook["spoken"] == 12.0
+    assert hook["over"] == 4.0
+    assert "Hook runs 4.0 s of speech over" in report["notes"][0]
     assert report["measured_rate"] == round(1 / 12.0, 2)
     assert narration.read_index(root)["measured_rate"] == report["measured_rate"]
 
@@ -324,3 +325,13 @@ def test_a_story_film_buys_its_full_set_after_the_style_check(tmp_path):
     assert flow.settings(root) == {"guided": True, "preview_gate": False, "late_credits": True}
     write_json(root / flow.FILE, {**read_json(root / flow.FILE), "slug": "another-film"})
     assert flow.settings(root)["guided"] is False
+
+
+def test_a_long_pause_is_not_an_overrun(tmp_path):
+    root = make_film(tmp_path)
+    line = {"id": "l001", "beat": "hook", "text": "short", "pause_after": 15.0}
+    scripts.write_script(root, {"structure": "five-beat-2m", "lines": [line]})
+    narration.import_take(root, "l001", tone(tmp_path / "a.wav", 3.0))
+    report = scripts.script_report(root)
+    assert report["beats"][0]["measured"] == 18.0 and report["beats"][0]["over"] < 0
+    assert report["notes"] == []
