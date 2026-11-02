@@ -946,7 +946,7 @@ EditMotionType = Literal["hold", "push_in", "pull_back", "pan_left", "pan_right"
 EditAccentType = Literal["punch_in", "flash", "light_leak", "impulse"]
 EditTextAnimation = Literal["fade", "fade_in", "type_on", "slide_up", "pop", "kinetic_words"]
 EditTextStyle = Literal[
-    "super", "title", "lower_third", "lyric", "card", "logotype", "tagline", "cta"
+    "super", "title", "lower_third", "lyric", "card", "logotype", "tagline", "cta", "caption"
 ]
 GradePreset = Literal["neutral", "warm-night", "clean-day", "monochrome", "vivid", "film-fade"]
 

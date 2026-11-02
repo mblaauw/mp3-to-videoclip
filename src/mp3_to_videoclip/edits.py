@@ -1044,6 +1044,28 @@ def _caption_findings(edit: EditDecisionList) -> list[dict]:
     return findings
 
 
+def refresh_captions(root: Path) -> None:
+    """After a story film's takes move: the captions it has follow them to their new frames."""
+    from . import captions
+    from . import production as P
+
+    board = P.load_board(root) if (root / "work/storyboard.json").is_file() else None
+    edit = load_edit(root, board=board) if board is not None else None
+    if edit is None:
+        return
+    ids = {
+        int(item.id.removeprefix(captions.PREFIX).split("-")[0])
+        for shot in edit.shots
+        for item in shot.text
+        if item.id.startswith(captions.PREFIX)
+    }
+    if not ids:
+        return
+    project = P.load_project(root, verify_source=False)
+    known = {line["index"] for line in captions.timed_lines(root, project.fps, board.total_frames)}
+    apply_captions(root, sorted(ids & known))
+
+
 def apply_captions(
     root: Path,
     indexes: list[int] | None = None,
@@ -1074,7 +1096,8 @@ def apply_captions(
         chosen = set(indexes)
     else:
         raise ValueError("captions must be off, all, named or a list of lines")
-    layers = captions.caption_layers(edit, lines, chosen, project.fps)
+    style = "caption" if project.spine == "soundtrack" else "lyric"
+    layers = captions.caption_layers(edit, lines, chosen, project.fps, style)
     shots = []
     for shot in edit.shots:
         kept = [item for item in shot.text if not item.id.startswith(captions.PREFIX)]

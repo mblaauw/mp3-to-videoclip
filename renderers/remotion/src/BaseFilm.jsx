@@ -206,6 +206,19 @@ function textBox(style, width, frameHeight, color, family) {
       lineHeight: 1.12,
     };
   }
+  if (style === "caption") {
+    return {
+      ...base,
+      textShadow: "none",
+      left: width * 0.08,
+      right: width * 0.08,
+      bottom: frameHeight * 0.07,
+      textAlign: "center",
+      fontSize: height * 0.036,
+      fontWeight: 500,
+      lineHeight: 1.45,
+    };
+  }
   if (style === "lyric") {
     return {
       ...base,
@@ -249,6 +262,23 @@ function textBox(style, width, frameHeight, color, family) {
   };
 }
 
+// A caption's dark band hugs each line of its words, so it costs the picture as little as it can.
+function CaptionBand({style, unit, children}) {
+  if (style !== "caption") return children;
+  return (
+    <span
+      style={{
+        background: "rgba(8,8,10,0.72)",
+        padding: `${unit * 0.006}px ${unit * 0.016}px`,
+        boxDecorationBreak: "clone",
+        WebkitBoxDecorationBreak: "clone",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function TextLayer({item, absoluteFrame, width, height, family}) {
   const {fps} = useVideoConfig();
   if (absoluteFrame < item.in_frame || absoluteFrame >= item.out_frame) return null;
@@ -263,6 +293,7 @@ function TextLayer({item, absoluteFrame, width, height, family}) {
   if (item.animation === "kinetic_words") {
     return (
       <div style={box}>
+        <CaptionBand style={item.style} unit={Math.min(width, height)}>
         {words.map((word, index) => {
           const timed = item.words?.[index];
           const state = timed
@@ -282,6 +313,7 @@ function TextLayer({item, absoluteFrame, width, height, family}) {
             </span>
           );
         })}
+        </CaptionBand>
       </div>
     );
   }
@@ -298,7 +330,9 @@ function TextLayer({item, absoluteFrame, width, height, family}) {
         transform: state.transform ?? undefined,
       }}
     >
-      {visible}
+      <CaptionBand style={item.style} unit={Math.min(width, height)}>
+        {visible}
+      </CaptionBand>
     </div>
   );
 }

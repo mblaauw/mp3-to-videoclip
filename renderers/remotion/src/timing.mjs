@@ -521,6 +521,7 @@ export const EDIT_TEXT_STYLES = [
   "logotype",
   "tagline",
   "cta",
+  "caption",
 ];
 export const GRADE_PRESETS = {
   neutral: {contrast: 1, saturation: 1, brightness: 1, vignette: 0},
