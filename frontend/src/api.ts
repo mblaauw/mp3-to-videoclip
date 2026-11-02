@@ -107,6 +107,7 @@ export type Shot = {
   asset?: string | null;
   product_ref?: string | null;
   era_id?: string | null;
+  line_ids?: string[];
   motion_prompt?: string;
   music_context?: string;
   lyric_context?: string;
@@ -852,6 +853,14 @@ export type TimedLine = {
   source: string;
 };
 
+export type MixSpec = {
+  fade_in?: number;
+  fade_out?: number;
+  target_lufs?: number;
+  bed?: { path: string; gain_db: number; duck_db: number };
+  ambience?: { path: string; from_line: string; to_line: string; gain_db: number; duck_db: number }[];
+};
+
 export type ScriptPayload = {
   script: { structure: string; reading_rate_wps: number; lines: ScriptLine[]; notes: string } | null;
   beats: {
@@ -870,7 +879,9 @@ export type ScriptPayload = {
       lines_with_takes: number;
       lines: number;
       output_lufs: number | null;
+      output_true_peak_db?: number | null;
     } | null;
+    mix?: MixSpec;
   };
   narration: {
     voice: string;
@@ -1176,6 +1187,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({}),
     }),
+  setMix: (slug: string, patch: Partial<Omit<MixSpec, "bed">> & { bed?: MixSpec["bed"] | null }) =>
+    request<ScriptPayload>(`/api/projects/${slug}/soundtrack/mix`, {
+      method: "POST",
+      body: JSON.stringify(patch),
+    }),
+  addSound: (slug: string, file: File) =>
+    request<{ path: string }>(
+      `/api/projects/${slug}/soundtrack/sound?filename=${encodeURIComponent(file.name)}`,
+      { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } },
+    ),
   chooseVoice: (slug: string, voice: string) =>
     request<ScriptPayload>(`/api/projects/${slug}/narration/voice`, {
       method: "POST",

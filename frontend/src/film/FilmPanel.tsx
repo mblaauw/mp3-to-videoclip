@@ -11,7 +11,9 @@ import { clock } from "../spine/wave";
 import { ShotThumb } from "../storyboard/ShotThumb";
 import { Button, ErrorState } from "../ui";
 import type { CutNote } from "./cutNotes";
+import { isSpoken, useScriptPayload } from "../script/useSpokenLines";
 import { DeliveryPanel } from "./DeliveryPanel";
+import { MixPanel } from "./MixPanel";
 import {
   addCrop,
   joinMaxFrames,
@@ -454,7 +456,15 @@ function CropCuts({
 type CaptionMode = "off" | "all" | "named";
 
 /** Draw the timed lines on the film. SRT and VTT always carry all of them. */
-function Captions({ slug, edit }: { slug: string; edit: EditPayload | null }) {
+function Captions({
+  slug,
+  edit,
+  spoken,
+}: {
+  slug: string;
+  edit: EditPayload | null;
+  spoken: boolean;
+}) {
   const drawn = (edit?.shots ?? []).reduce(
     (count, shot) => count + (shot.text ?? []).filter((item) => item.id.startsWith("cap-")).length,
     0,
@@ -484,8 +494,8 @@ function Captions({ slug, edit }: { slug: string; edit: EditPayload | null }) {
           }}
         >
           <option value="off">Off</option>
-          <option value="all">All sung lines</option>
-          <option value="named">Named sections only</option>
+          <option value="all">{spoken ? "Every line, as it is said" : "All sung lines"}</option>
+          {!spoken && <option value="named">Named sections only</option>}
         </select>
       </label>{" "}
       <span className="hint">{drawn} on the film</span>
@@ -511,6 +521,7 @@ function Overview({
   onSeekNote: (note: CutNote) => void;
   onNavigate: (stage: Stage) => void;
 }) {
+  const spoken = useScriptPayload(film.slug, isSpoken(film.board) ? "soundtrack" : null);
   const { cut, board, rendererReady, slug, workflow } = film;
   // The stage already says the one thing to do; nothing here can be done yet.
   if (!film.hasBoard) return null;
@@ -544,7 +555,8 @@ function Overview({
           {cut.notes && <p className="cut-notes">{cut.notes}</p>}
           {cut.against_seed && <AgainstSeed changes={cut.against_seed} />}
           <SuggestCut slug={slug} onChange={onChange} />
-          <Captions slug={slug} edit={edit} />
+          <Captions slug={slug} edit={edit} spoken={Boolean(spoken)} />
+          {spoken && <MixPanel slug={slug} payload={spoken} />}
           {edit && <LookControls slug={slug} edit={edit} onChange={onChange} />}
           <CriticNotes slug={slug} onSeek={(frame) => onSeekNote({ frame } as CutNote)} />
           {edit && (

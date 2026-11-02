@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { EditPayload, ImageShot, Music, Storyboard } from "../api";
 import type { TitleWindow } from "../baseFilm";
+import { isSpoken, useScriptPayload } from "../script/useSpokenLines";
 import { usePlayerControls } from "../spine/player";
 import { Transport } from "../spine/Transport";
 import { clock, sectionColor, sectionName, waveformBars } from "../spine/wave";
@@ -72,6 +73,8 @@ export function FilmTimeline({
   onMoveBoundary: (next: EditPayload, label: string) => void;
 }) {
   const player = usePlayerControls();
+  const spoken = useScriptPayload(slug, isSpoken(board) ? "soundtrack" : null);
+  const spokenLines = spoken?.timing.lines ?? [];
   const lanes = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLDivElement>(null);
@@ -353,6 +356,28 @@ export function FilmTimeline({
                 );
               })}
           </div>
+          {spokenLines.length > 0 && duration > 0 && (
+            <div className="film-spoken-lane">
+              {spokenLines.map((line) => (
+                <button
+                  type="button"
+                  key={line.id}
+                  style={{
+                    left: `${(line.start / duration) * 100}%`,
+                    width: `${((line.end - line.start) / duration) * 100}%`,
+                  }}
+                  title={line.text}
+                  onClick={(event) => {
+                    releaseMouseFocus(event);
+                    player.seek(line.start);
+                  }}
+                >
+                  {line.text}
+                </button>
+              ))}
+            </div>
+          )}
+          {spoken?.soundtrack.mix?.bed && <div className="film-bed-lane" title="The bed under the voice" />}
           {windows.length > 0 && (
             <div className="film-titles-lane">
               {windows.map((window) => (

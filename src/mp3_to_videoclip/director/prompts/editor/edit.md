@@ -45,7 +45,7 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    frames. Spend about one to three per section on the strongest hits. Never
    place more than three `flash` accents inside any one second.
 6. **Text.** Time text layers inside their shot: `super`, `title`,
-   `lower_third`, `lyric`, `card`, `logotype`, `tagline` or `cta`, with `fade`, `type_on`, `slide_up`, `pop` or
+   `lower_third`, `lyric`, `caption`, `card`, `logotype`, `tagline` or `cta`, with `fade`, `type_on`, `slide_up`, `pop` or
    `kinetic_words`. Respect safe areas; never cover a face or the product.
 7. **Grade.** Choose one preset for the film: `neutral`, `warm-night`,
    `clean-day`, `monochrome`, `vivid` or `film-fade`, with strength 0–1. Use the
@@ -57,6 +57,8 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    phrase rather than a hit, give a line room before the next one, and leave the
    big musical arrivals clear of speech. You place the lines; the user makes the
    audio in Studio.
+   When the narrator is the film's clock, cut on sentence ends, lead the image by half a second on
+   a reveal, and never cut inside a word.
    A `reprise` repeats a still, so give it a new framing with a crop on its first
    frame (`crops: [{"frame": start_frame, "zoom": 1.5, "x": 0.5, "y": 0.5}]`). Words
    on a picture only appear as text layers in the cut. `logotype`, `tagline` and `cta` are
