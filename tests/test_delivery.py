@@ -126,3 +126,22 @@ def test_the_route_serves_only_package_files(film):
     assert client.get(f"/api/projects/{film.name}/film/package/{name}").status_code == 200
     bad = f"/api/projects/{film.name}/film/package/production-final-v001.json"
     assert client.get(bad).status_code == 404
+
+
+def test_a_chapter_takes_the_name_of_a_section_a_frame_away(film, monkeypatch):
+    from mp3_to_videoclip import song_map
+
+    edit = edits.load_edit(film)
+    sections = [
+        EditSection(id="a", start_frame=0, feel="beat"),
+        EditSection(id="b", start_frame=481, feel="beat"),
+    ]
+    edits.save_edit(film, edit.model_copy(update={"sections": sections}))
+    monkeypatch.setattr(
+        song_map,
+        "song_map",
+        lambda root: {
+            "sections": [{"start_frame": 0, "name": "Hook"}, {"start_frame": 480, "name": "World"}]
+        },
+    )
+    assert [row["title"] for row in delivery.chapter_list(film)] == ["Hook", "World"]

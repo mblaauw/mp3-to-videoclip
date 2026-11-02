@@ -95,7 +95,7 @@ def _reframed(root: Path, slug: str, payload: dict, aspect: str, canvas, assets,
     payload["width"], payload["height"] = canvas
     payload.pop("brand_plate", None)
     payload.pop("brand_duration_frames", None)
-    if not titles.has_layout_for(root, aspect):
+    if payload.get("titles") is not None and not titles.has_layout_for(root, aspect):
         payload["titles"] = None
         payload["titles_note"] = "This film's titles have no layout for this shape."
 

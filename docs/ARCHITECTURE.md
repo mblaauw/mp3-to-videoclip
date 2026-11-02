@@ -171,7 +171,8 @@ line is said, estimated or measured; `board.retime_lines` re-derives bound shots
 stills. `production/soundtrack.py` mixes the takes with a bed and ambience spans, measures the result, and
 keeps a receipt the render report copies. `clips.py` buys a clip of a selected still through the same journal
 and keeps it beside the versions in `work/assets.json`; `production.selected_clip` is the one rule for
-whether it plays. `structures.py` is the template table, and `analysis.analyze_narration` keeps the keys of
+whether it plays. `delivery.py` writes the package beside a final and `reframe.py` is the arithmetic of a version of another
+shape. `structures.py` is the template table, and `analysis.analyze_narration` keeps the keys of
 `analyze` so the Spine and `cut_material` read speech without knowing.
 
 ## Decisions and first drafts

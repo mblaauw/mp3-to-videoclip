@@ -95,3 +95,16 @@ def test_a_card_is_drawn_for_the_shape_it_appears_in(film):
     path = P.local_plate_path(film, "s001", (540, 960))
     with Image.open(path) as image:
         assert image.size == (540, 960)
+
+
+def test_a_film_with_no_titles_is_not_told_its_titles_have_no_layout(film, monkeypatch):
+    monkeypatch.setattr(services.preview, "_titles", lambda root, project: (None, None))
+    payload = services.preview.player_input(film, film.name, "9:16")
+    assert payload["titles"] is None and payload["titles_note"] is None
+
+
+def test_joint_titles_on_another_shape_say_why_they_are_gone(film, monkeypatch):
+    monkeypatch.setattr(services.preview, "_titles", lambda root, project: ({"windows": []}, None))
+    payload = services.preview.player_input(film, film.name, "9:16")
+    assert payload["titles"] is None
+    assert "no layout" in payload["titles_note"]

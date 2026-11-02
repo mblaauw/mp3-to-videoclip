@@ -57,10 +57,11 @@ def _verified_final(root: Path, film: Path) -> dict:
     return report
 
 
-def _section_name(section, names: dict[int, str], number: int) -> str:
-    known = names.get(section.start_frame)
-    if known:
-        return known
+def _section_name(section, names: dict[int, str], number: int, fps: int) -> str:
+    # A cut retimed by its takes drifts from the map, so a name within a second still counts.
+    near = [at for at in names if abs(at - section.start_frame) <= fps]
+    if near:
+        return names[min(near, key=lambda at: abs(at - section.start_frame))]
     feel = re.split(r"[.;:—]", section.feel, maxsplit=1)[0].strip()
     return feel[:60].rstrip() or f"Section {number}"
 
@@ -83,7 +84,9 @@ def chapter_list(root: Path) -> list[dict]:
         at = 0 if not rows else section.start_frame
         if rows and (at - rows[-1]["start_frame"]) / project.fps < MIN_CHAPTER_SECONDS:
             continue
-        rows.append({"start_frame": at, "title": _section_name(section, names, number)})
+        rows.append(
+            {"start_frame": at, "title": _section_name(section, names, number, project.fps)}
+        )
     return rows
 
 
