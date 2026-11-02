@@ -261,6 +261,11 @@ async def render(slug: str, request: Request, payload: dict):
 
     from mp3_to_videoclip import services
 
+    options = payload.get("options") if kind == "final" else None
+    if options is not None:
+        # Refused here, not after a queue and a render.
+        services.render.final_options(P.load_project(root), options)
+
     async def work():
         fn = {
             "preview": services.render.render_preview,
@@ -268,6 +273,8 @@ async def render(slug: str, request: Request, payload: dict):
             "base": services.render.render_base,
             "final": services.render.render_final,
         }[kind]
+        if options is not None:
+            return await asyncio.to_thread(fn, root, None, options)
         return await asyncio.to_thread(fn, root)
 
     job_id = runner.submit("render", slug, work, blocking=True, render_kind=kind)

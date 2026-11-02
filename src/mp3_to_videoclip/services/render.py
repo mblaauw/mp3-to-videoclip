@@ -94,6 +94,53 @@ def render_base(root: Path, output: Path | None = None) -> dict:
     return report
 
 
+#: The streaming norm, applied only to the kinds whose sound is ours to change.
+LOUDNESS = {"target_lufs": -14.0, "true_peak": -1.0}
+LOUDNESS_KINDS = ("promo", "advert")
+FINAL_CAPTURES = {"png": None, "jpeg90": {"format": "jpeg", "quality": 90}}
+
+
+def loudness_refusal(project) -> str | None:
+    """Why this film's sound stays as it is, or ``None`` when it may be normalised."""
+    if project.kind in LOUDNESS_KINDS:
+        return None
+    if project.spine == "soundtrack":
+        return "A story film's mix already sets its own loudness."
+    return "A music video's master is the mix, so it is never normalised."
+
+
+def final_options(project, options: dict | None) -> dict:
+    """The render arguments for a final's choices. Refuses what this film may not have."""
+    options = options or {}
+    unknown = set(options) - {"sample_rate", "loudness", "capture"}
+    if unknown:
+        raise ValueError(f"unknown final options: {', '.join(sorted(unknown))}")
+    capture = options.get("capture", "png")
+    if capture not in FINAL_CAPTURES:
+        raise ValueError("a final's capture is png or jpeg90")
+    rate = options.get("sample_rate")
+    if rate not in (None, 48000):
+        raise ValueError("a final keeps its source rate or uses 48000")
+    audio: dict = {}
+    if rate:
+        audio["sample_rate"] = rate
+    if options.get("loudness"):
+        refusal = loudness_refusal(project)
+        if refusal:
+            raise ValueError(refusal)
+        audio["loudness"] = LOUDNESS
+    result: dict = {"final_capture": capture}
+    if FINAL_CAPTURES[capture]:
+        result["capture"] = FINAL_CAPTURES[capture]
+    if audio:
+        result["audio_delivery"] = audio
+    return result
+
+
+def _render_arguments(choices: dict) -> dict:
+    return {key: value for key, value in choices.items() if key != "final_capture"}
+
+
 def _titled_final_inputs(root: Path, project, review: dict) -> dict:
     """Everything the titled final draws, read in the caller's snapshot.
 
@@ -115,7 +162,13 @@ def _titled_final_inputs(root: Path, project, review: dict) -> dict:
 
 
 def _render_titled_final(
-    root: Path, project, directory: Path, output: Path | None, review: dict, inputs: dict
+    root: Path,
+    project,
+    directory: Path,
+    output: Path | None,
+    review: dict,
+    inputs: dict,
+    choices: dict,
 ) -> dict:
     """One Remotion pass: the reviewed pictures with the reviewed titles drawn in."""
     output = output or _next_output(directory, f"{project.slug}-final")
@@ -128,8 +181,10 @@ def _render_titled_final(
         root / "work",
         brand=inputs["brand"],
         titles=inputs["titles"],
+        **_render_arguments(choices),
     )
     report["delivery_ready"] = True
+    report["final_capture"] = choices["final_capture"]
     report["graphics_review_method"] = review["method"]
     report["captions"] = captions.sidecars_for(root, output, project)
     _stamp(root, output, report, "final", inputs["provenance"])
@@ -149,12 +204,13 @@ def check_titles(root: Path) -> dict:
 
 
 @operations.progress_scope(stage="final-render")
-def render_final(root: Path, output: Path | None = None) -> dict:
+def render_final(root: Path, output: Path | None = None, options: dict | None = None) -> dict:
     """Render delivery: compose approved graphics over the reviewed base."""
     # The full-stills decision is the last human gate before a delivery render.
     P.require_approval(root, "stills")
     depth.ensure_for_render(root)
     project = P.load_project(root)
+    choices = final_options(project, options)
     directory = root / "renders"
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -172,7 +228,9 @@ def render_final(root: Path, output: Path | None = None) -> dict:
                 base = inside(root, review["base"])
                 provenance = _provenance(root, "final", graphics=True)
         if inputs is not None:
-            return _render_titled_final(root, project, directory, output, review, inputs)
+            return _render_titled_final(root, project, directory, output, review, inputs, choices)
+        if _render_arguments(choices):
+            raise ValueError("a film reviewed with the older titles cannot take final options")
         from mp3_to_videoclip.graphics import compose
 
         output = output or _next_output(directory, f"{project.slug}-final")
@@ -202,8 +260,10 @@ def render_final(root: Path, output: Path | None = None) -> dict:
         output,
         root / "work",
         brand=brand,
+        **_render_arguments(choices),
     )
     report["delivery_ready"] = True
+    report["final_capture"] = choices["final_capture"]
     report["captions"] = captions.sidecars_for(root, output, project)
     _stamp(root, output, report, "final", provenance)
     _write_report(output, report)

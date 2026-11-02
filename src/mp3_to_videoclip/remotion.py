@@ -1172,12 +1172,14 @@ def render_base(
     titles: dict | None = None,
     capture: dict | None = None,
     reuse_chunks: bool = False,
+    audio_delivery: dict | None = None,
 ) -> dict:
     """Remotion visuals + existing atomic FFmpeg/audio/verification contracts.
 
     ``titles`` (see :func:`titles_input`) draws the planned titles in the same
     pass; without it the request and the visual cache key are unchanged. ``capture``
     (see :data:`WORKING_CAPTURE`) is how frames leave the browser; absent means PNG.
+    ``audio_delivery`` (``sample_rate``, ``loudness``) changes only the muxed sound.
     """
     from . import render as R
 
@@ -1242,6 +1244,7 @@ def render_base(
         raise ValueError(f"Unresolved partial render: {partial}")
     operations.phase("muxing-audio", note="original audio muxed over the silent visual base")
     mux_started = time.perf_counter()
+    sound_args, delivered = _delivery_audio(audio, audio_delivery)
     try:
         R._run(
             [
@@ -1264,6 +1267,7 @@ def render_base(
                 "aac",
                 "-b:a",
                 R.AUDIO_BITRATE,
+                *sound_args,
                 "-t",
                 f"{project.total_frames / project.fps:.9f}",
                 "-movflags",
@@ -1271,6 +1275,8 @@ def render_base(
                 str(partial),
             ]
         )
+        if delivered and "loudness" in delivered:
+            _record_output_loudness(partial, delivered)
         mux_seconds = time.perf_counter() - mux_started
         verification_started = time.perf_counter()
         # A final (PNG capture) is counted by decoding it; working renders read packets.
@@ -1319,7 +1325,49 @@ def render_base(
         "verification": "Measured exact frames/dimensions/fps/audio/duration/faststart; not artistic acceptance",
     }
     report["video"]["fps"] = project.fps
+    # Named only when asked for, and it says plainly that the sound is new bytes.
+    if delivered:
+        report["audio_delivery"] = delivered
     return report
+
+
+def _delivery_audio(audio: Path, options: dict | None) -> tuple[list[str], dict | None]:
+    """FFmpeg arguments and the report's record for a chosen rate and loudness. ``None``: the mix."""
+    if not options:
+        return [], None
+    from . import audio as sound
+
+    arguments: list[str] = []
+    record: dict = {}
+    loudness = options.get("loudness")
+    rate = options.get("sample_rate")
+    if loudness:
+        target, peak = float(loudness["target_lufs"]), float(loudness["true_peak"])
+        stats = sound.loudness_stats(audio, target, peak)
+        if stats is None:
+            raise ValueError("this film's sound is silent, so its loudness cannot be set")
+        arguments += ["-af", sound.loudnorm_filter(stats, target, peak)]
+        # The filter works at 192 kHz, so a rate is always named after it.
+        rate = rate or 48000
+        record["loudness"] = {
+            "target": target,
+            "true_peak_target": peak,
+            "input_i": float(stats["input_i"]),
+            "input_tp": float(stats["input_tp"]),
+            "input_lra": float(stats["input_lra"]),
+        }
+    if rate:
+        arguments += ["-ar", str(int(rate))]
+        record["sample_rate"] = int(rate)
+    return arguments, record or None
+
+
+def _record_output_loudness(path: Path, record: dict) -> None:
+    from . import audio as sound
+
+    stats = sound.loudness_stats(path)
+    record["loudness"]["output_i"] = float(stats["input_i"]) if stats else None
+    record["loudness"]["output_tp"] = float(stats["input_tp"]) if stats else None
 
 
 def title_assets(spec: dict, palette: dict) -> dict:

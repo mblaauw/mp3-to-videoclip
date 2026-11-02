@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Stage } from "../shell/nextStep";
 import { usePlayerControls } from "../spine/player";
 import { CreditsCard } from "../story/CreditsCard";
@@ -22,6 +23,10 @@ export function DeliveryPanel({
     approveTitles, stillsDone, finalHint, seenSamples, allSamplesSeen, openSample, live,
     sampleIndex, samplesOpen, graphics,
   } = film;
+  const [rate48, setRate48] = useState(false);
+  const [loudness, setLoudness] = useState(false);
+  const [jpeg, setJpeg] = useState(false);
+  const loudnessRefusal = checklist?.loudness_refusal ?? null;
   const windows = live?.titles?.windows ?? [];
   const reviewCurrent = graphics?.current !== false;
   return (
@@ -164,11 +169,38 @@ export function DeliveryPanel({
           </li>
         )}
       </ul>
+      <fieldset className="final-options">
+        <legend>Final options</legend>
+        <label className="settings-check">
+          <input type="checkbox" checked={rate48} onChange={(event) => setRate48(event.target.checked)} />{" "}
+          48 kHz sound
+        </label>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={loudness && !loudnessRefusal}
+            disabled={Boolean(loudnessRefusal)}
+            onChange={(event) => setLoudness(event.target.checked)}
+          />{" "}
+          Normalise to −14 LUFS
+        </label>
+        {loudnessRefusal && <p className="hint">{loudnessRefusal}</p>}
+        <label className="settings-check">
+          <input type="checkbox" checked={jpeg} onChange={(event) => setJpeg(event.target.checked)} />{" "}
+          Capture as JPEG 90 (smaller and faster; PNG is the default until you have watched one)
+        </label>
+      </fieldset>
       <div className="row-actions">
         <Button
           variant="primary"
           disabled={!checklist?.can_final || busy !== null || rendering}
-          onClick={() => void render("final")}
+          onClick={() =>
+            void render("final", {
+              ...(rate48 ? { sample_rate: 48000 as const } : {}),
+              ...(loudness && !loudnessRefusal ? { loudness: true } : {}),
+              ...(jpeg ? { capture: "jpeg90" as const } : {}),
+            })
+          }
         >
           {busy === "final" ? "Queueing…" : "Render final"}
         </Button>

@@ -1378,3 +1378,11 @@
   list-style: none;
   font-size: 12px;
 }
+.final-options {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}

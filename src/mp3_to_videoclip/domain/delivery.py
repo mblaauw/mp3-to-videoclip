@@ -114,6 +114,12 @@ def _line(
     }
 
 
+def _loudness_refusal(project) -> str | None:
+    from mp3_to_videoclip.services.render import loudness_refusal
+
+    return loudness_refusal(project)
+
+
 @read_operation
 def build(root: Path) -> dict:
     root = Path(root)
@@ -232,6 +238,7 @@ def build(root: Path) -> dict:
         "signature_required": signature,
         "preview_required": preview_required,
         "can_final": can_final,
+        "loudness_refusal": _loudness_refusal(project),
         "lines": lines,
         "stills": progress,
         "outstanding": outstanding,

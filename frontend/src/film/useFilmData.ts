@@ -6,6 +6,7 @@ import {
   type CutSummary,
   type DeliveryChecklist,
   type DeliveryLine,
+  type FinalOptions,
   type FilmExports,
   type FilmFile,
   type GraphicsReview,
@@ -210,7 +211,7 @@ export function useFilmData(slug: string) {
     }
   };
 
-  const render = async (kind: "preview" | "titles" | "base" | "final") => {
+  const render = async (kind: "preview" | "titles" | "base" | "final", options?: FinalOptions) => {
     setBusy(kind);
     setError(null);
     setNotice(
@@ -225,7 +226,7 @@ export function useFilmData(slug: string) {
       } queued. Progress shows below; the file appears in Rendered files when it is done.`,
     );
     try {
-      await api.render(slug, kind);
+      await api.render(slug, kind, options);
       notifyProjectChanged();
       await load();
     } catch (caught) {

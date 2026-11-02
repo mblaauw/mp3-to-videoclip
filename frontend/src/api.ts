@@ -767,6 +767,7 @@ export type DeliveryChecklist = {
   signature_required: boolean;
   preview_required: boolean;
   can_final: boolean;
+  loudness_refusal?: string | null;
   lines: DeliveryLine[];
   stills: { kept: number; total: number };
   outstanding: string[];
@@ -1570,10 +1571,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  render: (slug: string, kind: "preview" | "titles" | "base" | "final") =>
+  render: (slug: string, kind: "preview" | "titles" | "base" | "final", options?: FinalOptions) =>
     request<unknown>(`/api/projects/${slug}/render`, {
       method: "POST",
-      body: JSON.stringify({ kind }),
+      body: JSON.stringify({ kind, ...(options ? { options } : {}) }),
     }),
 };
 export type FilmFile = {
@@ -1585,6 +1586,11 @@ export type FilmFile = {
   delivery_ready: boolean;
   reason?: string | null;
   package?: string[];
+};
+export type FinalOptions = {
+  sample_rate?: 48000;
+  loudness?: boolean;
+  capture?: "png" | "jpeg90";
 };
 export type FilmExports = {
   exports: string[];
