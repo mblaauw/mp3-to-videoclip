@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from test_chunk_render import _encode
 
-from mp3_to_videoclip import framecheck, remotion, render
+from mp3_to_videoclip import ffmpeg, framecheck, remotion
 
 
 def chunk(start, frames, key=None):
@@ -140,10 +140,10 @@ def test_a_packet_count_equals_the_decoded_count(tmp_path):
     frames = np.random.default_rng(1).integers(0, 255, (37, 54, 96), dtype=np.uint8)
     path = tmp_path / "a.mp4"
     _encode(frames, path)
-    assert render._count_frames(path) == render._decoded_frames(path) == 37
+    assert ffmpeg._count_frames(path) == ffmpeg._decoded_frames(path) == 37
     with pytest.raises(ValueError):
         (tmp_path / "bad.mp4").write_bytes(b"nope")
-        render._count_frames(tmp_path / "bad.mp4")
+        ffmpeg._count_frames(tmp_path / "bad.mp4")
 
 
 def test_planned_windows_name_dips_flashes_and_crops():

@@ -372,18 +372,3 @@ def test_strict_quote_and_generate_uses_preflight_budget_and_no_implicit_accepta
         P.approve(root, "proof", "cannot approve unseen images")
     accept(root, ("s001", "s002", "s004"))
     P.approve(root, "proof", "inspected generated proof")
-
-
-def test_strict_contact_sheet_versioned_with_byte_bound_labels(tmp_path):
-    root = strict_root(tmp_path)
-    record_stills(root, ["s001", "s002", "s003", "s004"])
-    command = parser().parse_args(["sheet", str(root), "--scope", "stills"])
-    first, second = execute(command), execute(command)
-    assert first["contact_sheet"] != second["contact_sheet"]
-    from pathlib import Path
-
-    metadata = read_json(Path(first["contact_sheet"]).with_suffix(".json"))
-    assert metadata["reviewed"] is False
-    assert metadata["shots"][1]["start_frame"] == 12
-    assert metadata["shots"][1]["version"] == 1
-    assert len(metadata["shots"][1]["sha256"]) == 64

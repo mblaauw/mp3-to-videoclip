@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 from .. import flow, kinds, profiles, styles
+from ..ffmpeg import audio_seconds, probe
 from ..models import (
     AudioWindow,
     Brief,
@@ -11,7 +12,6 @@ from ..models import (
     Intent,
     Project,
 )
-from ..render import audio_seconds, probe
 from ..storage import (
     file_hash,
     inside,

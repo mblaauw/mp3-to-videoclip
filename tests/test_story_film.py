@@ -141,7 +141,7 @@ def test_an_invented_claim_needs_a_fictional_world(tmp_path):
 
 
 def test_a_draft_soundtrack_is_silence_of_the_estimated_length(tmp_path):
-    from mp3_to_videoclip.render import audio_seconds
+    from mp3_to_videoclip.ffmpeg import audio_seconds
 
     root = make_film(tmp_path)
     script_for(root)

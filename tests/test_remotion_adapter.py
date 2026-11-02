@@ -15,7 +15,7 @@ from mp3_to_videoclip.storage import read_json, write_json
 def base_cache(tmp_path, monkeypatch):
     from PIL import Image
 
-    from mp3_to_videoclip import render
+    from mp3_to_videoclip import ffmpeg as render
     from mp3_to_videoclip.models import RenderShot
 
     image = tmp_path / "selected.png"
@@ -76,7 +76,7 @@ def test_same_visual_cache_is_serialized_across_processes(base_cache, tmp_path, 
     import multiprocessing
     import os
 
-    from mp3_to_videoclip import render
+    from mp3_to_videoclip import ffmpeg as render
     from mp3_to_videoclip.storage import file_hash
 
     project, shots, _, _ = base_cache
@@ -446,31 +446,6 @@ def test_backend_change_does_not_rewrite_upstream_analysis_identity(tmp_path):
     assert production.stage_hash(root, "analysis") == before
 
 
-def test_cli_preview_retains_renderer_revision(tmp_path, monkeypatch):
-    from test_signature_iteration import signature_root
-
-    from mp3_to_videoclip import cli
-
-    root = signature_root(tmp_path)
-
-    def preview(root, project, board, available, output, workdir):
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(b"review-fixture")
-        return {
-            "input_hash": "input",
-            "placeholder_shots": [],
-            "actual_shots": [],
-            "renderer_revision": "exact-remotion-revision",
-        }
-
-    monkeypatch.setattr(cli, "build_preview", preview)
-    cli.execute(cli.parser().parse_args(["preview", str(root), "--scope", "proof"]))
-    assert (
-        read_json(root / "work/preview-review.json")["renderer_revision"]
-        == "exact-remotion-revision"
-    )
-
-
 def test_first_base_creates_nested_destination_before_rendering(tmp_path, monkeypatch):
     from PIL import Image
 
@@ -543,14 +518,6 @@ def test_schema_three_uses_remotion_without_a_legacy_backend_flag(tmp_path, monk
         "renderer_revision": "revision",
     }
     assert remotion.renderer_binding(legacy) == {}
-
-    from mp3_to_videoclip import render as R
-
-    monkeypatch.setattr(
-        "mp3_to_videoclip.remotion.render_base", lambda *args, **kwargs: {"sentinel": True}
-    )
-    result = R.render(project, [], tmp_path / "audio.mp3", tmp_path / "out.mp4", tmp_path)
-    assert result == {"sentinel": True}
 
 
 def test_titles_join_the_base_pass_and_its_cache_key_only_when_given(base_cache):

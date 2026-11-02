@@ -344,7 +344,6 @@ def test_new_skeleton_defaults_do_not_change_old_film_cadence(tmp_path, monkeypa
 
 @pytest.mark.parametrize("renderer_binding", [False, True])
 def test_base_render_prepares_review_but_is_never_delivery(tmp_path, monkeypatch, renderer_binding):
-    import mp3_to_videoclip.cli as cli
     import mp3_to_videoclip.graphics as graphics
 
     root = signature_root(tmp_path)
@@ -379,7 +378,9 @@ def test_base_render_prepares_review_but_is_never_delivery(tmp_path, monkeypatch
         )
         return {"sidecar": str(sidecar)}
 
-    monkeypatch.setattr(cli, "render", render)
+    from mp3_to_videoclip import remotion as renderer
+
+    monkeypatch.setattr(renderer, "render_base", render)
     monkeypatch.setattr(graphics, "preflight_frames", preflight)
     result = execute(parser().parse_args(["render", str(root), "--base-only"]))
     assert result["delivery_ready"] is False and len(calls) == 1

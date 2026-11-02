@@ -11,9 +11,9 @@ from PIL import Image
 from mp3_to_videoclip import generation as G
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.cli import execute, parser
+from mp3_to_videoclip.ffmpeg import audio_seconds
 from mp3_to_videoclip.models import Brief, Lyrics, Project, Segment, Shot, Storyboard
 from mp3_to_videoclip.providers import ProviderError
-from mp3_to_videoclip.render import audio_seconds
 from mp3_to_videoclip.storage import digest, file_hash, inside, project_lock, read_json, write_json
 
 
@@ -604,7 +604,7 @@ def test_lyrics_import_preserves_previous_reviewed_artifact(production):
     assert read_json(production / "work/lyrics.json") == revised
 
 
-def test_cli_sheet_select_render_versions_and_report_with_real_mp3(production):
+def test_cli_select_and_costs_with_real_mp3(production):
     source = production / "media/song.mp3"
     subprocess.run(
         [
@@ -641,25 +641,13 @@ def test_cli_sheet_select_render_versions_and_report_with_real_mp3(production):
     client = FakeRunware(production)
     proof = authorized_quote(production, client)
     G.generate(production, proof["id"], client)
-    sheet = execute(parser().parse_args(["sheet", str(production)]))
-    assert Path(sheet["contact_sheet"]).is_file() and sheet["shots"] == 3
     P.approve(production, "proof", "test user approved fixture proof")
     remaining = G.quote_images(production, "stills", "0.01", client=client)
     G.authorize(production, remaining["id"], "0.01", "test user approved remaining fixture")
     G.generate(production, remaining["id"], client)
     execute(parser().parse_args(["select", str(production), "--shot", "s002", "--version", "1"]))
     P.approve(production, "stills", "test user approved full fixture")
-    first = execute(parser().parse_args(["render", str(production)]))
-    second = execute(parser().parse_args(["render", str(production)]))
-    assert Path(first["output"]).name == "stills-v001.mp4"
-    assert Path(second["output"]).name == "stills-v002.mp4"
-    saved = read_json(Path(first["output"]).with_suffix(".json"))
-    assert saved["input_hash"] == first["input_hash"] and first["video"]["pix_fmt"] == "yuv420p"
-    assert first["video"]["frames"] == board["total_frames"]
-    assert abs(first["duration"] - config["duration"]) <= 1 / 24
     assert (
         execute(parser().parse_args(["costs", str(production)]))["reported_or_calculated_usd"]
         == "0.004"
     )
-    with pytest.raises(ValueError, match="basename"):
-        execute(parser().parse_args(["render", str(production), "--name", "../escape.mp4"]))

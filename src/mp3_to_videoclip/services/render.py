@@ -9,7 +9,7 @@ from pathlib import Path
 from mp3_to_videoclip import captions, depth, operations
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.remotion import WORKING_CAPTURE
-from mp3_to_videoclip.render import render as _render
+from mp3_to_videoclip.remotion import render_base as _render
 from mp3_to_videoclip.storage import file_hash, inside, read_snapshot, write_json
 
 

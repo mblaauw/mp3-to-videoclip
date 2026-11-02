@@ -703,6 +703,11 @@ class Script(Model):
         return self
 
 
+#: The storyboard's camera moves, and how far a zoom goes. ``timing.mjs`` holds the same two.
+CAMERA_MOVES = ("hold", "zoom_in", "zoom_out", "pan_left", "pan_right")
+ZOOM_RANGE = 0.08
+
+
 class Shot(Model):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
     start_frame: int = Field(ge=0)

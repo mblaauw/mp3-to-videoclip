@@ -12,6 +12,7 @@ from PIL import Image
 
 from .. import flow, kinds, localplate, profiles, shotkinds, styles
 from ..branding import brand_hash, load_brand
+from ..ffmpeg import audio_seconds, probe
 from ..models import (
     AudioWindow,
     Brief,
@@ -28,7 +29,6 @@ from ..models import (
     Treatments,
     VisualBeat,
 )
-from ..render import audio_seconds, probe
 from ..storage import (
     digest,
     file_hash,
