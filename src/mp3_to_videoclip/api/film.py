@@ -233,13 +233,13 @@ async def get_critique(slug: str, request: Request):
 
 @router.get("/preview")
 @read_endpoint
-def preview_input(slug: str, request: Request):
+def preview_input(slug: str, request: Request, aspect: str | None = None):
     """The live Player payload: the renderer's shot fields plus local URLs."""
     from mp3_to_videoclip import services
 
     root = project_root(request, slug)
     try:
-        return services.preview.player_input(root, slug)
+        return services.preview.player_input(root, slug, aspect)
     except (OSError, ValueError) as exc:
         return {"available": False, "reason": str(exc)}
 
@@ -261,6 +261,11 @@ async def render(slug: str, request: Request, payload: dict):
 
     from mp3_to_videoclip import services
 
+    options = payload.get("options") if kind == "final" else None
+    if options is not None:
+        # Refused here, not after a queue and a render.
+        services.render.final_options(P.load_project(root), options)
+
     async def work():
         fn = {
             "preview": services.render.render_preview,
@@ -268,6 +273,8 @@ async def render(slug: str, request: Request, payload: dict):
             "base": services.render.render_base,
             "final": services.render.render_final,
         }[kind]
+        if options is not None:
+            return await asyncio.to_thread(fn, root, None, options)
         return await asyncio.to_thread(fn, root)
 
     job_id = runner.submit("render", slug, work, blocking=True, render_kind=kind)
@@ -288,6 +295,7 @@ def _films(directory: Path) -> list[str]:
 @router.get("/exports")
 @read_endpoint
 def list_exports(slug: str, request: Request):
+    from mp3_to_videoclip import delivery
     from mp3_to_videoclip.domain.exports import describe
 
     root = project_root(request, slug)
@@ -297,7 +305,13 @@ def list_exports(slug: str, request: Request):
         "exports": exports,
         "previews": previews,
         "signature_required": P.requires_signature(root, P.load_project(root)),
-        "files": [describe(root, "renders", name) for name in exports]
+        "files": [
+            {
+                **describe(root, "renders", name),
+                "package": delivery.listing(root / "renders" / name),
+            }
+            for name in exports
+        ]
         + [describe(root, "previews", name) for name in previews],
     }
 
@@ -337,6 +351,69 @@ async def play_archive_still(slug: str, index: int, request: Request):
     if not target.is_file() or not target.resolve().is_relative_to(root.resolve()):
         raise HTTPException(status_code=404, detail="archived still is missing")
     return FileResponse(target, content_disposition_type="inline")
+
+
+@router.post("/film/variant")
+async def render_variant(slug: str, request: Request, payload: dict):
+    """A vertical or square film from the same cut. Derives from what is already approved."""
+    import asyncio
+
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    aspect = payload.get("aspect")
+    # Refused here, not after a queue.
+    services.render.variant_source(root, aspect)
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+
+    async def work():
+        return await asyncio.to_thread(services.render.render_variant, root, aspect)
+
+    job_id = runner.submit("render", slug, work, blocking=True, render_kind="variant")
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.post("/film/package")
+async def make_package(slug: str, request: Request, payload: dict):
+    """The poster, contact sheet, chapters and captions beside a final. Spends nothing."""
+    import asyncio
+
+    from mp3_to_videoclip import delivery
+
+    root = project_root(request, slug)
+    name = payload.get("name")
+    if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.mp4", name):
+        raise HTTPException(status_code=400, detail="name a rendered final")
+    film = inside(root, f"renders/{name}")
+    if not film.is_file():
+        raise HTTPException(status_code=404, detail="film is missing")
+    frame = payload.get("frame")
+    if frame is not None and (isinstance(frame, bool) or not isinstance(frame, int)):
+        raise HTTPException(status_code=400, detail="frame must be a whole number")
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+
+    async def work():
+        return await asyncio.to_thread(delivery.make_package, root, film, frame=frame)
+
+    job_id = runner.submit("render", slug, work, blocking=True, render_kind="package")
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/film/package/{name}")
+async def get_package_file(slug: str, name: str, request: Request):
+    from mp3_to_videoclip import delivery
+
+    if not delivery.SIDECAR.fullmatch(name):
+        raise HTTPException(status_code=404, detail="unknown package file")
+    target = inside(project_root(request, slug), f"renders/{name}")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="package file is missing")
+    media = delivery.MEDIA.get(target.suffix, "application/octet-stream")
+    return FileResponse(target, media_type=media, filename=name)
 
 
 @router.get("/film/{kind}/{name}")

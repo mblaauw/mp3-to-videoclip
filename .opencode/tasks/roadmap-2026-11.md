@@ -229,8 +229,8 @@ Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both a
 ## Where the roadmap stands, 1 Nov 2026
 
 Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76),
-E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79), C-3 and E-3 (#80). I-3 and C-4 are
-in the PR after #80. Next in the final order: I-4.
+E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79), C-3 and E-3 (#80), I-3 and C-4 (#81).
+I-4 and F-2 are in the PR after #81. Next in the final order: F-3.
 
 Differences from the plans, where the plan was wrong or could not hold:
 
@@ -319,3 +319,19 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   The Player's hold past a clip's end was not looked at. `propose_motion` was not added: the tools are at their budget, and
   `propose_alternatives` can say the same. No clip has been bought: the capped batch needs the owner's authorisation, and
   the frame scan on real motion is unmeasured.
+
+- **I-4:** C-4 had already built the purchase and the layer this step planned, without limiting clips to narrative films.
+  What was left is `propose_motion`, which writes a suggestion and spends nothing, a per-shot `clip_loop`, and the reason beside
+  *Make a clip*. Depth stays the Settings start value rather than a story-film default. Adding the tool meant cutting other
+  tool descriptions to stay inside the 7,000 pin.
+- **F-2:** the package is made on a click, not with every final, so a failed poster cannot fail a final. Posters are named by
+  frame (`.poster-f001632.png`) and package listings likewise, because a chosen frame must add a file rather than rewrite one.
+  Chapters take the song map's name within a second, because a cut retimed by takes drifts from the map. The plan's
+  warning about a cut neighbourhood became naming shots cropped around the centre, because no neighbourhood of a
+  useful size fits inside the third of a still a vertical keeps. Cards are redrawn for the new canvas. A vertical version of a
+  joint-titled film has no titles and says so; `title-v1` was not rendered through a version. Loudness uses FFmpeg's two passes:
+  -31.95 in, -14.05 out, in a real mux. Keyframes measured at no more than 2.0 s apart. Rendered end to end on a scratch story film with
+  approval gates stubbed: preview, final, package, 9:16 at 1080x1920. Anchors at left, centre and right kept exactly those parts of a
+  test still. At 1:1 a long card's last line can sit under a caption. Four browsers stalled twice on this Mac with little free
+  memory while one browser passed, so the memory guard may be counting too much as free; unproved. The owner has
+  not looked at a real film's vertical framing, and a final with real stills has not been through a version.

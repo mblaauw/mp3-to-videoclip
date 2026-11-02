@@ -39,6 +39,8 @@ yet (transcription, listening, backups, signing, maintenance). Start with
   none. The brand kit sets the default; a kit with no name starts on short titles.
 - A short clip of any generated still, bought at a shown price and played in both the Player and the
   film; the still stays as the fallback.
+- A delivery package beside each final (poster, contact sheet, chapters, captions), and vertical and square
+  versions from the same cut.
 - A fourth kind, the story film: a narrator leads and there may be no song. It starts from a
   script on a structure's beats; the kept takes, their pauses and an optional bed are mixed
   into one WAV that becomes the clock, so a longer take moves only the shots after it. Takes

@@ -809,6 +809,28 @@ function ShotPanel({
             ))}
           </div>
           <CropCuts edit={edit} id={id} fps={fps} onChange={onChange} />
+          {film.images.find((image) => image.id === id)?.clip != null && (
+            <label className="settings-check">
+              <input
+                type="checkbox"
+                checked={edit.shots.find((shot) => shot.shot_id === id)?.clip_loop === true}
+                onChange={(event) =>
+                  void onChange(
+                    {
+                      ...edit,
+                      shots: edit.shots.map((shot) =>
+                        shot.shot_id === id
+                          ? { ...shot, clip_loop: event.target.checked ? true : null }
+                          : shot,
+                      ),
+                    },
+                    "this shot's clip",
+                  )
+                }
+              />{" "}
+              Loop the clip instead of holding its last frame
+            </label>
+          )}
           {(edit.grade.look?.depth ?? 0) > 0 && (
             <label className="settings-check">
               <input

@@ -4,7 +4,6 @@ That file is the film's clock. Its key covers every input, so a changed take mak
 never a rewritten one. ``set_duration`` is the only writer of a soundtrack film's length.
 """
 
-import subprocess
 import wave
 from pathlib import Path
 
@@ -132,33 +131,11 @@ def set_duration(root: Path, seconds: float) -> Project:
 
 def _measure(path: Path) -> dict | None:
     """Integrated loudness, true peak and range, or ``None`` for silence, which has none."""
-    import json
-    import re
-
-    completed = subprocess.run(
-        [
-            sound._ffmpeg(),
-            "-nostdin",
-            "-hide_banner",
-            "-i",
-            str(path),
-            "-af",
-            "loudnorm=print_format=json",
-            "-f",
-            "null",
-            "-",
-        ],  # fmt: skip
-        capture_output=True,
-    )
-    found = re.search(rb"\{[^{}]*\"input_i\"[^{}]*\}", completed.stderr)
-    if completed.returncode != 0 or not found:
-        return None
-    values = json.loads(found.group())
-    loudness = float(values.get("input_i", "-inf"))
-    if loudness <= -70:
+    values = sound.loudness_stats(path)
+    if values is None:
         return None
     return {
-        "lufs": loudness,
+        "lufs": float(values["input_i"]),
         "true_peak_db": float(values.get("input_tp", "-inf")),
         "range_lu": float(values.get("input_lra", 0.0)),
     }

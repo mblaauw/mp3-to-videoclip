@@ -175,6 +175,21 @@ under the same grade. A clip shorter than its shot holds its last frame, the rep
 that is more than a second, and a longer one is cut by the shot's end. Choosing a different picture
 turns the clip off; a sharper copy of the same picture does not. A depth layer never applies to a clip.
 
+A clip can loop instead of holding, per shot, for ambient things like rain. The Writer's `propose_motion` can
+name the shots it thinks earn a clip; its reason shows beside *Make a clip*, and it can spend nothing.
+
+## Versions and the delivery package
+
+*Make the package* beside a verified final writes a poster, a contact sheet, chapters from the cut's sections
+and the captions, all as new files; the final is only read. A poster is named by its frame, so another frame
+adds a file. *Render 9:16* and *Render 1:1* make a version of the current final from the same cut: each still
+sits on its motion anchor, cards are redrawn for the shape, and the report names shots cropped around the
+centre or enlarged past 1.5 times. The shape buttons under the picture show this before you render. Joint
+titles have no layout for these shapes, so such a version has none and says so.
+
+A final can ask for 48 kHz sound and JPEG 90 capture. Promos and adverts can also normalise to -14 LUFS, with
+measured values in the report; music videos and story films keep their own mix.
+
 ## Captions
 
 Film's *Captions* control draws every timed line, only the lines in sections named hook,

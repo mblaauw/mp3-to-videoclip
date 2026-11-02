@@ -7,8 +7,10 @@ without a window keep using the original file.
 
 from __future__ import annotations
 
+import json
 import math
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -185,3 +187,37 @@ def cached_peaks(path: Path, source_sha256: str, cache: Path, buckets: int = 320
     if values:
         write_json(cache, {"source_sha256": source_sha256, "buckets": buckets, "peaks": values})
     return values
+
+
+def loudness_stats(path: Path, target_lufs: float = -16.0, true_peak: float = -1.0) -> dict | None:
+    """FFmpeg's measuring pass. ``None`` for silence, which has no loudness."""
+    completed = subprocess.run(
+        [
+            _ffmpeg(),
+            "-nostdin",
+            "-hide_banner",
+            "-i",
+            str(path),
+            "-af",
+            f"loudnorm=I={target_lufs}:TP={true_peak}:LRA=11:print_format=json",
+            "-f",
+            "null",
+            "-",
+        ],  # fmt: skip
+        capture_output=True,
+    )
+    found = re.search(rb"\{[^{}]*\"input_i\"[^{}]*\}", completed.stderr)
+    if completed.returncode != 0 or not found:
+        return None
+    values = json.loads(found.group())
+    return values if float(values.get("input_i", "-inf")) > -70 else None
+
+
+def loudnorm_filter(stats: dict, target_lufs: float, true_peak: float) -> str:
+    """The second pass: apply exactly what the first one measured."""
+    return (
+        f"loudnorm=I={target_lufs}:TP={true_peak}:LRA=11:linear=true"
+        f":measured_I={stats['input_i']}:measured_TP={stats['input_tp']}"
+        f":measured_LRA={stats['input_lra']}:measured_thresh={stats['input_thresh']}"
+        f":offset={stats['target_offset']}"
+    )

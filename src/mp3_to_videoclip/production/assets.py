@@ -121,15 +121,22 @@ def _local_plate(root: Path, project: Project, shot: Shot) -> Path:
     return localplate.render(root, project, shot, asset=asset, sources=sources)
 
 
-def local_plate_path(root: Path, shot_id: str) -> Path:
-    """Resolve one non-paid shot to its current deterministic plate."""
+def _on_canvas(project: Project, canvas: tuple[int, int] | None) -> Project:
+    """A designed card is drawn for the shape it appears in, so its text is never cropped."""
+    if canvas is None:
+        return project
+    return project.model_copy(update={"width": canvas[0], "height": canvas[1]})
+
+
+def local_plate_path(root: Path, shot_id: str, canvas: tuple[int, int] | None = None) -> Path:
+    """Resolve one non-paid shot to its current deterministic plate, at this canvas if named."""
     board = load_board(root)
     shot = next((candidate for candidate in board.shots if candidate.id == shot_id), None)
     if shot is None:
         raise ValueError(f"unknown shot {shot_id}")
     if shot.asset_shot_id is not None or not shotkinds.is_local(shot):
         raise ValueError(f"shot {shot_id} is not a local plate")
-    return _local_plate(root, load_project(root), shot)
+    return _local_plate(root, _on_canvas(load_project(root), canvas), shot)
 
 
 def still_root(version: dict) -> str:
@@ -179,13 +186,15 @@ def _resolved_shot(root: Path, project, assets: dict, shot) -> RenderShot:
     return RenderShot(shot=shot, image=str(path), clip=clip)
 
 
-def resolved_assets(root: Path, ids: list[str] | None = None) -> list[RenderShot]:
+def resolved_assets(
+    root: Path, ids: list[str] | None = None, canvas: tuple[int, int] | None = None
+) -> list[RenderShot]:
     from .. import edits
 
     board = load_board(root)
     edit = edits.load_edit(root, board=board)
     effective = edit.effective_board(board) if edit is not None else board
-    project = load_project(root)
+    project = _on_canvas(load_project(root), canvas)
     assets = read_json(root / "work/assets.json")
     result = [
         _resolved_shot(root, project, assets, shot)

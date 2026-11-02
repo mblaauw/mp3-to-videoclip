@@ -752,7 +752,7 @@ def report(
 
     for shot in edit.shots:
         clip = selected_clip(clips.get(shot.shot_id, {})) if isinstance(clips, dict) else None
-        if clip is not None:
+        if clip is not None and not shot.clip_loop:
             short = shot.duration_frames / fps - clip["frames"] / clip["fps"]
             if short > 1.0:
                 warnings.append(

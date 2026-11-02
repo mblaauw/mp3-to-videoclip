@@ -44,7 +44,7 @@ import {openBrowser, renderMedia, renderStill, selectComposition} from "@remotio
 
 import {fail, requestSha256, resolveChrome, validateRequest} from "./src/request.mjs";
 import {createProgressWriter} from "./src/progress.mjs";
-import {createDiagnostics} from "./src/diagnostics.mjs";
+import {createDiagnostics, withKeyframes} from "./src/diagnostics.mjs";
 import {benchmarkOptions as resolveBenchmarkOptions} from "./src/benchmark-profiles.mjs";
 import {ensureBundleCache} from "./src/bundle-cache.mjs";
 import {bundleKey, clipFiles, isOwnClip, startAssetServer, withServedAssets} from "./src/asset-server.mjs";
@@ -388,7 +388,7 @@ async function renderWith(progress, run) {
       concurrency: normalized.concurrency,
       onDownload: refuseRemoteAsset,
       onStart: diagnostics.onStart,
-      ffmpegOverride: diagnostics.ffmpegOverride,
+      ffmpegOverride: (info) => withKeyframes(diagnostics.ffmpegOverride(info), normalized.fps),
       onProgress: (info) => {
         diagnostics.onProgress(info);
         const done = Number(info?.renderedFrames ?? info?.encodedFrames ?? 0);
@@ -488,6 +488,7 @@ async function renderChunks(progress, shared, settings, normalized, facts) {
           overwrite: false,
           concurrency: normalized.concurrency,
           onDownload: refuseRemoteAsset,
+          ffmpegOverride: ({args}) => withKeyframes(args, normalized.fps),
           onProgress: (info) => update(Number(info?.renderedFrames ?? 0) || 0),
         });
         if ((statSync(temp, {throwIfNoEntry: false})?.size ?? 0) <= 0) {

@@ -80,6 +80,7 @@ export type EditShot = {
   text: EditText[];
   crops?: EditCrop[];
   depth?: boolean | null;
+  clip_loop?: boolean | null;
 };
 
 export type Grade = {
@@ -116,6 +117,7 @@ export type ShotClip = {
 
 export type PreviewShot = {
   clip?: ShotClip;
+  reframe?: { x: number; y: number };
   id: string;
   image: string;
   src: string | null;

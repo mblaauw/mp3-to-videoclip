@@ -1,4 +1,11 @@
 // Observation only: never mutate FFmpeg arguments or renderer settings.
+/** A keyframe every two seconds inside a long shot, for seeking and for platform re-encodes. */
+export function withKeyframes(args, fps) {
+  if (!args.includes("libx264")) return args;
+  const gop = String(Math.round(fps * 2));
+  return [...args.slice(0, -1), "-g", gop, args[args.length - 1]];
+}
+
 export function createDiagnostics() {
   const data = {
     units: "milliseconds",

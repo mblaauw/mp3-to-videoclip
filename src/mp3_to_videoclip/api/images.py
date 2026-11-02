@@ -36,10 +36,14 @@ def get_images(slug: str, request: Request):
     board = P.load_board(root) if (root / "work" / "storyboard.json").is_file() else None
     shots = []
     if board is not None:
+        from mp3_to_videoclip import clips
+
+        proposed = clips.proposed_motion(root)
         for shot in board.shots:
             owner = shot.asset_shot_id or shot.id
             entry = assets.get(owner, {})
             local = shotkinds.is_local(shot)
+            motion_why = proposed.get(shot.id)
             local_plate = local and shot.asset_shot_id is None
             try:
                 review = None if local_plate else reviews.verdict_for(root, shot.id)
@@ -89,6 +93,7 @@ def get_images(slug: str, request: Request):
                     ),
                     "review": review,
                     "stale": stale,
+                    **({"motion_why": motion_why} if motion_why else {}),
                 }
             )
     return {"shots": shots}
@@ -96,10 +101,16 @@ def get_images(slug: str, request: Request):
 
 @router.get("/plates/{shot_id}")
 @read_endpoint
-def get_plate(slug: str, shot_id: str, request: Request):
+def get_plate(slug: str, shot_id: str, request: Request, aspect: str | None = None):
+    from mp3_to_videoclip import reframe
+
     root = project_root(request, slug)
     try:
-        target = P.local_plate_path(root, shot_id)
+        canvas = None
+        if aspect is not None:
+            project = P.load_project(root, verify_source=False)
+            canvas = reframe.canvas_for(project.width, project.height, aspect)
+        target = P.local_plate_path(root, shot_id, canvas)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="local plate is missing") from exc
     except ValueError as exc:

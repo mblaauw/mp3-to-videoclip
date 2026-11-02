@@ -35,6 +35,7 @@ export function MakeClip({
     });
   return (
     <div className="make-clip">
+      {shot.motion_why && <p className="hint make-clip-why">The Writer suggests motion: {shot.motion_why}</p>}
       {quote ? (
         <>
           <Button

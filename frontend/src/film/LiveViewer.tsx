@@ -146,6 +146,19 @@ export function LiveViewer({
       ) : (
         <div className="film-viewer-bar">
           {tabs}
+          <span className="film-aspect" role="group" aria-label="Shape shown in the player">
+            {([null, "9:16", "1:1"] as const).map((value) => (
+              <button
+                type="button"
+                key={value ?? "own"}
+                className={film.aspect === value ? "on" : ""}
+                aria-pressed={film.aspect === value}
+                onClick={() => film.setAspect(value)}
+              >
+                {value ?? "As cut"}
+              </button>
+            ))}
+          </span>
           {live && currentBoardShot && (
               <p className="film-now">
                 <b>{currentBoardShot.id}</b> {shotCaption(currentBoardShot)}

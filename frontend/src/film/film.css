@@ -1369,3 +1369,36 @@
   text-decoration: underline;
   cursor: pointer;
 }
+.film-package ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.final-options {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.film-aspect {
+  display: inline-flex;
+  gap: 2px;
+}
+.film-aspect button {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: none;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.film-aspect button.on {
+  border-color: var(--gold);
+  color: var(--ink);
+}

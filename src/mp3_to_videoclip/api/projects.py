@@ -119,8 +119,13 @@ def _final_state(root: Path) -> str | None:
 
 
 def _poster_stills(root: Path, slug: str, assets: dict) -> list[str]:
-    """First four selected stills, addressed through the image route."""
+    """The film's own frame when a final was packaged, then the first selected stills."""
+    from mp3_to_videoclip import delivery
+
     result: list[str] = []
+    poster = delivery.newest_poster(root)
+    if poster:
+        result.append(f"/api/projects/{slug}/film/package/{poster}")
     for owner, entry in assets.items():
         if not isinstance(entry, dict) or owner.startswith("sheet:"):
             continue

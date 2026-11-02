@@ -388,6 +388,8 @@ export type ImageShot = {
   stale: boolean;
   clips?: ImageClip[];
   clip?: number | null;
+  /** Why the Writer thinks this shot earns motion. */
+  motion_why?: string;
 };
 
 export type IntakePayload = {
@@ -765,6 +767,7 @@ export type DeliveryChecklist = {
   signature_required: boolean;
   preview_required: boolean;
   can_final: boolean;
+  loudness_refusal?: string | null;
   lines: DeliveryLine[];
   stills: { kept: number; total: number };
   outstanding: string[];
@@ -1126,7 +1129,15 @@ export const api = {
         body: JSON.stringify({ cards, use_as_template: useAsTemplate }),
       },
     ),
-  preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
+  preview: (slug: string, aspect?: FilmAspect | null) =>
+    request<PreviewInput>(
+      `/api/projects/${slug}/preview${aspect ? `?aspect=${encodeURIComponent(aspect)}` : ""}`,
+    ),
+  renderVariant: (slug: string, aspect: FilmAspect) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/film/variant`, {
+      method: "POST",
+      body: JSON.stringify({ aspect }),
+    }),
   edit: (slug: string) => request<EditSummary>(`/api/projects/${slug}/edit`),
   editSummary: async (slug: string): Promise<CutSummary> => {
     const [cut, base] = await Promise.all([
@@ -1345,6 +1356,11 @@ export const api = {
         body: file,
       },
     ),
+  makePackage: (slug: string, name: string, frame?: number) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/film/package`, {
+      method: "POST",
+      body: JSON.stringify({ name, ...(frame === undefined ? {} : { frame }) }),
+    }),
   exports: (slug: string) =>
     request<FilmExports>(
       `/api/projects/${slug}/exports`,
@@ -1563,10 +1579,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  render: (slug: string, kind: "preview" | "titles" | "base" | "final") =>
+  render: (slug: string, kind: "preview" | "titles" | "base" | "final", options?: FinalOptions) =>
     request<unknown>(`/api/projects/${slug}/render`, {
       method: "POST",
-      body: JSON.stringify({ kind }),
+      body: JSON.stringify({ kind, ...(options ? { options } : {}) }),
     }),
 };
 export type FilmFile = {
@@ -1577,6 +1593,13 @@ export type FilmFile = {
   current: boolean;
   delivery_ready: boolean;
   reason?: string | null;
+  package?: string[];
+};
+export type FilmAspect = "9:16" | "1:1";
+export type FinalOptions = {
+  sample_rate?: 48000;
+  loudness?: boolean;
+  capture?: "png" | "jpeg90";
 };
 export type FilmExports = {
   exports: string[];

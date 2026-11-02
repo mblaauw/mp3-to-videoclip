@@ -37,12 +37,14 @@ from .storage import (
     file_hash,
     inside,
     read_json,
+    read_optional,
     state_lock,
     state_mutation,
     write_json,
 )
 
 DEFAULT_SECONDS = 5
+MOTION_FILE = "work/motion-proposals.json"
 POLL_SECONDS = 5.0
 #: A slow clip stays journaled and is collected later; it is never bought again.
 POLL_LIMIT_SECONDS = 600.0
@@ -93,7 +95,7 @@ def quote_clips(
         raise ValueError("choose shots from this storyboard")
     for shot_id in named:
         shot = shots[shot_id]
-        if shot.asset_shot_id is not None or not shotkinds.is_paid(shot):
+        if _motion_problem(shot):
             raise ValueError(f"shot {shot_id} has no still of its own to make a clip from")
     own = client is None
     client = client or RunwareClient("public-schema-only")
@@ -207,6 +209,39 @@ def quote_clips(
             "warning": "The reserve is a limit on admission, not an exact price.",
         },
     )
+
+
+def _motion_problem(shot) -> str | None:
+    if shot.asset_shot_id is not None or not shotkinds.is_paid(shot):
+        return f"shot {shot.id} has no still of its own to move"
+    return None
+
+
+@state_mutation
+def propose_motion(root: Path, items: list) -> dict:
+    """The Writer's list of shots that earn motion. A suggestion: nothing here can spend."""
+    shots = {shot.id: shot for shot in load_board(root).shots}
+    rows = []
+    for item in items:
+        if not isinstance(item, dict) or item.get("id") not in shots:
+            raise ValueError("propose shots from this storyboard")
+        problem = _motion_problem(shots[item["id"]])
+        if problem:
+            raise ValueError(problem)
+        why = str(item.get("why") or "").strip()
+        if not why:
+            raise ValueError(f"say why {item['id']} earns motion")
+        rows.append({"id": item["id"], "why": why[:240]})
+    if len({row["id"] for row in rows}) != len(rows):
+        raise ValueError("name each shot once")
+    write_json(root / MOTION_FILE, {"shots": rows})
+    return {"proposed": [row["id"] for row in rows], "note": "Only the owner buys a clip."}
+
+
+def proposed_motion(root: Path) -> dict[str, str]:
+    value = read_optional(root / MOTION_FILE)
+    rows = value.get("shots", []) if isinstance(value, dict) else []
+    return {row["id"]: row["why"] for row in rows}
 
 
 def check_before_spend(root: Path, task: dict) -> None:

@@ -600,6 +600,10 @@
   align-items: flex-start;
   margin-top: var(--s-2);
 }
+.make-clip-why {
+  flex-basis: 100%;
+  margin: 0;
+}
 .clip-card {
   display: grid;
   gap: 4px;

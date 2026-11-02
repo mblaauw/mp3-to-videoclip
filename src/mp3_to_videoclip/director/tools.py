@@ -226,9 +226,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "sort_idea",
-        "Say which of the user's own sentences are story, style, rules or things to avoid. "
-        "Copy them word for word: anything not in the paste, used twice or left out is "
-        "refused. Saves them to the brief and returns the saved idea.",
+        "Say which of the user's own sentences are story, style, rules or things to avoid, word for "
+        "word: anything not in the paste, used twice or left out is refused.",
         {
             "slug": {"type": "string"},
             "story": {"type": "array", "items": {"type": "string"}},
@@ -240,9 +239,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "place_story",
-        "Say when each passage of brief.treatment plays. Together the passages must hold "
-        "every word of the treatment, unchanged and in order; times are seconds from the "
-        "film's first frame. Does not change the story or its approval.",
+        "Say when each passage of brief.treatment plays, in seconds from the first frame. Together "
+        "they must hold every word of the treatment, unchanged and in order.",
         {
             "slug": {"type": "string"},
             "passages": {
@@ -275,6 +273,23 @@ TOOLS: list[dict] = [
             },
         },
         ["slug", "shot_ids"],
+    ),
+    _tool(
+        "propose_motion",
+        "Name the few shots that earn a clip, each with why. Replaces the list and spends "
+        "nothing: only the owner buys a clip, on Images.",
+        {
+            "slug": {"type": "string"},
+            "shots": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}, "why": {"type": "string"}},
+                    "required": ["id", "why"],
+                },
+            },
+        },
+        ["slug", "shots"],
     ),
     _tool(
         "propose_alternatives",
@@ -340,9 +355,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "write_script",
-        "Write a story film's whole script. Refused after its approval unless revising is true, "
-        "which you only send when the owner asked for a revision. Every invented fact is a claim "
-        "with invented true, and only a fictional world may have one.",
+        "Write a story film's whole script. Refused after approval unless revising is true, sent "
+        "only when the owner asked. Every invented fact is a claim with invented true.",
         {
             "slug": {"type": "string"},
             "structure": {"type": "string"},
@@ -405,11 +419,9 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "set_creative_profile",
-        "Create or replace the film's cast, places, arc, global image rules, avoid list "
-        "and compact rendering look. Call once after the treatment, before the storyboard. "
-        "Characters carry identity and changeable states; never repeat identity or wardrobe "
-        "in shot prompts. Only the owner can confirm permission to depict someone: the result "
-        "lists anyone still waiting in owner_must_confirm, so ask the owner about them.",
+        "Create or replace the film's cast, places, arc, image rules, avoid list and look, once "
+        "after the treatment. Never repeat identity or wardrobe in shot prompts. Anyone in "
+        "the result's owner_must_confirm waits for the owner's permission: ask them.",
         {
             "slug": {"type": "string"},
             "characters": {
@@ -539,17 +551,14 @@ TOOLS: list[dict] = [
     _tool(
         "update_shots",
         "Edit content fields of named shots. Timing and motion are refused once an edit exists. "
-        "It cannot add or remove shots; use write_storyboard for that. Returns the changed "
-        "shots and the board's size.",
+        "To add or remove shots use write_storyboard.",
         {"slug": {"type": "string"}, "changes": {"type": "array", "items": {"type": "object"}}},
         ["slug", "changes"],
     ),
     _tool(
         "write_storyboard",
-        "Replace the whole shot list so the board has the shots its story needs, adding, "
-        "removing or retiming freely. Send every shot; together they must cover the film "
-        "exactly. Refused once a cut exists, or if it drops a shot with paid stills. "
-        "Returns the board's size and each shot's id, span and kind.",
+        "Replace the whole shot list, adding, removing or retiming freely. Send every shot; they "
+        "must cover the film exactly. Refused once a cut exists, or if it drops paid stills.",
         {"slug": {"type": "string"}, "shots": {"type": "array", "items": {"type": "object"}}},
         ["slug", "shots"],
     ),
@@ -927,6 +936,11 @@ def _dispatch(
 
     if name == "propose_alternatives":
         return _propose(arguments)
+
+    if name == "propose_motion":
+        from .. import clips
+
+        return clips.propose_motion(root, arguments.get("shots") or [])
 
     if name == "batch_update_prompts":
         return _batch_prompts(root, arguments.get("changes") or [])

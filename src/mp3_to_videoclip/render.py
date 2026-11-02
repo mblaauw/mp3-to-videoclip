@@ -644,6 +644,7 @@ def render(
     titles: dict | None = None,
     capture: dict | None = None,
     reuse_chunks: bool = False,
+    audio_delivery: dict | None = None,
 ) -> dict:
     """Render an approved still set to an MP4 on the project's exact timeline.
 
@@ -677,6 +678,7 @@ def render(
             titles=titles,
             capture=capture,
             reuse_chunks=reuse_chunks,
+            **({"audio_delivery": audio_delivery} if audio_delivery else {}),
         )
     if titles is not None:
         raise ValueError("titles in the film require the Remotion backend")

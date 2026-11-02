@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {createDiagnostics} from "../src/diagnostics.mjs";
+import {createDiagnostics, withKeyframes} from "../src/diagnostics.mjs";
 
 test("observers preserve args identity and only report observed encoder/capture", () => {
   const d = createDiagnostics();
@@ -22,4 +22,13 @@ test("actual completion milliseconds retained; missing encoded time stays unknow
   d.onProgress({encodedDoneIn: 456});
   assert.equal(d.data.encodedDoneIn, 456);
   assert.match(d.data.timing_note, /not additive/);
+});
+
+test("a two-second keyframe interval goes before the output, on x264 only", () => {
+  assert.deepEqual(withKeyframes(["-i", "x", "-c:v", "libx264", "out.mp4"], 24), [
+    "-i", "x", "-c:v", "libx264", "-g", "48", "out.mp4",
+  ]);
+  assert.deepEqual(withKeyframes(["-i", "x", "-c:v", "prores", "out.mov"], 24), [
+    "-i", "x", "-c:v", "prores", "out.mov",
+  ]);
 });

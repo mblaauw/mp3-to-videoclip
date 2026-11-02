@@ -718,6 +718,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{slug}/film/package": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make Package
+         * @description The poster, contact sheet, chapters and captions beside a final. Spends nothing.
+         */
+        post: operations["make_package_api_projects__slug__film_package_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{slug}/film/package/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Package File */
+        get: operations["get_package_file_api_projects__slug__film_package__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{slug}/film/variant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render Variant
+         * @description A vertical or square film from the same cut. Derives from what is already approved.
+         */
+        post: operations["render_variant_api_projects__slug__film_variant_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{slug}/film/{kind}/{name}": {
         parameters: {
             query?: never;
@@ -3826,6 +3883,112 @@ export interface operations {
             };
         };
     };
+    make_package_api_projects__slug__film_package_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_package_file_api_projects__slug__film_package__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_variant_api_projects__slug__film_variant_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     play_film_api_projects__slug__film__kind___name__get: {
         parameters: {
             query?: never;
@@ -5445,7 +5608,9 @@ export interface operations {
     };
     get_plate_api_projects__slug__plates__shot_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                aspect?: string | null;
+            };
             header?: never;
             path: {
                 slug: string;
@@ -5477,7 +5642,9 @@ export interface operations {
     };
     preview_input_api_projects__slug__preview_get: {
         parameters: {
-            query?: never;
+            query?: {
+                aspect?: string | null;
+            };
             header?: never;
             path: {
                 slug: string;

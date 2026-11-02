@@ -18,6 +18,7 @@ import {
   parallaxState,
   clipFrame,
   validateClip,
+  validateReframe,
   validateDepthLayers,
   splitLayout,
   textAnimationStyle,
@@ -415,7 +416,7 @@ test("an impulse kicks, dies away and stays within the frame", () => {
 
 test("a clip shorter than its shot holds its last frame and is never stretched", () => {
   const clip = {file: "a.mp4", frames: 48, fps: 24};
-  assert.deepEqual(clipFrame(clip, 0, 24), {frame: 0, held: false, last: 47});
+  assert.deepEqual(clipFrame(clip, 0, 24), {frame: 0, held: false, last: 47, start: 0});
   assert.equal(clipFrame(clip, 46, 24).frame, 46);
   assert.equal(clipFrame(clip, 46, 24).held, false);
   assert.equal(clipFrame(clip, 47, 24).held, true);
@@ -431,4 +432,22 @@ test("a clip that is not a flat mp4 with its frames is refused", () => {
   assert.throws(() => validateClip({file: "abc.mov", frames: 48, fps: 24}, "shot a"));
   assert.throws(() => validateClip({file: "abc.mp4", frames: 0, fps: 24}, "shot a"));
   assert.throws(() => validateClip({file: "abc.mp4", frames: 48, fps: 0}, "shot a"));
+});
+
+test("a looped clip wraps at its own length and never holds", () => {
+  const clip = {file: "a.mp4", frames: 48, fps: 24};
+  const state = clipFrame(clip, 50, 24, true);
+  assert.equal(state.frame, 2);
+  assert.equal(state.start, 48);
+  assert.equal(state.held, false);
+  assert.equal(clipFrame(clip, 47, 24, true).frame, 47);
+  assert.equal(clipFrame(clip, 48, 24, true).frame, 0);
+});
+
+test("a reframe is two percentages or nothing", () => {
+  validateReframe(undefined, "shot a");
+  validateReframe({x: 0, y: 100}, "shot a");
+  assert.throws(() => validateReframe({x: -1, y: 50}, "shot a"));
+  assert.throws(() => validateReframe({x: 50, y: 101}, "shot a"));
+  assert.throws(() => validateReframe({x: "50", y: 50}, "shot a"));
 });
