@@ -27,7 +27,7 @@ PRODUCTION_LINE = "A JOINT MAHA KALA & VJDJ69 PRODUCTION"
 def _project() -> Project:
     return Project.model_validate(
         {
-            "schema_version": 1,
+            "schema_version": 3,
             "slug": "probe",
             "title": "probe",
             "source": "media/song.mp3",

@@ -165,6 +165,7 @@ def test_story_task_routing_follows_the_artifacts(tmp_path):
     write_json(root / "work/treatments.json", concepts)
     assert prompts.select_task(root, "story", "writer") == "script_ad"
 
+    brief["creative"]["profile_version"] = 0
     brief["treatment"] = "the chosen route"
     brief["script"] = [
         {"time_range": "0–3 s", "picture": "the hook", "text": "", "music": "first accent"}

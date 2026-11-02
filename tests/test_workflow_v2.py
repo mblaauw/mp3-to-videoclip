@@ -13,6 +13,7 @@ from mp3_to_videoclip import production as P
 from mp3_to_videoclip.cli import execute, parser
 from mp3_to_videoclip.models import Character, CharacterState, Project, Shot
 from mp3_to_videoclip.references import import_reference
+from mp3_to_videoclip.remotion import implementation_hash
 from mp3_to_videoclip.reviews import record_review, require_accepted, verdict_for
 from mp3_to_videoclip.storage import digest, file_hash, read_json, write_json
 
@@ -210,6 +211,7 @@ def test_proof_requires_inspected_selection_and_unrelated_edit_keeps_preview(tmp
             "movie_sha256": file_hash(movie),
             "storyboard_hash": P.preview_board_hash(root),
             "proof_hash": P.stage_hash(root, "proof"),
+            "renderer_revision": implementation_hash(),
         },
     )
     P.approve(root, "preview", "test reviewed preview")
@@ -329,21 +331,16 @@ def test_a_v2_story_needs_the_structured_profile_before_approval(tmp_path):
     P.approve(root, "analysis", "test user approved")
     P.approve(root, "lyrics", "test user approved", True)
     P.approve(root, "events", "test user approved")
+    unprofiled = read_json(root / "brief.json")
+    unprofiled["creative"].pop("profile_version", None)
+    write_json(root / "brief.json", unprofiled)
     with pytest.raises(ValueError, match="create the creative profile"):
         P.approve(root, "brief", "test user approved")
 
     brief = read_json(root / "brief.json")
-    assert "profile_version" not in brief["creative"]
     brief["creative"]["profile_version"] = 1
     write_json(root / "brief.json", brief)
     P.approve(root, "brief", "test user approved")
-    P.require_approval(root, "brief")
-
-
-def test_a_legacy_story_still_approves_without_a_profile(tmp_path):
-    root = make_root(tmp_path)
-    assert read_json(root / "brief.json")["creative"].get("profile_version") is None
-    approve_prerequisites(root)
     P.require_approval(root, "brief")
 
 

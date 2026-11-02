@@ -492,34 +492,6 @@ def test_approval_revision_does_not_read_the_browser(tmp_path, monkeypatch):
     assert remotion.implementation_hash() == first
 
 
-def test_schema_three_uses_remotion_without_a_legacy_backend_flag(tmp_path, monkeypatch):
-    project = Project(
-        slug="new-film",
-        schema_version=3,
-        title="New",
-        source_sha256="a" * 64,
-        duration=1,
-        width=192,
-        height=108,
-    )
-    legacy = Project(
-        slug="old-film",
-        title="Old",
-        source_sha256="a" * 64,
-        duration=1,
-        width=192,
-        height=108,
-    )
-    assert project.uses_remotion is True
-    assert legacy.uses_remotion is False
-    monkeypatch.setattr(remotion, "implementation_hash", lambda: "revision")
-    assert remotion.renderer_binding(project) == {
-        "renderer_backend": "remotion",
-        "renderer_revision": "revision",
-    }
-    assert remotion.renderer_binding(legacy) == {}
-
-
 def test_titles_join_the_base_pass_and_its_cache_key_only_when_given(base_cache):
     _project, _shots, calls, run = base_cache
     plain = run()

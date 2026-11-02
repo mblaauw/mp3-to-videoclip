@@ -17,7 +17,7 @@ from ..storage import (
     write_json,
 )
 from .brief import _record_prompt_write, load_brief
-from .project import STAGE_FILES, creative_workflow, load_project
+from .project import STAGE_FILES, load_project
 
 
 def load_events(root: Path) -> EventMap:
@@ -229,17 +229,16 @@ def skeleton(root: Path, nominal_seconds=None, timing=None, *, min_seconds=None,
     if (root / STAGE_FILES["storyboard"]).exists():
         raise ValueError("storyboard already exists; edit it rather than overwrite")
     project = load_project(root)
-    new_film = creative_workflow(project)
     if timing is None:
         timing = "adaptive" if project.image_model is not None else "beats"
     if timing not in ("adaptive", "beats", "events", "free"):
         raise ValueError("timing must be adaptive, beats, events or free")
     if nominal_seconds is None:
-        nominal_seconds = (5 if new_film else 8) if timing == "adaptive" else 10
+        nominal_seconds = 5 if timing == "adaptive" else 10
     if min_seconds is None:
-        min_seconds = 1.5 if new_film else 4
+        min_seconds = 1.5
     if max_seconds is None:
-        max_seconds = 7 if new_film else 12
+        max_seconds = 7
     if timing == "adaptive":
         from ..pacing import plan_boundaries
 

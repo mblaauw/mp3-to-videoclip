@@ -18,7 +18,15 @@ from test_production import fake_schema
 from mp3_to_videoclip import budget
 from mp3_to_videoclip import generation as G
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip.models import Brief, Lyrics, Project, Segment, Shot, Storyboard
+from mp3_to_videoclip.models import (
+    Brief,
+    CreativeProfile,
+    Lyrics,
+    Project,
+    Segment,
+    Shot,
+    Storyboard,
+)
 from mp3_to_videoclip.providers import ProviderError
 from mp3_to_videoclip.storage import file_hash, read_json, write_json
 
@@ -35,6 +43,7 @@ def production(tmp_path):
         duration=1,
         width=192,
         height=108,
+        budget=[{"at": "2026-01-01T00:00:00+00:00", "cap_usd": "5.00", "reason": "test budget"}],
     )
     write_json(root / "project.json", project.model_dump())
     write_json(root / "work/music.json", {"duration": 1, "beats": [0, 0.25, 0.5, 0.75]})
@@ -48,7 +57,14 @@ def production(tmp_path):
     )
     write_json(
         root / "brief.json",
-        Brief(direction="A story", style="Cinematic", treatment="Chosen treatment").model_dump(),
+        Brief(
+            direction="A story",
+            style="Cinematic",
+            treatment="Chosen treatment",
+            creative=CreativeProfile(
+                look="Painted, quiet", profile_version=1, proof_shot_ids=["s001", "s003", "s004"]
+            ),
+        ).model_dump(),
     )
     shots = [
         Shot(

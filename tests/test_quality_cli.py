@@ -122,6 +122,9 @@ def test_budget_note_without_cap_is_not_silently_discarded(tmp_path):
     from test_creative_production import make_root
 
     root = make_root(tmp_path)
+    stored = read_json(root / "project.json")
+    stored.pop("budget", None)
+    write_json(root / "project.json", stored)
     with pytest.raises(ValueError, match="only apply with --cap"):
         execute(parser().parse_args(["budget", str(root), "--note", "authority that would vanish"]))
     assert not (root / "work/production-budget.json").exists()

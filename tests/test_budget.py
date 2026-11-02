@@ -14,11 +14,11 @@ from mp3_to_videoclip import generation as G
 from mp3_to_videoclip.storage import read_json, write_json
 
 
-def make_root(tmp_path, *, workflow_version=None):
+def make_root(tmp_path):
     root = tmp_path / "production"
     (root / "work").mkdir(parents=True)
     project = {
-        "schema_version": 1,
+        "schema_version": 3,
         "slug": "test",
         "title": "Test",
         "source_sha256": "0" * 64,
@@ -26,8 +26,6 @@ def make_root(tmp_path, *, workflow_version=None):
         "width": 192,
         "height": 108,
     }
-    if workflow_version is not None:
-        project["workflow_version"] = workflow_version
     write_json(root / "project.json", project)
     write_json(root / "work/tasks.json", {})
     return root
@@ -86,7 +84,7 @@ def test_set_budget_requires_note_and_bounded_corrections(tmp_path):
     record = B.set_budget(root, "1.50", "user set a hard ceiling", 3)
     assert record["version"] == 1
     assert record["cap_usd"] == "1.50" and record["max_corrections"] == 3 and record["at"]
-    assert read_json(root / "work/production-budget.json") == record
+    assert read_json(root / "project.json")["budget"][-1]["cap_usd"] == "1.50"
     assert B.read_budget(root)["cap_usd"] == "1.50"
 
 
@@ -195,15 +193,6 @@ def test_summary_keeps_unknown_reservations_and_never_invents_zero(tmp_path):
     assert "not inference-only" in report["task_latency_seconds"]["coverage"]
 
 
-def test_summary_without_budget_is_legacy_and_check_capacity_is_a_noop(tmp_path):
-    root = make_root(tmp_path)
-    report = B.summary(root)
-    assert report["budget_configured"] is False
-    assert report["cap_usd"] is None and report["cap_remaining_usd"] is None
-    assert report["over_cap"] is False and report["admission_note"]
-    assert B.check_capacity(root, "100") is None  # historical behaviour preserved
-
-
 def test_summary_flags_over_cap_after_new_spend(tmp_path):
     root = make_root(tmp_path)
     B.set_budget(root, "0.01", "tiny explicit cap")
@@ -217,11 +206,11 @@ def test_summary_flags_over_cap_after_new_spend(tmp_path):
 # --------------------------------------------------------------------------- #
 # admission
 # --------------------------------------------------------------------------- #
-def test_workflow_two_requires_budget_before_admission(tmp_path):
-    root = make_root(tmp_path, workflow_version=2)
-    with pytest.raises(ValueError, match="workflow version 2"):
+def test_a_film_needs_a_budget_before_admission(tmp_path):
+    root = make_root(tmp_path)
+    with pytest.raises(ValueError, match="explicit production budget"):
         B.require_budget(root)
-    with pytest.raises(ValueError, match="workflow version 2"):
+    with pytest.raises(ValueError, match="explicit production budget"):
         B.check_capacity(root, "0.01")
     B.set_budget(root, "0.02", "user authorized v2 budget")
     assert B.check_capacity(root, "0.01")["cap_usd"] == "0.02"
@@ -230,9 +219,9 @@ def test_workflow_two_requires_budget_before_admission(tmp_path):
 
 
 def test_authorize_and_begin_task_enforce_cumulative_production_cap(tmp_path):
-    root = make_root(tmp_path, workflow_version=2)
+    root = make_root(tmp_path)
     quote_id = write_quote(root, "0.02")
-    with pytest.raises(ValueError, match="workflow version 2"):
+    with pytest.raises(ValueError, match="explicit production budget"):
         G.authorize(root, quote_id, "0.10", "user authorized this scope")
     B.set_budget(root, "0.03", "user set a production ceiling")
     G.authorize(root, quote_id, "0.10", "user authorized this scope")
@@ -285,14 +274,6 @@ def test_correction_limit_requires_explicit_restaging(tmp_path):
     )
     with pytest.raises(ValueError, match="restaging"):
         B.check_correction_cycle(root, "s001")
-
-
-def test_correction_policy_is_inactive_for_legacy_projects(tmp_path):
-    root = make_root(tmp_path)
-    write_json(root / "work/tasks.json", {f"t{i}": image_task(f"t{i}", "s001") for i in range(6)})
-    assert B.correction_policy(root) == (False, 2)
-    B.check_correction_cycle(root, "s001")
-    B.require_correction_cycles(root, ["s001"])  # uncontrolled legacy behaviour preserved
 
 
 @pytest.mark.parametrize(

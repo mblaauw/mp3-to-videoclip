@@ -14,7 +14,6 @@ import unicodedata
 from pathlib import Path
 
 from . import budget as app_budget
-from .migrate import migrate
 
 MAX_SOURCE_BYTES = 50_000_000
 MAX_TITLE_LENGTH = 120
@@ -157,7 +156,6 @@ def create_from_upload(
             from mp3_to_videoclip.signature import require_package
 
             require_package(titles, aspect, P.load_project(root).duration)
-        migrate(root)
         app_budget.add_budget(root, cap, "initial production budget")
     except BaseException:
         if root.exists():

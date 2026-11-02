@@ -171,8 +171,6 @@ def save_edit(
     from . import production as P
 
     require_revision(edit_path(root), expected_hash)
-    if not P.load_project(root, verify_source=False).uses_remotion:
-        raise ValueError("edit lists require the Remotion renderer")
     board = board or P.load_board(root)
     edit = value if isinstance(value, EditDecisionList) else EditDecisionList.model_validate(value)
     edit.check_board(board)

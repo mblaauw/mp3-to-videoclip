@@ -50,7 +50,7 @@ def _root(tmp_path: Path) -> Path:
     (root / "project.json").write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 3,
                 "slug": "probe",
                 "title": TITLE,
                 "source": "media/song.mp3",

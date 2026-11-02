@@ -10,7 +10,6 @@ from test_creative_production import jpeg, make_root
 from mp3_to_videoclip import flow
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.app import create_app
-from mp3_to_videoclip.references import import_reference
 from mp3_to_videoclip.storage import digest, file_hash, read_json, write_json
 
 
@@ -22,13 +21,6 @@ def make_api_project(tmp_path: Path, name: str = "production") -> Path:
     project["slug"] = name
     write_json(root / "project.json", project)
     flow.mark(root)
-    brief = read_json(root / "brief.json")
-    for ref in brief["creative"]["references"]:
-        imported = import_reference(
-            root, root / ref["path"], note="test-owned reference", permission_confirmed=True
-        )
-        ref["path"] = imported["path"]
-    write_json(root / "brief.json", brief)
     return root
 
 

@@ -148,7 +148,7 @@ def _intake_payload(root: Path, *, analysis_needed: bool = False) -> dict:
         "kind": project.kind or "music_video",
         "intent": brief.intent.model_dump() if brief.intent is not None else None,
         "brief": brief.model_dump(),
-        "prompt_version": project.prompt_version,
+        "prompt_version": project.prompt_version or 2,
         "style_preset": project.style_preset,
         "style_presets": styles.public_presets(),
         "kinds": kinds.public_kinds(),

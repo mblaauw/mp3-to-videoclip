@@ -84,6 +84,7 @@ def project(tmp_path):
         duration=4,
         width=192,
         height=108,
+        budget=[{"at": "2026-01-01T00:00:00+00:00", "cap_usd": "5.00", "reason": "test budget"}],
     )
     write_json(root / "project.json", config.model_dump())
     write_json(root / "work/music.json", {"duration": 4, "beats": []})

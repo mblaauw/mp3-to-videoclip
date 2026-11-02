@@ -138,26 +138,6 @@ def test_cli_derives_film_slug_and_rejects_unintended_source_folder(tmp_path):
     assert not wrong.exists()
 
 
-def test_style_first_versioning_preserves_old_image_spec(tmp_path):
-    root = make_root(tmp_path)
-    shot = P.load_board(root).shots[0]
-    old = P.image_spec(root, shot)
-    assert old["positivePrompt"].startswith(shot.image_prompt)
-    project = read_json(root / "project.json")
-    assert not any(
-        k in Project.model_validate(project).model_dump()
-        for k in ("prompt_version", "signature_required", "source_filename")
-    )
-    project["prompt_version"] = 2
-    write_json(root / "project.json", project)
-    new = P.image_spec(root, shot)
-    assert new["positivePrompt"].startswith(P.load_brief(root).creative.look)
-    assert new["positivePrompt"].count(P.load_brief(root).creative.look) == 1
-    project.pop("prompt_version")
-    write_json(root / "project.json", project)
-    assert P.image_spec(root, shot) == old
-
-
 def confirmed_spec(root, project):
     spec = signature.draft_spec(project.title)
     spec["credit_roles_confirmed"] = True
@@ -184,7 +164,7 @@ def signature_root(tmp_path):
     write_json(root / "work/music.json", music)
     confirmed_spec(root, project)
     approve_through_proof(root)
-    record_stills(root, ["s003"])
+    record_stills(root, ["s003"], reviewed=True)
     write_preview_report(root)
     P.approve(root, "preview", "test inspected sequence")
     P.approve(root, "stills", "test accepted still set")

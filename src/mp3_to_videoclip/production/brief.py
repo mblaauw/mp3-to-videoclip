@@ -28,11 +28,6 @@ from ..storage import (
 from .project import load_project
 
 
-def legacy_brief_hash(brief: Brief) -> str:
-    """Legacy content hash: the new creative profile is not part of old artifacts."""
-    return digest(brief.model_dump(exclude={"creative"}))
-
-
 @snapshot_read
 def load_brief(root: Path) -> Brief:
     return Brief.model_validate(read_json(root / "brief.json"))

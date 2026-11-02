@@ -175,8 +175,6 @@ def implementation_hash() -> str:
 
 
 def renderer_binding(project: Project) -> dict:
-    if not project.uses_remotion:
-        return {}
     return {"renderer_backend": "remotion", "renderer_revision": implementation_hash()}
 
 

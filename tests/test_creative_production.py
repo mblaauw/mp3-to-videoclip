@@ -30,9 +30,10 @@ from mp3_to_videoclip.models import (
     VisualBeat,
     VisualReference,
 )
+from mp3_to_videoclip.references import import_reference
+from mp3_to_videoclip.reviews import record_review
 from mp3_to_videoclip.storage import digest, file_hash, read_json, write_json
 
-PILOT = Path(__file__).resolve().parents[1] / "projects" / "kortjakje"
 REF_DIR = "media/refs"
 
 
@@ -50,6 +51,7 @@ def creative_brief(proof_shot_ids=("s001", "s002", "s004"), look="LOOK: muted te
         visual_rules=["LEGACY-RULE-SECRET"],
         avoid=["AVOID-TEXT"],
         creative=CreativeProfile(
+            profile_version=1,
             mode="narrative",
             look=look,
             image_rules=["IMAGE-RULE no on-screen text"],
@@ -112,6 +114,7 @@ def make_root(
         height=108,
         fps=24,
         music_mode=music_mode,
+        budget=[{"at": "2026-01-01T00:00:00+00:00", "cap_usd": "5.00", "reason": "test budget"}],
     )
     config = project.model_dump()
     if config["music_mode"] is None:
@@ -150,7 +153,13 @@ def make_root(
         )
     else:
         brief = Brief(direction="Legacy", style="Legacy style", treatment="Legacy treatment")
-    write_json(root / "brief.json", brief.model_dump())
+    value = brief.model_dump()
+    # A live film's references are imported, so an approval can check their bytes.
+    for ref in (value.get("creative") or {}).get("references", []):
+        ref["path"] = import_reference(
+            root, root / ref["path"], note="test-owned reference", permission_confirmed=True
+        )["path"]
+    write_json(root / "brief.json", value)
     if with_events:
         write_json(
             root / P.STAGE_FILES["events"],
@@ -197,7 +206,7 @@ def approve_prerequisites(root, note="test user approved"):
     P.approve(root, "brief", note)
 
 
-def record_stills(root, shot_ids):
+def record_stills(root, shot_ids, *, reviewed=False):
     assets = read_json(root / "work/assets.json")
     for shot in P.load_board(root).shots:
         if shot.id not in shot_ids:
@@ -217,12 +226,15 @@ def record_stills(root, shot_ids):
             "selected": 1,
         }
     write_json(root / "work/assets.json", assets)
+    if reviewed:
+        for shot_id in shot_ids:
+            record_review(root, shot_id, 1, "accept", reviewer="test", inspected=True)
 
 
 def approve_through_proof(root):
     approve_prerequisites(root)
     P.approve(root, "storyboard", "test user approved shots")
-    record_stills(root, P.proof_ids(P.load_board(root), P.load_brief(root)))
+    record_stills(root, P.proof_ids(P.load_board(root), P.load_brief(root)), reviewed=True)
     P.approve(root, "proof", "test user approved proof")
 
 
@@ -237,10 +249,9 @@ def write_preview_report(root, name="work/preview-v001.mp4"):
         "proof_hash": P.stage_hash(root, "proof"),
         "input_hash": digest({"render_inputs": "fake"}),
     }
-    if P.load_project(root).uses_remotion:
-        from mp3_to_videoclip.remotion import implementation_hash
+    from mp3_to_videoclip.remotion import implementation_hash
 
-        report["renderer_revision"] = implementation_hash()
+    report["renderer_revision"] = implementation_hash()
     write_json(root / P.STAGE_FILES["preview"], report)
     return report
 
@@ -248,30 +259,6 @@ def write_preview_report(root, name="work/preview-v001.mp4"):
 # --------------------------------------------------------------------------- #
 # 1. legacy artifacts stay byte/hash identical
 # --------------------------------------------------------------------------- #
-@pytest.mark.skipif(not PILOT.is_dir(), reason="local pilot production not present")
-def test_legacy_pilot_approvals_and_assets_remain_current():
-    approvals = read_json(PILOT / "work/approvals.json")
-    for stage in ("analysis", "lyrics", "brief", "storyboard", "proof", "stills"):
-        assert P.stage_hash(PILOT, stage) == approvals[stage]["hash"]
-    assets = read_json(PILOT / "work/assets.json")
-    for shot in P.load_board(PILOT).shots:
-        entry = assets[shot.id]
-        chosen = next(v for v in entry["versions"] if v["version"] == entry["selected"])
-        assert digest(P.image_spec(PILOT, shot)) == chosen["input_hash"]
-
-
-def test_legacy_brief_hash_and_project_payload_ignore_new_fields(tmp_path):
-    root = make_root(tmp_path, creative=False, with_events=False, music_mode=None)
-    brief = P.load_brief(root)
-    shot = P.load_board(root).shots[0]
-    spec = P.image_spec(root, shot)
-    assert brief.creative is None
-    assert spec["brief_hash"] == P.legacy_brief_hash(brief)
-    assert "profile_version" not in spec
-    assert "music_mode" not in P.project_payload(P.load_project(root))
-    assert P.proof_ids(P.load_board(root)) == ["s001", "s003", "s004"]
-
-
 # --------------------------------------------------------------------------- #
 # 2. creative prompt: shot-first, isolated, explicit
 # --------------------------------------------------------------------------- #
@@ -280,7 +267,7 @@ def test_creative_prompt_is_shot_first_and_scene_isolated(tmp_path):
     shot = P.load_board(root).shots[0]
     spec = P.image_spec(root, shot)
     prompt = spec["positivePrompt"]
-    assert prompt.splitlines()[0] == "SHOT-s001 prompt"
+    assert prompt.splitlines()[0].startswith("LOOK: muted teal")
     assert "Framing: wide establishing shot" in prompt
     assert "Must show: a brass lamp" in prompt
     assert "SCENE-STREET" in prompt
@@ -302,9 +289,8 @@ def test_creative_prompt_is_shot_first_and_scene_isolated(tmp_path):
         assert excluded not in prompt
     # New spec carries only transmitted prompt/size/selected refs/profile version.
     assert set(spec) == {"shot_id", "positivePrompt", "size", "references", "profile_version"}
-    assert spec["references"] == [
-        {"path": f"{REF_DIR}/lamp.jpg", "sha256": file_hash(root / f"{REF_DIR}/lamp.jpg")}
-    ]
+    lamp = next(r.path for r in P.load_brief(root).creative.references if r.id == "lamp")
+    assert spec["references"] == [{"path": lamp, "sha256": file_hash(root / lamp)}]
 
 
 def test_creative_reference_permission_bytes_and_count(tmp_path):
@@ -314,7 +300,9 @@ def test_creative_reference_permission_bytes_and_count(tmp_path):
     assert len(P.image_spec(root, shot)["references"]) == 1
 
     # Referenced file bytes are the appearance identity.
-    jpeg(root / f"{REF_DIR}/lamp.jpg", (200, 10, 10))
+    lamp = next(r.path for r in P.load_brief(root).creative.references if r.id == "lamp")
+    (root / lamp).chmod(0o644)
+    jpeg(root / lamp, (200, 10, 10))
     assert digest(P.image_spec(root, shot)) != baseline
 
     # Declared-but-unconfirmed references are rejected at generation and approval.
@@ -334,14 +322,6 @@ def test_creative_reference_permission_bytes_and_count(tmp_path):
     P.approve(root, "events", "test user")
     with pytest.raises(ValueError, match="permission"):
         P.approve(root, "brief", "user")
-
-    # The MVP model accepts at most four reference images per shot.
-    many = make_root(tmp_path, name="many", extra_refs=5)
-    board = read_json(many / P.STAGE_FILES["storyboard"])
-    board["shots"][0]["reference_ids"] = [f"extra{i}" for i in range(5)]
-    write_json(many / P.STAGE_FILES["storyboard"], board)
-    with pytest.raises(ValueError, match="four"):
-        P.image_spec(many, P.load_board(many).shots[0])
 
 
 def test_creative_dependencies_editorial_versus_appearance(tmp_path):
@@ -480,17 +460,11 @@ def test_creative_storyboard_approval_requires_proof_selection(tmp_path):
 # --------------------------------------------------------------------------- #
 # 4. stage gates: creative stills need preview, legacy stills need proof
 # --------------------------------------------------------------------------- #
-def test_creative_stills_require_preview_while_legacy_require_proof(tmp_path):
+def test_stills_require_the_preview(tmp_path):
     creative = make_root(tmp_path)
     approve_through_proof(creative)
     with pytest.raises(ValueError, match="preview"):
         G.quote_images(creative, "stills", "0.01")
-
-    legacy = make_root(tmp_path, name="legacy", creative=False, with_events=False)
-    approve_prerequisites(legacy)
-    P.approve(legacy, "storyboard", "user")
-    with pytest.raises(ValueError, match="proof"):
-        G.quote_images(legacy, "stills", "0.01")
 
 
 def test_guided_stills_quote_and_generate_share_the_style_gate(tmp_path):

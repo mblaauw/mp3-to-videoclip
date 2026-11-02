@@ -193,11 +193,9 @@ def init_project(
         music_mode="narration-led" if story_film else music_mode,
         spine="soundtrack" if story_film else None,
         bed="media/bed.mp3" if story_film and source is not None else None,
-        workflow_version=2,
         prompt_version=3,
         signature_required=package != "none",
         source_filename=source.name if source is not None else None,
-        renderer_backend="remotion",
         image_model=selected_model,
         image_settings=selected_settings,
         image_seed=image_seed,
@@ -381,7 +379,7 @@ def apply_intake(
         project, analysis_needed = _apply_window(root, project, audio_window)
     if prompt_version is not None:
         # One way only: a film moved to the newer prompt has marked its stills out of date.
-        if prompt_version != 3 or project.prompt_version not in (2, 3):
+        if prompt_version != 3:
             raise ValueError("this film cannot move to that image prompt")
         project = project.model_copy(update={"prompt_version": 3})
     if style_preset is not None:

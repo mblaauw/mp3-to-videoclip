@@ -184,6 +184,7 @@ def _review_root(tmp_path, monkeypatch):
 
     # Shape the spec before the fixture approves anything that binds it.
     monkeypatch.setattr(signature, "draft_spec", remotion_draft)
+    monkeypatch.setattr(remotion, "implementation_hash", lambda: "renderer-r1")
     root = signature_root(tmp_path)
     renders = []
 
@@ -198,7 +199,6 @@ def _review_root(tmp_path, monkeypatch):
         return {"stills": stills}
 
     monkeypatch.setattr(remotion, "render_stills", fake_stills)
-    monkeypatch.setattr(remotion, "implementation_hash", lambda: "renderer-r1")
     return root, renders
 
 

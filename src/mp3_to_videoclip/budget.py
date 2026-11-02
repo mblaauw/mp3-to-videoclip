@@ -74,28 +74,6 @@ def _journal(root: Path) -> dict:
     return read_json(path) if path.exists() else {}
 
 
-def workflow_version(root: Path):
-    """Raw ``project.json`` workflow version; read directly to avoid model coupling."""
-    path = root / PROJECT_PATH
-    if not path.exists():
-        return None
-    value = read_json(path)
-    return value.get("workflow_version") if isinstance(value, dict) else None
-
-
-def schema_version(root: Path):
-    path = root / PROJECT_PATH
-    if not path.exists():
-        return None
-    value = read_json(path)
-    return value.get("schema_version") if isinstance(value, dict) else None
-
-
-def strict_paid(root: Path) -> bool:
-    """Creative-workflow productions always need a cap before paid work."""
-    return schema_version(root) == 3 or workflow_version(root) == STRICT_WORKFLOW_VERSION
-
-
 # --------------------------------------------------------------------------- #
 # budget artifact
 # --------------------------------------------------------------------------- #
@@ -123,7 +101,7 @@ def _schema_budget(root: Path) -> dict | None:
     if not path.exists():
         return None
     project = read_json(path)
-    if not isinstance(project, dict) or project.get("schema_version") != 3:
+    if not isinstance(project, dict):
         return None
     entries = project.get("budget") or []
     if not entries:
@@ -148,25 +126,21 @@ def _schema_budget(root: Path) -> dict | None:
 
 
 def read_budget(root: Path) -> dict | None:
-    """Validated production budget, or ``None`` for a legacy/unconfigured project."""
+    """Validated production budget, or ``None`` before one is set."""
     path = root / BUDGET_PATH
-    if schema_version(root) == 3:
-        record = _schema_budget(root)
-        if path.exists():
-            legacy = _validate_budget_record(read_json(path))
-            if (
-                record is None
-                or money(legacy["cap_usd"]) != money(record["cap_usd"])
-                or legacy["max_corrections"] != record["max_corrections"]
-            ):
-                raise ValueError(
-                    "conflicting schema-3 budget files; inspect and explicitly reconcile "
-                    "work/production-budget.json with project.json before spending"
-                )
-        return record
+    record = _schema_budget(root)
     if path.exists():
-        return _validate_budget_record(read_json(path))
-    return _schema_budget(root)
+        legacy = _validate_budget_record(read_json(path))
+        if (
+            record is None
+            or money(legacy["cap_usd"]) != money(record["cap_usd"])
+            or legacy["max_corrections"] != record["max_corrections"]
+        ):
+            raise ValueError(
+                "conflicting schema-3 budget files; inspect and explicitly reconcile "
+                "work/production-budget.json with project.json before spending"
+            )
+    return record
 
 
 def split_commitment(root: Path) -> tuple[Decimal, Decimal, int]:
@@ -294,22 +268,19 @@ def set_budget(root: Path, cap_usd, note: str, max_corrections: int | None = Non
         "note": note,
         "at": _now(),
     }
-    if schema_version(root) == 3:
-        read_budget(root)
-        if (root / BUDGET_PATH).exists():
-            raise ValueError("reconcile the legacy budget file before changing a schema-3 cap")
-        project = read_json(root / PROJECT_PATH)
-        project.setdefault("budget", []).append(
-            {
-                "at": record["at"],
-                "cap_usd": str(cap),
-                "reason": note,
-                "max_corrections": max_corrections,
-            }
-        )
-        write_json(root / PROJECT_PATH, project)
-    else:
-        write_json(root / BUDGET_PATH, record)
+    read_budget(root)
+    if (root / BUDGET_PATH).exists():
+        raise ValueError("reconcile the legacy budget file before changing a cap")
+    project = read_json(root / PROJECT_PATH)
+    project.setdefault("budget", []).append(
+        {
+            "at": record["at"],
+            "cap_usd": str(cap),
+            "reason": note,
+            "max_corrections": max_corrections,
+        }
+    )
+    write_json(root / PROJECT_PATH, project)
     return record
 
 
@@ -317,13 +288,10 @@ def set_budget(root: Path, cap_usd, note: str, max_corrections: int | None = Non
 # admission
 # --------------------------------------------------------------------------- #
 def require_budget(root: Path) -> dict | None:
-    """Strict workflow 2 requires a budget; legacy/unconfigured projects do not."""
+    """Every film needs a budget before anything can be bought."""
     record = read_budget(root)
-    if record is None and strict_paid(root):
-        raise ValueError(
-            "workflow version 2 and schema 3 require an explicit production budget "
-            "before authorized paid tasks"
-        )
+    if record is None:
+        raise ValueError("a film needs an explicit production budget before authorized paid tasks")
     return record
 
 
@@ -350,8 +318,6 @@ def check_capacity(root: Path, additional_usd, *, context: str = "submission"):
 
 def require_reconciled(root: Path, admitted=()):
     """No new work after ambiguous prior tasks; allow this run's live workers."""
-    if read_budget(root) is None and not strict_paid(root):
-        return
     allowed = set(admitted)
     unresolved = [
         t.get("uuid", key)
@@ -379,13 +345,11 @@ def _successful_images(journal: dict, shot_id: str) -> int:
 
 
 def correction_policy(root: Path) -> tuple[bool, int]:
-    """``(enforced, max_corrections)``; legacy projects are deliberately uncontrolled."""
+    """``(enforced, max_corrections)``; every film is controlled."""
     record = read_budget(root)
     if record is not None:
         return True, record["max_corrections"]
-    if strict_paid(root):
-        return True, DEFAULT_MAX_CORRECTIONS
-    return False, 2  # Historical inactive policy; no new default injected into old projects.
+    return True, DEFAULT_MAX_CORRECTIONS
 
 
 def _stored_cycle(root: Path, shot_id: str):
@@ -579,8 +543,6 @@ def summary(root: Path) -> dict:
     return {
         "currency": "USD",
         "budget_configured": record is not None,
-        "workflow_version": workflow_version(root),
-        "schema_version": schema_version(root),
         "cap_usd": str(cap) if cap is not None else None,
         "max_corrections": record["max_corrections"] if record else None,
         "note": record["note"] if record else None,

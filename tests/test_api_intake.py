@@ -65,7 +65,7 @@ def test_upload_creates_the_project_and_queues_analysis(tmp_path, monkeypatch):
         assert project.schema_version == 3
         # The app creates schema-3 projects natively; rewriting the budget must
         # not erase the backend or signature choice it was created with.
-        assert stored["renderer_backend"] == "remotion"
+        assert "renderer_backend" not in stored
         assert stored["signature_required"] is True
         assert project.cap_usd == "3.50"
         assert (root / "media/song.mp3").read_bytes() == b"ID3fake"

@@ -8,13 +8,7 @@ inspect the same diagnostics without changing their historical approvals.
 import re
 from pathlib import Path
 
-from .storage import digest, read_json
-
-
-def strict_workflow(root: Path):
-    """The creative workflow: explicit v2 or the migrated/native schema 3."""
-    project = read_json(root / "project.json")
-    return project.get("workflow_version") == 2 or project.get("schema_version") == 3
+from .storage import digest
 
 
 def manifest(root: Path, ids=None):
@@ -67,7 +61,7 @@ def manifest(root: Path, ids=None):
                 "description": state.description if state else None,
                 "attributes": state.attributes if state else {},
             }
-            if P.creative_workflow(project) and not character.identity:
+            if not character.identity:
                 issue(
                     shot.id,
                     "identity",
@@ -164,12 +158,11 @@ def manifest(root: Path, ids=None):
                 "digit-count",
                 "ambiguous five fingers plus a thumb; use four fingers and a thumb",
             )
-        if P.creative_workflow(project):
-            for ref in spec["references"]:
-                try:
-                    validate_import(root, ref["path"])
-                except (ValueError, OSError) as exc:
-                    issue(shot.id, "immutable-reference", str(exc))
+        for ref in spec["references"]:
+            try:
+                validate_import(root, ref["path"])
+            except (ValueError, OSError) as exc:
+                issue(shot.id, "immutable-reference", str(exc))
         shots.append(
             {
                 "id": shot.id,
@@ -187,7 +180,6 @@ def manifest(root: Path, ids=None):
             }
         )
     return {
-        "workflow_version": project.workflow_version,
         "generated": False,
         "ok": not issues,
         "issues": issues,
@@ -197,8 +189,6 @@ def manifest(root: Path, ids=None):
 
 
 def validate_before_spend(root: Path, ids):
-    if not strict_workflow(root):
-        return
     result = manifest(root, ids)
     if not result["ok"]:
         details = "; ".join(f"{i['shot_id']}: {i['message']}" for i in result["issues"])
