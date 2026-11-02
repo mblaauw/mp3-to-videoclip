@@ -492,7 +492,7 @@ def test_graphics_review_lists_and_serves_only_review_samples(client, project):
     body = client.get("/api/projects/production/graphics-review").json()
     assert body["available"] is True
     assert body["current"] is False
-    assert "incomplete" in body["reason"]
+    assert "old compositor" in body["reason"]
     assert "graphics-spec.json" not in body["reason"]
     assert body["warning"].startswith("Inspect")
     assert body["method"] == "composite"

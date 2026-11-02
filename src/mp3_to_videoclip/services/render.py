@@ -1,6 +1,4 @@
-"""Render service: Remotion preview, base, titles review and final; the older
-FFmpeg graphics composite remains for reviews recorded before the titles moved
-into the composition."""
+"""Render service: Remotion preview, base, titles review and final."""
 
 from __future__ import annotations
 
@@ -10,7 +8,7 @@ from mp3_to_videoclip import captions, depth, operations
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.remotion import WORKING_CAPTURE
 from mp3_to_videoclip.remotion import render_base as _render
-from mp3_to_videoclip.storage import file_hash, inside, read_snapshot, write_json
+from mp3_to_videoclip.storage import file_hash, read_snapshot, write_json
 
 
 def _next_output(directory: Path, prefix: str) -> Path:
@@ -215,35 +213,16 @@ def render_final(root: Path, output: Path | None = None, options: dict | None = 
     directory.mkdir(parents=True, exist_ok=True)
 
     if P.requires_signature(root, project):
-        from mp3_to_videoclip.signature import COMPOSITION_METHOD, validate_review
+        from mp3_to_videoclip.signature import COMPOSITION_METHOD, OLD_REVIEW, validate_review
 
         # Both the approval record and the reviewed bytes must still match.
         with read_snapshot(root):
             P.require_approval(root, "graphics")
             review = validate_review(root, project)
-            if review.get("method") == COMPOSITION_METHOD:
-                inputs = _titled_final_inputs(root, project, review)
-            else:
-                inputs = None
-                base = inside(root, review["base"])
-                provenance = _provenance(root, "final", graphics=True)
-        if inputs is not None:
-            return _render_titled_final(root, project, directory, output, review, inputs, choices)
-        if _render_arguments(choices):
-            raise ValueError("a film reviewed with the older titles cannot take final options")
-        from mp3_to_videoclip.graphics import compose
-
-        output = output or _next_output(directory, f"{project.slug}-final")
-        report = compose(root, base, output)
-        report["delivery_ready"] = True
-        # compose already checked frames, identical audio and faststart.
-        report["verified"] = True
-        report["captions"] = captions.sidecars_for(root, Path(report["output"]), project)
-        # The compositor versions an occupied destination. Its returned path is
-        # authoritative; never certify or overwrite the old movie's sidecar.
-        _stamp(root, Path(report["output"]), report, "final", provenance)
-        _write_report(Path(report["output"]), report)
-        return report
+            if review.get("method") != COMPOSITION_METHOD:
+                raise ValueError(OLD_REVIEW)
+            inputs = _titled_final_inputs(root, project, review)
+        return _render_titled_final(root, project, directory, output, review, inputs, choices)
 
     # Projects without a signature have no separate graphics pass.
     output = output or _next_output(directory, f"{project.slug}-final")

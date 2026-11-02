@@ -17,6 +17,7 @@ from test_production_defaults import Nano
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import profiles, signature
 from mp3_to_videoclip.cli import execute, parser
+from mp3_to_videoclip.legacy import graphics_compose, graphics_review
 from mp3_to_videoclip.models import Project, Shot
 from mp3_to_videoclip.providers import ProviderError
 from mp3_to_videoclip.storage import digest, file_hash, read_json, write_json
@@ -222,11 +223,10 @@ def test_signature_review_binds_spec_base_and_sample_bytes(tmp_path):
 
 
 def test_graphics_review_rejects_implementation_change(tmp_path, monkeypatch):
-    from mp3_to_videoclip import graphics
 
     root = signature_root(tmp_path)
     review_fixture(root)
-    monkeypatch.setattr(graphics, "implementation_revision", lambda: "different-renderer")
+    monkeypatch.setattr(graphics_review, "implementation_revision", lambda: "different-renderer")
     with pytest.raises(ValueError, match="graphics implementation changed"):
         signature.validate_review(root, P.load_project(root))
 
@@ -264,7 +264,6 @@ def test_obsolete_base_cannot_be_approved_after_upstream_reapproval(tmp_path):
 
 
 def test_cli_requires_inspected_graphics_and_composes_not_base(tmp_path, monkeypatch):
-    import mp3_to_videoclip.graphics as graphics
 
     root = signature_root(tmp_path)
     review_fixture(root)
@@ -286,7 +285,7 @@ def test_cli_requires_inspected_graphics_and_composes_not_base(tmp_path, monkeyp
         output.write_bytes(b"test composite")
         return {"output": str(output)}
 
-    monkeypatch.setattr(graphics, "compose", compose)
+    monkeypatch.setattr(graphics_compose, "compose", compose)
     result = execute(parser().parse_args(["render", str(root)]))
     assert result["delivery_ready"] is True
     assert calls[0][0] == root / "base.mp4"
@@ -361,7 +360,7 @@ def test_base_render_prepares_review_but_is_never_delivery(tmp_path, monkeypatch
     from mp3_to_videoclip import remotion as renderer
 
     monkeypatch.setattr(renderer, "render_base", render)
-    monkeypatch.setattr(graphics, "preflight_frames", preflight)
+    monkeypatch.setattr(graphics_review, "preflight_frames", preflight)
     result = execute(parser().parse_args(["render", str(root), "--base-only"]))
     assert result["delivery_ready"] is False and len(calls) == 1
     assert Path(result["output"]).name == "creative-base-v001.mp4"

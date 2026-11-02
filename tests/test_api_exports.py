@@ -3,8 +3,8 @@
 import pytest
 from api_support import add_assets, api_client, make_api_project
 
-from mp3_to_videoclip import graphics, services, signature
 from mp3_to_videoclip import production as P
+from mp3_to_videoclip import services, signature
 from mp3_to_videoclip.domain import exports
 from mp3_to_videoclip.storage import file_hash, read_json, read_snapshot, write_json
 
@@ -126,10 +126,8 @@ def test_selected_bytes_are_current_not_saved_approval(tmp_path):
         ]
 
 
-@pytest.mark.parametrize("composed", [False, True])
-def test_render_captures_old_provenance_and_rejects_mid_render_change(
-    tmp_path, monkeypatch, composed
-):
+def test_render_captures_old_provenance_and_rejects_mid_render_change(tmp_path, monkeypatch):
+    composed = False
     root = make_api_project(tmp_path)
     add_assets(root)
     project = read_json(root / "project.json")
@@ -163,7 +161,6 @@ def test_render_captures_old_provenance_and_rejects_mid_render_change(
         "_render",
         lambda project, shots, audio, output, *args, **kwargs: change(output),
     )
-    monkeypatch.setattr(graphics, "compose", lambda root, base, output: change(output))
     output = root / "renders/final.mp4"
     report = services.render.render_final(root, output)
     assert output.read_bytes() == b"old pixels"
@@ -205,40 +202,3 @@ def test_signature_final_requires_graphics_provenance(tmp_path, monkeypatch, gra
         assert not item["delivery_ready"]
         assert "Graphics provenance" in item["reason"]
         assert client.get("/api/projects/production/film/renders/final.mp4").status_code == 200
-
-
-def test_composition_versions_output_without_certifying_old_movie(tmp_path, monkeypatch):
-    root = make_api_project(tmp_path)
-    project = read_json(root / "project.json")
-    project["signature_required"] = True
-    write_json(root / "project.json", project)
-    monkeypatch.setattr(P, "require_approval", lambda *args: None)
-    monkeypatch.setattr(signature, "current_input_hash", lambda root: "current")
-    monkeypatch.setattr(P, "stage_hash", lambda *args: "current-graphics")
-    base = root / "renders/base.mp4"
-    base.parent.mkdir(exist_ok=True)
-    base.write_bytes(b"reviewed base")
-    monkeypatch.setattr(signature, "validate_review", lambda *args: {"base": "renders/base.mp4"})
-    output = root / "renders/final.mp4"
-    output.write_bytes(b"old movie")
-    old_report = {"old": "preserve this sidecar"}
-    write_json(output.with_suffix(".json"), old_report)
-    versioned = root / "renders/final-v002.mp4"
-
-    def compose(root, base, requested):
-        assert requested == output
-        assert requested.exists()
-        versioned.write_bytes(b"new composite")
-        return {"output": str(versioned), "output_sha256": file_hash(versioned)}
-
-    monkeypatch.setattr(graphics, "compose", compose)
-    report = services.render.render_final(root, output)
-    assert report["output"] == str(versioned)
-    assert report["output_sha256"] == file_hash(versioned)
-    assert report["final_output_sha256"] == file_hash(versioned)
-    assert report["delivery_ready"] is True
-    assert read_json(versioned.with_suffix(".json")) == report
-    assert output.read_bytes() == b"old movie"
-    assert read_json(output.with_suffix(".json")) == old_report
-    with read_snapshot(root):
-        assert exports.describe(root, "renders", versioned.name)["delivery_ready"] is True

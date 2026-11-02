@@ -22,6 +22,7 @@ from conftest import audio_packet_hash, frame_diff, read_frame
 from PIL import Image, ImageDraw
 
 from mp3_to_videoclip import graphics
+from mp3_to_videoclip.legacy import graphics_compose
 
 FPS = 24
 DURATION = 85.0
@@ -118,6 +119,7 @@ def _spec() -> dict:
 # the real composite
 # --------------------------------------------------------------------------- #
 @requires_ffmpeg
+@pytest.mark.slow
 def test_compose_spec_intro_captions_sfx_and_credits(project_root: Path):
     base = project_root / "work" / "base-fixture.mp4"
     spec_path = project_root / "work" / "graphics-spec.json"
@@ -125,13 +127,13 @@ def test_compose_spec_intro_captions_sfx_and_credits(project_root: Path):
 
     # The module's own loader path drives the composite.
     spec = graphics.load_spec(project_root)
-    report = graphics.compose(project_root, base, output, spec_path=spec_path)
+    report = graphics_compose.compose(project_root, base, output, spec_path=spec_path)
 
     assert output.is_file() and report["output"] == str(output)
     assert report["version"] == graphics.VERSION
     assert report["base"]["sha256"] == report["source"]["sha256"]
     assert report["spec_sha256"] == graphics._digest(spec)
-    assert report["implementation_sha256"] == graphics._file_hash(Path(graphics.__file__))
+    assert report["implementation_sha256"] == graphics._file_hash(Path(graphics_compose.__file__))
 
     info = graphics._probe(output)
     video = next(s for s in info["streams"] if s["codec_type"] == "video")
@@ -188,11 +190,12 @@ def test_compose_spec_intro_captions_sfx_and_credits(project_root: Path):
 
 
 @requires_ffmpeg
+@pytest.mark.slow
 def test_compose_never_overwrites_and_versions(project_root: Path):
     base = project_root / "work" / "base-fixture.mp4"
     target = project_root / "renders" / "final-v001.mp4"
-    first = graphics.compose(project_root, base, target)
-    second = graphics.compose(project_root, base, target)
+    first = graphics_compose.compose(project_root, base, target)
+    second = graphics_compose.compose(project_root, base, target)
     assert second["output"].endswith("-v002.mp4")
     assert Path(first["output"]).is_file() and Path(second["output"]).is_file()
 

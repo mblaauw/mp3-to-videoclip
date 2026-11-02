@@ -23,7 +23,11 @@ import pytest
 from conftest import run_ffmpeg
 from PIL import Image
 
-from mp3_to_videoclip import graphics, timeline
+from mp3_to_videoclip import graphics as pure
+from mp3_to_videoclip import timeline
+from mp3_to_videoclip.legacy import graphics_compose as graphics
+
+pytestmark = pytest.mark.slow
 
 FPS = 24
 DURATION = 40.0
@@ -56,7 +60,7 @@ def _spec() -> dict:
         "intro_seconds": INTRO_SECONDS,
         "credits_tail_seconds": CREDITS_TAIL,
         "lockup_seconds": LOCKUP_SECONDS,
-        "palette": dict(graphics.DEFAULT_PALETTE),
+        "palette": dict(pure.DEFAULT_PALETTE),
         "intro": {
             "mark": {"kind": "signal"},
             "names": "MAHA KALA",
@@ -192,7 +196,7 @@ def test_caption_key_moves_only_with_its_own_render_inputs():
     unrelated["credits"]["lockup"] = "ANOTHER LOCKUP"
     unrelated["credits"]["cards"][0][1] = "SOMEONE ELSE"
     unrelated["captions"][1]["text"] = "CHANGED ELSEWHERE"
-    unrelated["palette"] = dict(graphics.DEFAULT_PALETTE)
+    unrelated["palette"] = dict(pure.DEFAULT_PALETTE)
     assert _element_key("caption", unrelated, part) == key
 
     # ...while its own content, window, binding, canvas, fps, frame count,
@@ -604,12 +608,12 @@ def test_preflight_default_samples_cover_every_phase_and_overlay(project_root, b
     report = graphics.preflight_frames(project_root, base, project_root / "renders" / "default")
     entries = report["frames"]
     # 10 named intro phases + 2 captions + 1 card + 1 lockup, all below the cap.
-    assert len(entries) == len(graphics.INTRO_PHASES) + 4
+    assert len(entries) == len(pure.INTRO_PHASES) + 4
     assert len(entries) <= graphics.PREFLIGHT_MAX_SAMPLES
     assert {entry["phase"] for entry in entries if entry["phase"] is not None} == set(
-        graphics.INTRO_PHASES
+        pure.INTRO_PHASES
     )
-    phases = {phase["phase"]: phase for phase in graphics.intro_phase_samples(INTRO_SECONDS)}
+    phases = {phase["phase"]: phase for phase in pure.intro_phase_samples(INTRO_SECONDS)}
     for entry in entries:
         if entry["phase"] is not None:
             assert entry["frame"] == timeline.frame_number(

@@ -735,8 +735,8 @@ def execute(args):
                 ),
             ):
                 if signature and not args.base_only:
-                    from .graphics import compose
-                    from .signature import validate_review
+                    from .legacy.graphics_compose import compose
+                    from .legacy.graphics_review import validate_old_review as validate_review
 
                     production.require_approval(root, "graphics")
                     review = validate_review(root, project)
@@ -757,7 +757,7 @@ def execute(args):
 
                 report["input_hash"] = current_input_hash(root)
                 if signature:
-                    from .signature import prepare_review
+                    from .legacy.graphics_review import prepare_review
 
                     report["delivery_ready"] = False
                     write_json(directory / name.replace(".mp4", ".json"), report)

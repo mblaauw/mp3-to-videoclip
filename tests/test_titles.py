@@ -9,6 +9,7 @@ import pytest
 from test_edits import _energetic_edit, _energetic_root
 
 from mp3_to_videoclip import edits, titles
+from mp3_to_videoclip.legacy import graphics_compose
 
 
 def _spec(cards: int = 5, *, design: str | None = "joint-v1", captions=None) -> dict:
@@ -263,7 +264,6 @@ def test_a_reviewed_film_renders_its_final_in_one_pass_with_the_reviewed_titles(
 ):
     from test_render_service import _fake_render
 
-    from mp3_to_videoclip import graphics
     from mp3_to_videoclip import production as P
     from mp3_to_videoclip.services import render
     from mp3_to_videoclip.storage import read_json
@@ -275,7 +275,7 @@ def test_a_reviewed_film_renders_its_final_in_one_pass_with_the_reviewed_titles(
     def no_compose(*_args, **_kwargs):
         raise AssertionError("a composition-reviewed final is one pass, never a composite")
 
-    monkeypatch.setattr(graphics, "compose", no_compose)
+    monkeypatch.setattr(graphics_compose, "compose", no_compose)
     calls = []
     monkeypatch.setattr(render, "_render", _fake_render(calls))
 

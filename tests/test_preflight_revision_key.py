@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from mp3_to_videoclip import graphics, production, signature
+from mp3_to_videoclip.legacy import graphics_review
 from mp3_to_videoclip.storage import file_hash, read_json, write_json
 
 TITLE = "Stof en Stilte"
@@ -92,16 +93,16 @@ def _stub_preflight(monkeypatch, calls: list, revision_box: dict) -> None:
         )
         return {"sidecar": str(sidecar)}
 
-    monkeypatch.setattr(graphics, "preflight_frames", fake)
+    monkeypatch.setattr(graphics_review, "preflight_frames", fake)
     # This unit tests cache identity, not storyboard/still approval scaffolding.
-    monkeypatch.setattr(signature, "current_input_hash", lambda root: "same-film-inputs")
-    monkeypatch.setattr(graphics, "implementation_revision", lambda: revision_box["value"]())
+    monkeypatch.setattr(graphics_review, "current_input_hash", lambda root: "same-film-inputs")
+    monkeypatch.setattr(graphics_review, "implementation_revision", lambda: revision_box["value"]())
 
 
 def _prepare(tmp_path: Path, monkeypatch, calls, revision_box) -> dict:
     root = _root(tmp_path)
     project = production.load_project(root)
-    return signature.prepare_review(root, root / "work" / "base-fixture.mp4", project)
+    return graphics_review.prepare_review(root, root / "work" / "base-fixture.mp4", project)
 
 
 def test_preflight_directory_follows_the_implementation_revision(tmp_path: Path, monkeypatch):
@@ -128,11 +129,11 @@ def test_brand_palette_changes_the_cache_key_without_changing_raw_spec(tmp_path,
     calls = []
     _stub_preflight(monkeypatch, calls, {"value": lambda: "revision-a"})
     project = production.load_project(root)
-    first = signature.prepare_review(root, root / "work/base-fixture.mp4", project)
+    first = graphics_review.prepare_review(root, root / "work/base-fixture.mp4", project)
     brand = read_json(root / "brand.json")
     brand["accent"] = "#112233"
     write_json(root / "brand.json", brand)
-    second = signature.prepare_review(root, root / "work/base-fixture.mp4", project)
+    second = graphics_review.prepare_review(root, root / "work/base-fixture.mp4", project)
     assert first["spec_hash"] == second["spec_hash"]
     assert first["resolved_spec_hash"] != second["resolved_spec_hash"]
     assert first["preflight"] != second["preflight"]

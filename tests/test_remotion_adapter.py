@@ -7,6 +7,7 @@ import pytest
 
 from mp3_to_videoclip import graphics, remotion
 from mp3_to_videoclip.branding import filmstrip_svg
+from mp3_to_videoclip.legacy import graphics_compose
 from mp3_to_videoclip.models import Project, Shot
 from mp3_to_videoclip.storage import read_json, write_json
 
@@ -393,7 +394,7 @@ def test_remotion_graphics_uses_single_brand_geometry(tmp_path, monkeypatch):
     font = tmp_path / "font.ttc"
     font.write_bytes(b"testfont")
     monkeypatch.setattr(graphics, "resolve_font", lambda: (font, {}, "fixture"))
-    monkeypatch.setattr(remotion, "invoke", lambda *args: calls.append(args))
+    monkeypatch.setattr(graphics_compose, "invoke", lambda *args: calls.append(args))
     palette = {
         "ink": (244, 241, 232),
         "accent": (212, 174, 106),
@@ -402,7 +403,7 @@ def test_remotion_graphics_uses_single_brand_geometry(tmp_path, monkeypatch):
     }
     spec = {"intro": {"mark": {"kind": "filmstrip"}}}
     part = {"kind": "identity", "frames": 48}
-    remotion.graphics_clip(part, spec, palette, (1920, 1080), 24, tmp_path / "alpha.mov")
+    graphics_compose.graphics_clip(part, spec, palette, (1920, 1080), 24, tmp_path / "alpha.mov")
     inputs = calls[0][-1]
     actual = base64.b64decode(inputs["logo"].split(",", 1)[1]).decode()
     assert actual == filmstrip_svg("#d4ae6a")
@@ -414,10 +415,10 @@ def test_corrupt_alpha_cache_never_reused(tmp_path, monkeypatch):
     # Exercise the real existing cache-integrity guard rather than trusting path existence.
     clip = tmp_path / "cached.mov"
     clip.write_bytes(b"first")
-    graphics._cache_integrity(clip, created=True)
+    graphics_compose._cache_integrity(clip, created=True)
     clip.write_bytes(b"different")
     with pytest.raises(graphics.ComposeError):
-        graphics._cache_integrity(clip, created=False)
+        graphics_compose._cache_integrity(clip, created=False)
 
 
 def test_changed_post_effects_invalidates_proof_preview(tmp_path):
