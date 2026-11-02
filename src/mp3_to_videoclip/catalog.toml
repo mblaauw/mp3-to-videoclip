@@ -68,18 +68,23 @@ only_with_key = true
 unlocks = ["voices"]
 
 [[models]]
+id = "gpt-6-luna"
+provider = "opencode-go"
+label = "GPT-6 Luna"
+capabilities = ["text", "vision"]
+recommended = ["writer", "editor", "critic"]
+
+[[models]]
 id = "gpt-6.1-sol"
 provider = "openai"
 label = "GPT-6.1 Sol"
 capabilities = ["text", "vision"]
-recommended = ["writer", "critic"]
 
 [[models]]
 id = "deepseek-v4.1-flash"
 provider = "opencode-go"
 label = "DeepSeek V4.1 Flash"
 capabilities = ["text"]
-recommended = ["editor"]
 
 [[models]]
 id = "google-nano-banana-2-1"

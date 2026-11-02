@@ -47,9 +47,9 @@ class Role(BaseModel):
 
 
 class Roles(BaseModel):
-    writer: Role = Role(provider="openai", model="gpt-6.1-sol")
-    editor: Role = Role(provider="opencode-go", model="deepseek-v4.1-flash")
-    critic: Role = Role(provider="openai", model="gpt-6.1-sol")
+    writer: Role = Role(provider="opencode-go", model="gpt-6-luna")
+    editor: Role = Role(provider="opencode-go", model="gpt-6-luna")
+    critic: Role = Role(provider="opencode-go", model="gpt-6-luna")
     narrator: Role = Role(provider="runware", model="minimax-speech-2-8")
 
 

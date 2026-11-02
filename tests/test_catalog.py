@@ -31,9 +31,9 @@ def test_it_loads_with_no_cache_and_no_network():
     assert {provider.id for provider in loaded.providers} >= {"openai", "runware", "elevenlabs"}
     recommended = {role: m.id for m in loaded.models for role in m.recommended}
     assert recommended == {
-        "writer": "gpt-6.1-sol",
-        "critic": "gpt-6.1-sol",
-        "editor": "deepseek-v4.1-flash",
+        "writer": "gpt-6-luna",
+        "critic": "gpt-6-luna",
+        "editor": "gpt-6-luna",
         "pictures": "google-nano-banana-2-1",
         "upscaler": "real-esrgan",
         "narrator": "minimax-speech-2-8",
