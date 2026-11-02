@@ -1,14 +1,14 @@
 # mp3-to-videoclip
 
-One local web app that turns an MP3 into a finished videoclip: import the track,
-talk to a built-in director, review the storyboard and the stills, and render the
-film. Money records, the library, source audio and generated stills are kept
+One local web app that makes finished short films: a videoclip, promo or advert from
+an MP3, or a narrated story film from a script. Talk to a built-in director, review the
+storyboard and the stills, and render the film. Money records, the library, source audio and generated stills are kept
 locally. Only an explicitly authorized paid transcription, listening pass or
 image batch sends the required bytes to the provider.
 
-`uv run studio` opens the library, creates a production from an MP3, measures it
-locally, and takes it through Track, Story, Storyboard, Images and Film with
-content-bound approvals and a job tray. `clip` remains for engine tasks with no GUI
+`uv run studio` opens the library, creates a production, measures any song locally,
+and takes it through its stages (Track, or Script on a story film, with Story, Storyboard,
+Images and Film) with content-bound approvals and a job tray. `clip` remains for engine tasks with no GUI
 yet (transcription, listening, backups, signing, maintenance). Start with
 [docs/README.md](docs/README.md) for how it is built.
 
@@ -22,7 +22,8 @@ yet (transcription, listening, backups, signing, maintenance). Start with
   images came from an older prompt (`production/image_specs.py`, `generation.py`).
 - Paid image batches with a pre-submit journal: task UUID and reservation are
   written **before** the request, recovery happens by UUID and never resubmits,
-  and an unknown cost keeps its reservation until the provider reports it.
+  and an unknown cost keeps its reservation until the provider reports it. A task that
+  never comes back is named under the budget, to check again or settle.
 - Remotion for stills-film previews, the final cut and the live Studio Player;
   FFmpeg for probe, mux and verification (`remotion.py`, `ffmpeg.py`). The Player
   runs the renderer's own `Film` composition and `timing.mjs`, so the live
@@ -96,7 +97,7 @@ reason to run `npm ci --prefix frontend`; the renderer install is
 first run.
 
 The Runware key can be saved in the Studio settings file or supplied as
-`PROJECT_VEIL_RUNWARE_API`; a saved key wins. It is only needed for paid image,
+`PROJECT_VEIL_RUNWARE_API`; a saved key wins. It is only needed for paid image, clip, voice,
 transcription or listening work; analysis and rendering are local. Never commit it
 or write it into a production folder.
 
@@ -107,8 +108,8 @@ uv run studio                  # free loopback port, opens the browser
 uv run studio --port 8799
 ```
 
-**New production:** press *New film*, drop an MP3 (50 MB limit) and choose
-a title, starting budget and 16:9 or 9:16. The app probes and copies the source,
+**New production:** press *New film*, drop an MP3 (50 MB limit; a story film needs none) and
+choose a title, starting budget and 16:9 or 9:16. The app probes and copies the source,
 writes a schema-3 production, and queues the local analysis job. Paste LRC
 timestamps in Track when the track has vocals; no lyric position is invented.
 In Storyboard, drag the gold boundaries over the waveform (or focus one and use

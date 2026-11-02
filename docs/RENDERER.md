@@ -140,7 +140,8 @@ A render with several chunks left runs several browsers, one `render.mjs` proces
 list: half the cores, at most 4, one fewer for each 600 MB short of free memory, and never
 more than the chunks left. `STUDIO_RENDER_WORKERS` overrides it. The machine lock is taken
 once for the whole render. The bundle is built first by `--bundle-only`. One worker failing
-or stalling ends the rest and names itself; nothing retries silently.
+or stalling ends the rest and names itself; nothing retries silently. A process exits explicitly
+once its work is published: one that only failed to exit used to be ended as a stall.
 
 `--serve-assets` loads stills from a loopback server for that one run, so the bundle holds
 code only and a new still never rebundles. The server answers this computer alone and

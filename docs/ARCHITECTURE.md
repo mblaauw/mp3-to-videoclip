@@ -84,8 +84,8 @@ archived and its README states no separate licence for the pretrained weights.
 
 ## Production kinds and intake
 
-Every new production carries `project.kind` (`music_video`, `promo` or
-`advert`). The code table in `kinds.py` is authoritative for lengths, default
+Every new production carries `project.kind` (`music_video`, `promo`, `advert` or
+`narrative`, the story film). The code table in `kinds.py` is authoritative for lengths, default
 style, text density, pacing, opening/closing and whether the 25/40 graphics
 signature is required; the prose block the Writer reads is
 `director/prompts/kinds/<kind>.md`. Music videos keep the 25 s opening and 40 s
@@ -270,6 +270,10 @@ quote is scoped and hashed, authorization is user-owned, a submission is recorde
 before it is sent, recovery is by UUID, and an unreported cost keeps its
 reservation. Rendering, analysis and verification are local and free.
 
+A task that never comes back holds the film's spending. `GET /budget` names it, and the budget
+popover offers `POST /tasks/<id>/recover`, a free read that never resubmits, and
+`POST /tasks/<id>/resolve`, the owner's billed amount with evidence. Nothing resolves one by itself.
+
 ## Presentation
 
 `app.py` is the FastAPI factory; `api/` exposes the five stages, approvals,
@@ -301,14 +305,13 @@ it found at least two, under the owner's layer, and never rewrite `music.json`, 
 approval moves. The deep pass is the second phase of analysis. `music_map.py` is a
 different thing: the paid listening draft for music-led films.
 
-Settings is one schema 2 TOML file, nested by what a value is for (`roles`, `voices`,
+Settings is one schema 3 TOML file, nested by what a value is for (`roles`, `voices`,
 `pictures`, `keys`, `new_films`, `prices`, `computer`), with the old flat names kept as
 read-only properties so no caller had to change. `catalog.py` and `catalog.toml` say what
 can be chosen: a price appears only with its source and date, and a refresh runs on a
 click through free calls and never overwrites a static price. `caches.py` is the one list
-of derived folders that may be cleared. Several stored choices wait for later phases, and
-the API's `notes` says which: per-role models on the direct path, thinking and token
-budgets, picture models per look, and the narrator voice.
+of derived folders that may be cleared. Stored choices that do nothing yet are named in the API's `notes`: thinking level, token
+budgets and picture models per look.
 
 Engine refusals reach the API through one mapping, `api/errors.py:engine_error`,
 installed as app exception handlers: `ValueError` is 400, `ProjectBusy` and
@@ -318,8 +321,7 @@ path. Routes keep their own `except` only to say something more specific.
 `needs_budget` and `needs_new_round` are 200s, because they are decisions and not
 failures.
 
-The old hand-written `ThreadingHTTPServer` and its Python-string UI were removed
-in the Phase 4 cleanup. `cli.py` remains for engine tasks that do not have a GUI
+`cli.py` remains for engine tasks that do not have a GUI
 yet: 14 commands for transcription, the listening pass, backups, recovery and diagnostics.
 
 The Studio shell is hash-routed: `#/` is the library, `#/:slug/:stage` is a
@@ -329,7 +331,7 @@ cheap stage states, the next step, remaining budget and an update time; the
 library uses those without re-hashing every gate. Inside a production one
 `PlayerProvider` owns the only `<audio>` element and the shared time store.
 `spine/Spine.tsx` draws the waveform, filmstrip, sections and playhead from that
-store, and Storyboard owns boundary dragging (the old `Timeline.tsx` is gone).
+store, and Storyboard owns boundary dragging.
 Film's Remotion `LivePlayer` seeks from the same time, so switching stages keeps
 the playhead. The director is a drawer, open by default above 1180 px except on
 Film, remembered per stage, and an overlay below that width; approvals and library
@@ -346,7 +348,7 @@ browser refresh. The server announces four kinds of change on the one
   `project.changed` once its body is complete (`app.StudioGuard`, a pure ASGI
   middleware so the SSE and NDJSON streams are never buffered);
 - every finished director tool that is not a read publishes `project.changed`
-  while the turn streams (its tools may run in the OpenCode MCP process);
+  while the turn streams;
 - jobs publish `job.queued/started/progress/succeeded/failed/cancelled` with
   `project` and `kind`; engine `operations.phase/tick` calls reach the runner
   through a context-variable observer, and an image batch also publishes
@@ -382,7 +384,7 @@ journaled.
 Archived productions never pass through `project_root`; dedicated
 `/api/projects/<slug>/archive/render` and `/archive/stills/<index>` routes serve
 their bytes read-only, so no filesystem path is exposed. `GET /budget` reports
-`spent_usd`, `reserved_usd` and `paid_stills` separately from
+`spent_usd`, `reserved_usd`, `paid_stills` and `unresolved` separately from
 `committed_usd`; the budget popover reads the current cap before posting a
 top-up as the new cap.
 
@@ -413,7 +415,8 @@ same tools with the paid ones excluded. The Studio does not use it.
 `opencode_workspace` are ignored on load, and the first save keeps the old file as
 `settings.toml.v<n>.bak`. A file on the direct path keeps the one model that really answered it, as
 provider `direct`. A file on the gateway keeps its role models, which now need that provider's own
-key in Settings, because logins stored inside OpenCode can't be used. `llm_*` still means your own
+key in Settings, because logins stored inside OpenCode can't be used. A fresh install starts every
+role on `gpt-6-luna` through OpenCode Go, the model the story film proved; `gpt-6.1-sol` is not on Go. `llm_*` still means your own
 endpoint; an OpenCode Go key saved there still counts for OpenCode Go.
 
 ## Layout
@@ -422,9 +425,9 @@ endpoint; an OpenCode Go key saved there still counts for OpenCode Go.
 app.py            FastAPI factory, static files, lifespan
 launcher.py       `uv run studio`: free port, build frontend if stale, open browser
 api/              projects, track, story, storyboard, images, film, director, jobs, budget, approvals, settings, setup
-domain/           intake, models, migration, approvals, archive, budget, lyrics
+domain/           intake, models, approvals, archive, budget, lyrics, sections
 services/         analysis, generation, graphics, transcription, render, preview input, runware
-director/         direct adapter, OpenCode gateway, MCP bridge, tools, context, prompts, conversation
+director/         provider adapters, routing, MCP bridge, tools, context, prompts, conversation
 edits.py          edit decision list, effective board, report and flash rule
 jobs/             asyncio runner, per-project serialisation, SSE events
 frontend/         Vite + React + TypeScript, @remotion/player for the real composition
@@ -437,6 +440,5 @@ Every artifact has a cheap fingerprint. A changed fingerprint makes its approval
 stale, and the stage says so; the gate blocks until the current bytes are reviewed
 and re-approved. One budget per production pauses a paid job as `needs_budget`
 when it runs out.
-The phase plan and acceptance criteria are in
-`.opencode/tasks/gui-rework.md`; decisions D1–D8 are in the 25 Oct 2026 brief that
-record references. Renderer notes stay in `docs/RENDERER.md`.
+The phase plans and acceptance records are in `.opencode/tasks/`, with the latest state at the end
+of `roadmap-2026-11.md` and `museum-of-tomorrow.md`. Renderer notes stay in `docs/RENDERER.md`.

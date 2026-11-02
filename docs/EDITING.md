@@ -81,8 +81,9 @@ Non-cut transitions need handle frames and a stated reason.
 - Transition: `cut`, `fade`, `wipe_left`, `wipe_right`, `dip_to_black`,
   `dip_to_white`, `whip_pan`, `push`, `slide`.
 - Accent: `punch_in`, `flash`, `light_leak`.
-- Text style: `super`, `title`, `lower_third`, `lyric`, `card`.
-- Text animation: `fade`, `type_on`, `slide_up`, `pop`, `kinetic_words`.
+- Text style: `super`, `title`, `lower_third`, `lyric`, `card`, `caption`, `logotype`, `tagline`, `cta`,
+  and `gallery_title` and `gallery_label`, fine spaced capitals with no box, at the top and bottom.
+- Text animation: `fade`, `fade_in`, `type_on`, `slide_up`, `pop`, `kinetic_words`.
 - Split layout: `row`, `column`, `grid`.
 - Grade preset: `neutral`, `warm-night`, `clean-day`, `monochrome`, `vivid`,
   `film-fade`; the four legacy sliders remain per-key advanced overrides.
