@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from api_support import api_client, make_api_project
 
 from mp3_to_videoclip import pacing, song_map
@@ -126,12 +127,15 @@ def test_names_already_given_keep_their_sections(tmp_path):
     assert song["sections"][0]["name"] == "Named 0"
 
 
-def test_it_is_cached_until_an_input_changes(tmp_path):
+def test_it_is_rebuilt_only_when_an_input_changes_and_reading_writes_nothing(tmp_path, monkeypatch):
     root = _film(tmp_path, with_deep=False)
+    before = sorted((path, path.stat().st_mtime_ns) for path in root.rglob("*") if path.is_file())
     first = song_map.song_map(root)
-    stamp = (root / song_map.FILE).stat().st_mtime_ns
+    built = song_map._build
+    monkeypatch.setattr(song_map, "_build", lambda *_: pytest.fail("rebuilt with no change"))
     assert song_map.song_map(root) == first
-    assert (root / song_map.FILE).stat().st_mtime_ns == stamp
+    monkeypatch.setattr(song_map, "_build", built)
+    assert sorted((p, p.stat().st_mtime_ns) for p in root.rglob("*") if p.is_file()) == before
     _deep(root)
     assert song_map.song_map(root)["deep"] is True
 
