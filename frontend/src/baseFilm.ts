@@ -3,9 +3,9 @@ import type { ComponentType } from "react";
 // The renderer composition is plain JSX shared by the MP4 renderer and the
 // Studio Player. Vite bundles it from the repository; TypeScript gets the typed
 // surface below because the renderer is not part of the frontend's src root.
-// @ts-ignore - shared renderer source, not a frontend module with a .d.ts
+// @ts-expect-error - shared renderer source, not a frontend module with a .d.ts
 import { BaseFilm as RendererBaseFilm } from "../../renderers/remotion/src/BaseFilm.jsx";
-// @ts-ignore - shared renderer source, not a frontend module with a .d.ts
+// @ts-expect-error - shared renderer source, not a frontend module with a .d.ts
 import { Film as RendererFilm } from "../../renderers/remotion/src/Film.jsx";
 
 export type CameraFraming = {

@@ -3,7 +3,7 @@
  * placeholder, never a word such as Spanish "todo" inside lyrics. The approval gate
  * stays on the server; this only decides what the screen shows.
  */
-const MARKED = /^\s*(?:todo|tbd|placeholder)(?:\s*[:\-]|\s*$)/i;
+const MARKED = /^\s*(?:todo|tbd|placeholder)(?:\s*[:-]|\s*$)/i;
 
 export const EMPTY_PURPOSE = "TODO: approved story purpose";
 export const EMPTY_PROMPT = "TODO: compose this shot";

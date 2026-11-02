@@ -109,12 +109,13 @@ export function ShotInspector({
     setSaved(false);
     paid.clear();
     // The paid flow belongs to one shot; never carry a quote to the next.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- the saver of this one shot, by design
       saves.current.invalidate();
       if (timer.current) window.clearTimeout(timer.current);
       if (savedTimer.current) window.clearTimeout(savedTimer.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identity is exactly when this resets
   }, [identity]);
 
   useEffect(

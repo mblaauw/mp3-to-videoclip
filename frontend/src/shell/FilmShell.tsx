@@ -467,6 +467,7 @@ function FilmShellContent({
     };
     window.addEventListener("studio:ask-director", ask);
     return () => window.removeEventListener("studio:ask-director", ask);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the drawer's setter never changes the listener's job
   }, []);
 
   const imageJob = jobs.find(

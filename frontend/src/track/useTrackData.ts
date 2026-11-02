@@ -78,6 +78,7 @@ export function useTrackData(slug: string) {
       }
     }, 3000);
     return () => window.clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only the music decides whether polling is still needed
   }, [adopt, data?.music, slug]);
 
   useEffect(

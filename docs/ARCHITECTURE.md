@@ -281,10 +281,8 @@ self-hosted Schibsted Grotesk variable font; `ui/` holds the token-only
 `Button`, `IconButton`, `StatusDot`, `Pill`, `Seg`, `Chip` and `Field`
 primitives. The shell keeps one `/api/events` EventSource open for jobs, with
 JSON payloads and reconnect/backoff; there is no polling. Job progress is
-reported in real units (images, frames) and stays indeterminate otherwise. `frontend/src/api/schema.d.ts` is
-generated with `npm run api:types` from the app's OpenAPI document and types the
-routes that declare response models; legacy untyped routes keep explicit
-hand-written types. Every API 4xx/5xx is `{detail, code}`; the frontend parses
+reported in real units (images, frames) and stays indeterminate otherwise. The types the screens read are
+hand-written in `frontend/src/api.ts`. Every API 4xx/5xx is `{detail, code}`; the frontend parses
 it into `ApiError` and maps stable codes to user-facing copy and, where there is
 one next move, an action (Open settings, Go to a stage).
 

@@ -47,6 +47,7 @@ jobs:
       - name: Frontend tests and build
         run: |
           npm test --prefix frontend
+          npm run lint --prefix frontend
           npm run build --prefix frontend
       - name: Committed frontend build is current
         run: git diff --exit-code --stat -- frontend/dist

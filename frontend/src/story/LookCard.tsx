@@ -124,7 +124,7 @@ export function LookCard({
     }
   };
 
-  const useNewerPrompt = async () => {
+  const moveToNewerPrompt = async () => {
     setSaving(true);
     setError(null);
     try {
@@ -190,7 +190,7 @@ export function LookCard({
             <p className="hint">
               Every still of this film goes out of date, and the story needs approving again.
             </p>
-            <Button size="small" disabled={saving} onClick={() => void useNewerPrompt()}>
+            <Button size="small" disabled={saving} onClick={() => void moveToNewerPrompt()}>
               Mark them out of date and switch
             </Button>
             <Button size="small" variant="quiet" onClick={() => setMovingPrompt(false)}>

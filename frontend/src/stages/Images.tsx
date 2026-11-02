@@ -180,6 +180,7 @@ export function ImagesStage({
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
       if (refreshPending.current) notifyProjectChanged({ slug });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on leaving, for the slug this screen opened with
     [],
   );
 
