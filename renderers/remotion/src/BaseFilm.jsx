@@ -161,11 +161,13 @@ function textBox(style, width, frameHeight, color, family) {
     const title = style === "gallery_title";
     return {
       ...base,
+      // No box, so the shadow alone has to carry it across a bright or brass ground.
+      textShadow: "0 1px 3px rgba(0,0,0,0.95), 0 0 16px rgba(0,0,0,0.85), 0 0 40px rgba(0,0,0,0.6)",
       left: width * 0.05,
       right: width * 0.05,
       ...(title ? {top: frameHeight * 0.1} : {bottom: frameHeight * 0.075}),
       textAlign: "center",
-      fontSize: height * (title ? 0.052 : 0.024),
+      fontSize: height * (title ? 0.052 : 0.028),
       fontWeight: 400,
       letterSpacing: title ? "0.26em" : "0.3em",
       lineHeight: 1.3,
