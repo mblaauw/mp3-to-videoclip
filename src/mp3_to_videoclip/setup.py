@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from .remotion import ENGINE
@@ -35,9 +36,35 @@ def _chrome() -> bool:
     return any(Path(candidate).is_file() for candidate in CHROME_CANDIDATES)
 
 
+#: What a render cannot run without, what to call it, and how to get it. Nothing here installs.
+RENDER_TOOLS = {
+    "chrome": (
+        "Chrome",
+        {"darwin": "brew install --cask google-chrome"},
+        "sudo apt install chromium",
+    ),
+    "ffmpeg": ("FFmpeg", {"darwin": "brew install ffmpeg"}, "sudo apt install ffmpeg"),
+    "ffprobe": ("ffprobe", {"darwin": "brew install ffmpeg"}, "sudo apt install ffmpeg"),
+    "node": ("Node.js", {"darwin": "brew install node"}, "sudo apt install nodejs npm"),
+    "renderer": ("The renderer", {}, "npm ci --prefix renderers/remotion"),
+}
+
+
+def _missing(values: dict) -> list[dict]:
+    """One plain line per render tool this computer lacks, with the command that adds it."""
+    rows = []
+    for key, (name, by_platform, fallback) in RENDER_TOOLS.items():
+        if not values[key]:
+            install = by_platform.get(sys.platform, fallback)
+            rows.append({"tool": key, "name": name, "install": install})
+    return rows
+
+
 def status() -> dict:
-    """Capabilities the local app needs; booleans only, no paths or secrets."""
-    return {
+    """Capabilities the local app needs: booleans and install hints, no paths or secrets."""
+    from . import depth, lyric_tools
+
+    values = {
         "node": shutil.which("node") is not None,
         "npm": shutil.which("npm") is not None,
         "chrome": _chrome(),
@@ -45,6 +72,12 @@ def status() -> dict:
         "ffprobe": shutil.which("ffprobe") is not None,
         "renderer": (ENGINE / "node_modules/@remotion/renderer").is_dir(),
         "frontend": (REPO / "frontend/dist/index.html").is_file(),
+    }
+    return {
+        **values,
+        "lyric_tools": lyric_tools.status()["ready"],
+        "depth_tools": depth.status()["ready"],
+        "missing": _missing(values),
     }
 
 

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, type KindProfile } from "./api";
 import { ErrorState } from "./ui";
 
-const MAX_BYTES = 25_000_000;
+const MAX_BYTES = 50_000_000;
 
 const FALLBACK_KINDS: KindProfile[] = [
   {
@@ -143,7 +143,7 @@ export function NewProduction({
       return;
     }
     if (picked.size > MAX_BYTES) {
-      setError("That MP3 is larger than the 25 MB intake limit.");
+      setError("That MP3 is larger than the 50 MB limit.");
       return;
     }
     setError(null);
@@ -267,7 +267,7 @@ export function NewProduction({
               {isStory ? "Drop a music bed here, if you want one" : "Drop an MP3 here or choose a file"}
             </strong>
             <span className="meta">
-              {isStory ? "Optional · " : ""}MP3 only · up to 25 MB · stays on this machine
+              {isStory ? "Optional · " : ""}MP3 only · up to 50 MB · stays on this machine
             </span>
           </>
         )}

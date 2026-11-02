@@ -52,6 +52,5 @@ director, paid generation and rendering; the interim server and its tests are
 gone. The Player imports the renderer's own `BaseFilm.jsx` and `timing.mjs`, and
 renderer approvals no longer hash the browser binary. A fresh clone installs the
 pinned renderer on first launch and serves the committed frontend. Remaining: the
-legacy FFmpeg/Pillow branches kept for frozen films and the portable headless-shell
-decision. What comes next, and how the plans changed, is at the end of
+legacy FFmpeg/Pillow branches kept for frozen films. What comes next, and how the plans changed, is at the end of
 `.opencode/tasks/roadmap-2026-11.md`.

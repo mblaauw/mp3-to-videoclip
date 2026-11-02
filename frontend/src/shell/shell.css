@@ -1286,3 +1286,16 @@ body {
   font-size: var(--t-12);
   font-variant-numeric: tabular-nums;
 }
+.library-doctor {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.library-doctor .link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

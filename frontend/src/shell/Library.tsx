@@ -178,6 +178,7 @@ export function Library({
   onArchive,
   onCreated,
   onRetry,
+  onSettings,
 }: {
   projects: ProjectSummary[];
   loading: boolean;
@@ -186,7 +187,21 @@ export function Library({
   onArchive: (slug: string) => void;
   onCreated: (slug: string, first?: "track" | "story") => void;
   onRetry?: () => void;
+  onSettings?: () => void;
 }) {
+  const [missing, setMissing] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    api.setup().then(
+      (status) => {
+        if (live) setMissing((status.missing ?? []).map((item) => item.name));
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
   const [newFile, setNewFile] = useState<File | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -235,6 +250,16 @@ export function Library({
           <div className="grow">
             <h1>Your films</h1>
             <p>{loading ? "Loading the library…" : summary}</p>
+            {missing.length > 0 && (
+              <p className="library-doctor" role="status">
+                This computer can't render yet: {missing.join(", ")} {missing.length === 1 ? "is" : "are"} missing.{" "}
+                {onSettings && (
+                  <button type="button" className="link-button" onClick={onSettings}>
+                    Open settings
+                  </button>
+                )}
+              </p>
+            )}
           </div>
           <Button variant="primary" onClick={() => startNew()}>
             <PlusIcon /> New film

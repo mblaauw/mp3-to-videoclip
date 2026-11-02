@@ -69,8 +69,9 @@ Track writes to them after the words are saved. Two layers sit beside them:
 apart from the Studio's environment, after saying what it downloads. A job isolates
 vocals with Demucs, hears words with Parakeet and aligns them to the known lyrics.
 Heard words are cached in `work/heard/` by audio and lock hash. Lines not heard stay
-untimed, and tapped lines are never overwritten. It runs on Apple Silicon only; other
-machines keep tap-along. Tests use a fake runner.
+untimed, and tapped lines are never overwritten. It runs on Apple Silicon only, because the
+word recogniser is MLX: other machines keep tap-along, and a story film's captions stay per line,
+which are exact by construction. Tests use a fake runner.
 
 Suno's MP3s carry their lyrics and tags in the file, which Track offers as a starting
 point. Section proposals start a sung part at its first word and an instrumental part

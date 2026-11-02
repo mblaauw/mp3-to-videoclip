@@ -107,7 +107,7 @@ uv run studio                  # free loopback port, opens the browser
 uv run studio --port 8799
 ```
 
-**New production:** press *New film*, drop an MP3 (25 MB limit) and choose
+**New production:** press *New film*, drop an MP3 (50 MB limit) and choose
 a title, starting budget and 16:9 or 9:16. The app probes and copies the source,
 writes a schema-3 production, and queues the local analysis job. Paste LRC
 timestamps in Track when the track has vocals; no lyric position is invented.

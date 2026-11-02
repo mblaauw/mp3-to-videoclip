@@ -99,6 +99,11 @@ legacy camera endpoints with the Python models and renderer;
 `renderers/remotion/tests/edit-primitives.test.mjs` pins every edit primitive and
 the flash refusal.
 
+**A local Chrome or Chromium is required, and Remotion's headless shell is not pinned.** The shell is a
+150 MB per-platform download that needs consent and saves at most about 20 %, and the candidate list plus
+`REMOTION_CHROME` already covers Mac and Linux. The Library says when a render tool is missing. Revisit this
+when someone without Chrome appears.
+
 A Studio preview job writes `work/preview-review.json` itself, binding the movie
 bytes to the current storyboard, proof set, brand and renderer revision, so the
 preview approval is available as soon as the render finishes. Delivery for a

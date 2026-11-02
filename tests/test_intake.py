@@ -137,7 +137,7 @@ def test_non_mp3_and_oversize_sources_are_rejected(tmp_path, fake_probe, monkeyp
     with pytest.raises(ValueError, match="MP3"):
         intake.create_from_upload(projects, _source(tmp_path, "song.wav"), title="Wrong")
     monkeypatch.setattr(intake, "MAX_SOURCE_BYTES", 4)
-    with pytest.raises(ValueError, match="25 MB"):
+    with pytest.raises(ValueError, match="the limit is"):
         intake.create_from_upload(projects, _source(tmp_path, payload=b"12345"), title="Big")
 
 
