@@ -54,6 +54,11 @@ def _stamp(root: Path, output: Path, report: dict, kind: str, provenance: dict) 
         report["delivery_ready"] = False
     if kind == "final":
         report["final_output_sha256"] = report["output_sha256"]
+    if P.load_project(root).spine == "soundtrack":
+        # What was measured when the mix was made, so the delivery checklist can say it.
+        from mp3_to_videoclip.production import soundtrack
+
+        report["soundtrack"] = soundtrack.receipt(root)
 
 
 @operations.progress_scope(stage="base-render")
