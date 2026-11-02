@@ -1369,3 +1369,12 @@
   text-decoration: underline;
   cursor: pointer;
 }
+.film-package ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}

@@ -288,6 +288,7 @@ def _films(directory: Path) -> list[str]:
 @router.get("/exports")
 @read_endpoint
 def list_exports(slug: str, request: Request):
+    from mp3_to_videoclip import delivery
     from mp3_to_videoclip.domain.exports import describe
 
     root = project_root(request, slug)
@@ -297,7 +298,13 @@ def list_exports(slug: str, request: Request):
         "exports": exports,
         "previews": previews,
         "signature_required": P.requires_signature(root, P.load_project(root)),
-        "files": [describe(root, "renders", name) for name in exports]
+        "files": [
+            {
+                **describe(root, "renders", name),
+                "package": delivery.listing(root / "renders" / name),
+            }
+            for name in exports
+        ]
         + [describe(root, "previews", name) for name in previews],
     }
 
@@ -337,6 +344,47 @@ async def play_archive_still(slug: str, index: int, request: Request):
     if not target.is_file() or not target.resolve().is_relative_to(root.resolve()):
         raise HTTPException(status_code=404, detail="archived still is missing")
     return FileResponse(target, content_disposition_type="inline")
+
+
+@router.post("/film/package")
+async def make_package(slug: str, request: Request, payload: dict):
+    """The poster, contact sheet, chapters and captions beside a final. Spends nothing."""
+    import asyncio
+
+    from mp3_to_videoclip import delivery
+
+    root = project_root(request, slug)
+    name = payload.get("name")
+    if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.mp4", name):
+        raise HTTPException(status_code=400, detail="name a rendered final")
+    film = inside(root, f"renders/{name}")
+    if not film.is_file():
+        raise HTTPException(status_code=404, detail="film is missing")
+    frame = payload.get("frame")
+    if frame is not None and (isinstance(frame, bool) or not isinstance(frame, int)):
+        raise HTTPException(status_code=400, detail="frame must be a whole number")
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+
+    async def work():
+        return await asyncio.to_thread(delivery.make_package, root, film, frame=frame)
+
+    job_id = runner.submit("render", slug, work, blocking=True, render_kind="package")
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/film/package/{name}")
+async def get_package_file(slug: str, name: str, request: Request):
+    from mp3_to_videoclip import delivery
+
+    if not delivery.SIDECAR.fullmatch(name):
+        raise HTTPException(status_code=404, detail="unknown package file")
+    target = inside(project_root(request, slug), f"renders/{name}")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="package file is missing")
+    media = delivery.MEDIA.get(target.suffix, "application/octet-stream")
+    return FileResponse(target, media_type=media, filename=name)
 
 
 @router.get("/film/{kind}/{name}")

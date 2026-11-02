@@ -1347,6 +1347,11 @@ export const api = {
         body: file,
       },
     ),
+  makePackage: (slug: string, name: string, frame?: number) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/film/package`, {
+      method: "POST",
+      body: JSON.stringify({ name, ...(frame === undefined ? {} : { frame }) }),
+    }),
   exports: (slug: string) =>
     request<FilmExports>(
       `/api/projects/${slug}/exports`,
@@ -1579,6 +1584,7 @@ export type FilmFile = {
   current: boolean;
   delivery_ready: boolean;
   reason?: string | null;
+  package?: string[];
 };
 export type FilmExports = {
   exports: string[];
