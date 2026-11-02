@@ -52,13 +52,11 @@ def _project() -> Project:
         height=1080,
         music_mode="vocal",
         native_size=[1376, 768],
-        workflow_version=2,
         prompt_version=2,
         style_preset=profiles.STYLE_PRESET_ID,
         image_model=profiles.DEFAULT_MODEL,
         image_settings=ImageSettings(thinkingLevel="high"),
         image_seed=7,
-        renderer_backend="remotion",
     )
 
 
