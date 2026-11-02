@@ -577,7 +577,11 @@ async function renderStills(progress, shared, settings, normalized) {
   }
 }
 
-run().catch((error) => {
-  process.stderr.write(`${error?.message ?? error}\n`);
-  process.exitCode = 1;
-});
+// Exit outright: the work is published, and a handle left open by Chrome or the encoder can keep
+// Node alive after it, which the Studio then ends as a stalled browser and calls a failure.
+run()
+  .catch((error) => {
+    process.stderr.write(`${error?.message ?? error}\n`);
+    process.exitCode = 1;
+  })
+  .finally(() => process.exit());
