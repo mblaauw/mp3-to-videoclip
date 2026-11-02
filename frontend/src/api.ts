@@ -351,6 +351,16 @@ export type ImageVersion = {
   derivation?: { kind: string; model: string; factor: number };
 };
 
+export type ImageClip = {
+  version: number;
+  frames: number;
+  fps: number;
+  seconds: number;
+  model: string;
+  /** Still a clip of the selected picture. */
+  current: boolean;
+};
+
 export type ImageReview = {
   shot_id: string;
   version: number;
@@ -376,6 +386,8 @@ export type ImageShot = {
   versions: ImageVersion[];
   review: ImageReview | null;
   stale: boolean;
+  clips?: ImageClip[];
+  clip?: number | null;
 };
 
 export type IntakePayload = {
@@ -1259,6 +1271,24 @@ export const api = {
     request<Brief>(`/api/projects/${slug}/sheets/${entryId}/use`, {
       method: "POST",
       body: JSON.stringify({ version }),
+    }),
+  estimateClips: (slug: string, shotIds: string[]) =>
+    request<{
+      estimate: { quote_id: string; tasks: number; seconds: number; reserve_usd: string; model: string };
+      decision: { ok: boolean };
+    }>(`/api/projects/${slug}/images/clips/estimate`, {
+      method: "POST",
+      body: JSON.stringify({ shot_ids: shotIds }),
+    }),
+  generateClips: (slug: string, quoteId: string) =>
+    request<{ job_id?: string; needs_budget?: boolean }>(`/api/projects/${slug}/images/clips`, {
+      method: "POST",
+      body: JSON.stringify({ quote_id: quoteId }),
+    }),
+  selectClip: (slug: string, shotId: string, version: number | null) =>
+    request<{ clip: number | null }>(`/api/projects/${slug}/images/clips/select`, {
+      method: "POST",
+      body: JSON.stringify({ shot_id: shotId, version }),
     }),
   estimateUpscale: (slug: string, shotIds: string[]) =>
     request<{

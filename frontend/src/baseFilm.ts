@@ -107,7 +107,15 @@ export type SplitPane = {
   image?: string;
 };
 
+export type ShotClip = {
+  file: string;
+  frames: number;
+  fps: number;
+  src?: string;
+};
+
 export type PreviewShot = {
+  clip?: ShotClip;
   id: string;
   image: string;
   src: string | null;

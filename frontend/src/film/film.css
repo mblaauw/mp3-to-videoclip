@@ -1028,6 +1028,15 @@
   background: var(--gold);
   opacity: 1;
 }
+.film-tile[data-clip]::after {
+  content: "▶";
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  color: #fff;
+  font-size: 9px;
+  text-shadow: 0 0 3px #000;
+}
 .film-spoken-lane {
   position: relative;
   height: 18px;

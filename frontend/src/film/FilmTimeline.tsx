@@ -294,7 +294,10 @@ export function FilmTimeline({
                     backgroundImage: url ? `url(${url})` : undefined,
                   }}
                   aria-label={`${shot.id}: ${shotCaption(shot) || "needs a job"}`}
-                  title={`${shot.id}, ${((end - start) / fps).toFixed(1)} s`}
+                  title={`${shot.id}, ${((end - start) / fps).toFixed(1)} s${
+                    imageById.get(shot.id)?.clip != null ? ", plays a clip" : ""
+                  }`}
+                  data-clip={imageById.get(shot.id)?.clip != null ? "yes" : undefined}
                   onClick={(event) => {
                     releaseMouseFocus(event);
                     onSelectShot(shot.id);

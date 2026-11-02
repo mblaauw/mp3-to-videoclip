@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { ApprovalBar, useApprovals } from "../ApprovalBar";
 import { ReferencePicker } from "../images/ReferencePicker";
+import { MakeClip } from "../images/MakeClip";
 import { MakeSharper } from "../images/MakeSharper";
 import { NewRoundCard } from "../images/NewRoundCard";
 import { PaidCard } from "../images/PaidCard";
@@ -787,6 +788,14 @@ export function ImagesStage({
                 shotId={current.id}
                 disabled={imageJobs.length > 0}
                 onStarted={() => notifyProjectChanged({ slug })}
+              />
+            )}
+            {current.paid && !current.stale && current.selected != null && current.id === current.owner && (
+              <MakeClip
+                slug={slug}
+                shot={current}
+                disabled={imageJobs.length > 0}
+                onChanged={() => notifyProjectChanged({ slug })}
               />
             )}
             {!current.local && current.versions.length > 0 && (
