@@ -63,6 +63,36 @@ SHOT_KINDS: dict[ShotKind, dict] = {
         "paid": False,
         "purpose": "A local close with the CTA, URL and any mandatory legal line.",
     },
+    "plate": {
+        "label": "Plate",
+        "icon": "▧",
+        "paid": False,
+        "purpose": "An uploaded period or archival image with a camera move from the edit.",
+    },
+    "era": {
+        "label": "Era",
+        "icon": "◷",
+        "paid": True,
+        "purpose": "The film's place in one era, generated with the place's image as anchor.",
+    },
+    "document": {
+        "label": "Document",
+        "icon": "▭",
+        "paid": True,
+        "purpose": "A generated close-up of a prop: a letter, a map, a key.",
+    },
+    "date_card": {
+        "label": "Date card",
+        "icon": "#",
+        "paid": False,
+        "purpose": "A year on the film's colours, drawn locally.",
+    },
+    "title_card": {
+        "label": "Title card",
+        "icon": "T",
+        "paid": False,
+        "purpose": "A chapter or film title on the film's colours, drawn locally.",
+    },
 }
 
 
@@ -79,7 +109,7 @@ def is_paid(shot: Shot) -> bool:
         return shot.bridge is not None and shot.bridge.mode == "generated"
     if shot.kind == "product":
         return shot.asset is None
-    return shot.kind == "scene"
+    return shot.kind in ("scene", "era", "document")
 
 
 def is_local(shot: Shot) -> bool:

@@ -189,6 +189,45 @@ def _card(root: Path, project: Project, shot: Shot) -> Image.Image:
     return image
 
 
+def _centred(draw, lines, font, fill, width: float, y: float, advance: float) -> None:
+    for number, line in enumerate(lines):
+        x = (width - _text_width(draw, line, font)) / 2
+        draw.text((x, y + number * advance), line, font=font, fill=fill)
+
+
+def _time_card(root: Path, project: Project, shot: Shot, *, nominal: float) -> Image.Image:
+    """A year or a title alone in the middle of the frame, with one smaller line under it."""
+    size = (project.width, project.height)
+    background, foreground, accent = _palette(root)
+    image = Image.new("RGB", size, background[:3])
+    draw = ImageDraw.Draw(image)
+    base = min(size)
+    margin = int(base * 0.1)
+    values = shot.text or [shot.message]
+    under = shot.message if shot.text and shot.message else ""
+    font, lines, advance = _fitted(
+        draw,
+        values,
+        face="demi",
+        nominal=base * nominal,
+        max_width=size[0] - 2 * margin,
+        max_height=size[1] * 0.5,
+    )
+    small = _font("regular", base * 0.036)
+    small_lines = _wrap(draw, under, small, size[0] - 2 * margin) if under else []
+    gap = base * 0.05
+    height = len(lines) * advance + (gap + len(small_lines) * base * 0.05 if small_lines else 0)
+    top = (size[1] - height) / 2
+    _centred(draw, lines, font, foreground, size[0], top, advance)
+    if small_lines:
+        below = top + len(lines) * advance + gap
+        bar_w, bar_h = max(44, int(base * 0.06)), max(4, int(base * 0.005))
+        left = (size[0] - bar_w) / 2
+        draw.rectangle([left, below - gap / 2, left + bar_w, below - gap / 2 + bar_h], fill=accent)
+        _centred(draw, small_lines, small, foreground, size[0], below, base * 0.05)
+    return image
+
+
 def _bridge(root: Path, project: Project, shot: Shot) -> Image.Image:
     size = (project.width, project.height)
     background, foreground, accent = _palette(root)
@@ -391,12 +430,16 @@ def _compose(
 ) -> Image.Image:
     if shot.kind == "split":
         return _split(root, project, shot, sources)
-    if shot.kind in ("upload", "product") and asset is not None:
+    if shot.kind in ("upload", "product", "plate") and asset is not None:
         with Image.open(asset) as opened:
             opened.load()
             return _cover(opened, (project.width, project.height))
     if shot.kind == "card":
         return _card(root, project, shot)
+    if shot.kind == "date_card":
+        return _time_card(root, project, shot, nominal=0.3)
+    if shot.kind == "title_card":
+        return _time_card(root, project, shot, nominal=0.13)
     if shot.kind == "bridge":
         return _bridge(root, project, shot)
     if shot.kind == "logo":

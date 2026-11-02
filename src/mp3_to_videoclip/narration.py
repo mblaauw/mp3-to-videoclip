@@ -29,7 +29,16 @@ from .production.project import now
 from .production.script import load_script, require_script
 from .providers import RunwareClient, runware_api_key
 from .render import audio_seconds
-from .storage import digest, file_hash, inside, read_json, state_lock, state_mutation, write_json
+from .storage import (
+    digest,
+    file_hash,
+    inside,
+    read_json,
+    read_optional,
+    state_lock,
+    state_mutation,
+    write_json,
+)
 
 FILE = "work/narration.json"
 AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aiff"}
@@ -43,8 +52,19 @@ def read_index(root: Path) -> dict:
     return read_json(path) if path.is_file() else {"voice": None, "lines": {}}
 
 
+def _narrator(root: Path):
+    from .models import Brief
+
+    value = read_optional(root / "brief.json")
+    creative = Brief.model_validate(value).creative if isinstance(value, dict) else None
+    return creative.narrator if creative else None
+
+
 def current_voice(root: Path) -> str:
-    return read_index(root).get("voice") or voices.default_voice()
+    """The voice chosen here, else the profile's narrator's, else the default in Settings."""
+    narrator = _narrator(root)
+    chosen = narrator.voice_id if narrator else None
+    return read_index(root).get("voice") or chosen or voices.default_voice()
 
 
 @state_mutation
@@ -203,6 +223,12 @@ def quote_lines(
 ) -> dict:
     """Quote a take of each line with none of its current words. Spends nothing."""
     require_approval(root, "script")
+    narrator = _narrator(root)
+    if narrator is not None and narrator.real_person and not narrator.permission_confirmed:
+        raise ValueError(
+            "the narrator is a real person and permission is not confirmed. Only the owner can "
+            "confirm it on Story's Characters card."
+        )
     script = require_script(root)
     known = {line.id for line in script.lines}
     if line_ids is not None and (not line_ids or not set(line_ids) <= known):

@@ -99,6 +99,11 @@ def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
             "bridge",
             "split",
             "reprise",
+            "plate",
+            "era",
+            "document",
+            "date_card",
+            "title_card",
             "logo",
             "end_card",
         }
@@ -109,6 +114,9 @@ def test_settings_are_masked_and_empty_secrets_preserve(monkeypatch, tmp_path):
             "brand-graphic-v1",
             "painted-documentary-v1",
             "painted-comic-noir-v1",
+            "archival-v1",
+            "illustrated-v1",
+            "future-museum-v1",
         }
         assert {item["id"] for item in first["kinds"]} == {
             "music_video",

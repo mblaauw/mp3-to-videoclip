@@ -62,6 +62,7 @@ def validate_board(root: Path, board: Storyboard, *, verify_source: bool = True)
     characters = {c.id for c in brief.characters}
     scenes = {s.id for s in creative.scenes} if creative else set()
     references = {r.id for r in creative.references} if creative else set()
+    eras = {e.id for e in creative.eras} if creative else set()
     event_ids = None
     if any(shot.event_ids for shot in board.shots):
         if not (root / STAGE_FILES["events"]).exists():
@@ -82,6 +83,8 @@ def validate_board(root: Path, board: Storyboard, *, verify_source: bool = True)
             raise ValueError(f"unknown scene in shot {shot.id}")
         if not set(shot.reference_ids) <= references:
             raise ValueError(f"unknown reference in shot {shot.id}")
+        if shot.era_id is not None and shot.era_id not in eras:
+            raise ValueError(f"unknown era in shot {shot.id}")
         if event_ids is not None and not set(shot.event_ids) <= event_ids:
             raise ValueError(f"unknown musical event in shot {shot.id}")
         if shot.asset_shot_id is not None:

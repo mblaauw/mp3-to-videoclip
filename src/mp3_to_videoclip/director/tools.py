@@ -495,6 +495,39 @@ TOOLS: list[dict] = [
                     "required": ["id", "start", "end", "palette", "light"],
                 },
             },
+            "narrator": {
+                "type": "object",
+                "properties": {
+                    "persona": {"type": "string"},
+                    "era": {"type": "string"},
+                    "attitude": {"type": "string"},
+                    "gets_wrong": {"type": "string"},
+                    "voice_id": {"type": "string"},
+                    "real_person": {"type": "boolean"},
+                },
+                "required": ["persona"],
+            },
+            "place": {
+                "type": "object",
+                "properties": {"description": {"type": "string"}, "camera": {"type": "string"}},
+                "required": ["description"],
+            },
+            "eras": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "year": {"type": "string"},
+                        "state": {"type": "string"},
+                        "palette": {"type": "array", "items": {"type": "string"}},
+                        "light": {"type": "string"},
+                        "persists": {"type": "string"},
+                        "changed": {"type": "string"},
+                    },
+                    "required": ["id", "year", "state"],
+                },
+            },
             "look": {
                 "type": "string",
                 "description": "Rendering only, 90-150 words. With a style preset: send the current "
@@ -929,6 +962,9 @@ def _dispatch(
                     avoid=arguments.get("avoid") or [],
                     look=arguments.get("look") or "",
                     sections=arguments.get("sections"),
+                    narrator=arguments.get("narrator"),
+                    place=arguments.get("place"),
+                    eras=arguments.get("eras"),
                 )
             ),
         )

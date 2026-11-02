@@ -753,7 +753,7 @@ def report(
         if source is None:
             continue
         words = sum(len(line.split()) for line in source.text)
-        if source.kind in ("card", "end_card", "logo") and words:
+        if source.kind in ("card", "end_card", "logo", "date_card", "title_card") and words:
             needed = 0.3 * words + 1.0
             if shot.duration_frames / fps < needed:
                 warnings.append(
@@ -770,6 +770,8 @@ def report(
             "card",
             "end_card",
             "logo",
+            "date_card",
+            "title_card",
         ):
             warnings.append(
                 {

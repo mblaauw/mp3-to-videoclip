@@ -83,7 +83,12 @@ export type ShotKind =
   | "split"
   | "reprise"
   | "logo"
-  | "end_card";
+  | "end_card"
+  | "plate"
+  | "era"
+  | "document"
+  | "date_card"
+  | "title_card";
 
 export type Shot = {
   id: string;
@@ -101,6 +106,7 @@ export type Shot = {
   asset_shot_id: string | null;
   asset?: string | null;
   product_ref?: string | null;
+  era_id?: string | null;
   motion_prompt?: string;
   music_context?: string;
   lyric_context?: string;
