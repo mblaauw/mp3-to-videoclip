@@ -38,7 +38,7 @@ line-length = 100
 extend-exclude = [".opencode"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "RUF100"]
 ignore = ["E501"]
 
 [tool.pytest.ini_options]

@@ -110,7 +110,7 @@ def _test_runware() -> dict:
             "kind": "runware",
             "message": f"Could not verify the key ({exc.code}).",
         }
-    except Exception:  # noqa: BLE001 - the settings dialog never shows a traceback
+    except Exception:
         return {
             "ok": False,
             "kind": "runware",

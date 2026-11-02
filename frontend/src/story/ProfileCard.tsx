@@ -5,7 +5,7 @@ import { Button } from "../ui";
 import { ColourScript } from "./ColourScript";
 import { MakeSheet } from "./MakeSheet";
 
-export const PROFILE_PROMPT =
+const PROFILE_PROMPT =
   "Read the treatment and script with get_brief. Build the film's creative profile with " +
   "set_creative_profile: every recurring person as a character with identity and states, " +
   "every recurring place as a scene, the arc, at most six global image rules, at most eight " +

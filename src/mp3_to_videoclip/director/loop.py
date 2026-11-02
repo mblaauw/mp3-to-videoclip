@@ -247,7 +247,7 @@ async def run_turn(
                         payload=finished(
                             {
                                 "error": f"The {who} is repeating a failed call to {tc.name}, so this turn was stopped."
-                            }  # noqa: E501
+                            }
                         ),
                     )
                     return

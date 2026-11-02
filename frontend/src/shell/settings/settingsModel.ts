@@ -186,10 +186,3 @@ export function money(value: string | undefined): string {
   return `$${Number(value ?? 0).toFixed(2)}`;
 }
 
-/** A comma list as typed, as the list it means. */
-export function words(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}

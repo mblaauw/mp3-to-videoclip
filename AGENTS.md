@@ -48,10 +48,10 @@ ever read.
 
 ## Rework state
 
-Phases 0–6 are complete. `uv run studio` owns intake, the five stages, the
-director, paid generation and rendering; the interim server and its tests are
-gone. The Player imports the renderer's own `BaseFilm.jsx` and `timing.mjs`, and
+The rework and the 2026-11 roadmap are complete. `uv run studio` owns intake, the
+stages, the director, paid generation and rendering. The Player imports the renderer's own `BaseFilm.jsx` and `timing.mjs`, and
 renderer approvals no longer hash the browser binary. A fresh clone installs the
 pinned renderer on first launch and serves the committed frontend. Every film is
-schema 3; the old compositor lives in `legacy/`, which only the CLI reaches. What comes next, and how the plans changed, is at the end of
-`.opencode/tasks/roadmap-2026-11.md`.
+schema 3; the old compositor lives in `legacy/`, which only `python -m` and an old review
+reach. What was built, and what is unproven, is at the end of `.opencode/tasks/roadmap-2026-11.md`
+and in `.opencode/tasks/museum-of-tomorrow.md`.

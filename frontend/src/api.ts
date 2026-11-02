@@ -5,7 +5,6 @@ import { toast } from "./toast.ts";
 import { bindRevision, resources, revisionHeaders } from "./api/resources.ts";
 import type { FilmUsage } from "./shell/modelCost.ts";
 
-export { ApiError } from "./api/errors.ts";
 
 export type ProjectSummary = {
   archived: boolean;

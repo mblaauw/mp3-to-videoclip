@@ -247,7 +247,7 @@ def evaluate_run(run_dir: Path) -> dict:
             result["ok"] = automatic["ok"]
         else:
             raise ValueError("meta.role must be writer or editor")
-    except Exception as exc:  # noqa: BLE001 - one damaged run must not stop the report
+    except Exception as exc:
         result["error"] = str(exc)
         result["ok"] = False
     result["cross_review"], result["cross_review_error"] = _cross_review(run_dir, meta, role)

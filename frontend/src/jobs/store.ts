@@ -300,7 +300,7 @@ function wake() {
 }
 
 /** Start the one shared SSE connection and initial job snapshot. */
-export function startJobs() {
+function startJobs() {
   if (started) return;
   started = true;
   void refresh();

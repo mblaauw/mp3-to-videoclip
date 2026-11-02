@@ -73,7 +73,7 @@ def _missing_stage(root: Path, exc: FileNotFoundError, stage: str) -> str:
                     return name
     try:
         return P.effective_upstream(root, stage) or stage
-    except Exception:  # noqa: BLE001 - keep the approval state readable
+    except Exception:
         return stage
 
 
@@ -96,7 +96,7 @@ def _approval(root, stage: str) -> dict:
             "at": (record or {}).get("at"),
             "note": (record or {}).get("note"),
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {
             "stage": stage,
             "state": "unavailable",

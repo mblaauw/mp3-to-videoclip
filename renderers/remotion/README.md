@@ -1,6 +1,6 @@
 # Production visual renderer
 
-Pinned Remotion4.0.536 / React19.2.0. This package is invoked by the Python
+Pinned Remotion and React: the exact versions are in `package.json`. This package is invoked by the Python
 adapter, not a second production UI or editable timeline.
 
 ```sh

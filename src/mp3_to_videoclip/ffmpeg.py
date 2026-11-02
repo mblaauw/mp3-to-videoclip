@@ -17,7 +17,6 @@ from .models import Project, RenderShot, Storyboard
 
 AUDIO_BITRATE = "192k"
 DURATION_SAMPLE_RATE = 8000
-_DEFAULT_THREADS_CAP = 4
 _TOLERANT_FRAME_SLACK = 1
 
 
@@ -32,13 +31,6 @@ def _binary(name: str) -> str:
     if not found:
         raise RuntimeError(f"{name} was not found on PATH")
     return found
-
-
-def _max_threads() -> int:
-    override = os.environ.get("CLIP_FFMPEG_THREADS")
-    if override:
-        return max(1, int(override))
-    return max(1, min(_DEFAULT_THREADS_CAP, os.cpu_count() or 1))
 
 
 def _run(argv: list[str]) -> str:

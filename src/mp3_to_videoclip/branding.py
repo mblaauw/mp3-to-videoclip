@@ -409,7 +409,6 @@ _DRAW_MARKS = {
 #: Marks drawn from a corner box rather than the monogram text path. The
 #: collaboration mark is deliberately absent: it is composited as its own
 #: supersampled layer, not stroked into the caller's draw handle.
-_BOX_MARKS = ("open-frame", "cutline")
 _BOX_MARKS_DRAW = {**_DRAW_MARKS}
 
 

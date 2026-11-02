@@ -2,7 +2,7 @@
 
 export type SectionEdit = { start: number; name: string };
 
-export const MIN_SECTION = 2;
+const MIN_SECTION = 2;
 
 /** Moves the edge at the start of section `index`, keeping both neighbours long enough. */
 export function moveEdge(

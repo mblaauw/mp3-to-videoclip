@@ -12,7 +12,6 @@ from functools import lru_cache
 from pathlib import Path
 
 PROMPTS = Path(__file__).resolve().parent / "director" / "prompts" / "styles"
-DEFAULT_PRESET = "clean-photographic-v1"
 
 
 @dataclass(frozen=True)

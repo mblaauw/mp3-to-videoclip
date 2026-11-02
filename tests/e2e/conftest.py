@@ -15,10 +15,10 @@ import uvicorn
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api_support import make_api_project  # noqa: E402
+from api_support import make_api_project
 
-from mp3_to_videoclip.app import create_app  # noqa: E402
-from mp3_to_videoclip.storage import read_json, write_json  # noqa: E402
+from mp3_to_videoclip.app import create_app
+from mp3_to_videoclip.storage import read_json, write_json
 
 
 class Studio:

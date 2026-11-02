@@ -24,7 +24,7 @@ const QUOTE = /^\s*>\s?(.*)$/;
 const RULE = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
 const FENCE = /^\s*```/;
 
-export function parseBlocks(source: string): Block[] {
+function parseBlocks(source: string): Block[] {
   const lines = source.replace(/\r\n?/g, "\n").split("\n");
   const blocks: Block[] = [];
   let index = 0;
@@ -115,7 +115,7 @@ export function parseBlocks(source: string): Block[] {
 // (`get_brief`, `s01_intro`) would turn into italics.
 const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g;
 
-export function inline(text: string, keyPrefix = "i"): ReactNode[] {
+function inline(text: string, keyPrefix = "i"): ReactNode[] {
   const parts = text.split(INLINE);
   return parts.map((part, index) => {
     const key = `${keyPrefix}-${index}`;

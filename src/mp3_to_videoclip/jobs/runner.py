@@ -404,7 +404,7 @@ class JobRunner:
             job.status = "cancelled"
             job.finished_at = time.time()
             self._event("job.cancelled", job)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             job.status = "cancelled" if job.status == "stopping" else "failed"
             job.error = str(exc)
             job.code = getattr(exc, "code", None)
