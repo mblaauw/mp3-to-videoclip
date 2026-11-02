@@ -60,7 +60,7 @@ export type EditCrop = {
 
 export type EditText = {
   id: string;
-  style: "super" | "title" | "lower_third" | "lyric" | "card" | "logotype" | "tagline" | "cta" | "caption";
+  style: "super" | "title" | "lower_third" | "lyric" | "card" | "logotype" | "tagline" | "cta" | "caption" | "gallery_title" | "gallery_label";
   color?: string;
   text: string;
   in_frame: number;

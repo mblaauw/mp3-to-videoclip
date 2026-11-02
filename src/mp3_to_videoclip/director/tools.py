@@ -90,7 +90,7 @@ TOOLS: list[dict] = [
         "save_critique",
         "Save the Critic's review of the newest render: a verdict and up to twelve notes, "
         "each with severity (must_fix, should_fix or consider), note, and optional shot_id, "
-        "frame and suggestion. Advice only; it changes nothing.",
+        "frame and suggestion. Advice only.",
         {
             "slug": {"type": "string"},
             "verdict": {"type": "string"},
@@ -112,7 +112,7 @@ TOOLS: list[dict] = [
         "update_voice_lines",
         "Set the film's spoken voiceover lines: id, text, start_frame, optional gain_db and "
         "reason, ordered by start_frame. Replaces the list. Use the user's words exactly. "
-        "Making the audio is the user's decision in Studio; this only places the lines.",
+        "The user makes the audio in Studio; this only places lines.",
         {
             "slug": {"type": "string"},
             "lines": {"type": "array", "items": {"type": "object"}},

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from api_support import add_assets, api_client, make_api_project
@@ -738,3 +739,12 @@ def test_advert_checks_read_the_words_actually_drawn(tmp_path):
     assert _advert_checks(root, drawn)["end_card_3s"] is (
         drawn.shots[-1].duration_frames >= 3 * P.load_project(root).fps
     )
+
+
+def test_a_layer_over_a_card_that_draws_its_own_words_is_named():
+    board = SimpleNamespace(shots=[Shot(id="end", start_frame=0, duration_frames=24, kind="end_card", purpose="close", text=["THE END"])])  # fmt: skip
+    layer = EditText(id="t", style="gallery_label", text="THE END", in_frame=0, out_frame=24)
+    edit = SimpleNamespace(shots=[SimpleNamespace(shot_id="end", text=[layer])])
+    assert [w["code"] for w in edits._unseen_words_findings(edit, board)] == ["text_over_card"]
+    edit.shots[0].text = []
+    assert edits._unseen_words_findings(edit, board) == []
