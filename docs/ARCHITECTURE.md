@@ -320,7 +320,7 @@ failures.
 
 The old hand-written `ThreadingHTTPServer` and its Python-string UI were removed
 in the Phase 4 cleanup. `cli.py` remains for engine tasks that do not have a GUI
-yet: transcription, the listening pass, backups, signing and render maintenance.
+yet: 14 commands for transcription, the listening pass, backups, recovery and diagnostics.
 
 The Studio shell is hash-routed: `#/` is the library, `#/:slug/:stage` is a
 production and `#/archive/:slug` is a delivered, read-only film. `GET
