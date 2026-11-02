@@ -22,7 +22,7 @@ const FALLBACK_KINDS: KindProfile[] = [
     id: "narrative",
     label: "Story film",
     purpose: "",
-    lengths: [60, 90, 120, 180, 300],
+    lengths: [60, 90, 120, 140, 180, 300],
     default_length: 120,
     allows_full_track: false,
     structures: [],

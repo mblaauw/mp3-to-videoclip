@@ -55,7 +55,7 @@ class Roles(BaseModel):
 
 class Voices(BaseModel):
     provider: str = "runware"
-    default_voice: str = "English_Magnetic_Male_2"
+    default_voice: str = "English_magnetic_voiced_man"
     favourites: list[str] = []
 
 

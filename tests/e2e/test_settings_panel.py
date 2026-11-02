@@ -42,7 +42,7 @@ def test_a_model_chosen_through_other_saves_and_reset_restores_it(page: Page, pa
 
 def test_elevenlabs_voices_appear_only_with_a_key(page: Page, panel):
     _tab(panel, "Voices")
-    expect(panel.get_by_label("Default voice")).to_have_value("English_Magnetic_Male_2")
+    expect(panel.get_by_label("Default voice")).to_have_value("English_magnetic_voiced_man")
     expect(
         panel.get_by_label("Voice provider").locator("option", has_text="ElevenLabs")
     ).to_have_count(0)
