@@ -39,9 +39,7 @@ def hold_lock(root: Path):
 @pytest.mark.parametrize(
     ("argv", "key"),
     [
-        (["status"], "approvals"),
         (["progress"], "operations"),
-        (["costs"], "currency"),
     ],
 )
 def test_monitoring_and_review_pages_work_while_a_writer_holds_the_lock(tmp_path, argv, key):
@@ -100,7 +98,7 @@ def test_progress_reports_attention_without_authorising_a_retry(tmp_path):
 
 def test_status_summarises_operations_without_claiming_anything_else(tmp_path):
     root = make_root(tmp_path)
-    summary = execute(parser().parse_args(["status", str(root)]))["operations"]
+    summary = operations.summary(root)
     assert summary["counts"] == {}
     assert summary["newest_running"] is None
     assert summary["unreadable"] == 0

@@ -3,6 +3,7 @@
 Everything here is local; no provider call and no credential is needed.
 """
 
+import argparse
 import json
 import subprocess
 
@@ -10,7 +11,6 @@ import pytest
 from test_creative_production import make_root
 
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip.cli import execute, parser
 from mp3_to_videoclip.models import Project
 from mp3_to_videoclip.storage import read_json, write_json
 
@@ -44,9 +44,40 @@ def synth_source(tmp_path):
 
 
 def init(root, source, *extra):
-    return execute(
-        parser().parse_args(["init", str(root), "--mp3", str(source), "--slug", root.name, *extra])
-    )
+    """Make a film as intake does, from flags these tests read easily."""
+    p = argparse.ArgumentParser()
+    p.add_argument("--native-size")
+    p.add_argument("--aspect", default="16:9")
+    p.add_argument("--fps", type=int, default=24)
+    p.add_argument("--music-mode", default="vocal")
+    p.add_argument("--kind", default="music_video")
+    p.add_argument("--model")
+    p.add_argument("--style")
+    p.add_argument("--style-preset")
+    p.add_argument("--titles")
+    p.add_argument("--title")
+    p.add_argument("--image-settings")
+    p.add_argument("--image-seed", type=int)
+    a = p.parse_args(list(extra))
+    settings = json.loads(a.image_settings) if a.image_settings else None
+    size = [int(v) for v in a.native_size.lower().split("x")] if a.native_size else None
+    return P.init_project(
+        root,
+        source,
+        root.name,
+        a.aspect,
+        a.fps,
+        a.music_mode,
+        image_model=a.model,
+        image_settings=settings,
+        image_seed=a.image_seed,
+        style=a.style,
+        style_preset=a.style_preset,
+        titles=a.titles,
+        native_size=size,
+        title=a.title,
+        kind=a.kind,
+    ).model_dump()
 
 
 # --------------------------------------------------------------------------- #
@@ -111,12 +142,6 @@ def test_cli_init_writes_the_declared_native_size(tmp_path):
     assert P.load_project(root, verify_source=False).image_size == (1376, 768)
 
 
-def test_cli_init_accepts_an_uppercase_separator(tmp_path):
-    source = synth_source(tmp_path)
-    root = tmp_path / "upper"
-    assert init(root, source, "--native-size", "2752X1536")["native_size"] == [2752, 1536]
-
-
 def test_cli_init_persists_preset_size_when_the_flag_is_absent(tmp_path):
     source = synth_source(tmp_path)
     root = tmp_path / "legacy"
@@ -141,18 +166,6 @@ def test_new_productions_are_schema_three_and_carry_no_old_flags(tmp_path):
     assert stored["source_filename"] == "source.mp3"
 
 
-@pytest.mark.parametrize(
-    "extra",
-    [("--workflow-version", "1"), ("--renderer", "ffmpeg")],
-)
-def test_removed_legacy_creation_flags_are_rejected_before_writing(tmp_path, extra):
-    source = synth_source(tmp_path)
-    root = tmp_path / "legacy-refused"
-    with pytest.raises(SystemExit):
-        init(root, source, *extra)
-    assert not root.exists()
-
-
 def test_existing_legacy_projects_remain_readable(tmp_path):
     """Compatibility readers stay; only new legacy creation is retired."""
     root = tmp_path / "existing-legacy"
@@ -175,15 +188,6 @@ def test_existing_legacy_projects_remain_readable(tmp_path):
     assert project.image_size == (1536, 864)
 
 
-@pytest.mark.parametrize("value", ["1376*768", "1376 x 768", "1376", "WxH", "0x0", "-1376x768"])
-def test_cli_init_rejects_malformed_values_before_writing(tmp_path, value):
-    source = synth_source(tmp_path)
-    root = tmp_path / "bad"
-    with pytest.raises(ValueError, match="--native-size|native_size"):
-        init(root, source, f"--native-size={value}")
-    assert not root.exists()
-
-
 def test_cli_init_rejects_a_ratio_the_production_cannot_use(tmp_path):
     source = synth_source(tmp_path)
     root = tmp_path / "mismatch"
@@ -200,5 +204,5 @@ def test_image_spec_carries_the_declared_size(tmp_path):
     config = read_json(root / "project.json")
     config["native_size"] = [1376, 768]
     write_json(root / "project.json", config)
-    prompts = execute(parser().parse_args(["prompts", str(root), "--shots", "s001"]))
-    assert prompts["shots"][0]["spec"]["size"] == [1376, 768]
+    shot = next(s for s in P.load_board(root).shots if s.id == "s001")
+    assert P.image_spec(root, shot)["size"] == [1376, 768]

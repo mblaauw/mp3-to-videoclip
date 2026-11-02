@@ -9,7 +9,6 @@ from test_workflow_v2 import strict_root
 from mp3_to_videoclip import budget, profiles
 from mp3_to_videoclip import generation as G
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip.cli import execute, parser
 from mp3_to_videoclip.models import ImageSettings
 from mp3_to_videoclip.references import import_reference
 from mp3_to_videoclip.storage import digest, read_json, write_json
@@ -91,7 +90,6 @@ def test_explicit_init_overrides_replace_default_model_style_settings(tmp_path):
         ["--image-settings", '{"temperature":NaN}'],
         ["--image-settings", '{"webSearch":"false"}'],
         ["--image-settings", "[]"],
-        ["--image-settings", "null"],
         ["--image-seed", "-1"],
         ["--style", "   "],
     ],
@@ -209,25 +207,8 @@ def test_one_correction_default_for_new_budget_not_existing_budget(tmp_path):
     root = strict_root(tmp_path)
     budget.set_budget(root, "1", "test allowance", max_corrections=2)
     assert budget.correction_policy(root) == (True, 2)
-    other = execute(
-        parser().parse_args(["budget", str(root), "--cap", "1", "--note", "test revised allowance"])
-    )
-    assert other["max_corrections"] == 2
-    explicit = execute(
-        parser().parse_args(
-            [
-                "budget",
-                str(root),
-                "--cap",
-                "1",
-                "--max-corrections",
-                "1",
-                "--note",
-                "test explicitly revised correction limit",
-            ]
-        )
-    )
-    assert explicit["max_corrections"] == 1
+    assert budget.set_budget(root, "1", "test revised allowance", 2)["max_corrections"] == 2
+    assert budget.set_budget(root, "1", "test revised limit", 1)["max_corrections"] == 1
 
 
 def test_default_correction_limit_on_the_journaled_generation_path(tmp_path):

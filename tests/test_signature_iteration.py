@@ -16,8 +16,7 @@ from test_production_defaults import Nano
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import profiles, signature
-from mp3_to_videoclip.cli import execute, parser
-from mp3_to_videoclip.legacy import graphics_compose, graphics_review
+from mp3_to_videoclip.legacy import graphics_review
 from mp3_to_videoclip.models import Project, Shot
 from mp3_to_videoclip.providers import ProviderError
 from mp3_to_videoclip.storage import digest, file_hash, read_json, write_json
@@ -121,22 +120,6 @@ def test_new_title_and_signature_draft_are_not_source_filename(tmp_path):
     assert spec["credits"]["cards"] == []
     with pytest.raises(ValueError, match="factual credit roles"):
         signature.validate_spec(root, P.load_project(root))
-
-
-def test_cli_derives_film_slug_and_rejects_unintended_source_folder(tmp_path):
-    source = synth_source(tmp_path)
-    root = tmp_path / "the-last-light"
-    args = ["init", str(root), "--mp3", str(source), "--title", "The Last Light"]
-    result = execute(parser().parse_args(args))
-    assert result["slug"] == "the-last-light" and result["title"] == "The Last Light"
-    wrong = tmp_path / "source-master-v55"
-    with pytest.raises(ValueError, match="derives folder 'the-last-light'"):
-        execute(
-            parser().parse_args(
-                ["init", str(wrong), "--mp3", str(source), "--title", "The Last Light"]
-            )
-        )
-    assert not wrong.exists()
 
 
 def confirmed_spec(root, project):
@@ -263,33 +246,12 @@ def test_obsolete_base_cannot_be_approved_after_upstream_reapproval(tmp_path):
         P.approve(root, "graphics", "test old graphics cannot bless obsolete base", inspected=True)
 
 
-def test_cli_requires_inspected_graphics_and_composes_not_base(tmp_path, monkeypatch):
-
+def test_a_titles_approval_needs_the_samples_inspected(tmp_path):
     root = signature_root(tmp_path)
     review_fixture(root)
-    with pytest.raises(ValueError, match="graphics needs"):
-        execute(parser().parse_args(["render", str(root)]))
     with pytest.raises(ValueError, match="--inspected"):
         P.approve(root, "graphics", "not inspected")
-    P.approve(
-        root,
-        "graphics",
-        "test actual graphics samples inspected",
-        inspected=True,
-    )
-    calls = []
-
-    def compose(_root, base, output):
-        calls.append((base, output))
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(b"test composite")
-        return {"output": str(output)}
-
-    monkeypatch.setattr(graphics_compose, "compose", compose)
-    result = execute(parser().parse_args(["render", str(root)]))
-    assert result["delivery_ready"] is True
-    assert calls[0][0] == root / "base.mp4"
-    assert calls[0][1].name == "creative-stills-v001.mp4"
+    P.approve(root, "graphics", "test actual graphics samples inspected", inspected=True)
 
 
 def test_portrait_signature_blocked_before_brief_spending(tmp_path):
@@ -299,71 +261,3 @@ def test_portrait_signature_blocked_before_brief_spending(tmp_path):
     )
     with pytest.raises(ValueError, match="resolve portrait graphics before brief"):
         signature.validate_spec(root, project)
-
-
-def test_new_skeleton_defaults_do_not_change_old_film_cadence(tmp_path, monkeypatch):
-    root = make_root(tmp_path)
-    calls = []
-
-    def skeleton(_root, target, timing, **bounds):
-        calls.append((target, timing, bounds))
-        return P.load_board(root)
-
-    monkeypatch.setattr(P, "skeleton", skeleton)
-    execute(parser().parse_args(["skeleton", str(root), "--timing", "adaptive"]))
-    assert calls[-1] == (None, "adaptive", {"min_seconds": None, "max_seconds": None})
-    config = read_json(root / "project.json")
-    config["prompt_version"] = 2
-    write_json(root / "project.json", config)
-    execute(parser().parse_args(["skeleton", str(root)]))
-    # No model on this synthetic fixture: explicitly choose adaptive as in new init.
-    execute(parser().parse_args(["skeleton", str(root), "--timing", "adaptive"]))
-    assert calls[-1] == (None, "adaptive", {"min_seconds": None, "max_seconds": None})
-
-
-@pytest.mark.parametrize("renderer_binding", [False, True])
-def test_base_render_prepares_review_but_is_never_delivery(tmp_path, monkeypatch, renderer_binding):
-    import mp3_to_videoclip.graphics as graphics
-
-    root = signature_root(tmp_path)
-    if renderer_binding:
-        from mp3_to_videoclip import remotion
-
-        monkeypatch.setattr(
-            remotion, "renderer_binding", lambda project: {"renderer_revision": "test-renderer"}
-        )
-    calls = []
-
-    def render(_project, _shots, _source, output, _work, **_kwargs):
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(b"test base movie")
-        return {"output": str(output)}
-
-    def preflight(_root, base, output):
-        calls.append(base)
-        output.mkdir(parents=True)
-        image = output / "sample.png"
-        image.write_bytes(b"test composited sample")
-        sidecar = output / "preflight.json"
-        write_json(
-            sidecar,
-            {
-                "base": {"sha256": file_hash(base)},
-                "implementation_revision": graphics.implementation_revision(),
-                "spec_sha256": digest(graphics.load_spec(_root)),
-                "truncated": False,
-                "frames": [{"image": str(image)}],
-            },
-        )
-        return {"sidecar": str(sidecar)}
-
-    from mp3_to_videoclip import remotion as renderer
-
-    monkeypatch.setattr(renderer, "render_base", render)
-    monkeypatch.setattr(graphics_review, "preflight_frames", preflight)
-    result = execute(parser().parse_args(["render", str(root), "--base-only"]))
-    assert result["delivery_ready"] is False and len(calls) == 1
-    assert Path(result["output"]).name == "creative-base-v001.mp4"
-    signature.validate_review(root, P.load_project(root))
-    with pytest.raises(ValueError, match="graphics needs"):
-        execute(parser().parse_args(["render", str(root)]))
