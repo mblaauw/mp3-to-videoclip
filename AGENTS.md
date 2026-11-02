@@ -27,7 +27,8 @@ uv run ruff format --check .
 ```
 
 `uv run pytest -m e2e --browser-channel chrome` runs the browser tests; plain
-`pytest` leaves them out and CI runs them as their own job.
+`pytest` leaves them out and CI runs them as their own job. `uv run pytest -m slow`
+runs the old compositor's tests, which plain `pytest` also leaves out; CI runs them as their own step.
 
 `tests/test_contract_golden.py` pins the compiled prompt, integer-frame timing and
 the Remotion request. Regenerate it only for an intended change and state the
@@ -51,6 +52,6 @@ Phases 0–6 are complete. `uv run studio` owns intake, the five stages, the
 director, paid generation and rendering; the interim server and its tests are
 gone. The Player imports the renderer's own `BaseFilm.jsx` and `timing.mjs`, and
 renderer approvals no longer hash the browser binary. A fresh clone installs the
-pinned renderer on first launch and serves the committed frontend. Remaining: the
-legacy FFmpeg/Pillow branches kept for frozen films. What comes next, and how the plans changed, is at the end of
+pinned renderer on first launch and serves the committed frontend. Every film is
+schema 3; the old compositor lives in `legacy/`, which only the CLI reaches. What comes next, and how the plans changed, is at the end of
 `.opencode/tasks/roadmap-2026-11.md`.

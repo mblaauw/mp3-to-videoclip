@@ -15,9 +15,10 @@ in the app is a second state store.
 | `lyric_tools.py`, `lyric_tools_worker.py` | Optional local lyric timing: Demucs and Parakeet in a private environment, as a separate process. No provider, no upload. |
 | `generation.py`, `providers.py` | Runware client with pre-submit journaling: reservation and task UUID are durable before the request; recovery is by UUID and never resubmits; changed bytes are quarantined. |
 | `budget.py` | Cap, committed cost, unresolved reservations, admission. |
-| `remotion.py`, `render.py` | Remotion render entry (film, titles review stills) plus FFmpeg probe/mux/verify. |
+| `remotion.py`, `ffmpeg.py` | Remotion render entry (film, titles review stills). `ffmpeg.py` holds the probe, mux and verification helpers; no FFmpeg path draws a picture. Every film is schema 3. |
 | `chunks.py`, `framecheck.py` | One render chunk per shot and its reuse key; finding broken frames in a rendered movie. |
-| `titles.py`, `graphics.py` | Integer-frame title windows; the graphics spec and the older composite route kept for reviews recorded before titles moved into the film. |
+| `titles.py`, `graphics.py` | Integer-frame title windows; the graphics spec, palette and frame drawers. |
+| `legacy/` | The old compositor and reviews of its samples. Only `cli.py` and `signature.validate_review` reach it; a test holds `api/`, `services/`, `director/` and `jobs/` to never importing it. |
 | `domain/archive.py` | Read-only view of frozen productions (title, duration, newest final render, selected stills). |
 
 ## Production folder
