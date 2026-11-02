@@ -13,7 +13,7 @@ function musicFacts(music: Music | null, duration: number): [string, string][] {
   const tempo = music?.estimated_tempo_bpm;
   facts.push(["Length", `${clock(duration)}${tempo ? `, about ${Math.round(tempo)} BPM` : ""}`]);
   const sections = music?.sections ?? [];
-  if (sections.length) facts.push(["Sections", `${sections.length} measured`]);
+  if (sections.length) facts.push(["Sections", `${sections.length}`]);
   const rated = sections.filter((section) => typeof section.energy === "number");
   if (rated.length > 1) {
     const span = (section: (typeof rated)[number]) =>

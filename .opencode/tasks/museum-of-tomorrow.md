@@ -38,3 +38,19 @@ Proved for the first time on real providers: narration through the journal, shee
 - **The Writer put a voice id in the narrator's era field,** and the Editor's type needed correcting twice: frames, not the report, showed both.
 - **Small:** a change of label colour in the cut makes the stills approval stale. The title's small type on Script overlaps the next-step strip when the page opens scrolled. The beat meters show pauses as overrun in red. `caption_overlap` fires on layers that sit apart, top and bottom.
 - **Vertical version and one-click first draft** were not run: this film is 16:9, and a first draft refuses a story film.
+
+## Tool fixes after the film, 2 Nov
+
+Owner: "make all fixes that are not related to the actual content productions."
+
+- **The render stall was not memory and not a sleeping Mac.** A browser finished every chunk, wrote its summary, removed its progress file and stayed alive, because `render.mjs` never told Node to exit. The Studio ended it after 120 s and failed the render. A first theory, that long encodes looked like stalls, was tested on a scratch copy and was wrong: it was reverted. With the exit, four browsers on the same 140 s film went from a failure at 303 s to a pass in 209 s, against about 8 minutes with one. The memory guard's count of inactive pages is unchanged and unproved either way.
+- A fresh install defaults to `gpt-6-luna` through OpenCode Go for every role. An OpenAI key alone now needs a role changed in Settings.
+- The song map is held in memory. An old `work/song-map.json` stays where it is, unread. Other read paths were not audited for writes.
+- A stuck paid task shows under the budget, with a free re-check and a settled amount that needs evidence. Live, on s018, it reported the provider down and spent nothing. Settling it was tested only on a fixture.
+- A clip batch stops at the first clip still out, so one slow clip no longer fails the job.
+- Only speech overruns a beat. `caption_overlap` looks at where styles sit, and that table is by hand: it must follow `BaseFilm.jsx`.
+- The two-row top bar cannot become three rows or run into the budget, and the Director opens under it. Checked at 1440, 1024, 800 and 375.
+
+**Left as designed:** a change to the cut makes the stills approval stale, because that approval signs the cut, and the bar already says "Approve this cut". Removing it would un-approve every existing film's hash. A change to a local shot makes the style check stale, because local proof entries are part of it.
+
+**Not fixes, so not done:** reuse across a series, a first draft for story films, sound generation, and `legacy/` and the `openai` upgrade, which are the owner's calls. "Stale storyboard message blames timing", from the Cool Cat run, was not reproduced or changed.

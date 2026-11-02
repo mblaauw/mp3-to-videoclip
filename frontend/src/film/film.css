@@ -1184,18 +1184,37 @@
   .shell:not(.on-film):has(.next-bar.compact) {
     grid-template-rows: auto minmax(0, 1fr) var(--spine-h);
   }
+  /* Two rows that cannot become three: the first gives way inside the stepper, however long the
+     title or the budget's words. The Director opens under both rows, so it never covers the step. */
+  .shell:has(.next-bar.compact) .director {
+    top: 112px;
+  }
   /* Two rows: the stages, then the next step. A wrapped row can't size its own grid track. */
   .shell .topbar:has(.next-bar.compact) {
-    flex-wrap: wrap;
-    align-content: flex-start;
+    display: grid;
+    grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto;
+    grid-template-rows: 56px 56px;
+    align-items: center;
     height: 112px;
   }
   .shell .topbar:has(.next-bar.compact) .stepper {
     height: 56px;
+    width: 100%;
+    margin: 0;
+    min-width: 0;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+  .shell .topbar:has(.next-bar.compact) .budget-chip .meter {
+    display: none;
+  }
+  .shell .topbar:has(.next-bar.compact) .top-right {
+    grid-column: 4;
+    grid-row: 1;
   }
   .next-bar.compact {
-    order: 5;
-    flex: 1 1 100%;
+    grid-column: 1 / -1;
+    grid-row: 2;
     justify-content: space-between;
     padding: var(--s-1) 0 var(--s-2);
   }
@@ -1238,10 +1257,19 @@
     display: inline;
   }
   .shell .topbar:has(.next-bar.compact) {
+    display: flex;
     height: auto;
   }
   .shell .topbar:has(.next-bar.compact) .stepper {
     height: 48px;
+    width: 100%;
+  }
+  .shell:has(.next-bar.compact) .director {
+    top: var(--topbar-h);
+  }
+  .next-bar.compact {
+    order: 5;
+    flex: 1 1 100%;
   }
   /* One line under the top bar: the sentence stays, the reason gives way to the picture. */
   .next-bar.compact .next-say > span:not(.ui-dot) {

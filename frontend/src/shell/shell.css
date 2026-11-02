@@ -1171,6 +1171,10 @@ body {
       "main"
       "spine";
   }
+  /* The drawer floats over the stage, so a next step on the stage stays left of it. */
+  .shell:has(.director) .shell-main > .next-bar {
+    padding-right: calc(var(--director-w) + var(--s-4));
+  }
   .director {
     position: fixed;
     top: var(--topbar-h);
@@ -1216,6 +1220,9 @@ body {
   :root {
     --spine-h: 96px;
     --topbar-h: 104px;
+  }
+  .shell:has(.director) .shell-main > .next-bar {
+    padding-right: var(--s-4);
   }
   .library-shell {
     grid-template-rows: 56px minmax(0, 1fr);

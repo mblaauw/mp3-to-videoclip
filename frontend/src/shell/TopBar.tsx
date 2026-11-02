@@ -80,7 +80,7 @@ function StuckTask({
     <div className="stuck-task">
       <b>{name} hasn't come back</b>
       <p className="pop-hint">
-        ${task.reserve_usd ?? "?"} is held and nothing new can be bought on this film until it
+        ${Number(task.reserve_usd ?? 0).toFixed(2)} is held and nothing new can be bought on this film until it
         settles. Checking is free and never buys it twice.
       </p>
       <div className="stuck-task-actions">
@@ -165,7 +165,7 @@ function BudgetPopover({
         />
       </div>
       <div className="pop-row">
-        <span>Spent on {budget?.paid_stills ?? 0} stills</span>
+        <span>Spent</span>
         <b>{budget?.spent_usd ?? "0.00"}</b>
       </div>
       <div className="pop-row">
@@ -439,7 +439,7 @@ export function TopBar({
           >
             <span>
               {budget?.unresolved?.length
-                ? "A paid task is waiting"
+                ? "Task waiting"
                 : remaining
                   ? `$${remaining} left`
                   : "Budget"}

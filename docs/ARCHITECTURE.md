@@ -293,7 +293,7 @@ come from whether each decision's recorded hash still matches (`production/stage
 remembered in a file beside the settings until a metadata file moves. No gate reads that
 file, and opening the library writes nothing into a film's folder.
 
-The song map (`song_map.py`, cached in `work/song-map.json`) merges `music.json`,
+The song map (`song_map.py`, held in memory by its inputs, so reading a film writes nothing) merges `music.json`,
 `music-deep.json`, the owner's section layer and the timed words into one object in film
 frames, served at `/song-map`, given to every role as `get_song_map` and summarised in
 every Director snapshot. Sections come from the deep pass's checkerboard boundaries when
