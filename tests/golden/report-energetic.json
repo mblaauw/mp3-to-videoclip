@@ -1,0 +1,367 @@
+{
+ "present": true,
+ "ok": true,
+ "hard": [],
+ "warnings": [
+  {
+   "code": "text_reading_time",
+   "shot_id": "s003",
+   "text_id": "t1",
+   "message": "text t1 holds 1.00s; 2 words need 1.60s"
+  },
+  {
+   "code": "text_reading_time",
+   "shot_id": "s006",
+   "text_id": "t2",
+   "message": "text t2 holds 1.00s; 2 words need 1.60s"
+  },
+  {
+   "code": "text_reading_time",
+   "shot_id": "s010",
+   "text_id": "t3",
+   "message": "text t3 holds 1.00s; 2 words need 1.60s"
+  }
+ ],
+ "hash": "51f0d98703f9fede91b7e0fa26ca15c5b326bc803e6f28622b103b91adce3163",
+ "coverage": {
+  "ok": true,
+  "start_frame": 0,
+  "end_frame": 240,
+  "total_frames": 240
+ },
+ "sections": [
+  {
+   "id": "build",
+   "start_frame": 0,
+   "end_frame": 120,
+   "feel": "build, close and restless",
+   "energy": null,
+   "target_density_per_10s": 8.0,
+   "density_per_10s": 8.0,
+   "cuts": 4,
+   "shots": 5,
+   "holds": 2,
+   "accents": 2,
+   "flashes": 1,
+   "techniques": [
+    "cut on accent",
+    "push-in"
+   ]
+  },
+  {
+   "id": "release",
+   "start_frame": 120,
+   "end_frame": 240,
+   "feel": "release, wide and bright chorus",
+   "energy": "high",
+   "target_density_per_10s": 8.0,
+   "density_per_10s": 8.0,
+   "cuts": 4,
+   "shots": 5,
+   "holds": 1,
+   "accents": 1,
+   "flashes": 0,
+   "techniques": [
+    "pull-back",
+    "flash frame"
+   ]
+  }
+ ],
+ "counts": {
+  "shots": 10,
+  "cuts": 9,
+  "holds": 3,
+  "hold_ratio": 0.3,
+  "text_layers": 3,
+  "accents": 3,
+  "flashes": 1,
+  "motions": {
+   "hold": 3,
+   "push_in": 3,
+   "pull_back": 2,
+   "pan_right": 1,
+   "pan_left": 1
+  },
+  "transitions": {
+   "cut": 4,
+   "whip_pan": 1,
+   "dip_to_black": 1,
+   "slide": 1,
+   "push": 1,
+   "fade": 1,
+   "dip_to_white": 1
+  },
+  "accents_by_type": {
+   "punch_in": 1,
+   "flash": 1,
+   "light_leak": 1
+  }
+ },
+ "techniques": [
+  {
+   "name": "breathing hold",
+   "count": 3,
+   "reasons": [
+    "open on the first accent",
+    "let the image land",
+    "breath after the montage"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "push-in",
+   "count": 3,
+   "reasons": [
+    "approach the reveal",
+    "intimacy",
+    "land the last line",
+    "build, close and restless"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "lateral pan",
+   "count": 2,
+   "reasons": [
+    "discover the second subject",
+    "return to the room"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "pull-back",
+   "count": 2,
+   "reasons": [
+    "release the section",
+    "reveal the room",
+    "release, wide and bright chorus"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "dip to black",
+   "count": 1,
+   "reasons": [
+    "chapter break"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "dip to white",
+   "count": 1,
+   "reasons": [
+    "end card arrival"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "dissolve",
+   "count": 1,
+   "reasons": [
+    "time passing"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "flash frame",
+   "count": 1,
+   "reasons": [
+    "accent flash",
+    "release, wide and bright chorus"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "kinetic typography",
+   "count": 1,
+   "reasons": [
+    "words hit the rhythm"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "light leak",
+   "count": 1,
+   "reasons": [
+    "memory warmth"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "pop type",
+   "count": 1,
+   "reasons": [
+    "closing date"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "punch-in",
+   "count": 1,
+   "reasons": [
+    "first hard hit"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "push transition",
+   "count": 1,
+   "reasons": [
+    "graphic transition"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "slide transition",
+   "count": 1,
+   "reasons": [
+    "list structure"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "type-on",
+   "count": 1,
+   "reasons": [
+    "date lands with the line"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "whip pan",
+   "count": 1,
+   "reasons": [
+    "chorus entry"
+   ],
+   "reasoned": true
+  }
+ ],
+ "shots": [
+  {
+   "shot_id": "s001",
+   "kind": "scene",
+   "start_frame": 0,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "cut",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s002",
+   "kind": "scene",
+   "start_frame": 24,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "push_in",
+   "transition_in": "whip_pan",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s003",
+   "kind": "scene",
+   "start_frame": 48,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "pull_back",
+   "transition_in": "dip_to_black",
+   "accents": [
+    "punch_in"
+   ],
+   "text": [
+    "OUT NOW"
+   ]
+  },
+  {
+   "shot_id": "s004",
+   "kind": "scene",
+   "start_frame": 72,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "cut",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s005",
+   "kind": "scene",
+   "start_frame": 96,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "pan_right",
+   "transition_in": "slide",
+   "accents": [
+    "flash"
+   ],
+   "text": []
+  },
+  {
+   "shot_id": "s006",
+   "kind": "scene",
+   "start_frame": 120,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "push_in",
+   "transition_in": "cut",
+   "accents": [],
+   "text": [
+    "ONE TAKE"
+   ]
+  },
+  {
+   "shot_id": "s007",
+   "kind": "scene",
+   "start_frame": 144,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "pull_back",
+   "transition_in": "push",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s008",
+   "kind": "scene",
+   "start_frame": 168,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "cut",
+   "accents": [
+    "light_leak"
+   ],
+   "text": []
+  },
+  {
+   "shot_id": "s009",
+   "kind": "scene",
+   "start_frame": 192,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "pan_left",
+   "transition_in": "fade",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s010",
+   "kind": "scene",
+   "start_frame": 216,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "push_in",
+   "transition_in": "dip_to_white",
+   "accents": [],
+   "text": [
+    "14 NOV"
+   ]
+  }
+ ],
+ "ad": {
+  "applicable": false,
+  "checks": []
+ }
+}

@@ -1,0 +1,238 @@
+{
+ "present": true,
+ "ok": true,
+ "hard": [],
+ "warnings": [
+  {
+   "code": "hold_ratio",
+   "section": "build",
+   "message": "section build holds 5 of 5 shots; name a breathing-hold technique if that is the plan"
+  },
+  {
+   "code": "hold_ratio",
+   "section": "release",
+   "message": "section release holds 5 of 5 shots; name a breathing-hold technique if that is the plan"
+  },
+  {
+   "code": "hold_ratio_total",
+   "message": "10 of 10 shots are holds"
+  },
+  {
+   "code": "motion_repetition",
+   "shot_id": "s003",
+   "message": "three hold moves in a row"
+  },
+  {
+   "code": "transition_repetition",
+   "message": "9 of 9 named joins use dip_to_black"
+  },
+  {
+   "code": "text_reading_time",
+   "shot_id": "s002",
+   "text_id": "fast",
+   "message": "text fast holds 0.17s; 12 words need 4.60s"
+  }
+ ],
+ "hash": "d67378a82b5b8c6c341f6d492fae022b6aadf3830359b649268e80f025d426ba",
+ "coverage": {
+  "ok": true,
+  "start_frame": 0,
+  "end_frame": 240,
+  "total_frames": 240
+ },
+ "sections": [
+  {
+   "id": "build",
+   "start_frame": 0,
+   "end_frame": 120,
+   "feel": "build, close and restless",
+   "energy": null,
+   "target_density_per_10s": 8.0,
+   "density_per_10s": 8.0,
+   "cuts": 4,
+   "shots": 5,
+   "holds": 5,
+   "accents": 0,
+   "flashes": 0,
+   "techniques": [
+    "cut on accent",
+    "push-in"
+   ]
+  },
+  {
+   "id": "release",
+   "start_frame": 120,
+   "end_frame": 240,
+   "feel": "release, wide and bright chorus",
+   "energy": "high",
+   "target_density_per_10s": 8.0,
+   "density_per_10s": 8.0,
+   "cuts": 4,
+   "shots": 5,
+   "holds": 5,
+   "accents": 0,
+   "flashes": 0,
+   "techniques": [
+    "pull-back",
+    "flash frame"
+   ]
+  }
+ ],
+ "counts": {
+  "shots": 10,
+  "cuts": 9,
+  "holds": 10,
+  "hold_ratio": 1.0,
+  "text_layers": 1,
+  "accents": 0,
+  "flashes": 0,
+  "motions": {
+   "hold": 10
+  },
+  "transitions": {
+   "cut": 1,
+   "dip_to_black": 9
+  },
+  "accents_by_type": {}
+ },
+ "techniques": [
+  {
+   "name": "breathing hold",
+   "count": 10,
+   "reasons": [],
+   "reasoned": false
+  },
+  {
+   "name": "dip to black",
+   "count": 9,
+   "reasons": [
+    "a habit"
+   ],
+   "reasoned": true
+  },
+  {
+   "name": "text fade",
+   "count": 1,
+   "reasons": [],
+   "reasoned": false
+  }
+ ],
+ "shots": [
+  {
+   "shot_id": "s001",
+   "kind": "scene",
+   "start_frame": 0,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "cut",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s002",
+   "kind": "scene",
+   "start_frame": 24,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": [
+    "far too many words to read in this little time at all"
+   ]
+  },
+  {
+   "shot_id": "s003",
+   "kind": "scene",
+   "start_frame": 48,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s004",
+   "kind": "scene",
+   "start_frame": 72,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s005",
+   "kind": "scene",
+   "start_frame": 96,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s006",
+   "kind": "scene",
+   "start_frame": 120,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s007",
+   "kind": "scene",
+   "start_frame": 144,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s008",
+   "kind": "scene",
+   "start_frame": 168,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s009",
+   "kind": "scene",
+   "start_frame": 192,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": []
+  },
+  {
+   "shot_id": "s010",
+   "kind": "scene",
+   "start_frame": 216,
+   "duration_frames": 24,
+   "seconds": 1.0,
+   "motion": "hold",
+   "transition_in": "dip_to_black",
+   "accents": [],
+   "text": []
+  }
+ ],
+ "ad": {
+  "applicable": false,
+  "checks": []
+ }
+}
