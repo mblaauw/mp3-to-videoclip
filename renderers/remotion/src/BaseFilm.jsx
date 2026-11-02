@@ -362,8 +362,8 @@ const WHIP_BLUR_ID = "whip-blur";
 
 // The MP4 takes exact frames from the file; the Player plays it like any video. Past its end a
 // clip is frozen on its last frame, by rule. Silent always: the film has one soundtrack.
-function ClipLayer({clip, localFrame, absoluteFrame, fps}) {
-  const state = timing.clipFrame(clip, localFrame, fps);
+function ClipLayer({clip, localFrame, absoluteFrame, fps, loop}) {
+  const state = timing.clipFrame(clip, localFrame, fps, loop);
   const src = clip.src ?? staticFile(clip.file);
   const style = {width: "100%", height: "100%", objectFit: "cover", display: "block"};
   const media = getRemotionEnvironment().isRendering ? (
@@ -372,7 +372,7 @@ function ClipLayer({clip, localFrame, absoluteFrame, fps}) {
     <Video src={src} muted style={style} />
   );
   return (
-    <Sequence from={absoluteFrame - localFrame} layout="none">
+    <Sequence from={absoluteFrame - localFrame + state.start} layout="none">
       {state.held ? <Freeze frame={state.last}>{media}</Freeze> : media}
     </Sequence>
   );
@@ -438,7 +438,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
             // placeholder marking as a preview render, without loading a file.
             <AbsoluteFill style={{backgroundColor: "#101014"}} />
           ) : span.clip ? (
-            <ClipLayer clip={span.clip} localFrame={localFrame} absoluteFrame={absoluteFrame} fps={fps} />
+            <ClipLayer clip={span.clip} localFrame={localFrame} absoluteFrame={absoluteFrame} fps={fps} loop={span.edit?.clip_loop === true} />
           ) : parallax && span.depth ? (
             ["far", "mid", "near"].map((layer) => (
               <Img

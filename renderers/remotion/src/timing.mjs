@@ -702,10 +702,14 @@ export function validateClip(clip, label) {
  * whether the clip has run out. A clip shorter than its shot holds its last frame; it is
  * never stretched, and a longer one is simply cut by the shot's end.
  */
-export function clipFrame(clip, localFrame, fps) {
+export function clipFrame(clip, localFrame, fps, loop = false) {
   const last = Math.max(0, Math.floor((clip.frames / clip.fps) * fps) - 1);
   const frame = Math.max(0, localFrame);
-  return {frame: Math.min(frame, last), held: frame >= last, last};
+  if (loop) {
+    const length = last + 1;
+    return {frame: frame % length, held: false, last, start: frame - (frame % length)};
+  }
+  return {frame: Math.min(frame, last), held: frame >= last, last, start: 0};
 }
 
 export function validateDepthLayers(depth, label) {

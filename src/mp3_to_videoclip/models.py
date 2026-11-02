@@ -1132,6 +1132,8 @@ class EditShot(Model):
     crops: list[EditCrop] = Field(default_factory=list, max_length=16)
     #: False keeps this shot flat in a film with depth: a card, a face filling the frame.
     depth: bool | None = None
+    #: A clip shorter than this shot repeats instead of holding: for rain, not for people.
+    clip_loop: bool | None = None
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
@@ -1140,6 +1142,8 @@ class EditShot(Model):
             value.pop("split_layout", None)
         if value.get("depth") is None:
             value.pop("depth", None)
+        if value.get("clip_loop") is None:
+            value.pop("clip_loop", None)
         # Absent when unused, so a cut without crop cuts hashes as it always has.
         if not value.get("crops"):
             value.pop("crops", None)

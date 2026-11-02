@@ -338,3 +338,26 @@ def test_a_film_without_a_clip_keeps_its_exact_bytes(film):
     entry = read_json(film / "work/assets.json")["s001"]
     assert "clips" not in entry and "clip" not in entry
     assert "clip" not in P.resolved_assets(film, ["s001"])[0].model_dump(exclude_none=True)
+
+
+def test_the_writer_can_propose_motion_and_nothing_is_spent(film):
+    result = clips.propose_motion(film, [{"id": "s001", "why": "The rain is the whole point."}])
+    assert result["proposed"] == ["s001"]
+    assert clips.proposed_motion(film) == {"s001": "The rain is the whole point."}
+    assert read_json(film / "work/tasks.json") == {}
+    with pytest.raises(ValueError, match="this storyboard"):
+        clips.propose_motion(film, [{"id": "nope", "why": "x"}])
+    with pytest.raises(ValueError, match="say why"):
+        clips.propose_motion(film, [{"id": "s001", "why": " "}])
+    with pytest.raises(ValueError, match="once"):
+        clips.propose_motion(film, [{"id": "s001", "why": "a"}, {"id": "s001", "why": "b"}])
+
+
+def test_a_looped_clip_is_not_reported_short_and_is_absent_until_set(film):
+    _bought(film)
+    version = read_json(film / "work/assets.json")["s001"]["clips"][0]["version"]
+    clips.select_clip(film, "s001", version)
+    edit = edits.seed_edit(film)
+    assert "clip_loop" not in edit.shots[0].model_dump()
+    looped = edit.shots[0].model_copy(update={"clip_loop": True})
+    assert looped.model_dump()["clip_loop"] is True

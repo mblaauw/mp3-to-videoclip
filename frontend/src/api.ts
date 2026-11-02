@@ -388,6 +388,8 @@ export type ImageShot = {
   stale: boolean;
   clips?: ImageClip[];
   clip?: number | null;
+  /** Why the Writer thinks this shot earns motion. */
+  motion_why?: string;
 };
 
 export type IntakePayload = {

@@ -80,6 +80,7 @@ export type EditShot = {
   text: EditText[];
   crops?: EditCrop[];
   depth?: boolean | null;
+  clip_loop?: boolean | null;
 };
 
 export type Grade = {
