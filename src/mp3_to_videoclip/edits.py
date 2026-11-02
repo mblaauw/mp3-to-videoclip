@@ -746,6 +746,25 @@ def report(
             )
         previous_framing = framing
 
+    # A clip holds its last frame past its end; more than a second of that shows.
+    clips = read_optional(root / "work/assets.json")
+    from .production.assets import selected_clip
+
+    for shot in edit.shots:
+        clip = selected_clip(clips.get(shot.shot_id, {})) if isinstance(clips, dict) else None
+        if clip is not None:
+            short = shot.duration_frames / fps - clip["frames"] / clip["fps"]
+            if short > 1.0:
+                warnings.append(
+                    {
+                        "code": "clip_short",
+                        "shot_id": shot.shot_id,
+                        "message": (
+                            f"the clip on {shot.shot_id} ends {short:.1f}s early and "
+                            "holds its last frame"
+                        ),
+                    }
+                )
     # Reading time. Card text is measured from the storyboard, timed text from
     # the edit layer, because both are words the viewer has to read.
     for shot in edit.shots:

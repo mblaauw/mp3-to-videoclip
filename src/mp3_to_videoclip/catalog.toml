@@ -93,6 +93,16 @@ price_source = "https://runware.ai/docs/models-api/pricing"
 price_checked = "2026-11-01"
 
 [[models]]
+id = "klingai-2-5-turbo-standard"
+provider = "runware"
+label = "Kling 2.5 Turbo Standard"
+capabilities = ["video"]
+price = { amount = "0.042", unit = "second" }
+price_note = "Published at 720p; clips come in 5 s or 10 s."
+price_source = "https://runware.ai/docs/models/klingai-2-5-turbo-standard"
+price_checked = "2026-11-02"
+
+[[models]]
 id = "real-esrgan"
 provider = "runware"
 label = "Real-ESRGAN"

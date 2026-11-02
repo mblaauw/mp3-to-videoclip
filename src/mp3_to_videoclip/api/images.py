@@ -72,6 +72,21 @@ def get_images(slug: str, request: Request):
                     "text": shot.text,
                     "selected": selected,
                     "versions": [] if local_plate else entry.get("versions", []),
+                    # Named only when there are some, so this answer is as it was until then.
+                    **(
+                        {
+                            "clips": [
+                                {
+                                    **clip,
+                                    "current": clip["still_root"] == P.still_root(chosen),
+                                }
+                                for clip in entry["clips"]
+                            ],
+                            "clip": entry.get("clip"),
+                        }
+                        if entry.get("clips") and chosen is not None and not shot.asset_shot_id
+                        else {}
+                    ),
                     "review": review,
                     "stale": stale,
                 }
@@ -107,6 +122,96 @@ async def get_image_file(slug: str, owner: str, version: int, request: Request):
     if not target.is_file():
         raise HTTPException(status_code=404, detail="image file is missing")
     return FileResponse(target)
+
+
+@router.get("/clips/{owner}/{version}")
+async def get_clip_file(slug: str, owner: str, version: int, request: Request):
+    root = project_root(request, slug)
+    path = root / "work" / "assets.json"
+    assets = json.loads(path.read_text()) if path.is_file() else {}
+    clips = (assets.get(owner) or {}).get("clips", [])
+    chosen = next((clip for clip in clips if clip["version"] == version), None)
+    if not chosen:
+        raise HTTPException(status_code=404, detail="unknown clip")
+    target = inside(root, chosen["path"])
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="clip file is missing")
+    return FileResponse(target, media_type="video/mp4")
+
+
+@router.post("/images/clips/estimate")
+async def estimate_clips(slug: str, request: Request, payload: dict):
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    shot_ids = payload.get("shot_ids") or []
+    if not shot_ids:
+        raise HTTPException(status_code=400, detail="select at least one shot")
+    estimate = services.generation.estimate_clips(root, shot_ids)
+    # Still before a price is shown: nothing can be bought without the key.
+    runware_api_key()
+    return {
+        "estimate": estimate,
+        "decision": _decisions(root, estimate["reserve_usd"]),
+        "budget": _budget_card(root),
+    }
+
+
+@router.post("/images/clips")
+async def generate_clips(slug: str, request: Request, payload: dict):
+    """The owner's click on the shown price: authorize exactly that quote, then run it."""
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    quote_id = payload.get("quote_id")
+    if not quote_id:
+        raise HTTPException(status_code=400, detail="estimate the clip first")
+    try:
+        quote = services.generation.quote(root, quote_id)
+    except FileNotFoundError as exc:
+        raise ApiError(
+            404, "That quote is no longer there. Estimate again.", "quote_missing"
+        ) from exc
+    if quote.get("kind") != "clip":
+        raise HTTPException(status_code=400, detail="this quote is not for clips")
+    decision = _decisions(root, quote["reserve_total_usd"])
+    if not decision["ok"]:
+        return {"needs_budget": True, "decision": decision, "budget": _budget_card(root)}
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+    services.generation.authorize(
+        root, quote_id, note=payload.get("note") or "user confirmed in Studio"
+    )
+
+    async def work():
+        return await asyncio.to_thread(services.generation.run_clips, root, quote_id)
+
+    job_id = runner.submit("images", slug, work, blocking=True)
+    return {
+        "job_id": job_id,
+        "quote_id": quote_id,
+        "reserve_usd": quote["reserve_total_usd"],
+        "tasks": len(quote["tasks"]),
+        "status": "queued",
+        "budget": _budget_card(root),
+    }
+
+
+@router.post("/images/clips/select")
+async def select_clip(slug: str, request: Request, payload: dict):
+    """Use this clip, or ``version: null`` to go back to the still."""
+    from mp3_to_videoclip import clips
+
+    root = project_root(request, slug)
+    shot_id = payload.get("shot_id")
+    if not isinstance(shot_id, str) or not shot_id:
+        raise HTTPException(status_code=400, detail="name the shot")
+    try:
+        clips.select_clip(root, shot_id, payload.get("version"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"shot_id": shot_id, "clip": payload.get("version")}
 
 
 @router.post("/images/review")

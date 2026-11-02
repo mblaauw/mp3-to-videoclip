@@ -1354,6 +1354,15 @@ class EditDecisionList(Model):
         return board.model_copy(update={"shots": shots})
 
 
+class RenderClip(Model):
+    """A selected clip for one shot. The still stays the fallback beside it."""
+
+    path: str
+    sha256: str
+    frames: int = Field(gt=0)
+    fps: float = Field(gt=0)
+
+
 class RenderShot(Model):
     """Input to renderer, already resolved and checked against current approvals."""
 
@@ -1361,6 +1370,7 @@ class RenderShot(Model):
     image: str
     edit: EditShot | None = None
     grade: Grade | None = None
+    clip: RenderClip | None = None
 
 
 class BrandPackage(Model):

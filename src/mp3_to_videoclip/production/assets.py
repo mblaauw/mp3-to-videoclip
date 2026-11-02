@@ -7,6 +7,7 @@ from .. import localplate, shotkinds
 from ..models import (
     Brief,
     Project,
+    RenderClip,
     RenderShot,
     Shot,
     Storyboard,
@@ -131,6 +132,32 @@ def local_plate_path(root: Path, shot_id: str) -> Path:
     return _local_plate(root, load_project(root), shot)
 
 
+def still_root(version: dict) -> str:
+    """The picture a version is of: a sharper copy counts as the still it came from."""
+    return (version.get("derived_from") or {}).get("sha256") or version["sha256"]
+
+
+def selected_clip(entry: dict) -> dict | None:
+    """The selected clip, while it is still a clip of the selected still."""
+    clip = next((c for c in entry.get("clips", []) if c["version"] == entry.get("clip")), None)
+    chosen = next(
+        (v for v in entry.get("versions", []) if v["version"] == entry.get("selected")), None
+    )
+    if clip is None or chosen is None or clip["still_root"] != still_root(chosen):
+        return None
+    return clip
+
+
+def _resolved_clip(root: Path, entry: dict, shot_id: str) -> RenderClip | None:
+    clip = selected_clip(entry)
+    if clip is None:
+        return None
+    path = inside(root, clip["path"])
+    if file_hash(path) != clip["sha256"]:
+        raise ValueError(f"selected clip for {shot_id} changed")
+    return RenderClip(path=str(path), sha256=clip["sha256"], frames=clip["frames"], fps=clip["fps"])
+
+
 def _resolved_shot(root: Path, project, assets: dict, shot) -> RenderShot:
     if shot.asset_shot_id is not None:
         owner_id = shot.asset_shot_id
@@ -147,7 +174,9 @@ def _resolved_shot(root: Path, project, assets: dict, shot) -> RenderShot:
     path = inside(root, chosen["path"])
     if file_hash(path) != chosen["sha256"]:
         raise ValueError(f"selected still for {shot.id} changed")
-    return RenderShot(shot=shot, image=str(path))
+    # A reprise re-crops the still; only the shot that owns a clip plays it.
+    clip = _resolved_clip(root, entry, shot.id) if shot.asset_shot_id is None else None
+    return RenderShot(shot=shot, image=str(path), clip=clip)
 
 
 def resolved_assets(root: Path, ids: list[str] | None = None) -> list[RenderShot]:

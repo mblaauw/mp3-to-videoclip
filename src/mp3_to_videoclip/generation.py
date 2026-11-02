@@ -497,9 +497,11 @@ def begin_task(root: Path, quote: dict, task: dict, *, kind=None, admitted=()):
             for entry in journal.values()
         ):
             raise ValueError("a conflicting task/version was submitted; recover or requote")
-    if (kind or quote["kind"]) in ("upscale", "sheet"):
+    if (kind or quote["kind"]) in ("upscale", "sheet", "clip"):
         if (kind or quote["kind"]) == "upscale":
             from .upscale import check_before_spend
+        elif (kind or quote["kind"]) == "clip":
+            from .clips import check_before_spend
         else:
             from .sheets import check_before_spend
 
@@ -887,6 +889,10 @@ def recover(root: Path, task_uuid: str, client=None):
         from .narration import recover_take
 
         return recover_take(root, task_uuid, client)
+    if task and task.get("kind") == "clip":
+        from .clips import recover_clip
+
+        return recover_clip(root, task_uuid, client)
     if task and task.get("kind") == "music-analysis":
         from .music_analysis import recover_music
 

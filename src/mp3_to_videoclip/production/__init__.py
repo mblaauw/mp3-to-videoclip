@@ -63,7 +63,9 @@ from .assets import (
     record_asset,
     resolved_assets,
     select_asset,
+    selected_clip,
     set_proof_ids,
+    still_root,
 )
 from .board import (
     init_events,
@@ -233,6 +235,8 @@ __all__ = [
     "requires_signature",
     "preview_assets",
     "resolved_assets",
+    "selected_clip",
+    "still_root",
     "select_asset",
     "set_creative_profile",
     "set_proof_ids",
