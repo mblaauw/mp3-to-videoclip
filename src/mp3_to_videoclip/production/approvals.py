@@ -252,7 +252,7 @@ def require_approval(root: Path, stage: str):
         if stage == "graphics":
             complete = complete and record.get("inspected") is True
         if stage == "lyrics":
-            lyrics = Lyrics.model_validate(read_json(root / STAGE_FILES[stage]))
+            lyrics = Lyrics.model_validate(read_json(root / STAGE_FILES["lyrics"]))
             if any(segment.flags for segment in lyrics.segments):
                 complete = complete and record.get("acknowledge_uncertain") is True
         if not complete:
@@ -300,6 +300,103 @@ def drafted_parent(root: Path, stage: str) -> str | None:
     return None
 
 
+def _check_lyrics(root: Path, *, acknowledge_uncertain: bool, inspected: bool) -> None:
+    lyrics = Lyrics.model_validate(read_json(root / STAGE_FILES["lyrics"]))
+    project = load_project(root)
+    if not lyrics.segments and not lyrics.lines:
+        raise ValueError("empty lyrics cannot be approved for this vocal project")
+    for segment in lyrics.segments:
+        if segment.end > project.duration + 0.1:
+            raise ValueError("lyric timestamps extend beyond the source")
+    if any(s.flags for s in lyrics.segments) and not acknowledge_uncertain:
+        raise ValueError("review/correct flagged lyrics, then explicitly --ack-uncertain")
+
+
+def _check_brief(root: Path, *, acknowledge_uncertain: bool, inspected: bool) -> None:
+    brief = load_brief(root)
+    project = load_project(root)
+    _require_default_style_core(project, brief)
+    if requires_signature(root) and not flow.settings(root)["late_credits"]:
+        from ..signature import validate_spec
+
+        validate_spec(root, load_project(root))
+    _require_reference_permissions(brief)
+    if brief.creative is None:
+        raise ValueError("the creative workflow requires a creative profile")
+    if not brief.treatment.strip():
+        raise ValueError("write the treatment before approving the story")
+    if not brief.creative.look.strip():
+        raise ValueError("define creative.look (global appearance only) before approval")
+    if brief.creative.profile_version < 1:
+        raise ValueError(
+            "create the creative profile (cast, places, rules and a compact look) "
+            "before approving the story"
+        )
+    from ..references import validate_import
+
+    for character in brief.characters:
+        if not character.identity:
+            raise ValueError("characters need identity separate from shot state")
+    for ref in brief_references(root, brief):
+        validate_import(root, ref["path"])
+
+
+def _check_storyboard(root: Path, *, acknowledge_uncertain: bool, inspected: bool) -> None:
+    board = load_board(root)
+    if any(has_placeholders(s) for s in board.shots):
+        raise ValueError("finish storyboard placeholders before approval")
+    # A creative profile must name its own explicit proof selection.
+    proof_ids(board, load_brief(root))
+    from ..preflight import validate_before_spend
+
+    validate_before_spend(root, [s.id for s in board.shots])
+
+
+def _check_analysis(root: Path, *, acknowledge_uncertain: bool, inspected: bool) -> None:
+    data = read_json(root / STAGE_FILES["analysis"])
+    if abs(data["duration"] - load_project(root).duration) > 0.05:
+        raise ValueError("analysis does not match the source duration")
+
+
+def _check_events(root: Path, *, acknowledge_uncertain: bool, inspected: bool) -> None:
+    load_events(root)  # Source identity, frame bounds and ordering.
+
+
+def _check_brand(root: Path, *, acknowledge_uncertain: bool, inspected: bool) -> None:
+    brand = load_brand(root)
+    if brand is None or brand.duration_seconds > load_project(root).duration:
+        raise ValueError("brand intro is missing or longer than the music")
+
+
+def _check_listening(root: Path, *, acknowledge_uncertain: bool, inspected: bool) -> None:
+    from ..music_analysis import load_listening
+
+    load_listening(root)
+
+
+def _check_graphics(root: Path, *, acknowledge_uncertain: bool, inspected: bool) -> None:
+    from ..signature import validate_review
+
+    if not inspected:
+        raise ValueError(
+            "inspect the actual composited graphics samples, then approve graphics with --inspected"
+        )
+    validate_review(root, load_project(root))
+
+
+#: What each stage must satisfy before it can be approved. A stage not listed has no check of its own.
+STAGE_CHECKS = {
+    "lyrics": _check_lyrics,
+    "brief": _check_brief,
+    "storyboard": _check_storyboard,
+    "analysis": _check_analysis,
+    "events": _check_events,
+    "brand": _check_brand,
+    "listening": _check_listening,
+    "graphics": _check_graphics,
+}
+
+
 @state_mutation
 def approve(
     root: Path,
@@ -335,74 +432,9 @@ def approve(
         from . import soundtrack
 
         soundtrack.require_complete(root)
-    if stage == "lyrics":
-        lyrics = Lyrics.model_validate(read_json(root / STAGE_FILES[stage]))
-        project = load_project(root)
-        if not lyrics.segments and not lyrics.lines:
-            raise ValueError("empty lyrics cannot be approved for this vocal project")
-        for segment in lyrics.segments:
-            if segment.end > project.duration + 0.1:
-                raise ValueError("lyric timestamps extend beyond the source")
-        if any(s.flags for s in lyrics.segments) and not acknowledge_uncertain:
-            raise ValueError("review/correct flagged lyrics, then explicitly --ack-uncertain")
-    elif stage == "brief":
-        brief = load_brief(root)
-        project = load_project(root)
-        _require_default_style_core(project, brief)
-        if requires_signature(root) and not flow.settings(root)["late_credits"]:
-            from ..signature import validate_spec
-
-            validate_spec(root, load_project(root))
-        _require_reference_permissions(brief)
-        if brief.creative is None:
-            raise ValueError("the creative workflow requires a creative profile")
-        if not brief.treatment.strip():
-            raise ValueError("write the treatment before approving the story")
-        if not brief.creative.look.strip():
-            raise ValueError("define creative.look (global appearance only) before approval")
-        if brief.creative.profile_version < 1:
-            raise ValueError(
-                "create the creative profile (cast, places, rules and a compact look) "
-                "before approving the story"
-            )
-        from ..references import validate_import
-
-        for character in brief.characters:
-            if not character.identity:
-                raise ValueError("characters need identity separate from shot state")
-        for ref in brief_references(root, brief):
-            validate_import(root, ref["path"])
-    elif stage == "storyboard":
-        board = load_board(root)
-        if any(has_placeholders(s) for s in board.shots):
-            raise ValueError("finish storyboard placeholders before approval")
-        # A creative profile must name its own explicit proof selection.
-        proof_ids(board, load_brief(root))
-        from ..preflight import validate_before_spend
-
-        validate_before_spend(root, [s.id for s in board.shots])
-    elif stage == "analysis":
-        data = read_json(root / STAGE_FILES[stage])
-        if abs(data["duration"] - load_project(root).duration) > 0.05:
-            raise ValueError("analysis does not match the source duration")
-    elif stage == "events":
-        load_events(root)  # Source identity, frame bounds and ordering.
-    elif stage == "brand":
-        brand = load_brand(root)
-        if brand is None or brand.duration_seconds > load_project(root).duration:
-            raise ValueError("brand intro is missing or longer than the music")
-    elif stage == "listening":
-        from ..music_analysis import load_listening
-
-        load_listening(root)
-    elif stage == "graphics":
-        from ..signature import validate_review
-
-        if not inspected:
-            raise ValueError(
-                "inspect the actual composited graphics samples, then approve graphics with --inspected"
-            )
-        validate_review(root, load_project(root))
+    check = STAGE_CHECKS.get(stage)
+    if check is not None:
+        check(root, acknowledge_uncertain=acknowledge_uncertain, inspected=inspected)
     # A draft's proof is checked by nobody yet, which is what "Drafted, not yours" says.
     if stage in ("proof", "stills") and via != "draft":
         from ..reviews import require_accepted

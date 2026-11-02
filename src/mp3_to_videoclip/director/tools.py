@@ -798,258 +798,358 @@ async def dispatch(
         return json.dumps({"error": str(exc)})
 
 
+def _tool_get_project(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    project = P.load_project(root)
+    return {"slug": project.slug, "title": project.title, "duration": project.duration}
+
+
+def _tool_get_brief(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    return P.load_brief(root).model_dump()
+
+
+def _tool_get_storyboard(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    return P.load_board(root).model_dump()
+
+
+def _tool_get_edit(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import edits
+
+    return edits.tool_page(root, arguments.get("first") or 0, arguments.get("count") or 30)
+
+
+def _tool_get_film_frames(name, arguments, root, runner, projects_dir):
+    return _get_film_frames(root, arguments.get("frames") or [])
+
+
+def _tool_save_critique(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import critique
+    from mp3_to_videoclip import production as P
+
+    return critique.save(
+        root,
+        arguments.get("verdict") or "",
+        arguments.get("notes") or [],
+        P.load_project(root).fps,
+    )
+
+
+def _tool_update_edit_shots(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import edits
+
+    return edits.patch_shots(root, arguments.get("shots") or [])
+
+
+def _tool_update_voice_lines(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import edits
+
+    return edits.set_voice_lines(root, arguments.get("lines") or [])
+
+
+def _tool_get_cut_material(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import edits
+
+    return edits.cut_material(root)
+
+
+def _tool_update_edit(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import edits
+
+    edit = edits.save_edit(root, arguments.get("edit") or {})
+    return {"saved": True, "report": edits._tool_report(edits.report(root, edit=edit))}
+
+
+def _tool_set_captions(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import edits
+
+    return edits.apply_captions(root, arguments.get("indexes"), mode=arguments.get("mode"))
+
+
+def _tool_get_song_map(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import song_map
+
+    return song_map.song_map(root)
+
+
+def _tool_get_music_summary(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip.domain import section_map
+
+    path = root / "work" / "music.json"
+    if not path.is_file():
+        return {"available": False}
+    data = read_json(path)
+    return {
+        "estimated_tempo_bpm": data.get("estimated_tempo_bpm"),
+        "sections": (section_map.apply(root, data) or {}).get("sections"),
+        "warnings": data.get("warnings"),
+    }
+
+
+def _tool_get_lyrics(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip.domain import lyric_timing
+
+    path = root / "work" / "lyrics.json"
+    if not path.is_file():
+        return {"available": False}
+    lines = lyric_timing.view(root)["lines"]
+    timed = [
+        {"text": line["text"], "start": line["start"], "source": line["source"]}
+        for line in lines
+        if line["start"] is not None
+    ]
+    if not timed:
+        return read_json(path)
+    return {
+        **read_json(path),
+        "line_times": timed,
+        "line_times_note": "Automatic times are estimates; tapped times are the owner's.",
+    }
+
+
+def _tool_get_treatments(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    treatments = P.load_treatments(root)
+    return treatments.model_dump() if treatments is not None else {"concepts": []}
+
+
+def _tool_update_treatments(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    payload = {key: value for key, value in arguments.items() if key != "slug"}
+    # A model with no choice to report tends to send an empty string for this field.
+    if not payload.get("chosen_id"):
+        payload["chosen_id"] = None
+    return P.update_treatments(root, payload).model_dump()
+
+
+def _tool_get_idea(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import idea
+
+    return idea.latest(root) or {"available": False}
+
+
+def _tool_sort_idea(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import idea
+
+    parts = {key: arguments.get(key) or [] for key in idea.PARTS}
+    return idea.apply_sort(root, parts, by="writer")
+
+
+def _tool_place_story(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import story_beats
+
+    placement = story_beats.place_story(root, {"passages": arguments.get("passages")})
+    return {"placed": len(placement.passages)}
+
+
+def _tool_get_images(name, arguments, root, runner, projects_dir):
+    return _get_images(root, arguments.get("shot_ids") or [])
+
+
+def _tool_get_script(name, arguments, root, runner, projects_dir):
+    return _script_tool(root, name, arguments)
+
+
+def _tool_propose_alternatives(name, arguments, root, runner, projects_dir):
+    return _propose(arguments)
+
+
+def _tool_propose_motion(name, arguments, root, runner, projects_dir):
+    from .. import clips
+
+    return clips.propose_motion(root, arguments.get("shots") or [])
+
+
+def _tool_batch_update_prompts(name, arguments, root, runner, projects_dir):
+    return _batch_prompts(root, arguments.get("changes") or [])
+
+
+def _tool_compare_versions(name, arguments, root, runner, projects_dir):
+    return _compare_versions(root, arguments)
+
+
+def _tool_get_preview_frames(name, arguments, root, runner, projects_dir):
+    return _preview_frames(root, arguments.get("seconds") or [])
+
+
+def _tool_update_brief(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    patch = arguments.get("patch") or {}
+    if not isinstance(patch, dict):
+        raise ValueError("brief patch must be a JSON object")
+    for key in ("direction", "style", "treatment"):
+        if key in patch and (not isinstance(patch[key], str) or not patch[key].strip()):
+            raise ValueError(f"brief {key} cannot be blank; omit it to keep the current text")
+    before = P.out_of_date_stills(root) if (root / "work/storyboard.json").is_file() else []
+    return _with_still_cost(root, before, _brief_result(P.update_brief(root, patch)))
+
+
+def _tool_set_creative_profile(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    before = P.out_of_date_stills(root) if (root / "work/storyboard.json").is_file() else []
+    return _with_still_cost(
+        root,
+        before,
+        _brief_result(
+            P.set_creative_profile(
+                root,
+                characters=arguments.get("characters") or [],
+                scenes=arguments.get("scenes") or [],
+                arc=arguments.get("arc") or [],
+                image_rules=arguments.get("image_rules") or [],
+                avoid=arguments.get("avoid") or [],
+                look=arguments.get("look") or "",
+                sections=arguments.get("sections"),
+                narrator=arguments.get("narrator"),
+                place=arguments.get("place"),
+                eras=arguments.get("eras"),
+            )
+        ),
+    )
+
+
+def _tool_update_shots(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    before = P.out_of_date_stills(root)
+    board, changed = P.update_shots(root, arguments.get("changes") or [])
+    # A whole board can outgrow what a client carries back to the model.
+    return _with_still_cost(
+        root,
+        before,
+        {
+            "changed": changed,
+            "shots": [shot.model_dump() for shot in board.shots if shot.id in changed],
+            "shot_total": len(board.shots),
+        },
+    )
+
+
+def _tool_write_storyboard(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+    from mp3_to_videoclip import shotkinds
+
+    board = P.write_storyboard(root, arguments.get("shots") or [])
+    return {
+        "saved": True,
+        "shot_total": len(board.shots),
+        "paid": sum(1 for shot in board.shots if shotkinds.is_paid(shot)),
+        "total_frames": board.total_frames,
+        "shots": [
+            {
+                "id": shot.id,
+                "start_frame": shot.start_frame,
+                "duration_frames": shot.duration_frames,
+                "kind": shot.kind,
+            }
+            for shot in board.shots
+        ],
+    }
+
+
+def _tool_create_storyboard(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    seconds = arguments.get("seconds")
+    if seconds is not None and seconds > MAX_SKELETON_SHOT_SECONDS:
+        raise ValueError(
+            f"seconds is the length of one shot, at most {MAX_SKELETON_SHOT_SECONDS}; "
+            "leave it out to follow the music"
+        )
+    board = P.skeleton(
+        root,
+        arguments.get("seconds"),
+        arguments.get("timing"),
+    )
+    from mp3_to_videoclip import promptlog
+
+    promptlog.record(root, "storyboard-skeleton")
+    return board.model_dump()
+
+
+def _tool_generate_images(name, arguments, root, runner, projects_dir):
+    return _generate_images(root, arguments, runner)
+
+
+def _tool_transcribe_lyrics(name, arguments, root, runner, projects_dir):
+    return _transcribe(root, arguments, runner)
+
+
+def _tool_render(name, arguments, root, runner, projects_dir):
+    return _render(root, arguments, runner)
+
+
+def _tool_set_proof_shots(name, arguments, root, runner, projects_dir):
+    from mp3_to_videoclip import production as P
+
+    return {"proof_shot_ids": P.set_proof_ids(root, arguments.get("shot_ids") or [])}
+
+
+def _tool_ask_user(name, arguments, root, runner, projects_dir):
+    return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}
+
+
+HANDLERS = {
+    "get_project": _tool_get_project,
+    "get_brief": _tool_get_brief,
+    "get_storyboard": _tool_get_storyboard,
+    "get_edit": _tool_get_edit,
+    "get_film_frames": _tool_get_film_frames,
+    "save_critique": _tool_save_critique,
+    "update_edit_shots": _tool_update_edit_shots,
+    "update_voice_lines": _tool_update_voice_lines,
+    "get_cut_material": _tool_get_cut_material,
+    "update_edit": _tool_update_edit,
+    "set_captions": _tool_set_captions,
+    "get_song_map": _tool_get_song_map,
+    "get_music_summary": _tool_get_music_summary,
+    "get_lyrics": _tool_get_lyrics,
+    "get_treatments": _tool_get_treatments,
+    "update_treatments": _tool_update_treatments,
+    "get_idea": _tool_get_idea,
+    "sort_idea": _tool_sort_idea,
+    "place_story": _tool_place_story,
+    "get_images": _tool_get_images,
+    "get_script": _tool_get_script,
+    "write_script": _tool_get_script,
+    "update_lines": _tool_get_script,
+    "get_narration": _tool_get_script,
+    "propose_alternatives": _tool_propose_alternatives,
+    "propose_motion": _tool_propose_motion,
+    "batch_update_prompts": _tool_batch_update_prompts,
+    "compare_versions": _tool_compare_versions,
+    "get_preview_frames": _tool_get_preview_frames,
+    "update_brief": _tool_update_brief,
+    "set_creative_profile": _tool_set_creative_profile,
+    "update_shots": _tool_update_shots,
+    "write_storyboard": _tool_write_storyboard,
+    "create_storyboard": _tool_create_storyboard,
+    "generate_images": _tool_generate_images,
+    "transcribe_lyrics": _tool_transcribe_lyrics,
+    "render": _tool_render,
+    "set_proof_shots": _tool_set_proof_shots,
+    "ask_user": _tool_ask_user,
+}
+
+
 def _dispatch(
     name: str,
     arguments: dict[str, Any],
     runner=None,
     projects_dir: Path | None = None,
 ) -> Any:
-    from mp3_to_videoclip import production as P
-
-    root = _root(arguments["slug"], projects_dir)
-
-    if name == "get_project":
-        project = P.load_project(root)
-        return {"slug": project.slug, "title": project.title, "duration": project.duration}
-
-    if name == "get_brief":
-        return P.load_brief(root).model_dump()
-
-    if name == "get_storyboard":
-        return P.load_board(root).model_dump()
-
-    if name == "get_edit":
-        from mp3_to_videoclip import edits
-
-        return edits.tool_page(root, arguments.get("first") or 0, arguments.get("count") or 30)
-
-    if name == "get_film_frames":
-        return _get_film_frames(root, arguments.get("frames") or [])
-
-    if name == "save_critique":
-        from mp3_to_videoclip import critique
-
-        return critique.save(
-            root,
-            arguments.get("verdict") or "",
-            arguments.get("notes") or [],
-            P.load_project(root).fps,
-        )
-
-    if name == "update_edit_shots":
-        from mp3_to_videoclip import edits
-
-        return edits.patch_shots(root, arguments.get("shots") or [])
-
-    if name == "update_voice_lines":
-        from mp3_to_videoclip import edits
-
-        return edits.set_voice_lines(root, arguments.get("lines") or [])
-
-    if name == "get_cut_material":
-        from mp3_to_videoclip import edits
-
-        return edits.cut_material(root)
-
-    if name == "update_edit":
-        from mp3_to_videoclip import edits
-
-        edit = edits.save_edit(root, arguments.get("edit") or {})
-        return {"saved": True, "report": edits._tool_report(edits.report(root, edit=edit))}
-
-    if name == "set_captions":
-        from mp3_to_videoclip import edits
-
-        return edits.apply_captions(root, arguments.get("indexes"), mode=arguments.get("mode"))
-
-    if name == "get_song_map":
-        from mp3_to_videoclip import song_map
-
-        return song_map.song_map(root)
-
-    if name == "get_music_summary":
-        from mp3_to_videoclip.domain import section_map
-
-        path = root / "work" / "music.json"
-        if not path.is_file():
-            return {"available": False}
-        data = read_json(path)
-        return {
-            "estimated_tempo_bpm": data.get("estimated_tempo_bpm"),
-            "sections": (section_map.apply(root, data) or {}).get("sections"),
-            "warnings": data.get("warnings"),
-        }
-
-    if name == "get_lyrics":
-        from mp3_to_videoclip.domain import lyric_timing
-
-        path = root / "work" / "lyrics.json"
-        if not path.is_file():
-            return {"available": False}
-        lines = lyric_timing.view(root)["lines"]
-        timed = [
-            {"text": line["text"], "start": line["start"], "source": line["source"]}
-            for line in lines
-            if line["start"] is not None
-        ]
-        if not timed:
-            return read_json(path)
-        return {
-            **read_json(path),
-            "line_times": timed,
-            "line_times_note": "Automatic times are estimates; tapped times are the owner's.",
-        }
-
-    if name == "get_treatments":
-        treatments = P.load_treatments(root)
-        return treatments.model_dump() if treatments is not None else {"concepts": []}
-
-    if name == "update_treatments":
-        payload = {key: value for key, value in arguments.items() if key != "slug"}
-        # A model with no choice to report tends to send an empty string for this field.
-        if not payload.get("chosen_id"):
-            payload["chosen_id"] = None
-        return P.update_treatments(root, payload).model_dump()
-
-    if name == "get_idea":
-        from mp3_to_videoclip import idea
-
-        return idea.latest(root) or {"available": False}
-
-    if name == "sort_idea":
-        from mp3_to_videoclip import idea
-
-        parts = {key: arguments.get(key) or [] for key in idea.PARTS}
-        return idea.apply_sort(root, parts, by="writer")
-
-    if name == "place_story":
-        from mp3_to_videoclip import story_beats
-
-        placement = story_beats.place_story(root, {"passages": arguments.get("passages")})
-        return {"placed": len(placement.passages)}
-
-    if name == "get_images":
-        return _get_images(root, arguments.get("shot_ids") or [])
-
-    if name in ("get_script", "write_script", "update_lines", "get_narration"):
-        return _script_tool(root, name, arguments)
-
-    if name == "propose_alternatives":
-        return _propose(arguments)
-
-    if name == "propose_motion":
-        from .. import clips
-
-        return clips.propose_motion(root, arguments.get("shots") or [])
-
-    if name == "batch_update_prompts":
-        return _batch_prompts(root, arguments.get("changes") or [])
-
-    if name == "compare_versions":
-        return _compare_versions(root, arguments)
-
-    if name == "get_preview_frames":
-        return _preview_frames(root, arguments.get("seconds") or [])
-
-    if name == "update_brief":
-        patch = arguments.get("patch") or {}
-        if not isinstance(patch, dict):
-            raise ValueError("brief patch must be a JSON object")
-        for field in ("direction", "style", "treatment"):
-            if field in patch and (not isinstance(patch[field], str) or not patch[field].strip()):
-                raise ValueError(f"brief {field} cannot be blank; omit it to keep the current text")
-        before = P.out_of_date_stills(root) if (root / "work/storyboard.json").is_file() else []
-        return _with_still_cost(root, before, _brief_result(P.update_brief(root, patch)))
-
-    if name == "set_creative_profile":
-        before = P.out_of_date_stills(root) if (root / "work/storyboard.json").is_file() else []
-        return _with_still_cost(
-            root,
-            before,
-            _brief_result(
-                P.set_creative_profile(
-                    root,
-                    characters=arguments.get("characters") or [],
-                    scenes=arguments.get("scenes") or [],
-                    arc=arguments.get("arc") or [],
-                    image_rules=arguments.get("image_rules") or [],
-                    avoid=arguments.get("avoid") or [],
-                    look=arguments.get("look") or "",
-                    sections=arguments.get("sections"),
-                    narrator=arguments.get("narrator"),
-                    place=arguments.get("place"),
-                    eras=arguments.get("eras"),
-                )
-            ),
-        )
-
-    if name == "update_shots":
-        before = P.out_of_date_stills(root)
-        board, changed = P.update_shots(root, arguments.get("changes") or [])
-        # A whole board can outgrow what a client carries back to the model.
-        return _with_still_cost(
-            root,
-            before,
-            {
-                "changed": changed,
-                "shots": [shot.model_dump() for shot in board.shots if shot.id in changed],
-                "shot_total": len(board.shots),
-            },
-        )
-
-    if name == "write_storyboard":
-        from mp3_to_videoclip import shotkinds
-
-        board = P.write_storyboard(root, arguments.get("shots") or [])
-        return {
-            "saved": True,
-            "shot_total": len(board.shots),
-            "paid": sum(1 for shot in board.shots if shotkinds.is_paid(shot)),
-            "total_frames": board.total_frames,
-            "shots": [
-                {
-                    "id": shot.id,
-                    "start_frame": shot.start_frame,
-                    "duration_frames": shot.duration_frames,
-                    "kind": shot.kind,
-                }
-                for shot in board.shots
-            ],
-        }
-
-    if name == "create_storyboard":
-        seconds = arguments.get("seconds")
-        if seconds is not None and seconds > MAX_SKELETON_SHOT_SECONDS:
-            raise ValueError(
-                f"seconds is the length of one shot, at most {MAX_SKELETON_SHOT_SECONDS}; "
-                "leave it out to follow the music"
-            )
-        board = P.skeleton(
-            root,
-            arguments.get("seconds"),
-            arguments.get("timing"),
-        )
-        from mp3_to_videoclip import promptlog
-
-        promptlog.record(root, "storyboard-skeleton")
-        return board.model_dump()
-
-    if name == "generate_images":
-        return _generate_images(root, arguments, runner)
-
-    if name == "transcribe_lyrics":
-        return _transcribe(root, arguments, runner)
-
-    if name == "render":
-        return _render(root, arguments, runner)
-
-    if name == "set_proof_shots":
-        return {"proof_shot_ids": P.set_proof_ids(root, arguments.get("shot_ids") or [])}
-
-    if name == "ask_user":
-        return {"ask_user": arguments.get("question"), "options": arguments.get("options") or []}
-
-    raise ValueError(f"unknown tool: {name}")
+    handler = HANDLERS.get(name)
+    if handler is None:
+        raise ValueError(f"unknown tool: {name}")
+    return handler(name, arguments, _root(arguments["slug"], projects_dir), runner, projects_dir)
 
 
 def _with_still_cost(root: Path, before: list[str], value: dict) -> dict:
