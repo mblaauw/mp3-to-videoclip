@@ -33,6 +33,7 @@ RUNWARE_SCHEMA_URL = "https://runware.ai/docs/models/{slug}/schema.json"
 OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions"
 
 MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024
+MAX_VIDEO_BYTES = 200 * 1024 * 1024
 MAX_REFERENCE_BYTES = 10 * 1024 * 1024
 MAX_TRANSCRIBE_BYTES = 25_000_000
 RUNWARE_KEY_ENV = "PROJECT_VEIL_RUNWARE_API"
@@ -167,6 +168,12 @@ def _check_speech(data: bytes) -> None:
         data[:4] in (b"RIFF", b"fLaC", b"OggS") or data[:3] == b"ID3" or data[:2] == b"\xff\xfb"
     ):
         raise ProviderError("invalid_audio")
+
+
+def _check_video(data: bytes) -> None:
+    """An MP4 starts with its ``ftyp`` box. ffprobe judges the rest once it is on disk."""
+    if data[4:8] != b"ftyp":
+        raise ProviderError("invalid_video")
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
@@ -363,7 +370,12 @@ class RunwareClient:
         """Stream a verified audio file to ``path`` without overwriting an existing asset."""
         self._download(url, path, _check_speech)
 
-    def _download(self, url: str, path: Path, check) -> None:
+    def download_video(self, url: str, path: Path) -> None:
+        """Stream an MP4 to ``path`` under the clip cap, without overwriting an existing asset."""
+        self._download(url, path, _check_video, limit=MAX_VIDEO_BYTES)
+
+    def _download(self, url: str, path: Path, check, limit: int | None = None) -> None:
+        limit = limit or MAX_DOWNLOAD_BYTES
         path = Path(path)
         if path.exists():
             raise ProviderError("asset_exists")
@@ -380,13 +392,13 @@ class RunwareClient:
                         declared_size = int(declared)
                     except ValueError:
                         declared_size = 0
-                    if declared_size > MAX_DOWNLOAD_BYTES:
+                    if declared_size > limit:
                         raise ProviderError("too_large")
                 chunks: list[bytes] = []
                 total = 0
                 for chunk in response.iter_bytes():
                     total += len(chunk)
-                    if total > MAX_DOWNLOAD_BYTES:
+                    if total > limit:
                         raise ProviderError("too_large")
                     chunks.append(chunk)
         except ProviderError:
@@ -564,6 +576,46 @@ class RunwareClient:
             raise ProviderError("invalid_request")
         data = self._post_json([{"taskType": "getResponse", "taskUUID": task_uuid}])
         return self._speech_result(self._match(data, task_uuid), task_uuid)
+
+    @staticmethod
+    def _video_result(task: dict | None, task_uuid: str) -> dict | None:
+        """The canonical finished result, or ``None`` while the task is still pending."""
+        if task is None:
+            return None
+        if task.get("status") == "error":
+            raise ProviderError(_safe_code(task.get("code")))
+        if task.get("status") in _PENDING or task.get("videoURL") is None:
+            return None
+        cost = task.get("cost")
+        if (
+            isinstance(cost, bool)
+            or not isinstance(cost, (int, float))
+            or not math.isfinite(cost)
+            or cost < 0
+        ):
+            raise ProviderError("invalid_cost")
+        url = _safe_media_url(task.get("videoURL"))
+        return {"taskUUID": task_uuid, "videoURL": url, "cost": float(cost)}
+
+    def submit_video(self, request: dict) -> dict:
+        """Submit one image-to-video task. Returns the finished result or ``{taskUUID}``."""
+        if not isinstance(request, dict) or request.get("taskType") != "videoInference":
+            raise ProviderError("invalid_request")
+        task_uuid = request.get("taskUUID")
+        if not isinstance(task_uuid, str) or not task_uuid:
+            raise ProviderError("invalid_request")
+        data = self._post_json([{**request, "includeCost": True}])
+        task = self._match(data, task_uuid)
+        if task is None:
+            raise ProviderError("mismatched_task")
+        return self._video_result(task, task_uuid) or {"taskUUID": task_uuid}
+
+    def recover_video(self, task_uuid: str) -> dict | None:
+        """Read-only ``getResponse`` poll. Returns the finished result, or ``None``."""
+        if not isinstance(task_uuid, str) or not task_uuid:
+            raise ProviderError("invalid_request")
+        data = self._post_json([{"taskType": "getResponse", "taskUUID": task_uuid}])
+        return self._video_result(self._match(data, task_uuid), task_uuid)
 
     # ------------------------------------------------------------------ text inference
 

@@ -48,6 +48,7 @@ def _payload(root: Path) -> dict:
             "built": built is not None,
             "receipt": soundtrack.receipt(root),
             "url": f"/api/projects/{root.name}/audio?v={soundtrack.key(root)}" if built else None,
+            "mix": soundtrack.read_spec(root),
         },
         "narration": narration.view(root),
         "voices": voices.catalogue(),
@@ -82,6 +83,31 @@ async def build_soundtrack(slug: str, request: Request):
 
     await asyncio.to_thread(run)
     return _payload(root)
+
+
+@router.post("/soundtrack/mix")
+def set_mix(slug: str, request: Request, payload: dict):
+    """The bed, the ambience and the fades. Nothing is heard until the next build."""
+    root = _story_film(request, slug)
+    with project_lock(root):
+        soundtrack.set_mix(root, payload)
+    return _payload(root)
+
+
+@router.post("/soundtrack/sound")
+async def add_sound(slug: str, request: Request, filename: str):
+    """An owned recording for the bed or an ambience. Its path goes in the mix next."""
+    root = _story_film(request, slug)
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=400, detail="the upload is empty")
+    if len(data) > MAX_TAKE_BYTES:
+        raise HTTPException(status_code=413, detail="that sound is too large")
+    with tempfile.TemporaryDirectory(prefix="film-sound-") as temp:
+        source = Path(temp) / f"sound{Path(filename).suffix.lower()}"
+        source.write_bytes(data)
+        with project_lock(root):
+            return {"path": soundtrack.add_sound(root, source)}
 
 
 @router.get("/narration/{line_id}/{version}")

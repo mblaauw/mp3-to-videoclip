@@ -592,3 +592,26 @@
   box-shadow: 0 0 0 999px rgba(10, 10, 12, 0.5);
   pointer-events: none;
 }
+
+.make-clip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: flex-start;
+  margin-top: var(--s-2);
+}
+.clip-card {
+  display: grid;
+  gap: 4px;
+  width: 200px;
+  padding: var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.clip-card.on {
+  border-color: var(--gold);
+}
+.clip-card video {
+  width: 100%;
+  display: block;
+}

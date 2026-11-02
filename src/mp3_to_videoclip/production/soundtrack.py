@@ -19,6 +19,9 @@ SOUNDTRACK_VERSION = 1
 TARGET_LUFS = -16.0
 PEAK = 0.98
 DEFAULT_BED = {"gain_db": -14.0, "duck_db": -10.0}
+AMBIENCE_GAIN_DB = -24.0
+AMBIENCE_FADE_SECONDS = 1.0
+AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aiff"}
 
 
 def read_spec(root: Path) -> dict:
@@ -73,6 +76,17 @@ def _inputs(root: Path) -> dict:
             }
             for row in rows
         ],
+        # Named only when there is some, so every key made before ambience existed holds.
+        **(
+            {
+                "ambience": [
+                    {**item, "sha256": file_hash(inside(root, item["path"]))}
+                    for item in spec["ambience"]
+                ]
+            }
+            if spec.get("ambience")
+            else {}
+        ),
     }
 
 
@@ -116,8 +130,8 @@ def set_duration(root: Path, seconds: float) -> Project:
     return updated
 
 
-def _loudness(path: Path) -> float | None:
-    """Integrated loudness, or ``None`` for silence, which has none."""
+def _measure(path: Path) -> dict | None:
+    """Integrated loudness, true peak and range, or ``None`` for silence, which has none."""
     import json
     import re
 
@@ -139,8 +153,20 @@ def _loudness(path: Path) -> float | None:
     found = re.search(rb"\{[^{}]*\"input_i\"[^{}]*\}", completed.stderr)
     if completed.returncode != 0 or not found:
         return None
-    value = float(json.loads(found.group()).get("input_i", "-inf"))
-    return value if value > -70 else None
+    values = json.loads(found.group())
+    loudness = float(values.get("input_i", "-inf"))
+    if loudness <= -70:
+        return None
+    return {
+        "lufs": loudness,
+        "true_peak_db": float(values.get("input_tp", "-inf")),
+        "range_lu": float(values.get("input_lra", 0.0)),
+    }
+
+
+def _loudness(path: Path) -> float | None:
+    measured = _measure(path)
+    return measured["lufs"] if measured else None
 
 
 def _write(path: Path, samples: np.ndarray) -> None:
@@ -185,13 +211,31 @@ def _mix(root: Path, rows: list[dict], takes: dict, spec: dict) -> np.ndarray:
         spans.append((first, end))
     out = np.stack([speech, speech], axis=1)
     bed = spec.get("bed")
+    depth = (1 - voice._duck(total, spans)) / (1 - 10 ** (voice.DUCK_DB / 20))
+
+    def looped(relative: str, count: int) -> np.ndarray:
+        music = voice._decode(inside(root, relative), sound.CHANNELS)
+        repeats = int(np.ceil(count / max(1, music.shape[0])))
+        return np.tile(music, (repeats, 1))[:count]
+
     if bed:
-        music = voice._decode(inside(root, bed["path"]), sound.CHANNELS)
-        repeats = int(np.ceil(total / max(1, music.shape[0])))
-        music = np.tile(music, (repeats, 1))[:total] * 10 ** (float(bed["gain_db"]) / 20)
+        music = looped(bed["path"], total) * 10 ** (float(bed["gain_db"]) / 20)
         duck = float(bed.get("duck_db", DEFAULT_BED["duck_db"]))
-        depth = (1 - voice._duck(total, spans)) / (1 - 10 ** (voice.DUCK_DB / 20))
         out = out + music * (1 - depth * (1 - 10 ** (duck / 20)))[:, None]
+    places = {row["id"]: row for row in rows}
+    for item in spec.get("ambience", []):
+        if item["from_line"] not in places or item["to_line"] not in places:
+            # A line this sound was tied to has left the script: it stops playing, and says so.
+            continue
+        first = round(places[item["from_line"]]["start"] * rate)
+        last = places[item["to_line"]]
+        end = min(total, round((last["end"] + last["pause_after"]) * rate))
+        if end <= first:
+            continue
+        span = looped(item["path"], end - first) * 10 ** (float(item["gain_db"]) / 20)
+        _fades(span, AMBIENCE_FADE_SECONDS, AMBIENCE_FADE_SECONDS)
+        duck = float(item.get("duck_db", DEFAULT_BED["duck_db"]))
+        out[first:end] += span * (1 - depth[first:end] * (1 - 10 ** (duck / 20)))[:, None]
     _fades(out, float(spec.get("fade_in", 0.0)), float(spec.get("fade_out", 0.0)))
     return out
 
@@ -224,6 +268,7 @@ def build(root: Path) -> dict:
             peak = float(np.max(np.abs(samples)))
             gain = min(goal - measured, 20 * float(np.log10(PEAK / peak)))
             _write(temp, samples * 10 ** (gain / 20))
+        final = _measure(temp) if measured is not None else None
         write_json(
             target.with_suffix(".json"),
             {
@@ -232,7 +277,9 @@ def build(root: Path) -> dict:
                 "lines_with_takes": len([row for row in rows if row["id"] in takes]),
                 "lines": len(rows),
                 "input_lufs": measured,
-                "output_lufs": _loudness(temp) if measured is not None else None,
+                "output_lufs": final["lufs"] if final else None,
+                "output_true_peak_db": final["true_peak_db"] if final else None,
+                "output_range_lu": final["range_lu"] if final else None,
                 "target_lufs": goal,
                 "gain_db": round(gain, 2),
             },
@@ -247,7 +294,85 @@ def build(root: Path) -> dict:
     from .board import retime_lines
 
     moved = retime_lines(root)
+    from ..edits import refresh_captions
+
+    refresh_captions(root)
     return {"key": value, "seconds": seconds, "path": str(target.relative_to(root)), "moved": moved}
+
+
+def _number(value, low: float, high: float, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+        raise ValueError(f"{name} must be between {low:g} and {high:g}")
+    return float(value)
+
+
+def _audio_path(root: Path, relative) -> str:
+    if not isinstance(relative, str) or not inside(root, relative).is_file():
+        raise ValueError("that sound is not in this film; add it first")
+    return relative
+
+
+def add_sound(root: Path, source: Path) -> str:
+    """Copy a bed or ambience into the film under its own hash. Never replaces a file."""
+    suffix = source.suffix.lower()
+    if suffix not in AUDIO_SUFFIXES:
+        raise ValueError(f"a sound must be one of {', '.join(sorted(AUDIO_SUFFIXES))}")
+    from .. import voice
+
+    voice._decode(source, sound.CHANNELS)
+    relative = f"media/sound-{file_hash(source)[:16]}{suffix}"
+    target = inside(root, relative)
+    if not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_suffix(suffix + ".partial")
+        temporary.write_bytes(source.read_bytes())
+        temporary.replace(target)
+    return relative
+
+
+@state_mutation
+def set_mix(root: Path, patch: dict) -> dict:
+    """Change the bed, the ambience or the fades. The next build makes a new file."""
+    from .script import require_script
+
+    if not isinstance(patch, dict):
+        raise ValueError("the mix must be an object")
+    script = require_script(root)
+    spec = ensure_spec(root, script)
+    known = {line.id for line in script.lines}
+    for name in ("fade_in", "fade_out"):
+        if name in patch:
+            spec[name] = _number(patch[name], 0, 30, name)
+    if "bed" in patch:
+        bed = patch["bed"]
+        if bed is None:
+            spec.pop("bed", None)
+        else:
+            spec["bed"] = {
+                "path": _audio_path(root, bed.get("path")),
+                "gain_db": _number(bed.get("gain_db", DEFAULT_BED["gain_db"]), -60, 0, "bed gain"),
+                "duck_db": _number(bed.get("duck_db", DEFAULT_BED["duck_db"]), -40, 0, "bed duck"),
+            }
+    if "ambience" in patch:
+        items = []
+        for item in patch["ambience"] or []:
+            if item.get("from_line") not in known or item.get("to_line") not in known:
+                raise ValueError("ambience runs from one line of this script to another")
+            items.append(
+                {
+                    "path": _audio_path(root, item.get("path")),
+                    "from_line": item["from_line"],
+                    "to_line": item["to_line"],
+                    "gain_db": _number(item.get("gain_db", AMBIENCE_GAIN_DB), -60, 0, "gain"),
+                    "duck_db": _number(item.get("duck_db", DEFAULT_BED["duck_db"]), -40, 0, "duck"),
+                }
+            )
+        if items:
+            spec["ambience"] = items
+        else:
+            spec.pop("ambience", None)
+    write_json(root / STAGE_FILES["voice"], spec)
+    return spec
 
 
 def stale_takes(root: Path) -> list[str]:

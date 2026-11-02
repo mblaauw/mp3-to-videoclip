@@ -213,6 +213,33 @@ def _section_look(project: Project, creative: CreativeProfile, shot: Shot) -> st
     return ""
 
 
+#: The one thing every picture of a place across time must not change.
+ERA_FRAMING = "Keep the camera, the horizon and the building line of the place."
+DOCUMENT_FRAMING = (
+    "A close-up of this one object filling the frame, its shape and surface legible; "
+    "any writing on it stays too small to read."
+)
+
+
+def _era_lines(creative: CreativeProfile, shot: Shot) -> list[str]:
+    """What an era shot adds: the place that stays, then this time's look of it."""
+    if creative.place is None:
+        raise ValueError(f"era shot {shot.id} needs the profile's place")
+    era = next((value for value in creative.eras if value.id == shot.era_id), None)
+    if era is None:
+        raise ValueError(f"unknown era {shot.era_id} in shot {shot.id}")
+    place = creative.place
+    return [
+        f"Place: {place.description}" + (f" Camera: {place.camera}" if place.camera else ""),
+        ERA_FRAMING,
+        f"Era {era.year}: {era.state}",
+        "Palette: " + ", ".join(era.palette) if era.palette else "",
+        f"Light: {era.light}" if era.light else "",
+        f"What persists: {era.persists}" if era.persists else "",
+        f"What changed: {era.changed}" if era.changed else "",
+    ]
+
+
 def shot_seed(seed: int, shot_id: str) -> int:
     """A stable seed per shot, so a redo of one shot never moves its neighbours.
 
@@ -272,7 +299,11 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
                 image.verify()
             product_refs = [{"path": shot.product_ref, "sha256": file_hash(path)}]
             product_role = "the supplied product"
-    refs = character_refs(root, brief, shot.character_ids, shot.character_states)
+    # The anchor goes first, so the model reads every other image against it.
+    anchor = []
+    if shot.kind == "era" and creative.place is not None and creative.place.reference_id:
+        anchor = reference_refs(root, brief, [creative.place.reference_id])
+    refs = anchor + character_refs(root, brief, shot.character_ids, shot.character_states)
     refs += reference_refs(root, brief, bound_ids)
     refs += product_refs
     refs = list({item["path"]: item for item in refs}.values())
@@ -314,6 +345,9 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
                     bound_roles.append(f"{c.id} state {sid}")
             bound_roles += [r.kind for r in creative.references if r.path == ref["path"]]
             role = "; ".join(dict.fromkeys(bound_roles)) or "visual"
+            if anchor and ref["path"] == anchor[0]["path"]:
+                roles.append(f"Image {index}: the place itself; keep its camera and geometry.")
+                continue
             roles.append(
                 f"Image {index}: {role} reference; do not copy incidental pose or background."
             )
@@ -339,6 +373,8 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
                 creative.look if look_first else "",
                 shot.image_prompt,
                 bridge_line,
+                DOCUMENT_FRAMING if shot.kind == "document" else "",
+                *(_era_lines(creative, shot) if shot.kind == "era" else []),
                 "Framing: " + FRAMING_TEXT[shot.framing] if shot.framing else "",
                 "Must show: " + "; ".join(shot.must_show) if shot.must_show else "",
                 _section_look(project, creative, shot),
@@ -379,6 +415,8 @@ def image_spec(root: Path, shot: Shot, *, verify_source: bool = True) -> dict:
     if brief.creative is None:
         if creative_workflow(project):
             raise ValueError("the creative workflow requires a creative profile for state prompts")
+        if shot.kind == "era":
+            raise ValueError(f"era shot {shot.id} needs the profile's place")
         spec = _legacy_image_spec(root, project, brief, shot)
     else:
         spec = _creative_image_spec(root, project, brief, shot)

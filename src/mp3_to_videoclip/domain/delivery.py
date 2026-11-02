@@ -207,6 +207,24 @@ def build(root: Path) -> dict:
         )
     )
 
+    if project.spine == "soundtrack":
+        from ..production import soundtrack
+
+        receipt = soundtrack.receipt(root) or {}
+        lufs = receipt.get("output_lufs")
+        lines.append(
+            _line(
+                "loudness",
+                "Loudness of the mix",
+                "film",
+                lufs is not None,
+                None,
+                None,
+                f"{lufs:.1f} LUFS measured" if lufs is not None else "Not measured yet.",
+                required=False,
+            )
+        )
+
     can_final = stills_ok and (graphics_ok if signature else True)
     required = [line for line in lines if line["required"]]
     outstanding = [line["label"] for line in required if line["state"] != "done"]

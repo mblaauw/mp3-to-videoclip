@@ -8,10 +8,14 @@
 import React, {useEffect, useState} from "react";
 import {
   AbsoluteFill,
+  Freeze,
   Img,
+  OffthreadVideo,
   Sequence,
+  Video,
   continueRender,
   delayRender,
+  getRemotionEnvironment,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
@@ -206,6 +210,19 @@ function textBox(style, width, frameHeight, color, family) {
       lineHeight: 1.12,
     };
   }
+  if (style === "caption") {
+    return {
+      ...base,
+      textShadow: "none",
+      left: width * 0.08,
+      right: width * 0.08,
+      bottom: frameHeight * 0.07,
+      textAlign: "center",
+      fontSize: height * 0.036,
+      fontWeight: 500,
+      lineHeight: 1.45,
+    };
+  }
   if (style === "lyric") {
     return {
       ...base,
@@ -249,6 +266,23 @@ function textBox(style, width, frameHeight, color, family) {
   };
 }
 
+// A caption's dark band hugs each line of its words, so it costs the picture as little as it can.
+function CaptionBand({style, unit, children}) {
+  if (style !== "caption") return children;
+  return (
+    <span
+      style={{
+        background: "rgba(8,8,10,0.72)",
+        padding: `${unit * 0.006}px ${unit * 0.016}px`,
+        boxDecorationBreak: "clone",
+        WebkitBoxDecorationBreak: "clone",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function TextLayer({item, absoluteFrame, width, height, family}) {
   const {fps} = useVideoConfig();
   if (absoluteFrame < item.in_frame || absoluteFrame >= item.out_frame) return null;
@@ -263,6 +297,7 @@ function TextLayer({item, absoluteFrame, width, height, family}) {
   if (item.animation === "kinetic_words") {
     return (
       <div style={box}>
+        <CaptionBand style={item.style} unit={Math.min(width, height)}>
         {words.map((word, index) => {
           const timed = item.words?.[index];
           const state = timed
@@ -282,6 +317,7 @@ function TextLayer({item, absoluteFrame, width, height, family}) {
             </span>
           );
         })}
+        </CaptionBand>
       </div>
     );
   }
@@ -298,7 +334,9 @@ function TextLayer({item, absoluteFrame, width, height, family}) {
         transform: state.transform ?? undefined,
       }}
     >
-      {visible}
+      <CaptionBand style={item.style} unit={Math.min(width, height)}>
+        {visible}
+      </CaptionBand>
     </div>
   );
 }
@@ -321,6 +359,24 @@ const GRAIN_IMAGE = `url("data:image/svg+xml,${encodeURIComponent(
 )}")`;
 
 const WHIP_BLUR_ID = "whip-blur";
+
+// The MP4 takes exact frames from the file; the Player plays it like any video. Past its end a
+// clip is frozen on its last frame, by rule. Silent always: the film has one soundtrack.
+function ClipLayer({clip, localFrame, absoluteFrame, fps}) {
+  const state = timing.clipFrame(clip, localFrame, fps);
+  const src = clip.src ?? staticFile(clip.file);
+  const style = {width: "100%", height: "100%", objectFit: "cover", display: "block"};
+  const media = getRemotionEnvironment().isRendering ? (
+    <OffthreadVideo src={src} muted style={style} />
+  ) : (
+    <Video src={src} muted style={style} />
+  );
+  return (
+    <Sequence from={absoluteFrame - localFrame} layout="none">
+      {state.held ? <Freeze frame={state.last}>{media}</Freeze> : media}
+    </Sequence>
+  );
+}
 
 export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, height, whipBlur = 0, typefaces = null}) {
   const grade = timing.gradeStyle(span.grade, span.post_effects);
@@ -381,6 +437,8 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
             // A missing selected still keeps its allocation and shows the same
             // placeholder marking as a preview render, without loading a file.
             <AbsoluteFill style={{backgroundColor: "#101014"}} />
+          ) : span.clip ? (
+            <ClipLayer clip={span.clip} localFrame={localFrame} absoluteFrame={absoluteFrame} fps={fps} />
           ) : parallax && span.depth ? (
             ["far", "mid", "near"].map((layer) => (
               <Img
@@ -403,7 +461,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
               style={{width: "100%", height: "100%", objectFit: "cover", display: "block"}}
             />
           )}
-          {look && look.bloom > 0 && span.src !== null && panes.length < 2 ? (
+          {look && look.bloom > 0 && span.src !== null && panes.length < 2 && !span.clip ? (
             <Img
               src={span.src ?? staticFile(span.image)}
               style={{
@@ -418,7 +476,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
               }}
             />
           ) : null}
-          {look && look.halation > 0 && span.src !== null && panes.length < 2 ? (
+          {look && look.halation > 0 && span.src !== null && panes.length < 2 && !span.clip ? (
             <Img
               src={span.src ?? staticFile(span.image)}
               style={{

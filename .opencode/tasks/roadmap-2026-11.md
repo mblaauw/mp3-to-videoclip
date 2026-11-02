@@ -229,8 +229,8 @@ Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both a
 ## Where the roadmap stands, 1 Nov 2026
 
 Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76),
-E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79). C-3 and E-3 are in the PR after
-#79. Next in the final order: I-3.
+E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79), C-3 and E-3 (#80). I-3 and C-4 are
+in the PR after #80. Next in the final order: I-4.
 
 Differences from the plans, where the plan was wrong or could not hold:
 
@@ -253,7 +253,7 @@ Differences from the plans, where the plan was wrong or could not hold:
 Still open by decision: the OpenAI major version; E-1 still uses that SDK's streaming, and no live
 call has proven the adapter.
 The narrator voice in Settings is not used until Phase I; `voice.py` keeps its own default.
-`_final_state` keeps its mtime check. Parts of C not yet done: C-3 and C-4.
+`_final_state` keeps its mtime check. C-4 was the last part of C.
 
 - **E-2:** a per-shot seed is reduced to 31 bits, because the image models' schemas stop there.
   Today's models have no separate edit input, so an edit sends the rejected still as the first
@@ -299,3 +299,23 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   `compare_versions`: the rule that the Critic only reads is pinned by name. The model allowance also stops at
   400,000 tokens, because no text model has a verified price. A first draft refuses a story film. Nothing about a
   first draft, a caption or a judge has met a real model: each needs the owner's authorisation.
+
+- **I-3:** the plan's Images tab for takes was not built: the Script stage already reviews takes with Keep, so a second
+  place would only disagree. The era anchor stays a reference on the World tab; a place with no reference image still
+  compiles from its words, so bind one before buying. The mix keeps I-2's one gain and measured ducking, not
+  `sidechaincompress` and `loudnorm`, and ambience runs from one line to another rather than by seconds, so it follows the
+  takes. `docs/primitives/` was not regenerated: `caption` is a text style and the sample set is per animation. Narrator,
+  place and eras cost the prompt budget, so their words live in `kinds/narrative.md`, not `profile.md`. A narrator's
+  permission asks again when the persona changes. No era or document still has been bought, and word timing in spoken
+  captions has only met constructed words.
+- **C-4:** a clip does not join `versions`, because every reader of that list assumes a picture: it has its own `clips` list
+  and `clip` field, sharing the version numbers. It belongs to its still by `still_root`, so a sharper copy keeps it and a
+  different picture turns it off. A reprise re-crops the still and never plays the clip. The request shape came from the
+  published schemas of Kling 2.5 Turbo and Veo 3.1 Lite: `videoInference`, async, `inputs.frameImages`, a duration from the
+  model's own list. Kling Turbo Standard is in the catalogue at a published $0.042 a second; no model is chosen by default.
+  The renderer's remote-asset guard refused the compositor's own download, which only a real render showed: it now
+  allows exactly the files the request names, on this computer. Rendered through Remotion with a local test clip: frames
+  follow it, hold after its end to within 0.02 and cut cleanly; the Player loaded it with Range requests and showed it.
+  The Player's hold past a clip's end was not looked at. `propose_motion` was not added: the tools are at their budget, and
+  `propose_alternatives` can say the same. No clip has been bought: the capped batch needs the owner's authorisation, and
+  the frame scan on real motion is unmeasured.

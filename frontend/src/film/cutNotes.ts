@@ -85,6 +85,8 @@ export function describeNote(finding: EditFinding, index: number, context: Conte
       return note(`${place}: the storyboard's words are not on screen`, "They only show if the cut draws them. Add them as text on this shot, or remove them from the storyboard.");
     case "reprise_uncropped":
       return note(`${place}: a repeated still with no new framing`, "A crop on its first frame makes the repeat read as a new shot.");
+    case "clip_short":
+      return note(`${shot?.shot_id ?? place}: the clip ends before the shot does`, "It holds its last frame until the cut. Shorten the shot, or make a longer clip.");
     case "reading_time":
     case "text_reading_time":
       return note(`${place}: on-screen text may be too quick to read`, text);

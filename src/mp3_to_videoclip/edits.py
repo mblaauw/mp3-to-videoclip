@@ -746,6 +746,25 @@ def report(
             )
         previous_framing = framing
 
+    # A clip holds its last frame past its end; more than a second of that shows.
+    clips = read_optional(root / "work/assets.json")
+    from .production.assets import selected_clip
+
+    for shot in edit.shots:
+        clip = selected_clip(clips.get(shot.shot_id, {})) if isinstance(clips, dict) else None
+        if clip is not None:
+            short = shot.duration_frames / fps - clip["frames"] / clip["fps"]
+            if short > 1.0:
+                warnings.append(
+                    {
+                        "code": "clip_short",
+                        "shot_id": shot.shot_id,
+                        "message": (
+                            f"the clip on {shot.shot_id} ends {short:.1f}s early and "
+                            "holds its last frame"
+                        ),
+                    }
+                )
     # Reading time. Card text is measured from the storyboard, timed text from
     # the edit layer, because both are words the viewer has to read.
     for shot in edit.shots:
@@ -753,7 +772,7 @@ def report(
         if source is None:
             continue
         words = sum(len(line.split()) for line in source.text)
-        if source.kind in ("card", "end_card", "logo") and words:
+        if source.kind in ("card", "end_card", "logo", "date_card", "title_card") and words:
             needed = 0.3 * words + 1.0
             if shot.duration_frames / fps < needed:
                 warnings.append(
@@ -770,6 +789,8 @@ def report(
             "card",
             "end_card",
             "logo",
+            "date_card",
+            "title_card",
         ):
             warnings.append(
                 {
@@ -1042,6 +1063,28 @@ def _caption_findings(edit: EditDecisionList) -> list[dict]:
     return findings
 
 
+def refresh_captions(root: Path) -> None:
+    """After a story film's takes move: the captions it has follow them to their new frames."""
+    from . import captions
+    from . import production as P
+
+    board = P.load_board(root) if (root / "work/storyboard.json").is_file() else None
+    edit = load_edit(root, board=board) if board is not None else None
+    if edit is None:
+        return
+    ids = {
+        int(item.id.removeprefix(captions.PREFIX).split("-")[0])
+        for shot in edit.shots
+        for item in shot.text
+        if item.id.startswith(captions.PREFIX)
+    }
+    if not ids:
+        return
+    project = P.load_project(root, verify_source=False)
+    known = {line["index"] for line in captions.timed_lines(root, project.fps, board.total_frames)}
+    apply_captions(root, sorted(ids & known))
+
+
 def apply_captions(
     root: Path,
     indexes: list[int] | None = None,
@@ -1072,7 +1115,8 @@ def apply_captions(
         chosen = set(indexes)
     else:
         raise ValueError("captions must be off, all, named or a list of lines")
-    layers = captions.caption_layers(edit, lines, chosen, project.fps)
+    style = "caption" if project.spine == "soundtrack" else "lyric"
+    layers = captions.caption_layers(edit, lines, chosen, project.fps, style)
     shots = []
     for shot in edit.shots:
         kept = [item for item in shot.text if not item.id.startswith(captions.PREFIX)]

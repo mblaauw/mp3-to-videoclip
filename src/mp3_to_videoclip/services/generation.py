@@ -157,6 +157,32 @@ def run_upscale(root: Path, quote_id: str) -> dict:
         return upscale.generate_upscale(root, quote_id)
 
 
+def estimate_clips(root: Path, shot_ids: list[str]) -> dict:
+    """Quote a clip of each selected still; saves the quote and spends nothing."""
+    from mp3_to_videoclip import clips
+    from mp3_to_videoclip.storage import project_lock
+
+    with project_lock(root):
+        quote = clips.quote_clips(root, shot_ids)
+    return {
+        "quote_id": quote["id"],
+        "tasks": len(quote["tasks"]),
+        "seconds": quote["seconds"],
+        "reserve_usd": quote["reserve_total_usd"],
+        "model": quote["model"],
+        "pricing": quote.get("published_pricing"),
+    }
+
+
+def run_clips(root: Path, quote_id: str) -> dict:
+    """Execute an authorized quote exactly once; never resubmits."""
+    from mp3_to_videoclip import clips
+    from mp3_to_videoclip.storage import project_lock
+
+    with project_lock(root):
+        return clips.generate_clips(root, quote_id)
+
+
 def recover(root: Path, task_uuid: str) -> dict:
     return G.recover(root, task_uuid)
 

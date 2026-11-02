@@ -60,7 +60,7 @@ export type EditCrop = {
 
 export type EditText = {
   id: string;
-  style: "super" | "title" | "lower_third" | "lyric" | "card" | "logotype" | "tagline" | "cta";
+  style: "super" | "title" | "lower_third" | "lyric" | "card" | "logotype" | "tagline" | "cta" | "caption";
   color?: string;
   text: string;
   in_frame: number;
@@ -107,7 +107,15 @@ export type SplitPane = {
   image?: string;
 };
 
+export type ShotClip = {
+  file: string;
+  frames: number;
+  fps: number;
+  src?: string;
+};
+
 export type PreviewShot = {
+  clip?: ShotClip;
   id: string;
   image: string;
   src: string | null;

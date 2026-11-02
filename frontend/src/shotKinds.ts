@@ -16,6 +16,11 @@ export const SHOT_KINDS: {
   { id: "reprise", label: "Reprise", icon: "↺", paid: false, hint: "New crop of an existing still" },
   { id: "logo", label: "Logo", icon: "◆", paid: false, hint: "Local brand lockup" },
   { id: "end_card", label: "End card", icon: "▮", paid: false, hint: "Local CTA close" },
+  { id: "plate", label: "Plate", icon: "▧", paid: false, hint: "Uploaded period or archival image" },
+  { id: "era", label: "Era", icon: "◷", paid: true, hint: "The film's place in one era, generated" },
+  { id: "document", label: "Document", icon: "▭", paid: true, hint: "Generated close-up of a prop" },
+  { id: "date_card", label: "Date card", icon: "#", paid: false, hint: "A year, drawn locally" },
+  { id: "title_card", label: "Title card", icon: "T", paid: false, hint: "A chapter or film title, drawn locally" },
 ];
 
 export function kindOf(shot: Pick<Shot, "kind">): ShotKind {
@@ -31,5 +36,5 @@ export function isPaidShot(shot: Shot): boolean {
   const kind = kindOf(shot);
   if (kind === "bridge") return shot.bridge?.mode === "generated";
   if (kind === "product") return !shot.asset;
-  return kind === "scene";
+  return kind === "scene" || kind === "era" || kind === "document";
 }

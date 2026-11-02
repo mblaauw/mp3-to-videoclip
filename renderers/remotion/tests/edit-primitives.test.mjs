@@ -16,6 +16,8 @@ import {
   gradeStyle,
   lookState,
   parallaxState,
+  clipFrame,
+  validateClip,
   validateDepthLayers,
   splitLayout,
   textAnimationStyle,
@@ -409,4 +411,24 @@ test("an impulse kicks, dies away and stays within the frame", () => {
   assert.equal(accentState(accents, 18).shiftX, 0);
   assert.throws(() => accentState([{...accents[0], amount: 1.15}], 10), /impulse/);
   assert.throws(() => accentState([{...accents[0], duration_frames: 20}], 10), /impulse/);
+});
+
+test("a clip shorter than its shot holds its last frame and is never stretched", () => {
+  const clip = {file: "a.mp4", frames: 48, fps: 24};
+  assert.deepEqual(clipFrame(clip, 0, 24), {frame: 0, held: false, last: 47});
+  assert.equal(clipFrame(clip, 46, 24).frame, 46);
+  assert.equal(clipFrame(clip, 46, 24).held, false);
+  assert.equal(clipFrame(clip, 47, 24).held, true);
+  assert.equal(clipFrame(clip, 500, 24).frame, 47);
+  // The same two seconds at another film rate.
+  assert.equal(clipFrame(clip, 500, 30).frame, 59);
+});
+
+test("a clip that is not a flat mp4 with its frames is refused", () => {
+  validateClip(undefined, "shot a");
+  validateClip({file: "abc.mp4", frames: 48, fps: 24}, "shot a");
+  assert.throws(() => validateClip({file: "../abc.mp4", frames: 48, fps: 24}, "shot a"));
+  assert.throws(() => validateClip({file: "abc.mov", frames: 48, fps: 24}, "shot a"));
+  assert.throws(() => validateClip({file: "abc.mp4", frames: 0, fps: 24}, "shot a"));
+  assert.throws(() => validateClip({file: "abc.mp4", frames: 48, fps: 0}, "shot a"));
 });

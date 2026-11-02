@@ -168,7 +168,10 @@ only by `soundtrack.set_duration` and stays out of the stage hashes, so re-recor
 script approved. The chain is brief, `script`, `voice`, storyboard. `narration_timing.py` says when each
 line is said, estimated or measured; `board.retime_lines` re-derives bound shots' frames from it and
 `edits.retime_by_lines` moves the cut with them. `narration.py` buys takes through the same journal as
-stills. `structures.py` is the template table, and `analysis.analyze_narration` keeps the keys of
+stills. `production/soundtrack.py` mixes the takes with a bed and ambience spans, measures the result, and
+keeps a receipt the render report copies. `clips.py` buys a clip of a selected still through the same journal
+and keeps it beside the versions in `work/assets.json`; `production.selected_clip` is the one rule for
+whether it plays. `structures.py` is the template table, and `analysis.analyze_narration` keeps the keys of
 `analyze` so the Spine and `cut_material` read speech without knowing.
 
 ## Decisions and first drafts

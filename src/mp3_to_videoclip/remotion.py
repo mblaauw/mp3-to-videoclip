@@ -68,10 +68,11 @@ class AssetCacheCorruption(ValueError):
     """An immutable cached asset differs from its content-addressed name."""
 
 
-def _stage_asset(source: Path, assets: Path) -> tuple[str, str]:
+def _stage_asset(source: Path, assets: Path, *, picture: bool = True) -> tuple[str, str]:
     sha = file_hash(source)
-    with Image.open(source) as image:
-        image.verify()
+    if picture:
+        with Image.open(source) as image:
+            image.verify()
     name = sha + source.suffix.lower()
     target = assets / name
     if not target.exists():
@@ -100,6 +101,8 @@ def selected_asset_root(compiled: list[dict], assets: Path) -> Path:
         entries = [shot, *shot.get("split_panes", [])]
         depth = shot.get("depth") or {}
         entries += [{"image": depth[layer]} for layer in ("far", "mid", "near") if layer in depth]
+        if shot.get("clip"):
+            entries.append({"image": shot["clip"]["file"], "image_sha256": shot["clip"]["sha256"]})
         for entry in entries:
             name = entry["image"]
             sha = entry.get("image_sha256", name.split(".", 1)[0])
@@ -761,6 +764,8 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path, stand_in
             and not (rs.shot.asset_shot_id is None and shotkinds.is_local(rs.shot))
             # A preview's labelled plate for a missing still has nothing to separate.
             and rs.shot.id not in stand_ins
+            # A clip moves on its own.
+            and rs.clip is None
         ):
             layers = depth.layer_set(root, Path(rs.image))
             if layers is None:
@@ -771,6 +776,14 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path, stand_in
                     for layer in depth.LAYERS
                 }
                 entry["depth"] = {**staged, "model": layers["model"]}
+        if rs.clip is not None:
+            clip_name, clip_sha = _stage_asset(Path(rs.clip.path), assets, picture=False)
+            entry["clip"] = {
+                "file": clip_name,
+                "sha256": clip_sha,
+                "frames": rs.clip.frames,
+                "fps": rs.clip.fps,
+            }
         if rs.edit is not None:
             entry["edit"] = rs.edit.model_dump(by_alias=True)
         if rs.grade is not None:

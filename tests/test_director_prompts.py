@@ -93,7 +93,7 @@ ALL_STYLES = tuple(preset["id"] for preset in styles.public_presets())
 def test_craft_is_loaded_where_the_writing_happens_and_nowhere_else(tmp_path):
     root = make_api_project(tmp_path)
     assert len((prompts.PROMPTS / "shared/craft.md").read_text().split()) <= 380
-    assert len(ALL_STYLES) == 6
+    assert len(ALL_STYLES) == 9
     for role, tasks in prompts.TASKS.items():
         for task in tasks:
             bundle = prompts.assemble(root, "story", role=role, task=task)

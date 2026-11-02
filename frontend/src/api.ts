@@ -83,7 +83,12 @@ export type ShotKind =
   | "split"
   | "reprise"
   | "logo"
-  | "end_card";
+  | "end_card"
+  | "plate"
+  | "era"
+  | "document"
+  | "date_card"
+  | "title_card";
 
 export type Shot = {
   id: string;
@@ -101,6 +106,8 @@ export type Shot = {
   asset_shot_id: string | null;
   asset?: string | null;
   product_ref?: string | null;
+  era_id?: string | null;
+  line_ids?: string[];
   motion_prompt?: string;
   music_context?: string;
   lyric_context?: string;
@@ -344,6 +351,16 @@ export type ImageVersion = {
   derivation?: { kind: string; model: string; factor: number };
 };
 
+export type ImageClip = {
+  version: number;
+  frames: number;
+  fps: number;
+  seconds: number;
+  model: string;
+  /** Still a clip of the selected picture. */
+  current: boolean;
+};
+
 export type ImageReview = {
   shot_id: string;
   version: number;
@@ -369,6 +386,8 @@ export type ImageShot = {
   versions: ImageVersion[];
   review: ImageReview | null;
   stale: boolean;
+  clips?: ImageClip[];
+  clip?: number | null;
 };
 
 export type IntakePayload = {
@@ -846,6 +865,14 @@ export type TimedLine = {
   source: string;
 };
 
+export type MixSpec = {
+  fade_in?: number;
+  fade_out?: number;
+  target_lufs?: number;
+  bed?: { path: string; gain_db: number; duck_db: number };
+  ambience?: { path: string; from_line: string; to_line: string; gain_db: number; duck_db: number }[];
+};
+
 export type ScriptPayload = {
   script: { structure: string; reading_rate_wps: number; lines: ScriptLine[]; notes: string } | null;
   beats: {
@@ -864,7 +891,9 @@ export type ScriptPayload = {
       lines_with_takes: number;
       lines: number;
       output_lufs: number | null;
+      output_true_peak_db?: number | null;
     } | null;
+    mix?: MixSpec;
   };
   narration: {
     voice: string;
@@ -1170,6 +1199,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({}),
     }),
+  setMix: (slug: string, patch: Partial<Omit<MixSpec, "bed">> & { bed?: MixSpec["bed"] | null }) =>
+    request<ScriptPayload>(`/api/projects/${slug}/soundtrack/mix`, {
+      method: "POST",
+      body: JSON.stringify(patch),
+    }),
+  addSound: (slug: string, file: File) =>
+    request<{ path: string }>(
+      `/api/projects/${slug}/soundtrack/sound?filename=${encodeURIComponent(file.name)}`,
+      { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } },
+    ),
   chooseVoice: (slug: string, voice: string) =>
     request<ScriptPayload>(`/api/projects/${slug}/narration/voice`, {
       method: "POST",
@@ -1232,6 +1271,24 @@ export const api = {
     request<Brief>(`/api/projects/${slug}/sheets/${entryId}/use`, {
       method: "POST",
       body: JSON.stringify({ version }),
+    }),
+  estimateClips: (slug: string, shotIds: string[]) =>
+    request<{
+      estimate: { quote_id: string; tasks: number; seconds: number; reserve_usd: string; model: string };
+      decision: { ok: boolean };
+    }>(`/api/projects/${slug}/images/clips/estimate`, {
+      method: "POST",
+      body: JSON.stringify({ shot_ids: shotIds }),
+    }),
+  generateClips: (slug: string, quoteId: string) =>
+    request<{ job_id?: string; needs_budget?: boolean }>(`/api/projects/${slug}/images/clips`, {
+      method: "POST",
+      body: JSON.stringify({ quote_id: quoteId }),
+    }),
+  selectClip: (slug: string, shotId: string, version: number | null) =>
+    request<{ clip: number | null }>(`/api/projects/${slug}/images/clips/select`, {
+      method: "POST",
+      body: JSON.stringify({ shot_id: shotId, version }),
     }),
   estimateUpscale: (slug: string, shotIds: string[]) =>
     request<{

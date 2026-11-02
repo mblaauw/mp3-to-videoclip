@@ -224,11 +224,11 @@ export function ShotInspector({
     } else if (shot.asset_shot_id) {
       next.asset_shot_id = null;
     }
-    if (!["upload", "product", "card", "logo", "end_card"].includes(kind)) {
+    if (!["upload", "plate", "product", "card", "logo", "end_card"].includes(kind)) {
       next.asset = null;
     }
     if (
-      ["card", "end_card", "logo"].includes(kind) &&
+      ["card", "end_card", "logo", "date_card", "title_card"].includes(kind) &&
       !(shot.message || "").trim() &&
       !shot.text?.length
     ) {
@@ -484,7 +484,18 @@ export function ShotInspector({
             />
           </label>
         )}
-        {kindOf(current) === "upload" && (
+        {kindOf(current) === "era" && (
+          <label className="ui-field">
+            <span>Era, from the profile</span>
+            <input
+              value={current.era_id || ""}
+              onChange={(event) => change("era_id", event.target.value || null)}
+              onBlur={() => void save()}
+              placeholder="Era ID"
+            />
+          </label>
+        )}
+        {(kindOf(current) === "upload" || kindOf(current) === "plate") && (
           <label className="ui-field">
             <span>Uploaded asset</span>
             <input

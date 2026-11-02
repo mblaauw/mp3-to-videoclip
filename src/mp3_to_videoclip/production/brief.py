@@ -7,7 +7,10 @@ from ..models import (
     Brief,
     Character,
     CreativeProfile,
+    Era,
     LookSection,
+    Narrator,
+    Place,
     Scene,
     Treatments,
     VisualBeat,
@@ -85,6 +88,14 @@ def _keep_stored_permissions(previous: Brief, brief: Brief) -> Brief:
     if brief.creative is not None:
         stored = previous.creative.references if previous.creative else []
         references = {value.id: value.permission_confirmed for value in stored}
+        narrator = brief.creative.narrator
+        if narrator is not None:
+            # A rewrite that names someone else, or a real person now, asks the owner again.
+            before = previous.creative.narrator if previous.creative else None
+            same = before is not None and before.persona == narrator.persona
+            narrator = narrator.model_copy(
+                update={"permission_confirmed": same and before.permission_confirmed}
+            )
         update["creative"] = brief.creative.model_copy(
             update={
                 "references": [
@@ -92,7 +103,8 @@ def _keep_stored_permissions(previous: Brief, brief: Brief) -> Brief:
                         update={"permission_confirmed": references.get(value.id, False)}
                     )
                     for value in brief.creative.references
-                ]
+                ],
+                "narrator": narrator,
             }
         )
     return brief.model_copy(update=update)
@@ -101,9 +113,13 @@ def _keep_stored_permissions(previous: Brief, brief: Brief) -> Brief:
 def unconfirmed_permissions(brief: Brief) -> list[str]:
     """Character and reference IDs still waiting for the owner's permission."""
     references = brief.creative.references if brief.creative else []
-    return [
+    waiting = [
         value.id for value in [*brief.characters, *references] if not value.permission_confirmed
     ]
+    narrator = brief.creative.narrator if brief.creative else None
+    if narrator is not None and narrator.real_person and not narrator.permission_confirmed:
+        waiting.append("narrator")
+    return waiting
 
 
 @state_mutation
@@ -154,6 +170,9 @@ def set_creative_profile(
     avoid: list,
     look: str,
     sections: list | None = None,
+    narrator: dict | None = None,
+    place: dict | None = None,
+    eras: list | None = None,
 ) -> Brief:
     """Create or replace the film's structured cast, places, rules and look.
 
@@ -190,6 +209,21 @@ def set_creative_profile(
         if section_values and section_values[-1].end > project.duration + 0.5:
             raise ValueError("a look section runs past the end of the film")
         section_update = {"sections": section_values}
+
+    # A place's reference is the owner's choice, so a rewrite keeps it.
+    stored = load_brief(root).creative
+    if place is not None and stored is not None and stored.place is not None:
+        place = {"reference_id": stored.place.reference_id, **place}
+    try:
+        for name, value in (
+            ("narrator", Narrator.model_validate(narrator) if narrator is not None else None),
+            ("place", Place.model_validate(place) if place is not None else None),
+            ("eras", [Era.model_validate(item) for item in eras] if eras is not None else None),
+        ):
+            if value is not None:
+                section_update[name] = value
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"creative profile is invalid: {exc}") from exc
 
     character_ids = [value.id for value in character_values]
     if len(set(character_ids)) != len(character_ids):

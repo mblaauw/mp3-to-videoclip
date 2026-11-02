@@ -140,6 +140,9 @@ KINDS: dict[Kind, KindProfile] = {
         signature_required=False,
         style_presets=(
             "painted-documentary-v1",
+            "archival-v1",
+            "illustrated-v1",
+            "future-museum-v1",
             "photographic-painted-v2",
             "clean-photographic-v1",
         ),

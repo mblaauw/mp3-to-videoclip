@@ -119,6 +119,14 @@
 .shot-card-open:focus-visible .shot-thumb {
   filter: brightness(1.08);
 }
+.shot-card-line {
+  display: block;
+  padding: 0 var(--s-3) var(--s-2);
+  color: var(--ink-3, var(--muted));
+  font-size: var(--t-12, 12px);
+  font-style: italic;
+  line-height: 1.35;
+}
 .shot-card-caption {
   display: -webkit-box;
   margin: 0;

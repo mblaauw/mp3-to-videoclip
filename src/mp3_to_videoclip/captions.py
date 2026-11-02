@@ -8,12 +8,14 @@ whichever were burned in.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from . import timeline
 from .domain import lyric_timing
 from .models import EditDecisionList, EditText
+from .storage import read_optional
 
 PREFIX = "cap-"
 MIN_SECONDS = 1.0
@@ -23,6 +25,8 @@ GAP_FRAMES = 2
 #: A continuation shorter than this would only flash at the end of a line.
 MIN_TAIL_SECONDS = 0.5
 MAX_TEXT = 160
+#: A spoken caption longer than this is split where the sentence takes a breath.
+MAX_SPOKEN = 84
 NAMED = ("hook", "chorus", "refrain")
 
 
@@ -30,8 +34,73 @@ def _clipped(text: str) -> str:
     return text if len(text) <= MAX_TEXT else text[: MAX_TEXT - 1].rstrip() + "…"
 
 
+def _phrases(text: str) -> list[str]:
+    """Pieces of at most ``MAX_SPOKEN`` characters, broken at punctuation, else between words."""
+    parts: list[str] = []
+    for clause in re.findall(r"[^,;:.!?—]+[,;:.!?—]*\s*", text) or [text]:
+        joined = (parts[-1] + clause) if parts else clause
+        if parts and len(joined.strip()) <= MAX_SPOKEN:
+            parts[-1] = joined
+            continue
+        parts.append(clause)
+    pieces: list[str] = []
+    for part in parts:
+        current = ""
+        for word in part.split():
+            if current and len(current) + 1 + len(word) > MAX_SPOKEN:
+                pieces.append(current)
+                current = word
+            else:
+                current = f"{current} {word}".strip()
+        if current:
+            pieces.append(current)
+    return pieces
+
+
+def _spoken_lines(root: Path, fps: int, total_frames: int) -> list[dict[str, Any]]:
+    """Each said line from the timing file: a long one in phrases, timed by their words."""
+    from . import narration_timing
+
+    lines: list[dict[str, Any]] = []
+    for row in narration_timing.read(root)["lines"]:
+        start, end = row["start"], row["end"]
+        pieces = _phrases(row["text"])
+        counts = [len(piece.split()) for piece in pieces]
+        heard = row.get("words") or []
+        exact = len(heard) == sum(counts)
+        at = 0
+        for number, (piece, count) in enumerate(zip(pieces, counts, strict=True)):
+            if exact:
+                begin = heard[at]["start"]
+                finish = heard[at + count - 1]["end"]
+            else:
+                share = (end - start) / max(1, sum(counts))
+                begin = start + at * share
+                finish = start + (at + count) * share
+            first = timeline.frame_number(begin, fps)
+            last = min(timeline.frame_number(finish, fps), total_frames)
+            if number + 1 == len(pieces):
+                last = min(timeline.frame_number(end, fps), total_frames)
+            if first < total_frames and last > first:
+                line = {"index": len(lines) + 1, "text": piece, "start": first, "end": last}
+                if exact:
+                    line["words"] = [
+                        {
+                            "text": word["text"],
+                            "in_frame": timeline.frame_number(word["start"], fps),
+                        }
+                        for word in heard[at : at + count]
+                    ]
+                lines.append(line)
+            at += count
+    return lines
+
+
 def timed_lines(root: Path, fps: int, total_frames: int) -> list[dict[str, Any]]:
-    """Each timed sung line with the frames it is on screen, in order."""
+    """Each timed sung or said line with the frames it is on screen, in order."""
+    project = read_optional(root / "project.json")
+    if isinstance(project, dict) and project.get("spine") == "soundtrack":
+        return _spoken_lines(root, fps, total_frames)
     rows = [
         row
         for row in lyric_timing.view(root)["lines"]

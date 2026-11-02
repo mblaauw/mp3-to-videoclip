@@ -248,3 +248,129 @@ def test_reprise_alias_keeps_working_without_a_kind(tmp_path):
     assert file_hash(Path(P.resolved_assets(root, ["s002"])[0].image)) == file_hash(
         Path(P.resolved_assets(root, ["s001"])[0].image)
     )
+
+
+def _place_film(tmp_path):
+    root = make_api_project(tmp_path)
+    (root / "media").mkdir(exist_ok=True)
+    jpeg(root / "media" / "corner.jpg")
+    brief = read_json(root / "brief.json")
+    brief["creative"] = {
+        **brief.get("creative", {}),
+        "references": [
+            *brief.get("creative", {}).get("references", []),
+            {
+                "id": "corner",
+                "kind": "location",
+                "path": "media/corner.jpg",
+                "description": "the corner",
+                "permission_confirmed": True,
+            },
+        ],
+        "place": {
+            "description": "A crossroads with one well.",
+            "camera": "Eye level, looking north.",
+            "reference_id": "corner",
+        },
+        "eras": [
+            {
+                "id": "e1880",
+                "year": "1880",
+                "state": "Mud and carts.",
+                "palette": ["umber"],
+                "light": "low sun",
+                "persists": "the well",
+                "changed": "no road yet",
+            }
+        ],
+    }
+    write_json(root / "brief.json", brief)
+    return root
+
+
+def test_only_era_and_document_are_new_money():
+    assert shotkinds.is_paid(_shot(kind="era", era_id="e1", image_prompt="x"))
+    assert shotkinds.is_paid(_shot(kind="document", image_prompt="a letter"))
+    assert shotkinds.is_local(_shot(kind="plate", asset="media/a.jpg"))
+    assert shotkinds.is_local(_shot(kind="date_card", text=["1880"]))
+    assert shotkinds.is_local(_shot(kind="title_card", text=["One place"]))
+
+
+@pytest.mark.parametrize(
+    ("values", "message"),
+    [
+        ({"kind": "plate"}, "plate shot needs"),
+        ({"kind": "era", "image_prompt": "x"}, "needs an era_id"),
+        ({"kind": "era", "era_id": "e1"}, "image prompt"),
+        ({"kind": "document"}, "image prompt"),
+        ({"kind": "date_card"}, "message or on-screen text"),
+        ({"kind": "scene", "image_prompt": "x", "era_id": "e1"}, "only belongs to an era"),
+    ],
+)
+def test_new_kinds_refuse_what_they_cannot_draw(values, message):
+    with pytest.raises(ValueError, match=message):
+        _shot(**values)
+
+
+def test_era_compiles_with_the_anchor_first_and_its_own_look(tmp_path):
+    root = _place_film(tmp_path)
+    shot = _shot(kind="era", era_id="e1880", image_prompt="A cart passes.", character_ids=[])
+    spec = P.image_spec(root, shot)
+    assert spec["references"][0]["path"] == "media/corner.jpg"
+    assert spec["kind"] == "era"
+    for words in (
+        "A crossroads with one well.",
+        "Eye level, looking north.",
+        "Keep the camera, the horizon and the building line",
+        "Era 1880: Mud and carts.",
+        "Palette: umber",
+        "What persists: the well",
+    ):
+        assert words in spec["positivePrompt"]
+
+
+def test_an_era_shot_without_its_era_is_refused(tmp_path):
+    root = _place_film(tmp_path)
+    with pytest.raises(ValueError, match="unknown era"):
+        P.image_spec(root, _shot(kind="era", era_id="nope", image_prompt="x"))
+
+
+def test_an_unset_profile_section_leaves_the_brief_bytes_alone(tmp_path):
+    root = make_api_project(tmp_path)
+    dumped = P.load_brief(root).model_dump()
+    assert not {"narrator", "place", "eras"} & set(dumped.get("creative") or {})
+    assert "era_id" not in _shot(image_prompt="x").model_dump()
+
+
+def test_a_real_narrator_waits_for_the_owner_and_a_rewrite_cannot_confirm(tmp_path):
+    root = make_api_project(tmp_path)
+    brief = read_json(root / "brief.json")
+    brief["creative"] = {
+        **brief.get("creative", {}),
+        "narrator": {"persona": "Ada", "real_person": True},
+    }
+    write_json(root / "brief.json", brief)
+    assert "narrator" in P.unconfirmed_permissions(P.load_brief(root))
+    patch = {"creative": {"narrator": {"permission_confirmed": True}}}
+    updated = P.update_brief(root, patch)
+    assert updated.creative.narrator.permission_confirmed is False
+    assert P.update_brief(root, patch, owner=True).creative.narrator.permission_confirmed is True
+    renamed = P.update_brief(root, {"creative": {"narrator": {"persona": "Someone else"}}})
+    assert renamed.creative.narrator.permission_confirmed is False
+
+
+def test_date_and_title_cards_are_drawn_locally(tmp_path):
+    root = make_api_project(tmp_path)
+    project = P.load_project(root)
+    from PIL import Image
+
+    from mp3_to_videoclip import localplate
+
+    for shot in (
+        _shot(kind="date_card", text=["1880"]),
+        _shot(kind="title_card", text=["One Place, 500 Years"], message="Part one"),
+    ):
+        path = localplate.render(root, project, shot)
+        with Image.open(path) as image:
+            assert image.size == (project.width, project.height)
+            assert len(image.convert("L").getcolors(256)) > 1

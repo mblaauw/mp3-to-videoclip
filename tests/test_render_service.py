@@ -232,7 +232,7 @@ def test_working_renders_use_jpeg_and_reuse_and_a_final_does_neither(tmp_path, m
     calls = []
     root = tmp_path / "film"
     root.mkdir()
-    project = SimpleNamespace(slug="film", fps=24, duration=10.0)
+    project = SimpleNamespace(spine=None, slug="film", fps=24, duration=10.0)
     monkeypatch.setattr(services.render.P, "require_approval", lambda *_a: None)
     monkeypatch.setattr(services.render.P, "load_project", lambda _r: project)
     monkeypatch.setattr(services.render.P, "resolved_assets", lambda _r: [])

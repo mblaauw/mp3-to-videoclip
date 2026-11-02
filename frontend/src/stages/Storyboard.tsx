@@ -10,6 +10,7 @@ import {
 } from "../api";
 import { ApprovalBar } from "../ApprovalBar";
 import { ArtifactRating } from "../ArtifactRating";
+import { isSpoken, useSpokenLines } from "../script/useSpokenLines";
 import { concerns, notifyProjectChanged, PROJECT_CHANGED } from "../shell/projectEvents";
 import { isPaidShot, kindMeta, kindOf } from "../shotKinds";
 import { ShotThumb } from "../storyboard/ShotThumb";
@@ -213,6 +214,8 @@ export function StoryboardStage({
     [shownBoard, music],
   );
   const fps = board?.fps || 24;
+  const spoken = useSpokenLines(slug, isSpoken(board) ? "soundtrack" : null);
+  const spokenText = useMemo(() => new Map(spoken.map((line) => [line.id, line.text])), [spoken]);
 
   return (
     <>
@@ -361,6 +364,14 @@ export function StoryboardStage({
                             <span className="shot-card-caption">
                               {shotCaption(shot) || <span className="needs-pill">Needs a job</span>}
                             </span>
+                            {shot.line_ids?.length ? (
+                              <span className="shot-card-line">
+                                {shot.line_ids
+                                  .map((id) => spokenText.get(id))
+                                  .filter(Boolean)
+                                  .join(" ")}
+                              </span>
+                            ) : null}
                           </button>
                           <footer className="shot-card-foot">
                             <button

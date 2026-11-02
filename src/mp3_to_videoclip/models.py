@@ -21,6 +21,11 @@ ShotKind = Literal[
     "reprise",
     "logo",
     "end_card",
+    "plate",
+    "era",
+    "document",
+    "date_card",
+    "title_card",
 ]
 
 
@@ -310,6 +315,39 @@ class LookSection(Model):
         return self
 
 
+class Narrator(Model):
+    """Who is speaking, for a film a voice leads. Planning for the words; not sent to images."""
+
+    persona: str = Field(min_length=1)
+    era: str = ""
+    attitude: str = ""
+    gets_wrong: str = ""
+    voice_id: str | None = None
+    real_person: bool = False
+    #: Only the owner sets this, as for a character.
+    permission_confirmed: bool = False
+
+
+class Place(Model):
+    """The one corner a film returns to, whose camera stays while the years change it."""
+
+    description: str = Field(min_length=1)
+    camera: str = ""
+    reference_id: str | None = None
+
+
+class Era(Model):
+    """One time at the place: what it looks like then, what stayed and what changed."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    year: str = Field(min_length=1, max_length=40)
+    state: str = Field(min_length=1)
+    palette: list[str] = Field(default_factory=list, max_length=6)
+    light: str = ""
+    persists: str = ""
+    changed: str = ""
+
+
 class CreativeProfile(Model):
     """Global appearance only; story/locations are not repeated into every image."""
 
@@ -323,9 +361,17 @@ class CreativeProfile(Model):
     proof_shot_ids: list[str] = Field(default_factory=list, max_length=3)
     profile_version: int = Field(default=0, ge=0)
     sections: list[LookSection] = Field(default_factory=list)
+    narrator: Narrator | None = None
+    place: Place | None = None
+    eras: list[Era] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_ids(self):
+        if len({e.id for e in self.eras}) != len(self.eras):
+            raise ValueError("era IDs must be unique")
+        if self.place is not None and self.place.reference_id is not None:
+            if self.place.reference_id not in {r.id for r in self.references}:
+                raise ValueError("the place's reference must be a known reference")
         if len({s.id for s in self.sections}) != len(self.sections):
             raise ValueError("look section IDs must be unique")
         for before, after in zip(self.sections, self.sections[1:], strict=False):
@@ -347,8 +393,9 @@ class CreativeProfile(Model):
         value = handler(self)
         if not value.get("profile_version"):
             value.pop("profile_version", None)
-        if not value.get("sections"):
-            value.pop("sections", None)
+        for key in ("sections", "narrator", "place", "eras"):
+            if not value.get(key):
+                value.pop(key, None)
         return value
 
 
@@ -689,6 +736,8 @@ class Shot(Model):
     state_requirements: dict[str, dict[str, str]] = Field(default_factory=dict)
     #: Lines said over this shot, in a soundtrack film; its frames come from their takes.
     line_ids: list[str] = Field(default_factory=list, max_length=24)
+    #: Which of the profile's eras an ``era`` shot shows.
+    era_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
@@ -696,7 +745,7 @@ class Shot(Model):
         for key in ("character_states", "state_requirements", "line_ids"):
             if not value.get(key):
                 value.pop(key, None)
-        for key in ("camera_keyframes", "post_effects", "transition"):
+        for key in ("camera_keyframes", "post_effects", "transition", "era_id"):
             if value.get(key) is None:
                 value.pop(key, None)
         # New fields are dropped while default so legacy approval hashes do not move.
@@ -721,6 +770,12 @@ class Shot(Model):
             raise ValueError("a reprise shot needs asset_shot_id")
         if self.kind == "upload" and self.asset is None:
             raise ValueError("an upload shot needs a project-relative asset")
+        if self.kind == "plate" and self.asset is None:
+            raise ValueError("a plate shot needs an uploaded period image as its asset")
+        if self.kind == "era" and self.era_id is None:
+            raise ValueError("an era shot needs an era_id")
+        if self.era_id is not None and self.kind != "era":
+            raise ValueError("era_id only belongs to an era shot")
         if self.kind == "product" and not (self.product_ref or self.asset):
             raise ValueError("a product shot needs a product_ref or an uploaded asset")
         if self.product_ref is not None and self.kind != "product":
@@ -748,9 +803,11 @@ class Shot(Model):
             raise ValueError("bridge plans only belong to a bridge shot")
         if self.text and any(not value.strip() or len(value) > 160 for value in self.text):
             raise ValueError("on-screen text lines must be 1-160 characters")
-        if self.kind in ("card", "end_card") and not (self.text or self.message.strip()):
+        if self.kind in ("card", "end_card", "date_card", "title_card") and not (
+            self.text or self.message.strip()
+        ):
             raise ValueError(f"a {self.kind} shot needs a message or on-screen text")
-        generated = self.kind in ("scene", "product", "bridge")
+        generated = self.kind in ("scene", "product", "bridge", "era", "document")
         if self.kind == "product" and self.asset is not None:
             generated = False
         if self.kind == "bridge" and self.bridge is not None:
@@ -763,8 +820,11 @@ class Shot(Model):
             "card",
             "logo",
             "end_card",
+            "plate",
         ):
-            raise ValueError("an uploaded asset belongs to upload, product, card, logo or end_card")
+            raise ValueError(
+                "an uploaded asset belongs to upload, plate, product, card, logo or end_card"
+            )
         return self
 
     @model_validator(mode="after")
@@ -886,7 +946,7 @@ EditMotionType = Literal["hold", "push_in", "pull_back", "pan_left", "pan_right"
 EditAccentType = Literal["punch_in", "flash", "light_leak", "impulse"]
 EditTextAnimation = Literal["fade", "fade_in", "type_on", "slide_up", "pop", "kinetic_words"]
 EditTextStyle = Literal[
-    "super", "title", "lower_third", "lyric", "card", "logotype", "tagline", "cta"
+    "super", "title", "lower_third", "lyric", "card", "logotype", "tagline", "cta", "caption"
 ]
 GradePreset = Literal["neutral", "warm-night", "clean-day", "monochrome", "vivid", "film-fade"]
 
@@ -1294,6 +1354,15 @@ class EditDecisionList(Model):
         return board.model_copy(update={"shots": shots})
 
 
+class RenderClip(Model):
+    """A selected clip for one shot. The still stays the fallback beside it."""
+
+    path: str
+    sha256: str
+    frames: int = Field(gt=0)
+    fps: float = Field(gt=0)
+
+
 class RenderShot(Model):
     """Input to renderer, already resolved and checked against current approvals."""
 
@@ -1301,6 +1370,7 @@ class RenderShot(Model):
     image: str
     edit: EditShot | None = None
     grade: Grade | None = None
+    clip: RenderClip | None = None
 
 
 class BrandPackage(Model):

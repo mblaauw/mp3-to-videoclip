@@ -166,11 +166,21 @@ on bar lines, alternating the whole still and a 1.25 detail, and a quiet section
 crop cuts and lets shots hold. The report adds `off_grid` and `late_cut` by section, in
 full sections, where a grid was found. All of it is advice; none of it is a hard finding.
 
+## Clips
+
+A paid shot on Images can have a clip: *Make a clip* shows the price, a second click buys it from the
+video model chosen in Settings. The clip sits beside the still's versions, the still stays selected,
+and nothing plays until you choose *Use this clip*. In a shot, the clip fills the same camera rect
+under the same grade. A clip shorter than its shot holds its last frame, the report says so when
+that is more than a second, and a longer one is cut by the shot's end. Choosing a different picture
+turns the clip off; a sharper copy of the same picture does not. A depth layer never applies to a clip.
+
 ## Captions
 
 Film's *Captions* control draws every timed line, only the lines in sections named hook,
 chorus or refrain, or none. The Editor's `set_captions` can choose any lines. A caption is
 an ordinary `lyric` text layer named `cap-<line>`, inside its shot and continued as a
 second layer when a line crosses a join, so choosing captions is a change to the cut and
-its approval goes stale. `captions.srt` and `captions.vtt` always hold every timed line
+its approval goes stale. A story film's captions come from when each line is said, use the `caption` style, split a long line
+where it breathes and follow the takes when the mix is rebuilt. `captions.srt` and `captions.vtt` always hold every timed line
 and are written beside each final.
