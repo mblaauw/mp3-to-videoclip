@@ -21,6 +21,10 @@ const REPO = path.resolve(ROOT, "../..");
 const GOLDEN = path.join(HERE, "pixels");
 const ASSETS = path.join(REPO, "docs/primitives/assets");
 const THRESHOLD = 0.98;
+// Chrome builds draw the whip's blur differently: Linux scores 0.952 against a Mac golden. A frame off
+// scores 0.857 at best and another transition 0.762, so this still fails on a whip that really moved.
+// A flipped direction scores 0.974 and passes here; edit-primitives.test.mjs pins direction.
+const THRESHOLDS = {whip: 0.93};
 
 const motion = {type: "hold", from: 1, to: 1, easing: "smoothstep", anchor: [0.5, 0.5]};
 const neutral = {preset: "neutral", strength: 1};
@@ -112,7 +116,7 @@ try {
     }
     if (!existsSync(target)) throw new Error(`no golden for ${name}; run with UPDATE_PIXELS=1`);
     const score = ssim(decodePng(readFileSync(target)), decodePng(readFileSync(stills[frame])));
-    const passed = score >= THRESHOLD;
+    const passed = score >= (THRESHOLDS[name] ?? THRESHOLD);
     failed ||= !passed;
     process.stdout.write(`${passed ? "ok" : "DIFFERENT"} ${name} ${score.toFixed(4)}\n`);
   }
