@@ -54,3 +54,15 @@ Owner: "make all fixes that are not related to the actual content productions."
 **Left as designed:** a change to the cut makes the stills approval stale, because that approval signs the cut, and the bar already says "Approve this cut". Removing it would un-approve every existing film's hash. A change to a local shot makes the style check stale, because local proof entries are part of it.
 
 **Not fixes, so not done:** reuse across a series, a first draft for story films, sound generation, and `legacy/` and the `openai` upgrade, which are the owner's calls. "Stale storyboard message blames timing", from the Cool Cat run, was not reproduced or changed.
+
+## Maintenance run, 2 Nov
+
+Owner: "do a total maintenance run... clean clean clean."
+
+- **Proved through the Studio's own routes, on a scratch copy of the Museum:** final, then 9:16 and 1:1 versions, four browsers, 233 s, 229 s and 161 s, 3,360 frames each, none broken. Subjects hold on real stills and long type wraps. Every 9:16 shot is flagged soft, since the crop enlarges a 768-high still; square has none. A version needs a current final, so a renderer change means one free re-render first.
+- **Removed:** six unreferenced names, the schema 1 migration no route reached, stale frontend exports. Backend routes and frontend calls match.
+- **The `openai` 3.x upgrade (PR 71)** behaves the same as 1.x through the Director's adapter against a real local streaming socket, and 35 Director tests pass. It has not met a real provider, which needs the owner's word, so it is not merged.
+- **Renderer `npm audit`:** `zod` (high) and `fast-uri` (moderate) sit in Remotion's dev packages, reached only on this computer. The fix moves the renderer's lock, which un-approves every film's renderer sign-off, so it waits for a chosen upgrade.
+- **Metadata snapshot:** `backups/projects-metadata-20261102T185739Z.zip`, with the Museum. An off-machine copy is still unchecked.
+
+**Left for the owner:** remote branches, two unmerged local branches and two local branches ahead of their remotes, all from merged or closed PRs; 1.9 GB in `.opencode/scratch`; 7.6 GB of rebuildable caches, by `scripts/clean_caches.py --yes`. `legacy/` also waits: `graphics.py`'s source is in the renderer's hash, so removing the drawers it alone uses would un-approve films.

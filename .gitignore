@@ -25,3 +25,4 @@ frontend/openapi.json
 
 tests/evals/runs/*/
 !tests/evals/runs/reference-*/
+.claude/
