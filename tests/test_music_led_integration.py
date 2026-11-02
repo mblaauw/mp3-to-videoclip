@@ -119,14 +119,6 @@ def test_brand_change_stales_review_but_not_image_inputs(tmp_path):
 
 
 def test_music_cli_modes_and_schema_are_available():
-    assert (
-        parser()
-        .parse_args(
-            ["init", "example", "--slug", "example", "--mp3", "x.mp3", "--music-mode", "music-led"]
-        )
-        .music_mode
-        == "music-led"
-    )
     assert parser().parse_args(["quote-music", "example"]).reserve == "0.05"
     assert execute(parser().parse_args(["schema", "brand"]))["type"] == "object"
     assert execute(parser().parse_args(["schema", "listening"]))["type"] == "object"

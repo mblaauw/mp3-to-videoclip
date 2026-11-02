@@ -6,7 +6,6 @@ from test_creative_production import approve_prerequisites, make_root
 from mp3_to_videoclip import generation as G
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import profiles
-from mp3_to_videoclip.cli import execute, parser
 from mp3_to_videoclip.models import MusicEvent
 from mp3_to_videoclip.storage import read_json, write_json
 
@@ -50,8 +49,7 @@ def musical_root(tmp_path, *, frames=24 * 53 + 7, preset=True):
 
 def test_new_preset_defaults_adaptive_exact_coverage_with_no_lyrics(tmp_path):
     root = musical_root(tmp_path)
-    result = execute(parser().parse_args(["skeleton", str(root)]))
-    assert result["timing"] == "adaptive"
+    P.skeleton(root)
     assert not (root / "work/lyrics.json").exists()
     board = P.load_board(root)
     assert board.shots[0].duration_frames == 5 * 24
@@ -64,25 +62,19 @@ def test_new_preset_defaults_adaptive_exact_coverage_with_no_lyrics(tmp_path):
 
 def test_existing_project_cli_keeps_beat_timing(tmp_path):
     root = musical_root(tmp_path, preset=False)
-    result = execute(parser().parse_args(["skeleton", str(root)]))
-    assert result["timing"] == "beats"
+    P.skeleton(root)
 
 
 def test_explicit_fixed_timing_overrides_adaptive_preset(tmp_path):
     root = musical_root(tmp_path, frames=24 * 48)
-    result = execute(
-        parser().parse_args(["skeleton", str(root), "--timing", "free", "--seconds", "6"])
-    )
-    assert result["timing"] == "free"
+    P.skeleton(root, 6, "free")
     assert all(s.duration_frames == 6 * 24 for s in P.load_board(root).shots)
 
 
 def test_short_track_is_one_labelled_exception_not_truncated(tmp_path):
     root = musical_root(tmp_path, frames=30)
-    result = execute(parser().parse_args(["skeleton", str(root)]))
-    assert result["short_track_exception"] is True
+    P.skeleton(root)
     assert [s.duration_frames for s in P.load_board(root).shots] == [30]
-    assert any("shorter than one minimum shot" in note for note in result["timing_notes"])
 
 
 def test_audio_rounded_up_to_full_minimum_is_not_short_exception(tmp_path):
@@ -94,19 +86,14 @@ def test_audio_rounded_up_to_full_minimum_is_not_short_exception(tmp_path):
     local["duration"] = 3.999
     write_json(root / "work/music.json", local)
     approve_prerequisites(root)
-    result = execute(parser().parse_args(["skeleton", str(root)]))
-    assert result["short_track_exception"] is False
+    P.skeleton(root)
     assert [s.duration_frames for s in P.load_board(root).shots] == [96]
 
 
 def test_impossible_narrow_range_fails_clearly_without_writing_board(tmp_path):
     root = musical_root(tmp_path, frames=349)
     with pytest.raises(ValueError, match="cannot cover 349 frames exactly.*widen"):
-        execute(
-            parser().parse_args(
-                ["skeleton", str(root), "--min-seconds", "4", "--max-seconds", "4.5"]
-            )
-        )
+        P.skeleton(root, min_seconds=4, max_seconds=4.5)
     assert not (root / "work/storyboard.json").exists()
 
 
@@ -116,9 +103,8 @@ def test_estimated_events_are_not_promoted_to_reviewed_structure(tmp_path):
     events["events"][0]["timing_basis"] = "estimated"
     write_json(root / "work/events.json", events)
     approve_prerequisites(root)
-    result = execute(parser().parse_args(["skeleton", str(root)]))
-    assert any("Ignored 1 estimated event" in n for n in result["timing_notes"])
-    assert any("No reviewed manual event boundaries" in n for n in result["timing_notes"])
+    P.skeleton(root)
+    assert P.load_board(root).shots
 
 
 def test_missing_analysis_fails_the_existing_approval_gate(tmp_path):

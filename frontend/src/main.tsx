@@ -2,7 +2,6 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "@fontsource-variable/schibsted-grotesk";
 import "./styles/tokens.css";
-import "./styles.css";
 import "./ui/ui.css";
 import "./stages/stages.css";
 import "./shell/shell.css";
@@ -13,7 +12,6 @@ import "./story/story.css";
 import "./track/track.css";
 import "./shell/settings/settings.css";
 import "./rating.css";
-import "./styles/polish.css";
 import { App } from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

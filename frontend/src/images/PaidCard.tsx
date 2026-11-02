@@ -38,6 +38,12 @@ export function PaidCard({
           ×
         </button>
       </header>
+      {quote.estimate.reserve_basis && (
+        <p className="hint">
+          Reserved from the published price of about ${quote.estimate.reserve_basis.published_usd} a
+          still, with room above it. You pay what the provider reports.
+        </p>
+      )}
       {quote.estimate.edit_unavailable && <p className="hint">{quote.estimate.edit_unavailable}</p>}
       {needsBudget ? (
         <p>

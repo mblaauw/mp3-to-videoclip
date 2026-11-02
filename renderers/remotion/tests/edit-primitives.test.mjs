@@ -451,3 +451,10 @@ test("a reframe is two percentages or nothing", () => {
   assert.throws(() => validateReframe({x: 50, y: 101}, "shot a"));
   assert.throws(() => validateReframe({x: "50", y: 50}, "shot a"));
 });
+
+test("a whip's direction decides which way the picture travels", () => {
+  const whip = (direction) =>
+    editTransitionStyle({type: "whip_pan", frames: 12, reason: "pin", direction}, 0.25).transform;
+  assert.ok(whip("left"));
+  assert.notEqual(whip("left"), whip("right"));
+});

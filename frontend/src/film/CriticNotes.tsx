@@ -19,7 +19,6 @@ export function CriticNotes({ slug, onSeek }: { slug: string; onSeek: (frame: nu
     void api.critique(slug).then((value) => setCritique(value.critique), () => undefined);
   };
   // The first read only depends on which film this is.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [slug]);
   useProjectChanged(slug, load);
 

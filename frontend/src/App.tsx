@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ProjectSummary } from "./api";
 import { OPEN_SETTINGS } from "./api/errorAction";
-import { ArchiveShell, FilmShell, LibraryShell } from "./shell/FilmShell";
+import { ArchiveShell } from "./shell/ArchiveShell";
+import { FilmShell } from "./shell/FilmShell";
+import { LibraryShell } from "./shell/LibraryShell";
 import { goArchive, goFilm, goLibrary, useHashRoute } from "./shell/route";
 import { notifyProjectChanged, PROJECT_CHANGED } from "./shell/projectEvents";
 import { SettingsPanel } from "./shell/settings/SettingsPanel";

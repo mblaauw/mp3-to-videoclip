@@ -65,6 +65,7 @@ def estimate(
         "uploads_required": G.quote_uploads_required(quote),
         "shot_ids": [task["shot_id"] for task in quote["tasks"]],
         "edit_unavailable": quote.get("edit_unavailable"),
+        "reserve_basis": quote.get("reserve_basis"),
     }
 
 

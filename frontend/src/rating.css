@@ -90,3 +90,9 @@
   color: var(--ink-2);
   font-size: var(--t-12);
 }
+
+.spine-chip.on {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  color: var(--gold);
+}

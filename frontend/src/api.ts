@@ -1,4 +1,3 @@
-import type { components } from "./api/schema";
 import { toastAction } from "./api/errorAction.ts";
 import { readApiError } from "./api/errors.ts";
 import type { PreviewShot } from "./baseFilm";
@@ -8,10 +7,31 @@ import type { FilmUsage } from "./shell/modelCost.ts";
 
 export { ApiError } from "./api/errors.ts";
 
-type Schemas = components["schemas"];
-
-/** Generated from `npm run api:types`; the route returns this model. */
-export type ProjectSummary = Schemas["ProjectSummary"];
+export type ProjectSummary = {
+  archived: boolean;
+  audio_url?: string | null;
+  duration?: number | null;
+  error?: string | null;
+  film_audio_url?: string | null;
+  has_analysis: boolean;
+  has_lyrics: boolean;
+  kind?: string | null;
+  music_mode?: string | null;
+  next_step?: "track" | "script" | "story" | "storyboard" | "images" | "film" | null;
+  parked: boolean;
+  poster_stills?: string[];
+  preview_required: boolean;
+  remaining_usd?: string | null;
+  render?: string | null;
+  shots: number;
+  signature_required?: boolean | null;
+  slug: string;
+  spine?: string | null;
+  stage_states?: { [key: string]: "done" | "you" | "changed" | "not_ready" };
+  still_count: number;
+  title: string;
+  updated_at?: string | null;
+};
 
 export type AudioWindow = {
   start: number;
@@ -809,12 +829,52 @@ export type SettingsCosts = {
 };
 
 /** Generated from the typed `/api/jobs` response models. */
-export type Job = Schemas["JobOut"] & { historical?: boolean; blocking?: boolean };
-export type JobDetail = Schemas["JobDetailOut"];
+export type JobProgress = {
+  done: number;
+  message?: string | null;
+  part?: string | null;
+  part_index?: number | null;
+  part_total?: number | null;
+  phase: string;
+  stage: string;
+  total: number;
+  unit: string;
+};
+export type Job = {
+  blocking?: boolean;
+  code?: string | null;
+  cost_usd: number;
+  error?: string | null;
+  finished_at?: number | null;
+  historical?: boolean;
+  id: string;
+  kind: string;
+  progress: JobProgress;
+  project: string;
+  queued_at?: number | null;
+  render_kind?: string | null;
+  started_at?: number | null;
+  status: string;
+};
+export type JobDetail = Job & { log?: string[] };
 
-export type ApprovalState = Schemas["ApprovalStateOut"];
-export type ApprovalsResponse = Schemas["ApprovalsOut"];
-export type ApprovalResponse = Schemas["ApprovalOut"];
+export type ApprovalState = {
+  at?: string | null;
+  blocking_stage?: string | null;
+  error?: string | null;
+  expected_hash?: string | null;
+  note?: string | null;
+  reason?: string | null;
+  stage: string;
+  state: "approved" | "stale" | "missing" | "unavailable";
+  via?: string | null;
+};
+export type ApprovalsResponse = { stages: ApprovalState[] };
+export type ApprovalResponse = {
+  approved: string;
+  generated: boolean;
+  record?: { [key: string]: unknown };
+};
 
 export type ApprovalChange = {
   field: string;
@@ -947,6 +1007,7 @@ export type ImageEstimate = {
   uploads_required: boolean;
   shot_ids: string[];
   edit_unavailable?: string | null;
+  reserve_basis?: { published_usd: string; factor: string; user_floor_usd: string } | null;
 };
 
 export type ImageEstimateResponse = {

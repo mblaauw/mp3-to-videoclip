@@ -6,7 +6,7 @@ admission; an unexpectedly expensive result stops subsequent submissions.
 
 import os
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_UP, Decimal, InvalidOperation
 from pathlib import Path
 from uuid import uuid4
 
@@ -123,6 +123,32 @@ def edit_prompt(spec_prompt: str, note: str) -> str:
     return f"Edit the first supplied image, keeping everything else. {note.strip()}\n{spec_prompt}"
 
 
+#: A published example is not a bill, so a reservation leaves room above it.
+PUBLISHED_FACTOR = Decimal("1.5")
+
+
+def published_reserve(pricing, size: tuple[int, int]) -> Decimal | None:
+    """What a still may cost by the model's own published examples, with room above it.
+
+    Examples span sizes from 1K to 4K, so those at this film's size decide when there are any. A
+    4K example says nothing about a 1376×768 still, and reserving for one would stop real batches.
+    """
+    if not isinstance(pricing, dict):
+        return None
+    rows = [
+        row
+        for key in ("examples", "measured")
+        for row in pricing.get(key) or []
+        if isinstance(row, dict) and isinstance(row.get("price"), (int, float))
+    ]
+    if not rows:
+        return None
+    canvas = f"{size[0]}×{size[1]}"
+    same_size = [row for row in rows if canvas in str(row.get("configuration", ""))]
+    highest = max(Decimal(str(row["price"])) for row in same_size or rows)
+    return highest * PUBLISHED_FACTOR
+
+
 def quote_images(
     root: Path,
     scope: str,
@@ -180,6 +206,15 @@ def quote_images(
     props = schema["components"]["schemas"]["RequestBody"]["items"]["properties"]
     if props.get("taskType", {}).get("const") != "imageInference":
         raise ValueError("MVP supports imageInference models only")
+    published = published_reserve(info.get("x-pricing"), load_project(root).image_size)
+    reserve_basis = None
+    if published is not None:
+        reserve_basis = {
+            "published_usd": str(published / PUBLISHED_FACTOR),
+            "factor": str(PUBLISHED_FACTOR),
+            "user_floor_usd": str(allowance),
+        }
+        allowance = max(allowance, published.quantize(Decimal("0.0001"), ROUND_UP))
     schema_path = f"work/schemas/{digest(schema)}.json"
     write_json(inside(root, schema_path), schema)
     assets = read_json(root / "work/assets.json")
@@ -305,6 +340,7 @@ def quote_images(
             "tasks": tasks,
             "reserve_total_usd": str(allowance * len(tasks)),
             "published_pricing": info.get("x-pricing"),
+            **({"reserve_basis": reserve_basis} if reserve_basis else {}),
             "warning": "Published examples are not an exact quote. Actual compute cost can exceed reservations; subsequent calls will stop.",
             **(
                 {"edit_unavailable": f"{model} cannot edit a still, so this makes it again."}

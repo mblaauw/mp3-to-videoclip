@@ -22,6 +22,8 @@ from mp3_to_videoclip.models import (
     CAMERA_MOVES,
     ZOOM_RANGE,
     BrandPackage,
+    EditMotion,
+    EditTransitionType,
     PostEffects,
     Shot,
     Storyboard,
@@ -61,7 +63,20 @@ const cameras = payload.cameras.map(([move, frames]) =>
     timing.cameraAtFrame({id: "probe", duration_frames: 24, handle: 0, camera: move}, frame),
   ),
 );
+const edit = (payload.edit_cameras ?? []).map(([motion, progress]) =>
+  timing.editCamera(motion, progress),
+);
+const joins = (payload.joins ?? []).map((type) => {
+  const value = {type, frames: type === "cut" ? 0 : 12, reason: "parity", direction: "left"};
+  return {
+    type,
+    start: timing.editTransitionStyle(value, 0).opacity,
+    end: timing.editTransitionStyle(value, 1).opacity,
+  };
+});
 console.log(JSON.stringify({
+  edit,
+  joins,
   constants: {
     ZOOM_RANGE: timing.ZOOM_RANGE,
     CAMERA_MOVES: timing.CAMERA_MOVES,
@@ -203,3 +218,28 @@ def test_camera_endpoints_match_the_python_zoom_range():
     assert by_move["zoom_out"][-1]["zoom"] == pytest.approx(1)
     assert by_move["pan_left"][-1]["x"] == pytest.approx(0)
     assert by_move["pan_right"][-1]["x"] == pytest.approx(1)
+
+
+def test_edit_camera_endpoints_match_the_cut_and_its_bounds():
+    push = {"type": "push_in", "from": 1.0, "to": 1.3, "anchor": [0.25, 0.75], "easing": "linear"}
+    pull = {"type": "pull_back", "from": 1.2, "to": 1.0, "anchor": [0.5, 0.5], "easing": "linear"}
+    observed = _run_node(
+        {
+            "allocations": [],
+            "cameras": [],
+            "edit_cameras": [[push, 0], [push, 1], [pull, 0], [pull, 1]],
+        }
+    )["edit"]
+    assert observed[0] == {"zoom": 1.0, "x": 0.25, "y": 0.75}
+    assert observed[1]["zoom"] == pytest.approx(1.3)
+    assert observed[2]["zoom"] == pytest.approx(1.2)
+    assert observed[3]["zoom"] == pytest.approx(1.0)
+    assert EditMotion.model_fields["from_scale"].metadata[-1].le == pytest.approx(1.3)
+
+
+def test_every_join_ends_fully_on_the_new_shot():
+    types = list(get_args(EditTransitionType))
+    joins = _run_node({"allocations": [], "cameras": [], "joins": types})["joins"]
+    assert [row["type"] for row in joins] == types
+    for row in joins:
+        assert row["end"] == pytest.approx(1), row["type"]

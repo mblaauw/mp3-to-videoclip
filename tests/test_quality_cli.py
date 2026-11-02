@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 from test_creative_production import make_root
 
+from mp3_to_videoclip import generation as G
+from mp3_to_videoclip import production as P
 from mp3_to_videoclip.cli import execute, parser
 from mp3_to_videoclip.ffmpeg import probe
 from mp3_to_videoclip.storage import file_hash, read_json, write_json
@@ -73,27 +75,12 @@ def test_cli_init_instrumental_and_event_schema(tmp_path):
         ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=duration=0.5", str(source)], check=True
     )
     root = tmp_path / "instrumental"
-    result = execute(
-        parser().parse_args(
-            [
-                "init",
-                str(root),
-                "--mp3",
-                str(source),
-                "--slug",
-                "instrumental",
-                "--music-mode",
-                "instrumental",
-            ]
-        )
-    )
+    result = P.init_project(root, source, "instrumental", music_mode="instrumental").model_dump()
     assert result["music_mode"] == "instrumental"
     assert not (root / "work/lyrics.json").exists()
     assert read_json(root / "brief.json")["creative"] is not None
     assert read_json(root / "work/events.json")["events"] == []
     assert execute(parser().parse_args(["schema", "events"]))["type"] == "object"
-    with pytest.raises(ValueError, match="already exist"):
-        execute(parser().parse_args(["events", str(root)]))
 
 
 def test_restage_normalises_padding_and_rejects_phantom_ids(tmp_path):
@@ -118,19 +105,6 @@ def test_restage_normalises_padding_and_rejects_phantom_ids(tmp_path):
         B.authorize_restaging(root, ["s003 "], "diagnosis")
 
 
-def test_budget_note_without_cap_is_not_silently_discarded(tmp_path):
-    from test_creative_production import make_root
-
-    root = make_root(tmp_path)
-    stored = read_json(root / "project.json")
-    stored.pop("budget", None)
-    write_json(root / "project.json", stored)
-    with pytest.raises(ValueError, match="only apply with --cap"):
-        execute(parser().parse_args(["budget", str(root), "--note", "authority that would vanish"]))
-    assert not (root / "work/production-budget.json").exists()
-    assert execute(parser().parse_args(["budget", str(root)]))["budget_configured"] is False
-
-
 def test_costs_lists_unpriced_tasks_instead_of_crashing(tmp_path):
     from test_creative_production import make_root
 
@@ -139,19 +113,8 @@ def test_costs_lists_unpriced_tasks_instead_of_crashing(tmp_path):
         root / "work/tasks.json",
         {"x": {"uuid": "x", "kind": "images", "status": "submitted", "quote_id": "q"}},
     )
-    report = execute(parser().parse_args(["costs", str(root)]))
+    report = G.costs(root)
     assert report["unpriced_tasks"] == ["x"]
     assert report["unresolved_reservations_usd"] == "0"
     assert "reconcile" in report["unpriced_note"]
     assert report["budget"]["unpriced_tasks"] == ["x"]
-
-
-def test_non_adaptive_timing_rejects_adaptive_only_bounds(tmp_path):
-    from test_creative_production import make_root
-
-    root = make_root(tmp_path, with_storyboard=False)
-    with pytest.raises(ValueError, match="only apply to --timing adaptive"):
-        execute(
-            parser().parse_args(["skeleton", str(root), "--timing", "free", "--min-seconds", "5"])
-        )
-    assert not (root / "work/storyboard.json").exists()

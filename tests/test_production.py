@@ -3,6 +3,7 @@
 import copy
 import math
 import subprocess
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from mp3_to_videoclip import flow
 from mp3_to_videoclip import generation as G
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.cli import execute, parser
+from mp3_to_videoclip.domain.lyrics import save_lyrics
 from mp3_to_videoclip.ffmpeg import audio_seconds
 from mp3_to_videoclip.models import (
     Brief,
@@ -459,8 +461,7 @@ def test_single_writer_lock(production):
 
 
 def test_cli_status_and_schema_are_no_cost(production):
-    result = execute(parser().parse_args(["status", str(production)]))
-    assert result["approvals"]["storyboard"] == "approved"
+    assert P.status(production)["approvals"]["storyboard"] == "approved"
     assert execute(parser().parse_args(["schema", "storyboard"]))["type"] == "object"
     assert G.costs(production)["reported_or_calculated_usd"] == "0"
 
@@ -635,7 +636,7 @@ def test_lyrics_import_preserves_previous_reviewed_artifact(production):
     revised["segments"][0]["text"] = "Corrected text"
     path = production / "corrected.json"
     write_json(path, revised)
-    execute(parser().parse_args(["import-lyrics", str(production), str(path)]))
+    save_lyrics(production, Lyrics.model_validate(read_json(path)))
     archived = read_json(production / f"work/lyrics-history/{digest(before)}.json")
     assert archived == before
     assert read_json(production / "work/lyrics.json") == revised
@@ -680,8 +681,38 @@ def test_cli_select_and_costs_with_real_mp3(production):
     G.generate(production, proof["id"], client)
     accept_stills(production)
     P.approve(production, "proof", "test user approved fixture proof")
-    execute(parser().parse_args(["select", str(production), "--shot", "s001", "--version", "1"]))
-    assert (
-        execute(parser().parse_args(["costs", str(production)]))["reported_or_calculated_usd"]
-        == "0.003"
-    )
+    P.select_asset(production, "s001", 1)
+    assert G.costs(production)["reported_or_calculated_usd"] == "0.003"
+
+
+def test_a_reservation_follows_the_published_price_at_this_size():
+    pricing = {
+        "examples": [
+            {"configuration": "text-to-image · 1376×768", "price": 0.0342},
+            {"configuration": "image-to-image · 4K", "price": 0.2},
+        ]
+    }
+    assert G.published_reserve(pricing, (1376, 768)) == Decimal("0.0342") * 3 / 2
+    # No example at this size: the highest published one is all there is to go on.
+    assert G.published_reserve(pricing, (640, 360)) == Decimal("0.2") * 3 / 2
+    assert G.published_reserve({"rates": []}, (1376, 768)) is None
+    assert G.published_reserve(None, (1376, 768)) is None
+
+
+def test_a_quote_never_reserves_less_than_the_published_price(production):
+    client = FakeRunware(production)
+    real_schema = client.schema
+
+    def priced(slug):
+        schema = real_schema(slug)
+        schema["info"]["x-pricing"] = {"examples": [{"configuration": "x", "price": 0.04}]}
+        return schema
+
+    client.schema = priced
+    quote = G.quote_images(production, "proof", "0.01", client=client)
+    assert {task["reserve_usd"] for task in quote["tasks"]} == {"0.0600"}
+    assert quote["reserve_basis"]["user_floor_usd"] == "0.01"
+    client = FakeRunware(production)
+    client.schema = priced
+    high = G.quote_images(production, "proof", "0.10", client=client)
+    assert {task["reserve_usd"] for task in high["tasks"]} == {"0.10"}

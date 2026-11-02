@@ -47,6 +47,7 @@ jobs:
       - name: Frontend tests and build
         run: |
           npm test --prefix frontend
+          npm run lint --prefix frontend
           npm run build --prefix frontend
       - name: Committed frontend build is current
         run: git diff --exit-code --stat -- frontend/dist
@@ -73,3 +74,12 @@ jobs:
         run: uv run playwright install --with-deps chromium
       - name: Blocked states in a browser
         run: uv run pytest -q -m e2e
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Renderer smoke and pixel goldens
+        run: |
+          npm ci --prefix renderers/remotion --ignore-scripts --no-audit --no-fund
+          export REMOTION_CHROME="$(uv run python -c 'from playwright.sync_api import sync_playwright as s; p = s().start(); print(p.chromium.executable_path); p.stop()')"
+          npm run smoke --prefix renderers/remotion
+          npm run pixels --prefix renderers/remotion

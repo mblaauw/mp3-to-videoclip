@@ -10,7 +10,6 @@ from test_production import FakeRunware
 from mp3_to_videoclip import budget, preflight
 from mp3_to_videoclip import generation as G
 from mp3_to_videoclip import production as P
-from mp3_to_videoclip.cli import execute, parser
 from mp3_to_videoclip.models import Character, CharacterState, Project, Shot
 from mp3_to_videoclip.references import import_reference
 from mp3_to_videoclip.remotion import implementation_hash
@@ -258,15 +257,9 @@ def test_record_asset_accepts_a_relative_project_root(tmp_path, monkeypatch):
     assert saved["path"] == "assets/s001/relative.jpg"
 
 
-def test_cli_commands_and_new_default(tmp_path):
-    args = parser().parse_args(
-        ["init", str(tmp_path / "new"), "--slug", "new", "--mp3", "song.mp3"]
-    )
-    assert args.command == "init"
+def test_a_preflight_passes_on_a_ready_shot(tmp_path):
     root = strict_root(tmp_path)
-    result = execute(parser().parse_args(["locate", str(root), "--frame", "12"]))
-    assert result["shot_id"] == "s002"
-    assert execute(parser().parse_args(["preflight", str(root), "--shots", "s001"]))["ok"]
+    assert preflight.manifest(root, ["s001"])["ok"]
 
 
 def test_reference_free_identity_and_only_bound_character_roles(tmp_path):

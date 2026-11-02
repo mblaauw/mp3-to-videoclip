@@ -229,7 +229,7 @@ Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both a
 ## Where the roadmap stands, 1 Nov 2026
 
 Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76),
-E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79), C-3 and E-3 (#80), I-3 and C-4 (#81), I-4 and F-2 (#82). F-3 and G-1 are in the PR after #82. Next: G-2, then the rest of G-3.
+E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79), C-3 and E-3 (#80), I-3 and C-4 (#81), I-4 and F-2 (#82), F-3 and G-1 (#83). G-2 and the rest of G-3 are in the PR after #83, and they finish the final order.
 
 Differences from the plans, where the plan was wrong or could not hold:
 
@@ -351,3 +351,16 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   rendered for real with the approval gate stubbed. Suite: about 85 s before, 66 s after, plus 33 s for the compositor's 24 slow tests.
   Tests that only proved old branches were deleted, including the one that a pending transcription does not block music
   listening: that was only true off the strict path, and real films were always blocked.
+
+- **G-2:** with `render` gone from the CLI, the old compositor is reached by `python -m mp3_to_videoclip.legacy.graphics_compose` and nothing else,
+  so `legacy/` is now a candidate to delete, which is the owner's call. The skeleton's timing notes were CLI output and went with the command.
+  D7 changed: Runware's published examples run from 1K to 4K, and the highest would reserve for a 4K still when a film makes 1376x768, enough to stop a real
+  batch on budget. Examples at the film's own size decide when there are any, with the Settings value as the floor. The report was pinned on three cuts before it was
+  split, and its families stay apart where merging would change the order the Editor reads. Pixel goldens use a title in an embedded face rather than the
+  joint lockup, so a machine's fonts cannot move them. Made on a Mac; the first Linux Chrome result is whatever CI says.
+- **G-3:** `FilmShell`, `Images`, `useFilmData` and `useStoryData` were not moved to `useResource`. Measured in a browser on the Film, Images and Story screens, one change causes
+  one fetch per resource, hinted or not, because `request` already shares through `resources.read`, so a rewrite could add risk and fix nothing. Director, Images and
+  FilmShell are each a view plus a hook holding their state, so no file in `shell/`, `stages/` or `director/` is over 500 lines; `film/FilmPanel.tsx` (867), `spine/Spine.tsx`, `storyboard/ShotInspector.tsx`
+  and `api.ts` still are, being outside the plan's three folders. `prompt_version` reads stayed, because Look still offers the move to 3. The stylesheet fold was checked by computed
+  style rather than the plan's screenshots: 6,868 elements on eleven views at 1440 and 390, no differences, and the harness itself repeats at zero. A state those views do not reach is unchecked. 12 stylesheets and 7,771
+  lines against the plan's 11 and 6,000, because no rule was removed: unused on these screens is not unused.

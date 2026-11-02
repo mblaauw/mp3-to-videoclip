@@ -1022,3 +1022,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(json.dumps({k: report[k] for k in ("output", "output_sha256", "report")}, indent=2))
     return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

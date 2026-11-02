@@ -1,331 +1,342 @@
-"""Explicit stage commands for use by a human or an approval-respecting agent."""
+"""Engine tasks with no screen yet. Every human decision and every other stage is in the Studio."""
 
 import argparse
 import contextlib
 import json
-import math
 import os
-import re
 import shutil
 import sys
-from fractions import Fraction
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
-from . import derivations, generation, operations, production, profiles
-from .analysis import analyze
-from .branding import load_brand
-from .models import (
-    BrandPackage,
-    Brief,
-    EventMap,
-    ListeningDraft,
-    Lyrics,
-    Storyboard,
-    native_size_problem,
-)
+from . import derivations, generation, operations, production
+from .models import BrandPackage, Brief, EventMap, ListeningDraft, Lyrics, Storyboard
 from .providers import RUNWARE_KEY_ENV
-from .storage import inside, project_lock, read_json, write_json
+from .storage import project_lock
+
+SCHEMAS = {
+    "brief": Brief,
+    "lyrics": Lyrics,
+    "storyboard": Storyboard,
+    "events": EventMap,
+    "brand": BrandPackage,
+    "listening": ListeningDraft,
+}
 
 
-def parse_native_size(text: str, aspect: str) -> list[int]:
-    """Strict ``WxH`` parse; unusable sizes fail before any project file is written."""
-    match = re.fullmatch(r"([0-9]+)[xX]([0-9]+)", text.strip())
-    if match is None:
-        raise ValueError(f"--native-size must be two positive integers like 1376x768, got {text!r}")
-    width, height = (int(group) for group in match.groups())
-    a, b = map(int, aspect.split(":"))
-    problem = native_size_problem([width, height], a, b)
-    if problem:
-        raise ValueError(problem)
-    return [width, height]
+def _doctor(_args) -> dict:
+    return {
+        "ffmpeg": shutil.which("ffmpeg"),
+        "ffprobe": shutil.which("ffprobe"),
+        "node": shutil.which("node"),
+        "remotion_dependencies_installed": (
+            Path(__file__).resolve().parents[2]
+            / "renderers/remotion/node_modules/@remotion/renderer"
+        ).is_dir(),
+        "local_chrome": Path(
+            os.environ.get(
+                "REMOTION_CHROME",
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            )
+        ).is_file(),
+        "runware_key_environment_variable": RUNWARE_KEY_ENV,
+        "project_RUNWARE_API_KEY_present": bool(os.environ.get(RUNWARE_KEY_ENV, "").strip()),
+        "shared_RUNWARE_API_KEY_ignored": bool(os.environ.get("RUNWARE_API_KEY")),
+        "OPENAI_API_KEY_present": bool(os.environ.get("OPENAI_API_KEY")),
+    }
+
+
+def _schema(args) -> dict:
+    return SCHEMAS[args.kind].model_json_schema()
+
+
+def _backup(args, root: Path):
+    from .backup import backup_project
+
+    return backup_project(root, args.directory.resolve())
+
+
+def _quote_transcription(args, root: Path):
+    return generation.quote_transcription(
+        root,
+        args.language,
+        provider=args.provider,
+        reserve=args.reserve,
+        model=args.model,
+        max_tokens=args.max_tokens,
+    )
+
+
+def _transcribe(args, root: Path):
+    result = generation.transcribe_quote(root, args.quote)
+    if result is not None:
+        return result
+    return {"lyrics": str(root / "work/lyrics.json"), "approved": False}
+
+
+def _quote_music(args, root: Path):
+    from .music_analysis import quote_music
+
+    return quote_music(
+        root,
+        reserve=args.reserve,
+        model=args.model,
+        max_tokens=args.max_tokens,
+        refine=args.refine,
+    )
+
+
+def _listen(args, root: Path):
+    from .music_analysis import run_music
+
+    return run_music(root, args.quote)
+
+
+def _music_map(_args, root: Path):
+    from .music_map import write_music_map
+
+    return write_music_map(root)
+
+
+def _recover(args, root: Path):
+    return {"task": args.task, "recovered": generation.recover(root, args.task)}
+
+
+def _resolve_task(args, root: Path):
+    generation.resolve_task(root, args.task, args.cost, args.note)
+    return {"reconciled": args.task, "submitted": False}
+
+
+def _restage(args, root: Path):
+    from .budget import authorize_restaging
+
+    ids = [token.strip() for token in args.shots.split(",")]
+    known = {shot.id for shot in production.load_board(root).shots}
+    if not ids or len(set(ids)) != len(ids) or not set(ids) <= known:
+        raise ValueError("restage needs unique, known storyboard shot IDs (no padding, no typos)")
+    return authorize_restaging(root, ids, args.note)
+
+
+def _reference_import(args, root: Path):
+    from .references import import_reference
+
+    return import_reference(
+        root,
+        args.source,
+        note=args.note,
+        permission_confirmed=args.permission_confirmed,
+        box=args.crop,
+    )
+
+
+def _adopt(args, root: Path):
+    return derivations.adopt_derivative(
+        root,
+        args.shot,
+        args.source,
+        operation=args.operation,
+        note=args.note,
+        permission_confirmed=args.permission_confirmed,
+        from_version=args.from_version,
+    )
+
+
+def _progress(args, root: Path):
+    return operations.report(
+        root,
+        limit=args.limit,
+        running_only=args.running_only,
+        reconcile_stale=args.reconcile,
+    )
+
+
+def _args_schema(cmd) -> None:
+    cmd.add_argument("kind", choices=sorted(SCHEMAS))
+
+
+def _args_backup(cmd) -> None:
+    cmd.add_argument("--directory", type=Path, default=Path("backups"))
+
+
+def _hosted_args(cmd) -> None:
+    cmd.add_argument(
+        "--reserve",
+        default="0.05",
+        help="Runware scope USD reservation, not an exact estimate or provider cap",
+    )
+    cmd.add_argument(
+        "--model",
+        default="google-gemini-3-1-flash-lite",
+        help="Runware public model schema slug",
+    )
+    cmd.add_argument("--max-tokens", type=int, default=8192, help="Runware output-token limit")
+
+
+def _args_quote_transcription(cmd) -> None:
+    cmd.add_argument("--language")
+    cmd.add_argument("--provider", choices=["runware", "openai"], default="runware")
+    _hosted_args(cmd)
+
+
+def _args_quote_music(cmd) -> None:
+    cmd.add_argument(
+        "--refine",
+        action="store_true",
+        help="Explicit new quoted pass; archive the existing unreviewed draft and use measured listening checkpoints",
+    )
+    _hosted_args(cmd)
+
+
+def _args_quote(cmd) -> None:
+    cmd.add_argument("--quote", required=True)
+
+
+def _args_recover(cmd) -> None:
+    cmd.add_argument("--task", required=True)
+
+
+def _args_resolve_task(cmd) -> None:
+    cmd.add_argument("--task", required=True)
+    cmd.add_argument(
+        "--cost", required=True, help="User-verified billed USD amount, including 0 if uncharged"
+    )
+    cmd.add_argument(
+        "--note", required=True, help="Provider-status/billing evidence reviewed by the user"
+    )
+
+
+def _args_restage(cmd) -> None:
+    cmd.add_argument("--shots", required=True)
+    cmd.add_argument("--note", required=True)
+
+
+def _args_reference_import(cmd) -> None:
+    cmd.add_argument("--source", type=Path, required=True)
+    cmd.add_argument("--crop", nargs=4, type=int, metavar=("X0", "Y0", "X1", "Y1"))
+    cmd.add_argument("--note", required=True)
+    cmd.add_argument("--permission-confirmed", action="store_true")
+
+
+def _args_adopt(cmd) -> None:
+    cmd.add_argument("--shot", required=True)
+    cmd.add_argument("--source", type=Path, required=True)
+    cmd.add_argument(
+        "--operation",
+        required=True,
+        help="What was changed, e.g. 'native crop 0,90,984,732' or 'horizontal mirror'",
+    )
+    cmd.add_argument("--note", required=True)
+    cmd.add_argument(
+        "--from-version", type=int, help="Optional version this derivative was derived from"
+    )
+    cmd.add_argument(
+        "--permission-confirmed",
+        action="store_true",
+        help="Attest that the source bytes are owned/authorized for this production",
+    )
+
+
+def _args_progress(cmd) -> None:
+    cmd.add_argument(
+        "--running-only", action="store_true", help="Only operations still marked running"
+    )
+    cmd.add_argument("--limit", type=int, help="Newest N receipts")
+    cmd.add_argument(
+        "--reconcile",
+        action="store_true",
+        help="Mark receipts whose owning process is provably gone as interrupted",
+    )
+
+
+@dataclass(frozen=True)
+class Command:
+    help: str
+    run: Callable
+    arguments: Callable | None = None
+    #: "none" needs no film. "read" takes no writer lock, so monitoring works during a long render
+    #: or paid batch; every artifact is written atomically, so a reader never sees half of one.
+    scope: str = "write"
+
+
+COMMANDS = {
+    "doctor": Command("Show tool/credential availability without values", _doctor, scope="none"),
+    "schema": Command("Print editable artifact JSON schemas", _schema, _args_schema, "none"),
+    "backup": Command(
+        "Save a private local production archive, excluding rebuildable plate caches",
+        _backup,
+        _args_backup,
+    ),
+    "quote-transcription": Command(
+        "Estimate hosted transcription cost without uploading",
+        _quote_transcription,
+        _args_quote_transcription,
+    ),
+    "transcribe": Command(
+        "PAID UPLOAD: submit an authorized transcription exactly once", _transcribe, _args_quote
+    ),
+    "quote-music": Command(
+        "Quote a tracked, audio-blind musical listening pass (no upload)",
+        _quote_music,
+        _args_quote_music,
+    ),
+    "listen": Command(
+        "PAID UPLOAD: execute the authorized musical listening quote", _listen, _args_quote
+    ),
+    "music-map": Command(
+        "Build an unreviewed combined listening/measurement map locally", _music_map
+    ),
+    "recover": Command(
+        "Recover/download a previously submitted task, never resubmit", _recover, _args_recover
+    ),
+    "resolve-task": Command(
+        "Record user-verified billing/status for an ambiguous submission",
+        _resolve_task,
+        _args_resolve_task,
+    ),
+    "restage": Command(
+        "Record diagnosis/restaging authority for another correction cycle; no spend",
+        _restage,
+        _args_restage,
+    ),
+    "reference-import": Command(
+        "Import a permission-confirmed immutable local reference; no upload",
+        _reference_import,
+        _args_reference_import,
+    ),
+    "adopt": Command(
+        "Record an inspected local derivative (crop/mirror/tone) as a new image version",
+        _adopt,
+        _args_adopt,
+    ),
+    "progress": Command(
+        "Monitor local operations from their durable receipts; never approves or spends",
+        _progress,
+        _args_progress,
+        "read",
+    ),
+}
 
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Agent-operated MP3 → storyboard → stills → video. No automatic paid stages."
+        description="Engine tasks with no screen yet. Everything else is `uv run studio`."
     )
     commands = p.add_subparsers(dest="command", required=True)
-    doctor = commands.add_parser("doctor", help="Show tool/credential availability without values")
-    doctor.set_defaults(project=None)
-    schema = commands.add_parser("schema", help="Print editable artifact JSON schemas")
-    schema.add_argument(
-        "kind", choices=["brief", "lyrics", "storyboard", "events", "brand", "listening"]
-    )
-    schema.set_defaults(project=None)
-    init = commands.add_parser("init", help="Copy an MP3 into a new production")
-    init.add_argument("project", type=Path)
-    init.add_argument("--mp3", type=Path, required=True)
-    init.add_argument("--slug", help="Explicit film folder ID; otherwise derived from --title")
-    init.add_argument(
-        "--title",
-        help="Film title, separate from source filename; choose the folder/slug from this title",
-    )
-    init.add_argument("--aspect", choices=["16:9", "9:16"], default="16:9")
-    init.add_argument("--titles", choices=["joint-v1", "title-v1", "none"])
-    init.add_argument("--fps", type=int, choices=[24, 30], default=24)
-
-    init.add_argument(
-        "--music-mode", choices=["vocal", "instrumental", "music-led"], default="vocal"
-    )
-    init.add_argument(
-        "--native-size",
-        metavar="WxH",
-        help="Image-generation size for this production, e.g. 1376x768; omit to keep the default",
-    )
-    init.add_argument("--kind", choices=["music_video", "promo", "advert"], default="music_video")
-    init.add_argument("--model", help="Persist a model schema slug override for this production")
-    init.add_argument(
-        "--style", help="Replace the default global look; do not include shot content"
-    )
-    init.add_argument("--style-preset", help="Select a style preset by ID (or use --style)")
-    init.add_argument("--length", type=float, help="Excerpt length in seconds for promo/advert")
-    init.add_argument("--window-start", type=float, default=0.0, help="Excerpt start in seconds")
-    init.add_argument("--fade-in", type=float, default=0.0, help="Excerpt fade-in seconds")
-    init.add_argument("--fade-out", type=float, default=0.0, help="Excerpt fade-out seconds")
-    init.add_argument("--image-settings", help="JSON settings object replacing the model defaults")
-    init.add_argument("--image-seed", type=int, help="Optional seed, not an identity guarantee")
-
-    for name, help_text in {
-        "analyze": "Local beat/energy/rough section analysis; no upload",
-        "status": "Show current approvals and stale/missing shots",
-        "approve": "Moved to the Studio: use `uv run studio`",
-        "import-lyrics": "Import supplied/corrected timestamped lyrics",
-        "skeleton": "Make a beat-snapped timing skeleton, NOT a creative storyboard",
-        "events": "Create an empty, editable musical event map (no automatic interpretations)",
-        "prompts": "Inspect compiled shot prompts and required visible details without generating",
-        "preview": "Render a marked local animatic with actual audio and labelled placeholders",
-        "backup": "Save a private local production archive, excluding rebuildable plate caches",
-        "quote-transcription": "Estimate hosted transcription cost without uploading",
-        "quote-music": "Quote a tracked, audio-blind musical listening pass (no upload)",
-        "listen": "PAID UPLOAD: execute the authorized musical listening quote",
-        "music-map": "Build an unreviewed combined listening/measurement map locally",
-        "quote": "Inspect live image schema/pricing and save a scoped spending request",
-        "authorize": "Moved to the Studio: use `uv run studio` (never starts generation)",
-        "transcribe": "PAID UPLOAD: submit an authorized transcription exactly once",
-        "generate": "PAID: execute an authorized image scope with durable tracking",
-        "recover": "Recover/download a previously submitted task, never resubmit",
-        "resolve-task": "Record user-verified billing/status for an ambiguous submission",
-        "select": "Choose an immutable image version; does not approve it",
-        "sheet": "Build a local contact sheet for visual review",
-        "render": "Render an approved full still set to a versioned MP4",
-        "costs": "Show reported/calculated costs and unresolved reservations",
-        "budget": "Set an authorized production cap, or report cumulative spending",
-        "restage": "Record diagnosis/restaging authority for another correction cycle; no spend",
-        "preflight": "Inspect resolved states, references, exact prompts and known conflicts",
-        "review": "Record an inspected image version's accept/reject/uncertain judgement",
-        "reference-import": "Import a permission-confirmed immutable local reference; no upload",
-        "locate": "Resolve a frame or second to its exact shot and source owner",
-        "adopt": "Record an inspected local derivative (crop/mirror/tone) as a new image version",
-        "progress": "Monitor local operations from their durable receipts; never approves or spends",
-    }.items():
-        cmd = commands.add_parser(name, help=help_text)
-        cmd.add_argument("project", type=Path)
-        if name == "analyze":
-            cmd.add_argument("--force", action="store_true")
-            cmd.add_argument(
-                "--deep",
-                action="store_true",
-                help=(
-                    "Also run the deeper local pass (downbeat phase, key, candidate "
-                    "sections, band onsets) into work/music-deep.json; still unreviewed "
-                    "measurements and still no provider call"
-                ),
-            )
-        elif name == "approve":
-            cmd.add_argument("stage", choices=list(production.UPSTREAM))
-            cmd.add_argument("--note", required=True)
-            cmd.add_argument("--ack-uncertain", action="store_true")
-            cmd.add_argument(
-                "--inspected",
-                action="store_true",
-                help="Acknowledgement of actual composited graphics inspection",
-            )
-        elif name == "budget":
-            cmd.add_argument("--cap")
-            cmd.add_argument("--note")
-            cmd.add_argument(
-                "--max-corrections",
-                type=int,
-                help=f"New budgets default to {profiles.DEFAULT_MAX_CORRECTIONS}; existing limits are retained unless explicit",
-            )
-        elif name == "restage":
-            cmd.add_argument("--shots", required=True)
-            cmd.add_argument("--note", required=True)
-        elif name == "review":
-            cmd.add_argument("--shot", required=True)
-            cmd.add_argument("--version", type=int, required=True)
-            cmd.add_argument("--verdict", choices=["accept", "reject", "uncertain"], required=True)
-            cmd.add_argument("--reviewer", required=True)
-            cmd.add_argument("--note", required=True)
-            cmd.add_argument("--inspected", action="store_true")
-        elif name == "reference-import":
-            cmd.add_argument("--source", type=Path, required=True)
-            cmd.add_argument("--crop", nargs=4, type=int, metavar=("X0", "Y0", "X1", "Y1"))
-            cmd.add_argument("--note", required=True)
-            cmd.add_argument("--permission-confirmed", action="store_true")
-        elif name == "adopt":
-            cmd.add_argument("--shot", required=True)
-            cmd.add_argument("--source", type=Path, required=True)
-            cmd.add_argument(
-                "--operation",
-                required=True,
-                help="What was changed, e.g. 'native crop 0,90,984,732' or 'horizontal mirror'",
-            )
-            cmd.add_argument("--note", required=True)
-            cmd.add_argument(
-                "--from-version",
-                type=int,
-                help="Optional version this derivative was derived from",
-            )
-            cmd.add_argument(
-                "--permission-confirmed",
-                action="store_true",
-                help="Attest that the source bytes are owned/authorized for this production",
-            )
-        elif name == "progress":
-            cmd.add_argument(
-                "--running-only",
-                action="store_true",
-                help="Only operations still marked running",
-            )
-            cmd.add_argument("--limit", type=int, help="Newest N receipts")
-            cmd.add_argument(
-                "--reconcile",
-                action="store_true",
-                help="Mark receipts whose owning process is provably gone as interrupted",
-            )
-        elif name == "locate":
-            when = cmd.add_mutually_exclusive_group(required=True)
-            when.add_argument("--frame", type=int)
-            when.add_argument("--seconds", type=float)
-        elif name == "preflight":
-            cmd.add_argument("--shots", help="Comma-separated shot IDs; default all")
-        elif name == "import-lyrics":
-            cmd.add_argument("file", type=Path)
-        elif name == "skeleton":
-            cmd.add_argument(
-                "--seconds",
-                type=float,
-                help="Target hold: default 5s new-film adaptive, 8s older adaptive, 10s legacy",
-            )
-            cmd.add_argument(
-                "--timing",
-                choices=["adaptive", "beats", "events", "free"],
-                help="Default adaptive for new presets, beats for legacy projects",
-            )
-            cmd.add_argument(
-                "--min-seconds",
-                type=float,
-                help="Adaptive timing only; default 1.5s new-film, 4s older",
-            )
-            cmd.add_argument(
-                "--max-seconds",
-                type=float,
-                help="Adaptive timing only; default 7s new-film, 12s older",
-            )
-        elif name == "prompts":
-            cmd.add_argument("--shots", help="Comma-separated stable shot IDs; default all")
-        elif name == "preview":
-            cmd.add_argument(
-                "--scope",
-                choices=["proof", "available"],
-                help="Default proof for new creative projects, available for legacy",
-            )
-        elif name == "backup":
-            cmd.add_argument("--directory", type=Path, default=Path("backups"))
-        elif name in ("quote-transcription", "quote-music"):
-            if name == "quote-music":
-                cmd.add_argument(
-                    "--refine",
-                    action="store_true",
-                    help="Explicit new quoted pass; archive the existing unreviewed draft and use measured listening checkpoints",
-                )
-            if name == "quote-transcription":
-                cmd.add_argument("--language")
-                cmd.add_argument("--provider", choices=["runware", "openai"], default="runware")
-            cmd.add_argument(
-                "--reserve",
-                default="0.05",
-                help="Runware scope USD reservation, not an exact estimate or provider cap",
-            )
-            cmd.add_argument(
-                "--model",
-                default="google-gemini-3-1-flash-lite",
-                help="Runware public model schema slug",
-            )
-            cmd.add_argument(
-                "--max-tokens", type=int, default=8192, help="Runware output-token limit"
-            )
-        elif name == "quote":
-            cmd.add_argument("--scope", choices=["proof", "stills"], default="proof")
-            cmd.add_argument(
-                "--reserve",
-                required=True,
-                help="Explicit per-shot USD reservation (not a provider cap)",
-            )
-            cmd.add_argument("--shots", help="Comma-separated stable shot IDs")
-            cmd.add_argument(
-                "--model",
-                help="Explicit model schema slug override; otherwise use the stored production model",
-            )
-            cmd.add_argument("--regenerate", action="store_true")
-        elif name in ("authorize", "transcribe", "generate", "listen"):
-            cmd.add_argument("--quote", required=True)
-            if name == "authorize":
-                cmd.add_argument("--cap", required=True, help="USD allowance for this scoped quote")
-                cmd.add_argument("--note", required=True)
-            if name == "generate":
-                cmd.add_argument("--concurrency", type=int, choices=[1, 2, 3], default=1)
-        elif name == "recover":
-            cmd.add_argument("--task", required=True)
-        elif name == "resolve-task":
-            cmd.add_argument("--task", required=True)
-            cmd.add_argument(
-                "--cost",
-                required=True,
-                help="User-verified billed USD amount, including 0 if uncharged",
-            )
-            cmd.add_argument(
-                "--note",
-                required=True,
-                help="Provider-status/billing evidence reviewed by the user",
-            )
-        elif name == "select":
-            cmd.add_argument("--shot", required=True)
-            cmd.add_argument("--version", type=int, required=True)
-        elif name == "sheet":
-            cmd.add_argument("--scope", choices=["proof", "stills"], default="proof")
-        elif name == "render":
-            cmd.add_argument("--name", help="Optional new MP4 basename, no directories")
-            cmd.add_argument(
-                "--base-only",
-                action="store_true",
-                help="Render the base and prepare signature preflight; not a final delivery",
-            )
+    for name, command in COMMANDS.items():
+        cmd = commands.add_parser(name, help=command.help)
+        if command.scope == "none":
+            cmd.set_defaults(project=None)
+        else:
+            cmd.add_argument("project", type=Path)
+        if command.arguments is not None:
+            command.arguments(cmd)
     return p
-
-
-#: Commands that read canonical artifacts, or write only their own derived page.
-#: They run without the exclusive writer lock so monitoring and inspection keep
-#: working during a long render or paid batch. Every artifact is written atomically
-#: (temp file + replace), so a reader sees either the previous or the next complete
-#: document, never a partial one. Anything that writes canon must stay out of this set.
-READ_ONLY_COMMANDS = frozenset(
-    {
-        "status",
-        "progress",
-        "costs",
-        "locate",
-        "preflight",
-        "prompts",
-        "sheet",
-    }
-)
 
 
 @contextlib.contextmanager
 def _project_scope(root: Path, command: str):
-    if command in READ_ONLY_COMMANDS:
+    if COMMANDS[command].scope == "read":
         yield
     else:
         with project_lock(root):
@@ -333,449 +344,20 @@ def _project_scope(root: Path, command: str):
 
 
 def execute(args):
-    if args.command == "doctor":
-        return {
-            "ffmpeg": shutil.which("ffmpeg"),
-            "ffprobe": shutil.which("ffprobe"),
-            "node": shutil.which("node"),
-            "remotion_dependencies_installed": (
-                Path(__file__).resolve().parents[2]
-                / "renderers/remotion/node_modules/@remotion/renderer"
-            ).is_dir(),
-            "local_chrome": Path(
-                os.environ.get(
-                    "REMOTION_CHROME",
-                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                )
-            ).is_file(),
-            "runware_key_environment_variable": RUNWARE_KEY_ENV,
-            "project_RUNWARE_API_KEY_present": bool(os.environ.get(RUNWARE_KEY_ENV, "").strip()),
-            "shared_RUNWARE_API_KEY_ignored": bool(os.environ.get("RUNWARE_API_KEY")),
-            "OPENAI_API_KEY_present": bool(os.environ.get("OPENAI_API_KEY")),
-        }
-    if args.command == "schema":
-        return {
-            "brief": Brief,
-            "lyrics": Lyrics,
-            "storyboard": Storyboard,
-            "events": EventMap,
-            "brand": BrandPackage,
-            "listening": ListeningDraft,
-        }[args.kind].model_json_schema()
+    command = COMMANDS[args.command]
+    if command.scope == "none":
+        return command.run(args)
     root = args.project.resolve()
-    if args.command == "init":
-        slug = args.slug
-        if slug is None:
-            if not args.title or not args.title.strip():
-                raise ValueError(
-                    "choose a film --title (or explicit --slug), not the source filename"
-                )
-            slug = re.sub(r"[^a-z0-9]+", "-", args.title.casefold()).strip("-")[:64].rstrip("-")
-            if not slug:
-                raise ValueError("provide an explicit ASCII --slug for this film title")
-            if root.name != slug:
-                raise ValueError(
-                    f"film title derives folder '{slug}'; use that project path or provide an explicit --slug"
-                )
-        native_size = (
-            parse_native_size(args.native_size, args.aspect)
-            if args.native_size is not None
-            else None
-        )
-        image_settings = (
-            json.loads(args.image_settings) if args.image_settings is not None else None
-        )
-        if args.image_settings is not None and not isinstance(image_settings, dict):
-            raise ValueError("--image-settings must be a JSON object")
-        project = production.init_project(
-            root,
-            args.mp3,
-            slug,
-            args.aspect,
-            args.fps,
-            args.music_mode,
-            image_model=args.model,
-            image_settings=image_settings,
-            image_seed=args.image_seed,
-            style=args.style,
-            style_preset=args.style_preset,
-            titles=args.titles,
-            native_size=native_size,
-            title=args.title,
-            kind=args.kind,
-            length_seconds=args.length,
-            window_start=args.window_start,
-            fade_in=args.fade_in,
-            fade_out=args.fade_out,
-        )
-        return project.model_dump()
     if not root.is_dir():
-        raise ValueError("production does not exist; use init first")
+        raise ValueError("that production does not exist; make it in the Studio")
     with _project_scope(root, args.command):
-        project = production.load_project(root)
-        cmd = args.command
-        if cmd == "budget":
-            from . import budget
-
-            if args.cap is None and (args.note is not None or args.max_corrections is not None):
-                raise ValueError(
-                    "--note/--max-corrections only apply with --cap; run plain `budget` to report"
-                )
-            if args.cap is not None:
-                budget.set_budget(root, args.cap, args.note or "", args.max_corrections)
-            return budget.summary(root)
-        if cmd == "restage":
-            from .budget import authorize_restaging
-
-            ids = [token.strip() for token in args.shots.split(",")]
-            known = {shot.id for shot in production.load_board(root).shots}
-            if not ids or len(set(ids)) != len(ids) or not set(ids) <= known:
-                raise ValueError(
-                    "restage needs unique, known storyboard shot IDs (no padding, no typos)"
-                )
-            return authorize_restaging(root, ids, args.note)
-        if cmd == "reference-import":
-            from .references import import_reference
-
-            return import_reference(
-                root,
-                args.source,
-                note=args.note,
-                permission_confirmed=args.permission_confirmed,
-                box=args.crop,
-            )
-        if cmd == "review":
-            from .reviews import record_review
-
-            return record_review(
-                root,
-                args.shot,
-                args.version,
-                args.verdict,
-                note=args.note,
-                reviewer=args.reviewer,
-                inspected=args.inspected,
-            )
-        if cmd == "preflight":
-            from .preflight import manifest
-
-            return manifest(root, args.shots.split(",") if args.shots else None)
-        if cmd == "locate":
-            from .timeline import label_at_frame, label_at_seconds
-
-            board = production.load_board(root)
-            label = (
-                label_at_frame(board, args.frame)
-                if args.frame is not None
-                else label_at_seconds(board, args.seconds)
-            )
-            assets = read_json(root / "work/assets.json")
-            entry = assets.get(label["owner_shot_id"], {})
-            selected = next(
-                (v for v in entry.get("versions", []) if v["version"] == entry.get("selected")), {}
-            )
-            return {
-                **label,
-                "selected_version": selected.get("version"),
-                "selected_sha256": selected.get("sha256"),
-                "note": "Current storyboard selection; not proof of bytes in a historical export.",
-            }
-        if cmd == "analyze":
-            path = root / "work/music.json"
-            result = None
-            if path.exists() and not args.force:
-                result = {"analysis": str(path), "reused": True}
-            else:
-                data = analyze(production.render_audio(root, project), project.duration)
-                write_json(path, data)
-                result = {
-                    "analysis": str(path),
-                    "duration": data["duration"],
-                    "estimated_tempo_bpm": data["estimated_tempo_bpm"],
-                    "sections": data["sections"],
-                    "warnings": data["warnings"],
-                }
-            if getattr(args, "deep", False):
-                # A separate artifact on purpose: the deep pass must never
-                # silently rewrite the approved analysis, and it stays unreviewed
-                # measurements. Local only, no provider call.
-                from .deep_analysis import deep_analyze
-
-                deep_path = root / "work/music-deep.json"
-                deep = deep_analyze(production.render_audio(root, project), project.duration)
-                write_json(deep_path, deep)
-                result = {
-                    **result,
-                    "deep": str(deep_path),
-                    "deep_analysis_version": deep["analysis_version"],
-                    "deep_warnings": deep["warnings"],
-                }
-            return result
-        if cmd == "status":
-            return {**production.status(root), "operations": operations.summary(root)}
-        if cmd == "progress":
-            return operations.report(
-                root,
-                limit=args.limit,
-                running_only=args.running_only,
-                reconcile_stale=args.reconcile,
-            )
-        if cmd == "adopt":
-            return derivations.adopt_derivative(
-                root,
-                args.shot,
-                args.source,
-                operation=args.operation,
-                note=args.note,
-                permission_confirmed=args.permission_confirmed,
-                from_version=args.from_version,
-            )
-        if cmd == "import-lyrics":
-            from .domain.lyrics import save_lyrics
-
-            lyrics = Lyrics.model_validate(read_json(args.file))
-            save_lyrics(root, lyrics)
-            return {"imported": "lyrics", "segments": len(lyrics.segments), "approved": False}
-        if cmd == "skeleton":
-            timing = args.timing or ("adaptive" if project.image_model is not None else "beats")
-            if timing != "adaptive" and (
-                args.min_seconds is not None or args.max_seconds is not None
-            ):
-                raise ValueError("--min-seconds/--max-seconds only apply to --timing adaptive")
-            if args.seconds is not None and not 1 <= args.seconds <= 30:
-                raise ValueError("nominal storyboard duration must be 1–30 seconds")
-            board = production.skeleton(
-                root,
-                args.seconds,
-                timing,
-                min_seconds=args.min_seconds,
-                max_seconds=args.max_seconds,
-            )
-            resolved_min = 1.5 if args.min_seconds is None else args.min_seconds
-            short = (
-                timing == "adaptive"
-                and len(board.shots) == 1
-                and board.shots[0].duration_frames < math.ceil(Fraction(resolved_min) * project.fps)
-            )
-            notes = []
-            if short:
-                notes.append(
-                    "Track is shorter than one minimum shot in output frames; retained the full track as one shot."
-                )
-            if timing == "adaptive":
-                events_path = root / production.STAGE_FILES["events"]
-                events = production.load_events(root).events if events_path.exists() else []
-                ignored = sum(e.timing_basis != "manual" for e in events)
-                if ignored:
-                    notes.append(
-                        f"Ignored {ignored} estimated event(s); only reviewed manual events get structural priority."
-                    )
-                if not any(e.timing_basis == "manual" for e in events):
-                    notes.append(
-                        "No reviewed manual event boundaries; using local measured changes/beat estimates, then target holds. Review this timing proposal."
-                    )
-            return {
-                "shots": len(board.shots),
-                "total_frames": board.total_frames,
-                "warning": "Timing skeleton only; replace every TODO before approval",
-                "timing": timing,
-                "short_track_exception": short,
-                "timing_notes": notes,
-            }
-        if cmd == "events":
-            event_map = production.init_events(root)
-            return {
-                "events": str(root / "work/events.json"),
-                "map": event_map.model_dump(),
-                "approved": False,
-            }
-        if cmd == "prompts":
-            from . import shotkinds
-
-            board = production.load_board(root)
-            ids = args.shots.split(",") if args.shots else [s.id for s in board.shots]
-            if len(set(ids)) != len(ids) or not set(ids) <= {s.id for s in board.shots}:
-                raise ValueError("unknown or duplicate shot IDs")
-            shots = []
-            for shot in board.shots:
-                if shot.id not in ids:
-                    continue
-                if shot.asset_shot_id is None and shotkinds.is_local(shot):
-                    shots.append(
-                        {
-                            "id": shot.id,
-                            "kind": shot.kind,
-                            "purpose": shot.purpose,
-                            "must_show": shot.must_show,
-                            "paid": False,
-                            "note": "local plate; no image-generation spec",
-                        }
-                    )
-                    continue
-                shots.append(
-                    {
-                        "id": shot.id,
-                        "kind": shot.kind,
-                        "purpose": shot.purpose,
-                        "must_show": shot.must_show,
-                        "paid": True,
-                        "spec": production.image_spec(root, shot),
-                    }
-                )
-            return {"generated": False, "shots": shots}
-        if cmd == "preview":
-            raise ValueError(
-                "the CLI animatic is gone; render a preview in the Studio's Film stage"
-            )
-        if cmd == "backup":
-            from .backup import backup_project
-
-            return backup_project(root, args.directory.resolve())
-        if cmd == "quote-music":
-            from .music_analysis import quote_music
-
-            return quote_music(
-                root,
-                reserve=args.reserve,
-                model=args.model,
-                max_tokens=args.max_tokens,
-                refine=args.refine,
-            )
-        if cmd == "listen":
-            from .music_analysis import run_music
-
-            return run_music(root, args.quote)
-        if cmd == "music-map":
-            from .music_map import write_music_map
-
-            return write_music_map(root)
-        if cmd == "quote-transcription":
-            return generation.quote_transcription(
-                root,
-                args.language,
-                provider=args.provider,
-                reserve=args.reserve,
-                model=args.model,
-                max_tokens=args.max_tokens,
-            )
-        if cmd == "quote":
-            return generation.quote_images(
-                root,
-                args.scope,
-                args.reserve,
-                args.model,
-                args.shots.split(",") if args.shots else None,
-                args.regenerate,
-            )
-        if cmd == "transcribe":
-            result = generation.transcribe_quote(root, args.quote)
-            if result is not None:
-                return result
-            return {"lyrics": str(root / "work/lyrics.json"), "approved": False}
-        if cmd == "generate":
-            # Read the quote first: an unknown/unauthorized quote must fail before a receipt exists.
-            quote = generation.read_quote(root, args.quote)
-            with operations.operation(
-                root,
-                "generate",
-                scope=args.quote,
-                expected_outputs=[],
-                next_action=(
-                    "inspect every new image version and record clip review verdicts; "
-                    "recover unknown UUIDs by task ID — never resubmit them"
-                ),
-            ) as operation:
-                operation.tick(done=0, total=len(quote["tasks"]), unit="images")
-                generation.generate(root, args.quote, concurrency=args.concurrency)
-            return {"scope_finished": args.quote, "approved": False}
-        if cmd == "recover":
-            return {"task": args.task, "recovered": generation.recover(root, args.task)}
-        if cmd == "resolve-task":
-            generation.resolve_task(root, args.task, args.cost, args.note)
-            return {"reconciled": args.task, "submitted": False}
-        if cmd == "select":
-            production.select_asset(root, args.shot, args.version)
-            return {"selected": args.shot, "version": args.version, "approved": False}
-        if cmd == "sheet":
-            raise ValueError(
-                "the CLI contact sheet is gone; a packaged final has one in the Studio"
-            )
-        if cmd == "render":
-            from .remotion import render_base
-
-            production.require_approval(root, "stills")
-            shots = production.resolved_assets(root)
-            signature = production.requires_signature(root, project)
-            directory = root / "renders"
-            if args.name:
-                if not re.fullmatch(r"[a-zA-Z0-9_-]+\.mp4", args.name):
-                    raise ValueError("render name must be a safe .mp4 basename")
-                name = args.name
-            else:
-                version = 1
-                prefix = (
-                    f"{project.slug}-{'base' if args.base_only else 'stills'}"
-                    if signature
-                    else "stills"
-                )
-                while (directory / f"{prefix}-v{version:03d}.mp4").exists():
-                    version += 1
-                name = f"{prefix}-v{version:03d}.mp4"
-            scope = "base-only" if args.base_only else "final-composite"
-            with operations.operation(
-                root,
-                "render",
-                scope=scope,
-                expected_outputs=[f"renders/{name}"],
-                next_action=(
-                    "the base is not delivery: inspect the composited graphics samples, record the "
-                    "graphics decision, then render the final composite"
-                    if signature and args.base_only
-                    else "inspect the export report, samples and audio before delivery"
-                ),
-            ):
-                if signature and not args.base_only:
-                    from .legacy.graphics_compose import compose
-                    from .legacy.graphics_review import validate_old_review as validate_review
-
-                    production.require_approval(root, "graphics")
-                    review = validate_review(root, project)
-                    report = compose(root, inside(root, review["base"]), directory / name)
-                    report["delivery_ready"] = True
-                    report["graphics_approval_hash"] = production.stage_hash(root, "graphics")
-                    write_json(directory / name.replace(".mp4", ".json"), report)
-                    return report
-                report = render_base(
-                    project,
-                    shots,
-                    production.render_audio(root, project),
-                    directory / name,
-                    root / "work",
-                    brand=load_brand(root),
-                )
-                from .signature import current_input_hash
-
-                report["input_hash"] = current_input_hash(root)
-                if signature:
-                    from .legacy.graphics_review import prepare_review
-
-                    report["delivery_ready"] = False
-                    write_json(directory / name.replace(".mp4", ".json"), report)
-                    report["graphics_review"] = prepare_review(root, directory / name, project)
-                write_json(directory / name.replace(".mp4", ".json"), report)
-            return report
-        if cmd == "costs":
-            return generation.costs(root)
-        raise ValueError("unknown command")
+        production.load_project(root)
+        return command.run(args, root)
 
 
 def main():
     args = parser().parse_args()
     try:
-        if args.command in {"approve", "authorize"}:
-            raise ValueError(
-                "Human decisions now use the Studio. Run `uv run studio` and review and confirm in the browser."
-            )
         result = execute(args)
     except (OSError, ValueError, RuntimeError, KeyError) as e:
         # No raw provider payloads or credential-bearing URLs are printed.

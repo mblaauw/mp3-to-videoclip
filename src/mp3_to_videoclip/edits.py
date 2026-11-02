@@ -423,35 +423,8 @@ def _is_plain_reprise(board, shot_id: str) -> bool:
     return shot is not None and shotkinds.is_reprise(shot)
 
 
-def report(
-    root: Path,
-    *,
-    edit: EditDecisionList | None = None,
-    board: Storyboard | None = None,
-    project: Project | None = None,
-) -> dict:
-    """Compute the edit report the Editor reads and the Film stage shows."""
-    from . import production as P
-
-    board = board or P.load_board(root)
-    project = project or P.load_project(root)
-    edit = edit if edit is not None else load_edit(root, board=board)
-    if edit is None:
-        return {
-            "present": False,
-            "ok": True,
-            "hard": [],
-            "warnings": [],
-            "sections": [],
-            "techniques": [],
-            "counts": {"shots": len(board.shots), "cuts": max(0, len(board.shots) - 1)},
-            "coverage": {"ok": True, "total_frames": board.total_frames},
-            "ad": {"applicable": False, "checks": []},
-        }
-
+def _coverage_findings(edit, board) -> tuple[dict, list[dict]]:
     hard: list[dict] = []
-    warnings: list[dict] = []
-
     try:
         edit.check_board(board)
         coverage = {
@@ -468,9 +441,11 @@ def report(
             "total_frames": board.total_frames,
         }
         hard.append({"code": "coverage", "message": str(exc)})
+    return coverage, hard
 
-    fps = project.fps
-    flashes = _flash_frames(edit)
+
+def _flash_findings(edit, fps: int) -> list[dict]:
+    hard: list[dict] = []
     for violation in flash_violations(edit, fps):
         hard.append(
             {
@@ -482,7 +457,12 @@ def report(
                 ),
             }
         )
+    return hard
 
+
+def _transition_findings(edit) -> tuple[list[dict], list[dict]]:
+    hard: list[dict] = []
+    warnings: list[dict] = []
     for index, shot in enumerate(edit.shots):
         transition = shot.transition_in
         if transition.type != "cut" and transition.frames <= 0:
@@ -509,8 +489,10 @@ def report(
                     "message": "the first shot has no outgoing plate to transition from",
                 }
             )
+    return hard, warnings
 
-    content = {shot.id: shot for shot in board.shots}
+
+def _shot_rows(edit, content: dict, fps: int) -> list[dict]:
     shots = []
     for shot in edit.shots:
         source = content.get(shot.shot_id)
@@ -527,8 +509,12 @@ def report(
                 "text": [item.text for item in shot.text],
             }
         )
+    return shots
 
-    windows = _section_windows(edit, board.total_frames)
+
+def _section_rows(root: Path, edit, windows, fps: int) -> tuple[list[dict], list[dict], int, bool]:
+    """Each section's numbers, what its rhythm gets wrong, and the holds across all of them."""
+    warnings: list[dict] = []
     sections = []
     total_holds = 0
     hold_excused = False
@@ -604,18 +590,12 @@ def report(
                 "techniques": techniques,
             }
         )
+    return sections, warnings, total_holds, hold_excused
 
-    total_shots = len(edit.shots)
-    hold_ratio = round(total_holds / total_shots, 3) if total_shots else 0
-    if hold_ratio > 0.5 and not hold_excused:
-        warnings.append(
-            {
-                "code": "hold_ratio_total",
-                "message": f"{total_holds} of {total_shots} shots are holds",
-            }
-        )
 
-    # Repetition: the same move or transition until it becomes mechanical.
+def _repetition_findings(edit) -> list[dict]:
+    """The same move or travel until it becomes mechanical."""
+    warnings: list[dict] = []
     run = 0
     previous = None
     for shot in edit.shots:
@@ -652,6 +632,11 @@ def report(
                     ),
                 }
             )
+    return warnings
+
+
+def _static_findings(edit, fps: int) -> list[dict]:
+    warnings: list[dict] = []
     for shot in edit.shots:
         seconds = shot.duration_frames / fps
         if (
@@ -667,6 +652,11 @@ def report(
                     "message": f"{shot.shot_id} stays still for {seconds:.1f}s",
                 }
             )
+    return warnings
+
+
+def _crop_findings(edit) -> list[dict]:
+    warnings: list[dict] = []
     for shot in edit.shots:
         soft = [crop for crop in shot.crops if crop.zoom > SOFT_CROP_ZOOM]
         if soft:
@@ -680,6 +670,11 @@ def report(
                     ),
                 }
             )
+    return warnings
+
+
+def _unseen_words_findings(edit, board) -> list[dict]:
+    warnings: list[dict] = []
     if board is not None:
         board_shots = {shot.id: shot for shot in board.shots}
         for shot in edit.shots:
@@ -699,6 +694,11 @@ def report(
                         ),
                     }
                 )
+    return warnings
+
+
+def _reprise_findings(edit, board) -> list[dict]:
+    warnings: list[dict] = []
     for shot in edit.shots:
         if not shot.crops and _is_plain_reprise(board, shot.shot_id):
             warnings.append(
@@ -711,6 +711,11 @@ def report(
                     ),
                 }
             )
+    return warnings
+
+
+def _feel_findings(windows) -> list[dict]:
+    warnings: list[dict] = []
     for section, _start, _end in windows:
         if section.feel.strip().lower() in UNREVIEWED_FEELS:
             warnings.append(
@@ -720,6 +725,11 @@ def report(
                     "message": f"section {section.id} has no written feel",
                 }
             )
+    return warnings
+
+
+def _join_habit_findings(edit) -> list[dict]:
+    warnings: list[dict] = []
     # Hard cut is the default and is not repetition; only named transitions are.
     joins = [shot.transition_in.type for shot in edit.shots[1:] if shot.transition_in.type != "cut"]
     for name in sorted(set(joins)):
@@ -731,6 +741,11 @@ def report(
                     "message": f"{count} of {len(joins)} named joins use {name}",
                 }
             )
+    return warnings
+
+
+def _framing_findings(edit, content: dict) -> list[dict]:
+    warnings: list[dict] = []
     previous_framing = None
     for shot in edit.shots:
         framing = content[shot.shot_id].framing if shot.shot_id in content else None
@@ -743,7 +758,11 @@ def report(
                 }
             )
         previous_framing = framing
+    return warnings
 
+
+def _clip_findings(root: Path, edit, fps: int) -> list[dict]:
+    warnings: list[dict] = []
     # A clip holds its last frame past its end; more than a second of that shows.
     clips = read_optional(root / "work/assets.json")
     from .production.assets import selected_clip
@@ -763,6 +782,11 @@ def report(
                         ),
                     }
                 )
+    return warnings
+
+
+def _reading_findings(edit, content: dict, fps: int) -> list[dict]:
+    warnings: list[dict] = []
     # Reading time. Card text is measured from the storyboard, timed text from
     # the edit layer, because both are words the viewer has to read.
     for shot in edit.shots:
@@ -812,11 +836,10 @@ def report(
                         ),
                     }
                 )
+    return warnings
 
-    warnings.extend(_soft_push_findings(root, edit, project))
-    warnings.extend(_grid_findings(root, edit, windows))
-    warnings.extend(_caption_findings(edit))
 
+def _counts(edit) -> tuple[dict, dict, dict]:
     transition_counts: dict[str, int] = {}
     accent_counts: dict[str, int] = {}
     motion_counts: dict[str, int] = {}
@@ -827,6 +850,73 @@ def report(
         motion_counts[shot.motion.type] = motion_counts.get(shot.motion.type, 0) + 1
         for accent in shot.accents:
             accent_counts[accent.type] = accent_counts.get(accent.type, 0) + 1
+    return motion_counts, transition_counts, accent_counts
+
+
+def report(
+    root: Path,
+    *,
+    edit: EditDecisionList | None = None,
+    board: Storyboard | None = None,
+    project: Project | None = None,
+) -> dict:
+    """Compute the edit report the Editor reads and the Film stage shows.
+
+    The order of the findings is what the Editor reads first, so it is part of the output.
+    """
+    from . import production as P
+
+    board = board or P.load_board(root)
+    project = project or P.load_project(root)
+    edit = edit if edit is not None else load_edit(root, board=board)
+    if edit is None:
+        return {
+            "present": False,
+            "ok": True,
+            "hard": [],
+            "warnings": [],
+            "sections": [],
+            "techniques": [],
+            "counts": {"shots": len(board.shots), "cuts": max(0, len(board.shots) - 1)},
+            "coverage": {"ok": True, "total_frames": board.total_frames},
+            "ad": {"applicable": False, "checks": []},
+        }
+
+    fps = project.fps
+    flashes = _flash_frames(edit)
+    content = {shot.id: shot for shot in board.shots}
+    windows = _section_windows(edit, board.total_frames)
+
+    coverage, coverage_hard = _coverage_findings(edit, board)
+    transition_hard, transition_warnings = _transition_findings(edit)
+    hard = [*coverage_hard, *_flash_findings(edit, fps), *transition_hard]
+    sections, section_warnings, total_holds, hold_excused = _section_rows(root, edit, windows, fps)
+    total_shots = len(edit.shots)
+    hold_ratio = round(total_holds / total_shots, 3) if total_shots else 0
+    warnings = [*transition_warnings, *section_warnings]
+    if hold_ratio > 0.5 and not hold_excused:
+        warnings.append(
+            {
+                "code": "hold_ratio_total",
+                "message": f"{total_holds} of {total_shots} shots are holds",
+            }
+        )
+    warnings += [
+        *_repetition_findings(edit),
+        *_static_findings(edit, fps),
+        *_crop_findings(edit),
+        *_unseen_words_findings(edit, board),
+        *_reprise_findings(edit, board),
+        *_feel_findings(windows),
+        *_join_habit_findings(edit),
+        *_framing_findings(edit, content),
+        *_clip_findings(root, edit, fps),
+        *_reading_findings(edit, content, fps),
+        *_soft_push_findings(root, edit, project),
+        *_grid_findings(root, edit, windows),
+        *_caption_findings(edit),
+    ]
+    motion_counts, transition_counts, accent_counts = _counts(edit)
 
     ad = _ad_checks(root, project, board, edit)
     for check in ad.get("checks", []):
@@ -855,7 +945,7 @@ def report(
             "accents_by_type": accent_counts,
         },
         "techniques": techniques,
-        "shots": shots,
+        "shots": _shot_rows(edit, content, fps),
         "ad": ad,
     }
 

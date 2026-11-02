@@ -615,3 +615,76 @@
   max-height: 124px;
   margin-bottom: 6px;
 }
+
+/* ------------------------------------------------------------ form baseline */
+/* One look for every text box: 15 px text, comfortable leading, a visible
+   placeholder, a gold focus ring. Local rules may still set width or height. */
+/* Zero specificity (:where): it fills in every unstyled box, and any local
+   rule that sets its own look still wins. */
+:where(.shell, .settings-modal) :where(input:not([type]), input[type="text"],
+    input[type="search"], input[type="url"], input[type="email"], input[type="number"],
+    input[type="password"], textarea, select) {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-15);
+  line-height: 1.55;
+  padding: 8px 11px;
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+:where(.shell) :where(input, textarea, select):where(:hover:not(:disabled):not(:focus)) {
+  border-color: #4a4c53;
+}
+
+:where(.shell, .settings-modal) :where(input, textarea, select):focus-visible,
+:where(.shell, .settings-modal) :where(textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])):focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: var(--focus-ring);
+}
+
+:where(.shell) :where(input, textarea)::placeholder {
+  color: #7d7f86;
+  opacity: 1;
+}
+
+:where(.shell) :where(input, textarea, select):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+:where(.shell) textarea {
+  line-height: 1.6;
+}
+
+:where(.shell) :where(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--gold);
+}
+
+/* Text that is read more than typed gets the reading measure. */
+.shell .ui-field textarea,
+.shell .prompt-text {
+  max-width: 100%;
+}
+
+.shell .prompt-text {
+  font-size: var(--t-15);
+  line-height: 1.65;
+}
+
+.next-bar .next-note {
+  width: min(320px, 40vw);
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: var(--t-13);
+}
+
+.next-bar .ui-btn[aria-busy="true"] {
+  cursor: progress;
+}

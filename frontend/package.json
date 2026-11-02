@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "test": "node --test tests/*.test.ts",
     "preview": "vite preview",
-    "api:types": "uv run --project .. python ../scripts/dump_openapi.py ../frontend/openapi.json && openapi-typescript openapi.json -o src/api/schema.d.ts"
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "@fontsource-variable/schibsted-grotesk": "5.3.0",
@@ -18,11 +18,14 @@
     "remotion": "4.0.539"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
-    "openapi-typescript": "^7.13.0",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
     "typescript": "^5.9.0",
+    "typescript-eslint": "8.72.1",
     "vite": "^8.3.5"
   }
 }

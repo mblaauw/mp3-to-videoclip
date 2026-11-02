@@ -217,6 +217,7 @@ export function useStoryData({
     if (!brief || saveFailed || !fieldsDirty) return;
     const timer = window.setTimeout(() => void saveFields(), 800);
     return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- saveFields changes every render; these are what make a save due
   }, [brief, direction, fieldsDirty, style, saveFailed]);
 
   const intakeChanged = (updated: IntakePayload) => {
