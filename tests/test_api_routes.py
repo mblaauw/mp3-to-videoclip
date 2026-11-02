@@ -758,7 +758,7 @@ def test_settings_provider_and_voice_tests_spend_nothing(monkeypatch, tmp_path):
         tested = client.post("/api/settings/test", json={"kind": "provider", "provider": "runware"})
         assert tested.json()["message"] == "Add a Runware key first."
         voice = client.post(
-            "/api/settings/test", json={"kind": "voice", "voice": "English_Magnetic_Male_2"}
+            "/api/settings/test", json={"kind": "voice", "voice": "English_magnetic_voiced_man"}
         )
         assert voice.json()["ok"] is False
         assert "no free sample" in voice.json()["message"]

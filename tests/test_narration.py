@@ -115,8 +115,8 @@ def test_each_line_gets_a_task_and_a_reservation(film):
 
 
 def test_a_voice_the_model_does_not_offer_is_refused_by_name(film):
-    with pytest.raises(ValueError, match="does not offer the voice English_Magnetic_Male_2"):
-        narration.quote_lines(film, voice_id="English_Magnetic_Male_2", client=Fake())
+    with pytest.raises(ValueError, match="does not offer the voice English_Not_A_Voice"):
+        narration.quote_lines(film, voice_id="English_Not_A_Voice", client=Fake())
 
 
 def test_nothing_is_bought_without_authorization(film):

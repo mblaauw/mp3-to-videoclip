@@ -38,7 +38,7 @@ def test_it_loads_with_no_cache_and_no_network():
         "upscaler": "real-esrgan",
         "narrator": "minimax-speech-2-8",
     }
-    assert next(v for v in loaded.voices if v.recommended).id == "English_Magnetic_Male_2"
+    assert next(v for v in loaded.voices if v.recommended).id == "English_magnetic_voiced_man"
 
 
 def test_every_stated_price_has_a_source_and_a_date():

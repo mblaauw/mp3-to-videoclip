@@ -522,6 +522,8 @@ export const EDIT_TEXT_STYLES = [
   "tagline",
   "cta",
   "caption",
+  "gallery_title",
+  "gallery_label",
 ];
 export const GRADE_PRESETS = {
   neutral: {contrast: 1, saturation: 1, brightness: 1, vignette: 0},

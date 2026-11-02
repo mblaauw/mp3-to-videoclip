@@ -48,7 +48,7 @@ def route_for(settings: Settings, role: str) -> Route:
     keys = settings.keys
     if provider == "openai":
         # With no OpenAI key of its own, an OpenAI model goes through OpenCode Go, whose key
-        # only ever goes to OpenCode Go's address. The same model answers either way.
+        # only ever goes to OpenCode Go's address. Go carries some of OpenAI's models, not all.
         go_key = opencode_go_key(settings)
         if not keys.openai and go_key:
             return Route(

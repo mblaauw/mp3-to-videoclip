@@ -694,6 +694,19 @@ def _unseen_words_findings(edit, board) -> list[dict]:
                         ),
                     }
                 )
+            # A designed plate already draws its words, so a layer on top lands over them.
+            drawn = planned is not None and shotkinds.is_local(planned) and not on_a_picture
+            if drawn and planned.text and shot.text:
+                warnings.append(
+                    {
+                        "code": "text_over_card",
+                        "shot_id": shot.shot_id,
+                        "message": (
+                            f"{shot.shot_id} draws its own words, and a text layer on top "
+                            "would land over them; keep one or the other"
+                        ),
+                    }
+                )
     return warnings
 
 

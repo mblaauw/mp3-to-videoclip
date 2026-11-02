@@ -45,7 +45,7 @@ grade. The edit must cover the storyboard's whole timeline exactly.
    frames. Spend about one to three per section on the strongest hits. Never
    place more than three `flash` accents inside any one second.
 6. **Text.** Time text layers inside their shot: `super`, `title`,
-   `lower_third`, `lyric`, `caption`, `card`, `logotype`, `tagline` or `cta`, with `fade`, `type_on`, `slide_up`, `pop` or
+   `lower_third`, `lyric`, `caption`, `card`, `logotype`, `tagline`, `cta`, or `gallery_title` and `gallery_label` (fine spaced capitals, top and bottom, no box), with `fade`, `type_on`, `slide_up`, `pop` or
    `kinetic_words`. Respect safe areas; never cover a face or the product.
 7. **Grade.** Choose one preset for the film: `neutral`, `warm-night`,
    `clean-day`, `monochrome`, `vivid` or `film-fade`, with strength 0–1. Use the

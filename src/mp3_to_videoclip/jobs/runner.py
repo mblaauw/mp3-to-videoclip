@@ -39,7 +39,7 @@ ACTIVE = {"queued", "running", "stopping", "needs_budget"}
 STATUSES = ACTIVE | {"succeeded", "failed", "cancelled", "interrupted"}
 RECEIPTS = "work/jobs"
 #: Render job kinds; ``titles`` renders the titles review stills.
-RENDER_KINDS = (None, "preview", "titles", "base", "final")
+RENDER_KINDS = (None, "preview", "titles", "base", "final", "variant", "package")
 logger = logging.getLogger(__name__)
 
 

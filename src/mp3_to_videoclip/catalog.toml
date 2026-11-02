@@ -125,10 +125,10 @@ price_source = "https://runware.ai/docs/models-api/pricing"
 price_checked = "2026-11-01"
 
 [[voices]]
-id = "English_Magnetic_Male_2"
+id = "English_magnetic_voiced_man"
 provider = "runware"
 model = "minimax-speech-2-8"
-label = "Magnetic male"
+label = "Magnetic-voiced man"
 language = "en"
 recommended = true
 
