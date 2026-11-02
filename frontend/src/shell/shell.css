@@ -1545,3 +1545,24 @@ body {
   white-space: nowrap;
   transform: translateX(-50%);
 }
+
+.stuck-task {
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.stuck-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.stuck-task-settle {
+  display: grid;
+  gap: 8px;
+}
+.stuck-task-settle label {
+  display: grid;
+  gap: 4px;
+}

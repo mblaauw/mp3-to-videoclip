@@ -35,6 +35,85 @@ function meterWidth(value: string | null | undefined, cap: string | null | undef
   return `${Math.min(100, (Number(value || 0) / Number(cap)) * 100)}%`;
 }
 
+/** A paid task that never came back holds the film's spending. The owner can always free it. */
+function StuckTask({
+  slug,
+  task,
+  onChanged,
+}: {
+  slug: string;
+  task: NonNullable<Budget["unresolved"]>[number];
+  onChanged: () => void;
+}) {
+  const [state, setState] = useState<string | null>(null);
+  const [settling, setSettling] = useState(false);
+  const [cost, setCost] = useState("");
+  const [note, setNote] = useState("");
+  const name = `${task.kind === "clip" ? "Clip" : "Task"}${task.shot_id ? ` for ${task.shot_id}` : ""}`;
+
+  const check = async () => {
+    setState("Asking the provider…");
+    try {
+      const result = await api.recoverTask(slug, task.id);
+      if (result.recovered) onChanged();
+      setState(
+        result.recovered
+          ? "It came back."
+          : result.answered
+            ? "Still being made. Check again later."
+            : "The provider isn't answering. Check again later.",
+      );
+    } catch (e) {
+      setState(String(e));
+    }
+  };
+  const settle = async () => {
+    try {
+      await api.resolveTask(slug, task.id, cost, note);
+      onChanged();
+    } catch (e) {
+      setState(String(e));
+    }
+  };
+
+  return (
+    <div className="stuck-task">
+      <b>{name} hasn't come back</b>
+      <p className="pop-hint">
+        ${task.reserve_usd ?? "?"} is held and nothing new can be bought on this film until it
+        settles. Checking is free and never buys it twice.
+      </p>
+      <div className="stuck-task-actions">
+        <button type="button" className="btn" onClick={check}>
+          Check again
+        </button>
+        <button type="button" className="btn ghost" onClick={() => setSettling(!settling)}>
+          Record what it billed
+        </button>
+      </div>
+      {settling && (
+        <div className="stuck-task-settle">
+          <label>
+            Billed, in USD (0 if nothing)
+            <input value={cost} inputMode="decimal" onChange={(e) => setCost(e.target.value)} />
+          </label>
+          <label>
+            What the billing page showed
+            <input value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+          <p className="pop-hint">
+            Only once you've seen your bill. If it arrives later, it is not collected.
+          </p>
+          <button type="button" className="btn" disabled={!cost || !note.trim()} onClick={settle}>
+            Settle this task
+          </button>
+        </div>
+      )}
+      {state && <p className="pop-hint" role="status">{state}</p>}
+    </div>
+  );
+}
+
 function BudgetPopover({
   slug,
   project,
@@ -93,6 +172,9 @@ function BudgetPopover({
         <span>Reserved for running jobs</span>
         <b>{budget?.reserved_usd ?? "0.00"}</b>
       </div>
+      {budget?.unresolved?.map((task) => (
+        <StuckTask key={task.id} slug={slug} task={task} onChanged={onChanged} />
+      ))}
       <div className="pop-row">
         <span>Left</span>
         <b>
@@ -355,7 +437,13 @@ export function TopBar({
             aria-label="Budget"
             onClick={() => setPop(pop === "budget" ? null : "budget")}
           >
-            <span>{remaining ? `$${remaining} left` : "Budget"}</span>
+            <span>
+              {budget?.unresolved?.length
+                ? "A paid task is waiting"
+                : remaining
+                  ? `$${remaining} left`
+                  : "Budget"}
+            </span>
             {cap && (
               <span className="meter" aria-hidden="true">
                 <i
