@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -11,6 +12,7 @@ from api_support import api_client
 from test_first_cut import _film
 
 from mp3_to_videoclip import delivery, edits
+from mp3_to_videoclip.api import film as film_api
 from mp3_to_videoclip.models import EditSection
 from mp3_to_videoclip.storage import file_hash, write_json
 
@@ -145,3 +147,12 @@ def test_a_chapter_takes_the_name_of_a_section_a_frame_away(film, monkeypatch):
         },
     )
     assert [row["title"] for row in delivery.chapter_list(film)] == ["Hook", "World"]
+
+
+def test_the_studio_can_queue_a_package_and_a_version():
+    """Both routes name their own render kinds; the runner once refused them before any work."""
+    from mp3_to_videoclip.jobs.runner import RENDER_KINDS
+
+    source = (Path(film_api.__file__)).read_text()
+    named = set(re.findall(r'render_kind="([a-z]+)"', source))
+    assert {"variant", "package"} <= named <= set(RENDER_KINDS)
