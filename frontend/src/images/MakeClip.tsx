@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, type ImageShot } from "../api";
-import { Button, ErrorState } from "../ui";
+import { Button } from "../ui";
 
 /** A short moving version of the selected still. First the price, then the purchase. */
 export function MakeClip({
@@ -23,7 +23,7 @@ export function MakeClip({
     try {
       await step();
     } catch (caught) {
-      setError(String(caught));
+      setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setBusy(false);
     }
@@ -104,7 +104,7 @@ export function MakeClip({
           </div>
         );
       })}
-      {error && <ErrorState what="making a clip" error={error} compact />}
+      {error && <p className="ui-state error compact" role="alert">{error}</p>}
     </div>
   );
 }

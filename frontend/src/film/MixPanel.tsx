@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { api, type MixSpec, type ScriptPayload } from "../api";
 import { notifyProjectChanged } from "../shell/projectEvents";
-import { ErrorState } from "../ui";
 
 function Decibels({
   label,
@@ -58,7 +57,7 @@ export function MixPanel({ slug, payload }: { slug: string; payload: ScriptPaylo
     setError(null);
     work()
       .then(() => notifyProjectChanged())
-      .catch((caught) => setError(String(caught)))
+      .catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)))
       .finally(() => setBusy(false));
   };
   const bed = mix.bed;
@@ -133,7 +132,7 @@ export function MixPanel({ slug, payload }: { slug: string; payload: ScriptPaylo
       {mix.ambience?.length ? (
         <p className="hint">{mix.ambience.length} ambience spans under the lines.</p>
       ) : null}
-      {error && <ErrorState what="changing the mix" error={error} compact />}
+      {error && <p className="ui-state error compact" role="alert">{error}</p>}
     </div>
   );
 }

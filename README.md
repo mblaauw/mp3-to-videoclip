@@ -37,6 +37,8 @@ yet (transcription, listening, backups, signing, maintenance). Start with
   intake, `brief.intent` and selectable style presets. Titles are a package chosen
   per film: the 25/40 signature, a short title and end card at either shape, or
   none. The brand kit sets the default; a kit with no name starts on short titles.
+- A short clip of any generated still, bought at a shown price and played in both the Player and the
+  film; the still stays as the fallback.
 - A fourth kind, the story film: a narrator leads and there may be no song. It starts from a
   script on a structure's beats; the kept takes, their pauses and an optional bed are mixed
   into one WAV that becomes the clock, so a longer take moves only the shots after it. Takes
