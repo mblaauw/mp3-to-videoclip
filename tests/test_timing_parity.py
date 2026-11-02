@@ -17,8 +17,15 @@ from typing import Any, get_args
 
 import pytest
 
-from mp3_to_videoclip import graphics, render
-from mp3_to_videoclip.models import BrandPackage, PostEffects, Shot, Storyboard
+from mp3_to_videoclip import branding, graphics
+from mp3_to_videoclip.models import (
+    CAMERA_MOVES,
+    ZOOM_RANGE,
+    BrandPackage,
+    PostEffects,
+    Shot,
+    Storyboard,
+)
 
 TIMING = Path(__file__).resolve().parents[1] / "renderers/remotion/src/timing.mjs"
 NODE = shutil.which("node")
@@ -148,17 +155,17 @@ def test_the_shared_timing_module_agrees_with_python():
     observed = _run_node(
         {
             "allocations": [case["shots"] for case in CASES],
-            "cameras": [[move, CAMERA_FRAMES] for move in render._MOVES],
+            "cameras": [[move, CAMERA_FRAMES] for move in CAMERA_MOVES],
         }
     )
     constants = observed["constants"]
-    assert constants["ZOOM_RANGE"] == render.ZOOM_RANGE
-    assert constants["CAMERA_MOVES"] == list(render._MOVES)
+    assert constants["ZOOM_RANGE"] == ZOOM_RANGE
+    assert constants["CAMERA_MOVES"] == list(CAMERA_MOVES)
     assert constants["INTRO_REFERENCE_SECONDS"] == graphics.INTRO_REFERENCE_SECONDS
     assert constants["MIN_CAPTION_GAP"] == graphics.MIN_CAPTION_GAP
     assert constants["SAFE_MARGIN"] == graphics.SAFE_MARGIN
     assert constants["BRAND_PLATE_SECONDS"] == BrandPackage.model_fields["duration_seconds"].default
-    assert constants["BRAND_PLATE_FADE_SECONDS"] == render.BRAND_PLATE_FADE_SECONDS
+    assert constants["BRAND_PLATE_FADE_SECONDS"] == branding.BRAND_PLATE_FADE_SECONDS
 
     assert observed["ranges"] == {name: _bounds(name) for name in PostEffects.model_fields}
     transitions = get_args(get_args(Shot.model_fields["transition"].annotation)[0])
@@ -186,19 +193,13 @@ def test_allocation_acceptance_matches_the_python_storyboard():
         ]
 
 
-def test_legacy_camera_endpoints_match_the_python_zoom_range():
+def test_camera_endpoints_match_the_python_zoom_range():
     observed = _run_node(
-        {"allocations": [], "cameras": [[move, CAMERA_FRAMES] for move in render._MOVES]}
+        {"allocations": [], "cameras": [[move, CAMERA_FRAMES] for move in CAMERA_MOVES]}
     )
-    by_move = dict(zip(render._MOVES, observed["cameras"], strict=True))
+    by_move = dict(zip(CAMERA_MOVES, observed["cameras"], strict=True))
     assert by_move["hold"][0] == {"zoom": 1, "x": 0.5, "y": 0.5}
-    assert by_move["zoom_in"][-1]["zoom"] == pytest.approx(1 + render.ZOOM_RANGE)
+    assert by_move["zoom_in"][-1]["zoom"] == pytest.approx(1 + ZOOM_RANGE)
     assert by_move["zoom_out"][-1]["zoom"] == pytest.approx(1)
     assert by_move["pan_left"][-1]["x"] == pytest.approx(0)
     assert by_move["pan_right"][-1]["x"] == pytest.approx(1)
-    for move in render._MOVES:
-        expression = render._zoompan(24, move)
-        if move == "hold":
-            assert "z='1'" in expression
-        else:
-            assert f"{render.ZOOM_RANGE}" in expression

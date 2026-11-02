@@ -20,8 +20,10 @@ from ..storage import (
     snapshot_read,
 )
 from .board import load_board
-from .brief import legacy_brief_hash, load_brief
-from .project import compile_order, creative_workflow, load_project, prompt_look_first
+from .brief import load_brief
+from .project import compile_order, load_project
+
+MAX_REFERENCES = 14
 
 # Framing is visual content, not a camera move: it is transmitted to the model.
 FRAMING_TEXT = {
@@ -67,11 +69,6 @@ def _avoid_list(brief: Brief) -> list[str]:
     """What pictures must leave out: the profile's list plus the owner's own in the intent."""
     owner = brief.intent.avoid if brief.intent else []
     return list(dict.fromkeys([*brief.avoid, *owner]))
-
-
-def _reference_cap(project: Project) -> int:
-    """Stored-model profiles may use the current model capacity; legacy stays at four."""
-    return 14 if project.image_model is not None else 4
 
 
 def _permission_refusal(subject: str, *, where: str = "") -> ValueError:
@@ -130,55 +127,6 @@ def brief_references(root: Path, brief: Brief) -> list[dict]:
     if brief.creative is not None:
         refs += reference_refs(root, brief, [r.id for r in brief.creative.references])
     return list({item["path"]: item for item in refs}.values())
-
-
-def _legacy_image_spec(root: Path, project: Project, brief: Brief, shot: Shot) -> dict:
-    refs = character_refs(root, brief, shot.character_ids)
-    product_line = ""
-    if shot.product_ref is not None:
-        path = inside(root, shot.product_ref)
-        with Image.open(path) as image:
-            image.verify()
-        refs.append({"path": shot.product_ref, "sha256": file_hash(path)})
-        product_line = (
-            "Product reference: preserve the supplied product's geometry, label, colour and "
-            "material; describe its placement and angle."
-        )
-    refs = list({item["path"]: item for item in refs}.values())
-    limit = _reference_cap(project)
-    if len(refs) > limit:
-        raise ValueError(f"this production permits at most {limit} reference images per shot")
-    descriptions = [c.description for c in brief.characters if c.id in shot.character_ids]
-    bridge_line = ""
-    if shot.kind == "bridge" and shot.bridge is not None and shot.bridge.match is not None:
-        match = shot.bridge.match
-        bridge_line = (
-            f"Bridge match: align {match.type} at normalized anchor "
-            f"({match.anchor[0]:.2f}, {match.anchor[1]:.2f})."
-            + (f" {match.note}" if match.note else "")
-        )
-    prompt = "\n".join(
-        filter(
-            None,
-            [
-                brief.style,
-                brief.direction,
-                *brief.visual_rules,
-                shot.image_prompt,
-                bridge_line,
-                product_line,
-                *descriptions,
-                "Avoid: " + "; ".join(brief.avoid) if brief.avoid else "",
-            ],
-        )
-    )
-    return {
-        "shot_id": shot.id,
-        "positivePrompt": prompt,
-        "size": list(project.image_size),
-        "references": refs,
-        "brief_hash": legacy_brief_hash(brief),
-    }
 
 
 def creative_profile_version(brief: Brief) -> str:
@@ -263,8 +211,6 @@ def _require_default_style_core(project: Project, brief: Brief):
     The photographic-painted core is one selectable preset now. Custom looks and
     the other presets are not forced to start with it.
     """
-    if not prompt_look_first(project):
-        return
     guarded = styles.protected_preset(project.style_preset)
     if guarded is None:
         return
@@ -307,51 +253,42 @@ def _creative_image_spec(root: Path, project: Project, brief: Brief, shot: Shot)
     refs += reference_refs(root, brief, bound_ids)
     refs += product_refs
     refs = list({item["path"]: item for item in refs}.values())
-    limit = _reference_cap(project)
-    if len(refs) > limit:
-        if limit == 14:
-            raise ValueError(
-                "the application permits at most 14 reference images; the live model schema may require fewer"
-            )
+    if len(refs) > MAX_REFERENCES:
         raise ValueError(
-            "this legacy production permits at most four reference images per shot; the live schema may require fewer"
+            f"the application permits at most {MAX_REFERENCES} reference images; "
+            "the live model schema may require fewer"
         )
     characters = []
     for character in brief.characters:
         if character.id not in shot.character_ids:
             continue
         identity = character.identity or character.description
-        characters.append(
-            f"{character.id} identity: {identity}" if creative_workflow(project) else identity
-        )
+        characters.append(f"{character.id} identity: {identity}")
         state_id = shot.character_states.get(character.id, character.default_state)
         if state_id:
             characters.append(
                 f"{character.id} state ({state_id}): {character.states[state_id].description}"
             )
-    if creative_workflow(project):
-        # State the role of each supplied image rather than inviting the model to
-        # copy its incidental background, pose or costume into every new shot.
-        roles = []
-        for index, ref in enumerate(refs, start=1):
-            bound_roles = []
-            for c in brief.characters:
-                if c.id not in shot.character_ids:
-                    continue
-                if ref["path"] in c.references:
-                    bound_roles.append(f"{c.id} identity")
-                sid = shot.character_states.get(c.id, c.default_state)
-                if sid and ref["path"] in c.states[sid].references:
-                    bound_roles.append(f"{c.id} state {sid}")
-            bound_roles += [r.kind for r in creative.references if r.path == ref["path"]]
-            role = "; ".join(dict.fromkeys(bound_roles)) or "visual"
-            if anchor and ref["path"] == anchor[0]["path"]:
-                roles.append(f"Image {index}: the place itself; keep its camera and geometry.")
+    # State the role of each supplied image rather than inviting the model to
+    # copy its incidental background, pose or costume into every new shot.
+    roles = []
+    for index, ref in enumerate(refs, start=1):
+        bound_roles = []
+        for c in brief.characters:
+            if c.id not in shot.character_ids:
                 continue
-            roles.append(
-                f"Image {index}: {role} reference; do not copy incidental pose or background."
-            )
-        characters.extend(roles)
+            if ref["path"] in c.references:
+                bound_roles.append(f"{c.id} identity")
+            sid = shot.character_states.get(c.id, c.default_state)
+            if sid and ref["path"] in c.states[sid].references:
+                bound_roles.append(f"{c.id} state {sid}")
+        bound_roles += [r.kind for r in creative.references if r.path == ref["path"]]
+        role = "; ".join(dict.fromkeys(bound_roles)) or "visual"
+        if anchor and ref["path"] == anchor[0]["path"]:
+            roles.append(f"Image {index}: the place itself; keep its camera and geometry.")
+            continue
+        roles.append(f"Image {index}: {role} reference; do not copy incidental pose or background.")
+    characters.extend(roles)
     if product_role:
         characters.append(
             "Product reference: preserve the supplied product's geometry, label, colour and "
@@ -413,13 +350,8 @@ def image_spec(root: Path, shot: Shot, *, verify_source: bool = True) -> dict:
     project = load_project(root, verify_source=verify_source)
     brief = load_brief(root)
     if brief.creative is None:
-        if creative_workflow(project):
-            raise ValueError("the creative workflow requires a creative profile for state prompts")
-        if shot.kind == "era":
-            raise ValueError(f"era shot {shot.id} needs the profile's place")
-        spec = _legacy_image_spec(root, project, brief, shot)
-    else:
-        spec = _creative_image_spec(root, project, brief, shot)
+        raise ValueError("the creative workflow requires a creative profile for state prompts")
+    spec = _creative_image_spec(root, project, brief, shot)
     # New kind metadata is included only when non-default, so legacy exact specs
     # and approved input hashes stay untouched.
     if shot.kind != "scene":

@@ -30,7 +30,8 @@ def test_setup_status_is_boolean_only_and_covers_the_render_tools(tmp_path, monk
     monkeypatch.setattr(setup.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(setup, "ENGINE", engine)
     status = setup.status()
-    assert status == READY
+    assert {key: status[key] for key in READY} == READY
+    assert status["missing"] == []
 
 
 def test_install_renderer_is_a_no_op_when_pinned_packages_exist(tmp_path, monkeypatch):
@@ -137,3 +138,30 @@ def test_launcher_installs_the_renderer_on_first_run(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "installing the pinned local renderer" in output
     assert "installed the pinned local renderer" in output
+
+
+def test_a_missing_render_tool_gets_one_line_and_its_command(monkeypatch):
+    monkeypatch.setattr(setup.shutil, "which", lambda name: None)
+    monkeypatch.setattr(setup, "_chrome", lambda: False)
+    status = setup.status()
+    tools = {row["tool"]: row for row in status["missing"]}
+    assert {"chrome", "ffmpeg", "ffprobe", "node"} <= set(tools)
+    assert tools["chrome"]["name"] == "Chrome"
+    assert tools["ffmpeg"]["install"]
+    assert "npm" not in tools
+
+
+def test_nothing_is_missing_when_every_render_tool_is_here(monkeypatch):
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "/bin/" + name)
+    monkeypatch.setattr(setup, "_chrome", lambda: True)
+    values = {key: True for key in setup.RENDER_TOOLS}
+    assert setup._missing(values) == []
+
+
+def test_remotion_chrome_pointing_nowhere_is_reported(monkeypatch, tmp_path):
+    monkeypatch.setenv("REMOTION_CHROME", str(tmp_path / "nothing"))
+    assert any(row["tool"] == "chrome" for row in setup.status()["missing"])
+    real = tmp_path / "chrome"
+    real.write_text("")
+    monkeypatch.setenv("REMOTION_CHROME", str(real))
+    assert not any(row["tool"] == "chrome" for row in setup.status()["missing"])

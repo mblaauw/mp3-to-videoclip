@@ -56,7 +56,7 @@ def test_new_preset_defaults_adaptive_exact_coverage_with_no_lyrics(tmp_path):
     board = P.load_board(root)
     assert board.shots[0].duration_frames == 5 * 24
     assert sum(s.duration_frames for s in board.shots) == P.load_project(root).total_frames
-    assert all(4 * 24 <= s.duration_frames <= 12 * 24 for s in board.shots)
+    assert all(36 <= s.duration_frames <= 7 * 24 for s in board.shots)
     assert len({s.duration_frames for s in board.shots}) > 1
     with pytest.raises(ValueError, match="already exists"):
         P.skeleton(root, timing="adaptive")
@@ -78,10 +78,10 @@ def test_explicit_fixed_timing_overrides_adaptive_preset(tmp_path):
 
 
 def test_short_track_is_one_labelled_exception_not_truncated(tmp_path):
-    root = musical_root(tmp_path, frames=63)
+    root = musical_root(tmp_path, frames=30)
     result = execute(parser().parse_args(["skeleton", str(root)]))
     assert result["short_track_exception"] is True
-    assert [s.duration_frames for s in P.load_board(root).shots] == [63]
+    assert [s.duration_frames for s in P.load_board(root).shots] == [30]
     assert any("shorter than one minimum shot" in note for note in result["timing_notes"])
 
 

@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from mp3_to_videoclip import framecheck, remotion, render
+from mp3_to_videoclip import ffmpeg as render
+from mp3_to_videoclip import framecheck, remotion
 from mp3_to_videoclip.storage import read_json, write_json
 
 

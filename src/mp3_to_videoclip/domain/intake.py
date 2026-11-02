@@ -14,9 +14,8 @@ import unicodedata
 from pathlib import Path
 
 from . import budget as app_budget
-from .migrate import migrate
 
-MAX_SOURCE_BYTES = 25_000_000
+MAX_SOURCE_BYTES = 50_000_000
 MAX_TITLE_LENGTH = 120
 
 
@@ -59,6 +58,12 @@ def reserve_slug(title: str, projects_dir: Path) -> tuple[str, Path]:
             continue
         return candidate, root
     raise ValueError("too many productions share this title")
+
+
+def too_large_words(size: int) -> str:
+    return (
+        f"That MP3 is {size / 1_000_000:.1f} MB; the limit is {MAX_SOURCE_BYTES // 1_000_000} MB."
+    )
 
 
 def create_from_upload(
@@ -115,7 +120,7 @@ def create_from_upload(
         if source.suffix.lower() != ".mp3":
             raise ValueError("the source must be an MP3")
         if source.stat().st_size > MAX_SOURCE_BYTES:
-            raise ValueError("the MP3 is larger than the 25 MB local intake limit")
+            raise ValueError(too_large_words(source.stat().st_size))
     cap = app_budget.money(budget)
     if cap <= 0:
         raise ValueError("the starting budget must be a positive USD amount")
@@ -151,7 +156,6 @@ def create_from_upload(
             from mp3_to_videoclip.signature import require_package
 
             require_package(titles, aspect, P.load_project(root).duration)
-        migrate(root)
         app_budget.add_budget(root, cap, "initial production budget")
     except BaseException:
         if root.exists():

@@ -492,7 +492,7 @@ def test_graphics_review_lists_and_serves_only_review_samples(client, project):
     body = client.get("/api/projects/production/graphics-review").json()
     assert body["available"] is True
     assert body["current"] is False
-    assert "incomplete" in body["reason"]
+    assert "old compositor" in body["reason"]
     assert "graphics-spec.json" not in body["reason"]
     assert body["warning"].startswith("Inspect")
     assert body["method"] == "composite"
@@ -517,6 +517,9 @@ def test_graphics_review_lists_and_serves_only_review_samples(client, project):
 
 
 def test_budget_read_topup_and_validation(client, project):
+    stored = read_json(project / "project.json")
+    stored.pop("budget", None)
+    write_json(project / "project.json", stored)
     first = client.get("/api/projects/production/budget").json()
     assert first["cap_usd"] is None
     assert first["committed_usd"] == "0.00"

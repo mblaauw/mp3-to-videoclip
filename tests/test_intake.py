@@ -101,19 +101,6 @@ def test_concurrent_same_title_uploads_both_survive(tmp_path, fake_probe, monkey
         assert (root / "media/song.mp3").read_bytes() == b"ID3fake"
 
 
-def test_failed_migration_leaves_no_half_production(tmp_path, fake_probe, monkeypatch):
-    projects = tmp_path / "projects"
-    source = _source(tmp_path)
-
-    def boom(root):
-        raise RuntimeError("migration exploded")
-
-    monkeypatch.setattr("mp3_to_videoclip.domain.intake.migrate", boom)
-    with pytest.raises(RuntimeError):
-        intake.create_from_upload(projects, source, title="Broken")
-    assert not (projects / "broken").exists()
-
-
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -137,7 +124,7 @@ def test_non_mp3_and_oversize_sources_are_rejected(tmp_path, fake_probe, monkeyp
     with pytest.raises(ValueError, match="MP3"):
         intake.create_from_upload(projects, _source(tmp_path, "song.wav"), title="Wrong")
     monkeypatch.setattr(intake, "MAX_SOURCE_BYTES", 4)
-    with pytest.raises(ValueError, match="25 MB"):
+    with pytest.raises(ValueError, match="the limit is"):
         intake.create_from_upload(projects, _source(tmp_path, payload=b"12345"), title="Big")
 
 

@@ -21,6 +21,7 @@ import numpy as np
 
 from . import audio as music
 from . import edits, production
+from .ffmpeg import audio_seconds
 from .generation import (
     asset_intact,
     authorization,
@@ -34,7 +35,6 @@ from .generation import (
 from .models import EditVoice, Project
 from .production import now
 from .providers import ProviderError, RunwareClient, runware_api_key
-from .render import audio_seconds
 from .storage import digest, file_hash, inside, read_json, state_lock, state_mutation, write_json
 
 VOICE_PATH = "work/voice.json"

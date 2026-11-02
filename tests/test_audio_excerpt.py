@@ -12,8 +12,8 @@ from PIL import Image
 
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip import remotion
+from mp3_to_videoclip.ffmpeg import audio_seconds
 from mp3_to_videoclip.models import RenderShot, Shot
-from mp3_to_videoclip.render import audio_seconds
 from mp3_to_videoclip.storage import file_hash
 
 pytestmark = pytest.mark.skipif(

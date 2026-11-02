@@ -849,6 +849,7 @@ export function LibraryShell({
         onArchive={onArchive}
         onCreated={onCreated}
         onRetry={onRetry}
+        onSettings={onSettings}
       />
     </div>
   );

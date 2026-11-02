@@ -107,7 +107,7 @@ def test_cli_init_writes_the_declared_native_size(tmp_path):
     assert result["native_size"] == [1376, 768]
     stored = json.loads((root / "project.json").read_text())
     assert stored["native_size"] == [1376, 768]
-    assert stored["workflow_version"] == 2
+    assert "workflow_version" not in stored
     assert P.load_project(root, verify_source=False).image_size == (1376, 768)
 
 
@@ -128,15 +128,15 @@ def test_cli_init_persists_preset_size_when_the_flag_is_absent(tmp_path):
     assert P.load_project(root, verify_source=False).image_size == (1376, 768)
 
 
-def test_new_productions_are_always_workflow_2_remotion(tmp_path):
+def test_new_productions_are_schema_three_and_carry_no_old_flags(tmp_path):
     source = synth_source(tmp_path)
     root = tmp_path / "modern"
     init(root, source)
     stored = json.loads((root / "project.json").read_text())
     assert stored["schema_version"] == 3
-    assert stored["workflow_version"] == 2
+    assert "workflow_version" not in stored
     assert stored["prompt_version"] == 3
-    assert stored["renderer_backend"] == "remotion"
+    assert "renderer_backend" not in stored
     assert stored["signature_required"] is True
     assert stored["source_filename"] == "source.mp3"
 

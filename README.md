@@ -24,7 +24,7 @@ yet (transcription, listening, backups, signing, maintenance). Start with
   written **before** the request, recovery happens by UUID and never resubmits,
   and an unknown cost keeps its reservation until the provider reports it.
 - Remotion for stills-film previews, the final cut and the live Studio Player;
-  FFmpeg for probe, mux and verification (`remotion.py`, `render.py`). The Player
+  FFmpeg for probe, mux and verification (`remotion.py`, `ffmpeg.py`). The Player
   runs the renderer's own `Film` composition and `timing.mjs`, so the live
   picture uses the same spans, camera, grade, transitions and titles as the MP4.
 - Intro, captions and credits are drawn in the film itself on integer-frame
@@ -107,7 +107,7 @@ uv run studio                  # free loopback port, opens the browser
 uv run studio --port 8799
 ```
 
-**New production:** press *New film*, drop an MP3 (25 MB limit) and choose
+**New production:** press *New film*, drop an MP3 (50 MB limit) and choose
 a title, starting budget and 16:9 or 9:16. The app probes and copies the source,
 writes a schema-3 production, and queues the local analysis job. Paste LRC
 timestamps in Track when the track has vocals; no lyric position is invented.
@@ -164,6 +164,7 @@ refuses to write to them.
 
 ```sh
 uv run pytest
+uv run pytest -m slow
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest -m e2e --browser-channel chrome

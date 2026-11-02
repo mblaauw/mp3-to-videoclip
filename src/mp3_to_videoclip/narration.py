@@ -13,6 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from . import voices
+from .ffmpeg import audio_seconds
 from .generation import (
     _check_stop_conditions,
     authorization,
@@ -28,7 +29,6 @@ from .production.approvals import require_approval
 from .production.project import now
 from .production.script import load_script, require_script
 from .providers import RunwareClient, runware_api_key
-from .render import audio_seconds
 from .storage import (
     digest,
     file_hash,

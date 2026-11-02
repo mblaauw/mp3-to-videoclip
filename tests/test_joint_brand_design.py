@@ -16,6 +16,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from mp3_to_videoclip import branding, graphics
+from mp3_to_videoclip.legacy import graphics_compose
 from mp3_to_videoclip.models import BrandPackage, Project
 
 FPS = 24
@@ -27,7 +28,7 @@ PRODUCTION_LINE = "A JOINT MAHA KALA & VJDJ69 PRODUCTION"
 def _project() -> Project:
     return Project.model_validate(
         {
-            "schema_version": 1,
+            "schema_version": 3,
             "slug": "probe",
             "title": "probe",
             "source": "media/song.mp3",
@@ -241,7 +242,7 @@ def test_a_spec_without_a_design_needs_no_brand(tmp_path: Path):
 # --------------------------------------------------------------------------- #
 def test_joint_closing_opens_with_an_identity_beat_and_still_fits():
     spec = _joint_spec()
-    parts, total = graphics._plan_parts(spec, DURATION, FPS)
+    parts, total = graphics_compose._plan_parts(spec, DURATION, FPS)
     kinds = [p["kind"] for p in parts]
     assert kinds[0] == "intro"
     assert kinds[1] == "identity", "the joint closing must open with a partnership card"
@@ -263,7 +264,7 @@ def test_joint_closing_opens_with_an_identity_beat_and_still_fits():
 def test_a_legacy_spec_has_no_identity_beat():
     spec = _joint_spec()
     spec.pop("design")
-    parts, _ = graphics._plan_parts(spec, DURATION, FPS)
+    parts, _ = graphics_compose._plan_parts(spec, DURATION, FPS)
     assert "identity" not in [p["kind"] for p in parts]
 
 
@@ -271,7 +272,7 @@ def test_a_short_credit_tail_degrades_to_the_plain_card_sequence():
     spec = _joint_spec()
     spec["credits_tail_seconds"] = 5.0
     spec["lockup_seconds"] = 5.0
-    parts, _ = graphics._plan_parts(spec, DURATION, FPS)
+    parts, _ = graphics_compose._plan_parts(spec, DURATION, FPS)
     assert "identity" not in [p["kind"] for p in parts]
 
 

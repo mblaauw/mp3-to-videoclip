@@ -32,7 +32,6 @@ from .image_specs import (
 from .project import (
     STAGE_FILES,
     UPSTREAM,
-    creative_workflow,
     load_project,
     now,
     project_payload,
@@ -97,10 +96,6 @@ def preview_board_hash(root: Path):
 
     board = Storyboard.model_validate(value)
     edit = edits.load_edit(root, board=board)
-    if not creative_workflow(load_project(root)):
-        if edit is not None:
-            return digest({"storyboard": value, "edit": edit.model_dump(by_alias=True)})
-        return digest(value)
     keys = (
         "id",
         "start_frame",
@@ -140,11 +135,10 @@ def check_preview_binding(root: Path, report: dict):
         raise ValueError("preview was generated from a different proof set; re-render and review")
     if report.get("brand_hash") != brand_hash(root):
         raise ValueError("brand changed since preview; re-render and review")
-    if load_project(root).uses_remotion:
-        from ..remotion import implementation_hash
+    from ..remotion import implementation_hash
 
-        if report.get("renderer_revision") != implementation_hash():
-            raise ValueError("Remotion changed since preview; re-render and review")
+    if report.get("renderer_revision") != implementation_hash():
+        raise ValueError("Remotion changed since preview; re-render and review")
     movie = inside(root, report["movie"])
     if not movie.is_file():
         raise ValueError("reviewed preview movie is missing")
@@ -179,11 +173,7 @@ def stage_hash(root: Path, stage: str) -> str:
     # The current storyboard must still be explicitly approved (parents are
     # checked by require_approval). Proof identity depends only on proof inputs,
     # not on a generation-only correction to an unseen placeholder.
-    parent = (
-        None
-        if stage == "proof" and creative_workflow(project)
-        else (stage_hash(root, upstream) if upstream else None)
-    )
+    parent = None if stage == "proof" else (stage_hash(root, upstream) if upstream else None)
     if stage == "preview":
         value = read_json(root / STAGE_FILES["preview"])
         check_preview_binding(root, value)
@@ -220,11 +210,10 @@ def stage_hash(root: Path, stage: str) -> str:
                 }
                 for s in shots
             ]
-            if creative_workflow(project):
-                value = [
-                    {**item, "input_hash": digest(image_spec(root, rs.shot))}
-                    for item, rs in zip(value, shots, strict=True)
-                ]
+            value = [
+                {**item, "input_hash": digest(image_spec(root, rs.shot))}
+                for item, rs in zip(value, shots, strict=True)
+            ]
             value += _local_proof_entries(root, board, project)
         else:
             shots = resolved_assets(root)
@@ -275,7 +264,7 @@ def require_approval(root: Path, stage: str):
 
         validate_review(root, load_project(root))
     drafted = stage == "proof" and record.get("via") == "draft"
-    if stage in ("proof", "stills") and creative_workflow(load_project(root)) and not drafted:
+    if stage in ("proof", "stills") and not drafted:
         from ..reviews import require_accepted
 
         board = load_board(root)
@@ -365,40 +354,33 @@ def approve(
 
             validate_spec(root, load_project(root))
         _require_reference_permissions(brief)
-        if creative_workflow(project) and brief.creative is None:
+        if brief.creative is None:
             raise ValueError("the creative workflow requires a creative profile")
-        if project.prompt_version in (2, 3):
-            if not brief.treatment.strip():
-                raise ValueError("write the treatment before approving the story")
-            if not brief.creative.look.strip():
-                raise ValueError("define creative.look (global appearance only) before approval")
-            if brief.creative.profile_version < 1:
-                raise ValueError(
-                    "create the creative profile (cast, places, rules and a compact look) "
-                    "before approving the story"
-                )
-        elif not all(x.strip() for x in [brief.direction, brief.style, brief.treatment]):
-            raise ValueError("choose a treatment, direction and style before approval")
-        if brief.creative is not None and not brief.creative.look.strip():
+        if not brief.treatment.strip():
+            raise ValueError("write the treatment before approving the story")
+        if not brief.creative.look.strip():
             raise ValueError("define creative.look (global appearance only) before approval")
-        if creative_workflow(project):
-            from ..references import validate_import
+        if brief.creative.profile_version < 1:
+            raise ValueError(
+                "create the creative profile (cast, places, rules and a compact look) "
+                "before approving the story"
+            )
+        from ..references import validate_import
 
-            for character in brief.characters:
-                if not character.identity:
-                    raise ValueError("workflow 2 characters need identity separate from shot state")
-            for ref in brief_references(root, brief):
-                validate_import(root, ref["path"])
+        for character in brief.characters:
+            if not character.identity:
+                raise ValueError("characters need identity separate from shot state")
+        for ref in brief_references(root, brief):
+            validate_import(root, ref["path"])
     elif stage == "storyboard":
         board = load_board(root)
         if any(has_placeholders(s) for s in board.shots):
             raise ValueError("finish storyboard placeholders before approval")
         # A creative profile must name its own explicit proof selection.
         proof_ids(board, load_brief(root))
-        if creative_workflow(load_project(root)):
-            from ..preflight import validate_before_spend
+        from ..preflight import validate_before_spend
 
-            validate_before_spend(root, [s.id for s in board.shots])
+        validate_before_spend(root, [s.id for s in board.shots])
     elif stage == "analysis":
         data = read_json(root / STAGE_FILES[stage])
         if abs(data["duration"] - load_project(root).duration) > 0.05:
@@ -422,7 +404,7 @@ def approve(
             )
         validate_review(root, load_project(root))
     # A draft's proof is checked by nobody yet, which is what "Drafted, not yours" says.
-    if stage in ("proof", "stills") and creative_workflow(load_project(root)) and via != "draft":
+    if stage in ("proof", "stills") and via != "draft":
         from ..reviews import require_accepted
 
         board = load_board(root)

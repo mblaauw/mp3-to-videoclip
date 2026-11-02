@@ -33,6 +33,9 @@ BRAND_RENDER_VERSION = "brand-plate-v2"
 
 MARKS = ("open-frame", "cutline", "monogram", "joint", "filmstrip")
 
+#: How long an opening brand plate takes to fade. ``timing.mjs`` holds the same number.
+BRAND_PLATE_FADE_SECONDS = 0.5
+
 
 #: Near-black, off-white, a white accent and a grey: for a film with no kit of its own.
 NEUTRAL = BrandPackage(

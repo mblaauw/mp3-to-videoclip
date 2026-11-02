@@ -479,6 +479,9 @@ export type SetupStatus = {
   ffprobe: boolean;
   renderer: boolean;
   frontend: boolean;
+  lyric_tools?: boolean;
+  depth_tools?: boolean;
+  missing?: { tool: string; name: string; install: string }[];
 };
 
 export type GraphicsSample = {

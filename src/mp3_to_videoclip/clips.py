@@ -86,8 +86,6 @@ def quote_clips(
     if not model:
         raise ValueError("choose a video model in Settings first")
     project = load_project(root)
-    if not project.uses_remotion:
-        raise ValueError("clips need a film made with the current renderer")
     board = load_board(root)
     shots = {shot.id: shot for shot in board.shots}
     named = list(dict.fromkeys(shot_ids))

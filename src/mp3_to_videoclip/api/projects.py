@@ -419,6 +419,20 @@ async def start_first_draft(slug: str, request: Request, payload: dict):
     return {"job_id": runner.submit("first-draft", slug, work, blocking=True), **first_draft.plan()}
 
 
+async def _stream_to(request: Request, target: Path, limit: int) -> int:
+    """Write the body to disk as it arrives, stopping at the limit so nothing large is held."""
+    from mp3_to_videoclip.domain import intake
+
+    size = 0
+    with target.open("wb") as handle:
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > limit:
+                raise HTTPException(status_code=413, detail=intake.too_large_words(size))
+            handle.write(chunk)
+    return size
+
+
 @router.post("", status_code=201)
 async def create_project(
     request: Request,
@@ -459,15 +473,9 @@ async def create_project(
     if length is not None:
         try:
             if int(length) > intake.MAX_SOURCE_BYTES:
-                raise HTTPException(status_code=413, detail="the MP3 is too large")
+                raise HTTPException(status_code=413, detail=intake.too_large_words(int(length)))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="invalid content length") from exc
-    data = await request.body()
-    # A story film's upload is an optional bed; it starts from words.
-    if not data and not story_film:
-        raise HTTPException(status_code=400, detail="the upload is empty")
-    if len(data) > intake.MAX_SOURCE_BYTES:
-        raise HTTPException(status_code=413, detail="the MP3 is too large")
 
     cap = budget
     if cap is None:
@@ -491,8 +499,11 @@ async def create_project(
         ).model_dump()
     with tempfile.TemporaryDirectory(prefix="mp3-intake-") as temp:
         source = Path(temp) / "source.mp3"
-        source.write_bytes(data)
-        if not data:
+        size = await _stream_to(request, source, intake.MAX_SOURCE_BYTES)
+        # A story film's upload is an optional bed; it starts from words.
+        if not size and not story_film:
+            raise HTTPException(status_code=400, detail="the upload is empty")
+        if not size:
             source = None
         created = intake.create_from_upload(
             projects_dir,

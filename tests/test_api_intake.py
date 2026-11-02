@@ -65,7 +65,7 @@ def test_upload_creates_the_project_and_queues_analysis(tmp_path, monkeypatch):
         assert project.schema_version == 3
         # The app creates schema-3 projects natively; rewriting the budget must
         # not erase the backend or signature choice it was created with.
-        assert stored["renderer_backend"] == "remotion"
+        assert "renderer_backend" not in stored
         assert stored["signature_required"] is True
         assert project.cap_usd == "3.50"
         assert (root / "media/song.mp3").read_bytes() == b"ID3fake"
@@ -104,7 +104,37 @@ def test_oversize_upload_is_refused(tmp_path, monkeypatch):
     with api_client(tmp_path) as client:
         response = _upload(client, title="Big")
         assert response.status_code == 413
+        assert "the limit is" in response.json()["detail"]
         assert not (tmp_path / "big").exists()
+
+
+def test_a_body_with_no_declared_length_stops_at_the_limit(tmp_path, monkeypatch):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from mp3_to_videoclip.api.projects import _stream_to
+
+    written = []
+
+    class Body:
+        async def stream(self):
+            for _ in range(100):
+                written.append(1)
+                yield b"x" * 10
+
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(_stream_to(Body(), tmp_path / "out.mp3", 25))
+    assert caught.value.status_code == 413
+    assert len(written) == 3
+    assert (tmp_path / "out.mp3").stat().st_size == 20
+
+
+def test_fifty_megabytes_is_allowed_and_a_byte_more_is_not():
+    from mp3_to_videoclip.domain import intake
+
+    assert intake.MAX_SOURCE_BYTES == 50_000_000
+    assert "50.0 MB" in intake.too_large_words(50_000_000)
 
 
 def test_same_origin_and_vite_dev_origin_are_allowed(tmp_path):

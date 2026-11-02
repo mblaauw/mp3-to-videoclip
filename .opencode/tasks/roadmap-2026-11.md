@@ -229,8 +229,7 @@ Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both a
 ## Where the roadmap stands, 1 Nov 2026
 
 Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76),
-E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79), C-3 and E-3 (#80), I-3 and C-4 (#81).
-I-4 and F-2 are in the PR after #81. Next in the final order: F-3.
+E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79), C-3 and E-3 (#80), I-3 and C-4 (#81), I-4 and F-2 (#82). F-3 and G-1 are in the PR after #82. Next: G-2, then the rest of G-3.
 
 Differences from the plans, where the plan was wrong or could not hold:
 
@@ -335,3 +334,20 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   test still. At 1:1 a long card's last line can sit under a caption. Four browsers stalled twice on this Mac with little free
   memory while one browser passed, so the memory guard may be counting too much as free; unproved. The owner has
   not looked at a real film's vertical framing, and a final with real stills has not been through a version.
+
+- **F-3:** CPU lyric timing was not tried. It needs a third-party ONNX model download of several hundred MB, which is the
+  owner's call, so the plan's documented refusal stands and narration captions stay per line off Apple Silicon. The headless
+  shell is decided: not pinned. A hosted transcription still refuses above its own 25 MB, so a 50 MB song uploads and is
+  timed by hand or locally.
+- **G-1:** decided as recommended, since nothing here is hard to undo: D1 (schema 3 only), D2 (delete), D3 (refuse), D4 (inert fields),
+  D6 (move and mark). `prompt_version` could not go inert as the plan said: E-2 gave it a real value of 3, which chooses the compile
+  order and seeds, so it stays a read field. Only `workflow_version` and `renderer_backend` are inert. `signature.validate_review` still
+  delegates to `legacy/` for an old review, or the CLI's old path could not be approved, so the Studio refuses one itself in
+  `render_final` and the review route. `tests/golden` needed no regeneration. `graphics.py` is 1,700 lines, not 1,200: the frame
+  drawers and spec stay and all are used. `preflight_picks` was not renamed. G1 and G2 share a commit. Tree of Love holds an old review and its
+  titles approval was already out of date, so it re-checks its titles once.
+  Proof: on scratch copies of zero-bars, Tree of Love and both Cool Cat films, all 208 recorded stage hashes, payloads and image specs
+  match before and after. Every route opens all four, the frozen film answers 409 and stays byte-identical. Preview, final, package and 9:16
+  rendered for real with the approval gate stubbed. Suite: about 85 s before, 66 s after, plus 33 s for the compositor's 24 slow tests.
+  Tests that only proved old branches were deleted, including the one that a pending transcription does not block music
+  listening: that was only true off the strict path, and real films were always blocked.

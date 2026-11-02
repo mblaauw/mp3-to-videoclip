@@ -240,6 +240,7 @@ def project(tmp_path):
         duration=4,
         width=192,
         height=108,
+        budget=[{"at": "2026-01-01T00:00:00+00:00", "cap_usd": "5.00", "reason": "test budget"}],
     )
     write_json(root / "project.json", config.model_dump())
     write_json(root / "work/music.json", {"duration": 4, "beats": []})
@@ -576,29 +577,6 @@ def test_two_quoted_listening_scopes_cannot_duplicate_upload(project):
     M.run_music(project, first["id"], client=client)
     with pytest.raises(ValueError, match="unresolved"):
         M.run_music(project, second["id"], client=client)
-    assert len(client.uploads) == len(client.calls) == 1
-
-
-def test_pending_guard_is_separate_from_a_pending_transcription(project):
-    other = str(uuid4())
-    write_json(
-        project / "work/tasks.json",
-        {
-            other: {
-                "uuid": other,
-                "kind": "transcription",
-                "provider": "runware",
-                "quote_id": "older-quote",
-                "source_hash": file_hash(project / "media/song.mp3"),
-                "status": "submitted",
-                "cost_usd": None,
-                "reserve_usd": "0.04",
-            }
-        },
-    )
-    client = Client(project)
-    q = quote(project, client)
-    assert M.run_music(project, q["id"], client=client)["status"] == "ready"
     assert len(client.uploads) == len(client.calls) == 1
 
 

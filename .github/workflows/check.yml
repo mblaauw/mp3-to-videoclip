@@ -37,6 +37,8 @@ jobs:
         run: uv run ruff format --check .
       - name: Test
         run: uv run pytest -q -n auto
+      - name: Test the old compositor
+        run: uv run pytest -q -n auto -m slow
       - uses: actions/setup-node@v7
         with:
           node-version: "24"

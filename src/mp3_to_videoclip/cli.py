@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import derivations, generation, operations, production, profiles
 from .analysis import analyze
-from .branding import brand_hash, load_brand
+from .branding import load_brand
 from .models import (
     BrandPackage,
     Brief,
@@ -23,10 +23,8 @@ from .models import (
     Storyboard,
     native_size_problem,
 )
-from .preview import build_preview
 from .providers import RUNWARE_KEY_ENV
-from .render import contact_sheet, render
-from .storage import file_hash, inside, project_lock, read_json, write_json
+from .storage import inside, project_lock, read_json, write_json
 
 
 def parse_native_size(text: str, aspect: str) -> list[int]:
@@ -553,11 +551,7 @@ def execute(args):
                 min_seconds=args.min_seconds,
                 max_seconds=args.max_seconds,
             )
-            resolved_min = (
-                (1.5 if project.prompt_version in (2, 3) else 4)
-                if args.min_seconds is None
-                else args.min_seconds
-            )
+            resolved_min = 1.5 if args.min_seconds is None else args.min_seconds
             short = (
                 timing == "adaptive"
                 and len(board.shots) == 1
@@ -630,81 +624,9 @@ def execute(args):
                 )
             return {"generated": False, "shots": shots}
         if cmd == "preview":
-            production.require_approval(root, "storyboard")
-            board = production.load_board(root)
-            brief = production.load_brief(root)
-            scope = args.scope or ("proof" if brief.creative else "available")
-            ids = (
-                production.proof_ids(board, brief)
-                if scope == "proof"
-                else [s.id for s in board.shots]
+            raise ValueError(
+                "the CLI animatic is gone; render a preview in the Studio's Film stage"
             )
-            if scope == "proof":
-                proof_sources = set(ids)
-                ids = [s.id for s in board.shots if (s.asset_shot_id or s.id) in proof_sources]
-            available = []
-            for shot_id in ids:
-                try:
-                    available.extend(production.resolved_assets(root, [shot_id]))
-                except (ValueError, OSError):
-                    pass  # Missing/stale stills are conspicuously labelled placeholders.
-            directory = root / "previews"
-            version = 1
-            while (directory / f"animatic-v{version:03d}.mp4").exists():
-                version += 1
-            output = directory / f"animatic-v{version:03d}.mp4"
-            with operations.operation(
-                root,
-                "preview",
-                scope=scope,
-                expected_outputs=[str(output.relative_to(root))],
-                next_action=(
-                    "watch the marked animatic with sound and decide; missing stills stay "
-                    "labelled placeholders, and a proof-scope preview binds the review gate"
-                ),
-            ):
-                report = build_preview(
-                    root, project, board, available, output, root / "work/preview"
-                )
-            write_json(output.with_suffix(".json"), report)
-            review_bound = False
-            # New full-generation gate binds proof-only previews. Available-set
-            # previews remain useful locally but never silently replace that gate.
-            if scope == "proof" or brief.creative is None:
-                try:
-                    proof_hash = production.stage_hash(root, "proof")
-                except (ValueError, OSError):
-                    proof_hash = None
-                if proof_hash:
-                    write_json(
-                        root / "work/preview-review.json",
-                        {
-                            "movie": str(output.relative_to(root)),
-                            "movie_sha256": file_hash(output),
-                            "storyboard_hash": production.preview_board_hash(root),
-                            "proof_hash": proof_hash,
-                            **(
-                                {"brand_hash": brand_hash(root)}
-                                if load_brand(root) is not None
-                                else {}
-                            ),
-                            "input_hash": report["input_hash"],
-                            **(
-                                {"renderer_revision": report["renderer_revision"]}
-                                if "renderer_revision" in report
-                                else {}
-                            ),
-                        },
-                    )
-                    review_bound = True
-            return {
-                "output": str(output),
-                "report": str(output.with_suffix(".json")),
-                "placeholder_shots": report["placeholder_shots"],
-                "actual_shots": report["actual_shots"],
-                "review_bound": review_bound,
-                "approved": False,
-            }
         if cmd == "backup":
             from .backup import backup_project
 
@@ -775,52 +697,12 @@ def execute(args):
             production.select_asset(root, args.shot, args.version)
             return {"selected": args.shot, "version": args.version, "approved": False}
         if cmd == "sheet":
-            board = production.load_board(root)
-            ids = (
-                production.proof_ids(board, production.load_brief(root))
-                if args.scope == "proof"
-                else None
+            raise ValueError(
+                "the CLI contact sheet is gone; a packaged final has one in the Studio"
             )
-            shots = production.resolved_assets(root, ids)
-            path = root / f"work/contact-sheet-{args.scope}.jpg"
-            labels = None
-            if project.workflow_version == 2:
-                assets = read_json(root / "work/assets.json")
-                labels, metadata = {}, []
-                number = 0
-                while True:
-                    number += 1
-                    path = root / f"work/contact-sheet-{args.scope}-v{number:03d}.jpg"
-                    if not path.exists() and not path.with_suffix(".json").exists():
-                        break
-                for rs in shots:
-                    shot = rs.shot
-                    owner = shot.asset_shot_id or shot.id
-                    entry = assets[owner]
-                    selected = next(
-                        v for v in entry["versions"] if v["version"] == entry["selected"]
-                    )
-                    end = shot.start_frame + shot.duration_frames
-                    labels[shot.id] = [
-                        f"frames {shot.start_frame}:{end} | owner {owner}",
-                        f"v{selected['version']:03d} sha256 {selected['sha256'][:16]}",
-                    ]
-                    metadata.append(
-                        {
-                            "id": shot.id,
-                            "owner_shot_id": owner,
-                            "start_frame": shot.start_frame,
-                            "end_frame": end,
-                            "version": selected["version"],
-                            "sha256": selected["sha256"],
-                            "path": selected["path"],
-                            "input_hash": selected["input_hash"],
-                        }
-                    )
-                write_json(path.with_suffix(".json"), {"reviewed": False, "shots": metadata})
-            contact_sheet(shots, path, labels=labels)
-            return {"contact_sheet": str(path), "shots": len(shots)}
         if cmd == "render":
+            from .remotion import render_base
+
             production.require_approval(root, "stills")
             shots = production.resolved_assets(root)
             signature = production.requires_signature(root, project)
@@ -853,8 +735,8 @@ def execute(args):
                 ),
             ):
                 if signature and not args.base_only:
-                    from .graphics import compose
-                    from .signature import validate_review
+                    from .legacy.graphics_compose import compose
+                    from .legacy.graphics_review import validate_old_review as validate_review
 
                     production.require_approval(root, "graphics")
                     review = validate_review(root, project)
@@ -863,7 +745,7 @@ def execute(args):
                     report["graphics_approval_hash"] = production.stage_hash(root, "graphics")
                     write_json(directory / name.replace(".mp4", ".json"), report)
                     return report
-                report = render(
+                report = render_base(
                     project,
                     shots,
                     production.render_audio(root, project),
@@ -875,7 +757,7 @@ def execute(args):
 
                 report["input_hash"] = current_input_hash(root)
                 if signature:
-                    from .signature import prepare_review
+                    from .legacy.graphics_review import prepare_review
 
                     report["delivery_ready"] = False
                     write_json(directory / name.replace(".mp4", ".json"), report)

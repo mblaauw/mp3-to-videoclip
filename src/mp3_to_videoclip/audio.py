@@ -84,7 +84,7 @@ def build_excerpt(root: Path, project: Project) -> Path:
         raise FileNotFoundError(f"source audio not found: {source}")
     target = excerpt_path(root, project)
     if target.is_file():
-        from .render import audio_seconds
+        from .ffmpeg import audio_seconds
 
         if abs(audio_seconds(target) - window.duration) <= 0.05:
             return target
@@ -115,7 +115,7 @@ def build_excerpt(root: Path, project: Project) -> Path:
     if completed.returncode != 0 or not temp.is_file():
         temp.unlink(missing_ok=True)
         raise RuntimeError("ffmpeg could not cut the excerpt: " + _tail(completed.stderr))
-    from .render import audio_seconds
+    from .ffmpeg import audio_seconds
 
     measured = audio_seconds(temp)
     if abs(measured - window.duration) > 0.05:

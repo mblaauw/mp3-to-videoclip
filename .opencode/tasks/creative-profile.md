@@ -72,5 +72,5 @@ made and no still was touched.
 
 - The three proof remakes (~$0.15) and the owner's re-approval are the only
   remaining steps for `tree-of-love`; the spend needs explicit authorization.
-- The legacy FFmpeg/Pillow branches and the portable headless-shell decision
-  remain from the rework.
+- The legacy FFmpeg/Pillow branches remain from the rework. The headless shell was decided against in
+  Phase F-3.

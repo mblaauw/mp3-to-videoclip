@@ -159,27 +159,6 @@ def test_foreign_model_assets_cannot_satisfy_canonical_currency(tmp_path):
     assert len(P.resolved_assets(root, ["s001"])) == 1
 
 
-def test_noncreative_legacy_reference_cap_is_still_four(tmp_path):
-    root = strict_root(tmp_path)
-    config = read_json(root / "project.json")
-    config.pop("workflow_version")
-    write_json(root / "project.json", config)
-    brief = read_json(root / "brief.json")
-    brief["creative"] = None
-    paths = []
-    for n in range(5):
-        path = jpeg(root / f"ref{n}.jpg", (n + 10, 20, 30))
-        paths.append(str(path.relative_to(root)))
-    brief["characters"][0]["references"] = paths
-    write_json(root / "brief.json", brief)
-    board = read_json(root / "work/storyboard.json")
-    for shot in board["shots"]:
-        shot.update(scene_id=None, reference_ids=[])
-    write_json(root / "work/storyboard.json", board)
-    with pytest.raises(ValueError, match="at most 4 reference"):
-        P.image_spec(root, P.load_board(root).shots[0])
-
-
 def test_model_settings_change_input_hash_and_tampered_quote_is_rejected(tmp_path):
     root = profiled(strict_root(tmp_path))
     approve_prerequisites(root)
@@ -249,11 +228,6 @@ def test_one_correction_default_for_new_budget_not_existing_budget(tmp_path):
         )
     )
     assert explicit["max_corrections"] == 1
-    (root / "work/production-budget.json").unlink()
-    fresh = execute(
-        parser().parse_args(["budget", str(root), "--cap", "1", "--note", "test new allowance"])
-    )
-    assert fresh["max_corrections"] == 1
 
 
 def test_default_correction_limit_on_the_journaled_generation_path(tmp_path):

@@ -44,5 +44,8 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Browser tests run on their own: `uv run pytest -m e2e`.
-addopts = '-m "not e2e"'
-markers = ["e2e: drives a real Studio in a browser"]
+addopts = '-m "not e2e and not slow"'
+markers = [
+    "e2e: drives a real Studio in a browser",
+    "slow: the old compositor, which renders a base movie",
+]

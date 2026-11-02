@@ -7,6 +7,7 @@ import pytest
 
 from mp3_to_videoclip import graphics, remotion
 from mp3_to_videoclip.branding import filmstrip_svg
+from mp3_to_videoclip.legacy import graphics_compose
 from mp3_to_videoclip.models import Project, Shot
 from mp3_to_videoclip.storage import read_json, write_json
 
@@ -15,7 +16,7 @@ from mp3_to_videoclip.storage import read_json, write_json
 def base_cache(tmp_path, monkeypatch):
     from PIL import Image
 
-    from mp3_to_videoclip import render
+    from mp3_to_videoclip import ffmpeg as render
     from mp3_to_videoclip.models import RenderShot
 
     image = tmp_path / "selected.png"
@@ -76,7 +77,7 @@ def test_same_visual_cache_is_serialized_across_processes(base_cache, tmp_path, 
     import multiprocessing
     import os
 
-    from mp3_to_videoclip import render
+    from mp3_to_videoclip import ffmpeg as render
     from mp3_to_videoclip.storage import file_hash
 
     project, shots, _, _ = base_cache
@@ -393,7 +394,7 @@ def test_remotion_graphics_uses_single_brand_geometry(tmp_path, monkeypatch):
     font = tmp_path / "font.ttc"
     font.write_bytes(b"testfont")
     monkeypatch.setattr(graphics, "resolve_font", lambda: (font, {}, "fixture"))
-    monkeypatch.setattr(remotion, "invoke", lambda *args: calls.append(args))
+    monkeypatch.setattr(graphics_compose, "invoke", lambda *args: calls.append(args))
     palette = {
         "ink": (244, 241, 232),
         "accent": (212, 174, 106),
@@ -402,7 +403,7 @@ def test_remotion_graphics_uses_single_brand_geometry(tmp_path, monkeypatch):
     }
     spec = {"intro": {"mark": {"kind": "filmstrip"}}}
     part = {"kind": "identity", "frames": 48}
-    remotion.graphics_clip(part, spec, palette, (1920, 1080), 24, tmp_path / "alpha.mov")
+    graphics_compose.graphics_clip(part, spec, palette, (1920, 1080), 24, tmp_path / "alpha.mov")
     inputs = calls[0][-1]
     actual = base64.b64decode(inputs["logo"].split(",", 1)[1]).decode()
     assert actual == filmstrip_svg("#d4ae6a")
@@ -414,10 +415,10 @@ def test_corrupt_alpha_cache_never_reused(tmp_path, monkeypatch):
     # Exercise the real existing cache-integrity guard rather than trusting path existence.
     clip = tmp_path / "cached.mov"
     clip.write_bytes(b"first")
-    graphics._cache_integrity(clip, created=True)
+    graphics_compose._cache_integrity(clip, created=True)
     clip.write_bytes(b"different")
     with pytest.raises(graphics.ComposeError):
-        graphics._cache_integrity(clip, created=False)
+        graphics_compose._cache_integrity(clip, created=False)
 
 
 def test_changed_post_effects_invalidates_proof_preview(tmp_path):
@@ -444,31 +445,6 @@ def test_backend_change_does_not_rewrite_upstream_analysis_identity(tmp_path):
     project["renderer_backend"] = "remotion"
     write_json(root / "project.json", project)
     assert production.stage_hash(root, "analysis") == before
-
-
-def test_cli_preview_retains_renderer_revision(tmp_path, monkeypatch):
-    from test_signature_iteration import signature_root
-
-    from mp3_to_videoclip import cli
-
-    root = signature_root(tmp_path)
-
-    def preview(root, project, board, available, output, workdir):
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(b"review-fixture")
-        return {
-            "input_hash": "input",
-            "placeholder_shots": [],
-            "actual_shots": [],
-            "renderer_revision": "exact-remotion-revision",
-        }
-
-    monkeypatch.setattr(cli, "build_preview", preview)
-    cli.execute(cli.parser().parse_args(["preview", str(root), "--scope", "proof"]))
-    assert (
-        read_json(root / "work/preview-review.json")["renderer_revision"]
-        == "exact-remotion-revision"
-    )
 
 
 def test_first_base_creates_nested_destination_before_rendering(tmp_path, monkeypatch):
@@ -515,42 +491,6 @@ def test_approval_revision_does_not_read_the_browser(tmp_path, monkeypatch):
     assert remotion.implementation_hash() == first
     monkeypatch.setenv("REMOTION_CHROME", str(tmp_path / "not-installed"))
     assert remotion.implementation_hash() == first
-
-
-def test_schema_three_uses_remotion_without_a_legacy_backend_flag(tmp_path, monkeypatch):
-    project = Project(
-        slug="new-film",
-        schema_version=3,
-        title="New",
-        source_sha256="a" * 64,
-        duration=1,
-        width=192,
-        height=108,
-    )
-    legacy = Project(
-        slug="old-film",
-        title="Old",
-        source_sha256="a" * 64,
-        duration=1,
-        width=192,
-        height=108,
-    )
-    assert project.uses_remotion is True
-    assert legacy.uses_remotion is False
-    monkeypatch.setattr(remotion, "implementation_hash", lambda: "revision")
-    assert remotion.renderer_binding(project) == {
-        "renderer_backend": "remotion",
-        "renderer_revision": "revision",
-    }
-    assert remotion.renderer_binding(legacy) == {}
-
-    from mp3_to_videoclip import render as R
-
-    monkeypatch.setattr(
-        "mp3_to_videoclip.remotion.render_base", lambda *args, **kwargs: {"sentinel": True}
-    )
-    result = R.render(project, [], tmp_path / "audio.mp3", tmp_path / "out.mp4", tmp_path)
-    assert result == {"sentinel": True}
 
 
 def test_titles_join_the_base_pass_and_its_cache_key_only_when_given(base_cache):

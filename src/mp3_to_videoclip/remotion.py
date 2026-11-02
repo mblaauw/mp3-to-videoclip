@@ -16,7 +16,7 @@ from threading import Thread, local
 
 from PIL import Image
 
-from . import operations
+from . import ffmpeg, operations
 from .models import Project, RenderShot
 from .storage import digest, file_hash, read_json, write_json
 
@@ -175,8 +175,6 @@ def implementation_hash() -> str:
 
 
 def renderer_binding(project: Project) -> dict:
-    if not project.uses_remotion:
-        return {}
     return {"renderer_backend": "remotion", "renderer_revision": implementation_hash()}
 
 
@@ -857,9 +855,7 @@ def render_stills(
     Returns the renderer's report, whose ``stills`` list each frame's file and
     SHA-256. Nothing is encoded and no audio is read.
     """
-    from . import render as R
-
-    R._validate_shots(project, shots)
+    ffmpeg._validate_shots(project, shots)
     output = Path(output).resolve()
     if output.exists():
         raise FileExistsError(output)
@@ -999,16 +995,14 @@ def _join_chunks(paths: list[Path], output: Path, fps: int) -> int:
 
     Returns the packet count that check already had to list.
     """
-    from . import render as R
-
     partial = output.with_name(f".{output.stem}.joining.mp4")
     listing = output.with_name(f".{output.stem}.joining.txt")
     quoted = [str(path).replace("'", "'\\''") for path in paths]
     listing.write_text("".join(f"file '{path}'\n" for path in quoted))
     try:
-        R._run(
+        ffmpeg._run(
             [
-                R._binary("ffmpeg"),
+                ffmpeg._binary("ffmpeg"),
                 "-nostdin",
                 "-v",
                 "error",
@@ -1036,11 +1030,9 @@ def _join_chunks(paths: list[Path], output: Path, fps: int) -> int:
 
 def _require_even_timing(movie: Path, fps: int) -> int:
     """Every frame one tick after the last: a bad join would show here first."""
-    from . import render as R
-
-    out = R._run(
+    out = ffmpeg._run(
         [
-            R._binary("ffprobe"),
+            ffmpeg._binary("ffprobe"),
             "-v",
             "error",
             "-select_streams",
@@ -1183,9 +1175,7 @@ def render_base(
     (see :data:`WORKING_CAPTURE`) is how frames leave the browser; absent means PNG.
     ``audio_delivery`` (``sample_rate``, ``loudness``) changes only the muxed sound.
     """
-    from . import render as R
-
-    R._validate_shots(project, shots)
+    ffmpeg._validate_shots(project, shots)
     output = Path(output).resolve()
     if output.exists():
         raise FileExistsError(output)
@@ -1237,7 +1227,7 @@ def render_base(
                 reuse_chunks,
             )
             if counted is None:
-                counted = R._count_frames(silent)
+                counted = ffmpeg._count_frames(silent)
             if counted != project.total_frames:
                 raise ValueError("Remotion silent base has incorrect frame count")
             write_json(cached, {"sha256": file_hash(silent), "key": key})
@@ -1248,9 +1238,9 @@ def render_base(
     mux_started = time.perf_counter()
     sound_args, delivered = _delivery_audio(audio, audio_delivery)
     try:
-        R._run(
+        ffmpeg._run(
             [
-                R._binary("ffmpeg"),
+                ffmpeg._binary("ffmpeg"),
                 "-nostdin",
                 "-v",
                 "error",
@@ -1268,7 +1258,7 @@ def render_base(
                 "-c:a",
                 "aac",
                 "-b:a",
-                R.AUDIO_BITRATE,
+                ffmpeg.AUDIO_BITRATE,
                 *sound_args,
                 "-t",
                 f"{project.total_frames / project.fps:.9f}",
@@ -1282,8 +1272,8 @@ def render_base(
         mux_seconds = time.perf_counter() - mux_started
         verification_started = time.perf_counter()
         # A final (PNG capture) is counted by decoding it; working renders read packets.
-        facts = R._validate_output(
-            partial, project, audio, R.audio_seconds(audio), decode=capture is None
+        facts = ffmpeg._validate_output(
+            partial, project, audio, ffmpeg.audio_seconds(audio), decode=capture is None
         )
         operations.phase("verifying-output", note="frames, fps, dimensions and audio identity")
         if facts["video"]["frames"] != project.total_frames:
@@ -1399,103 +1389,3 @@ def title_assets(spec: dict, palette: dict) -> dict:
 def titles_input(spec: dict, palette: dict, windows: list[dict]) -> dict:
     """``input.titles`` for the Film composition: assets plus the planned windows."""
     return {**title_assets(spec, palette), "windows": windows}
-
-
-def graphics_clip(part, spec, palette, canvas, fps, output: Path) -> None:
-    """Render one alpha element; existing compositor retains audio packet copying."""
-    inputs = {"part": part, **title_assets(spec, palette)}
-    invoke(
-        "graphics", output, output.parent / "remotion-assets", canvas, fps, part["frames"], inputs
-    )
-
-
-def overlay_clip(part, spec, palette, canvas, fps, directory: Path) -> Path:
-    """Alpha cache compatible with the current sparse qtrle track builder."""
-    from . import graphics as G
-
-    key = digest(
-        {
-            "part": part,
-            "spec": spec,
-            "palette": palette,
-            "canvas": canvas,
-            "fps": fps,
-            "renderer_revision": implementation_hash(),
-        }
-    )[:24]
-    path = directory / f"remotion-overlay-{key}.mov"
-    if path.exists():
-        G._validate_overlay(path, canvas, part["frames"])
-        G._cache_integrity(path, created=False)
-        return path
-    alpha = directory / f"remotion-prores-{key}.mov"
-    if not alpha.exists():
-        graphics_clip(part, spec, palette, canvas, fps, alpha)
-        G._cache_integrity(alpha, created=True)
-    else:
-        G._cache_integrity(alpha, created=False)
-    temp = path.with_name(f".{path.stem}.partial.mov")
-    conversion_started = time.perf_counter()
-    try:
-        G._run(
-            [
-                "ffmpeg",
-                "-nostdin",
-                "-v",
-                "error",
-                "-n",
-                "-i",
-                str(alpha),
-                "-an",
-                "-c:v",
-                "qtrle",
-                "-pix_fmt",
-                "argb",
-                str(temp),
-            ]
-        )
-        conversion_seconds = time.perf_counter() - conversion_started
-        verification_started = time.perf_counter()
-        G._validate_overlay(temp, canvas, part["frames"])
-        verification_seconds = time.perf_counter() - verification_started
-        os.link(temp, path)
-    finally:
-        temp.unlink(missing_ok=True)
-    G._cache_integrity(path, created=True)
-    write_json(
-        path.with_suffix(".timings.json"),
-        {
-            "conversion_seconds": conversion_seconds,
-            "output_verification_seconds": verification_seconds,
-        },
-    )
-    return path
-
-
-def overlay_frame(clip: Path, local_frame: int) -> Image.Image:
-    """Decode an actual cached Remotion frame; never substitute Pillow samples."""
-    import io
-
-    from .render import _binary
-
-    result = subprocess.run(
-        [
-            _binary("ffmpeg"),
-            "-v",
-            "error",
-            "-i",
-            str(clip),
-            "-vf",
-            f"select=eq(n\\,{local_frame})",
-            "-frames:v",
-            "1",
-            "-f",
-            "image2pipe",
-            "-vcodec",
-            "png",
-            "-",
-        ],
-        check=True,
-        capture_output=True,
-    )
-    return Image.open(io.BytesIO(result.stdout)).convert("RGBA")

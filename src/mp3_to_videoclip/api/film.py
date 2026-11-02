@@ -85,8 +85,10 @@ def get_graphics_review(slug: str, request: Request):
     current = True
     reason = None
     try:
-        from mp3_to_videoclip.signature import validate_review
+        from mp3_to_videoclip.signature import COMPOSITION_METHOD, OLD_REVIEW, validate_review
 
+        if review.get("method") != COMPOSITION_METHOD:
+            raise ValueError(OLD_REVIEW)
         validate_review(root, P.load_project(root))
     except OSError:
         current = False

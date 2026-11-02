@@ -211,7 +211,7 @@ def preview_assets(root: Path) -> tuple[list[RenderShot], list[str]]:
     says what it isn't showing. Only a preview may use this: a base or a final refuses.
     """
     from .. import edits
-    from ..preview import _placeholder_plate
+    from ..placeholder import _placeholder_plate
 
     board = load_board(root)
     edit = edits.load_edit(root, board=board)

@@ -60,16 +60,6 @@ def load_project(root: Path, verify_source=True) -> Project:
     return project
 
 
-def creative_workflow(project: Project) -> bool:
-    """The guided creative workflow, whether recorded as v2 or as schema 3.
-
-    Schema 3 is the migrated/native form of workflow 2: creative profile, resolved
-    character state, bound references, accepted image reviews. Schema-1 projects
-    without the v2 marker keep their historical legacy behaviour.
-    """
-    return project.workflow_version == 2 or project.schema_version == 3
-
-
 def requires_signature(root: Path, project: Project | None = None) -> bool:
     """Whether delivery needs the graphics signature pass.
 
@@ -82,19 +72,12 @@ def requires_signature(root: Path, project: Project | None = None) -> bool:
         return project.signature_required
     if project.kind is not None:
         return kinds.get(project.kind).signature_required
-    return project.schema_version == 3 and (root / "work" / "graphics-spec.json").is_file()
-
-
-def prompt_look_first(project: Project) -> bool:
-    """The v2 prompt layout puts the global look before the shot text."""
-    return project.prompt_version == 2 or project.schema_version == 3
+    return (root / "work" / "graphics-spec.json").is_file()
 
 
 def compile_order(project: Project) -> str:
     """Where the look goes. Version 2 leads with it; version 3 leads with the subject."""
-    if project.prompt_version == 3:
-        return "subject-first"
-    return "look-first" if prompt_look_first(project) else "subject-first"
+    return "subject-first" if project.prompt_version == 3 else "look-first"
 
 
 def project_payload(project: Project) -> dict:

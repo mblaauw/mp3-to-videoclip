@@ -99,7 +99,7 @@ class AudioWindow(Model):
 
 
 class Project(Model):
-    schema_version: Literal[1, 3] = 1
+    schema_version: Literal[3] = 3
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
     title: str
     #: A soundtrack film has no source: its clock is the mix built from its takes.
@@ -117,6 +117,7 @@ class Project(Model):
     source_duration: float | None = Field(default=None, gt=0)
     audio_window: AudioWindow | None = None
     native_size: list[int] | None = None
+    #: Written by older intake and bound in their approvals. Nothing reads it now.
     workflow_version: Literal[2] | None = None
     image_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,100}$")
     image_settings: ImageSettings | None = None
@@ -125,6 +126,7 @@ class Project(Model):
     prompt_version: Literal[2, 3] | None = None
     signature_required: bool | None = Field(default=None, strict=True)
     source_filename: str | None = None
+    #: Written by older intake, left out of every hash. Nothing reads it now.
     renderer_backend: Literal["ffmpeg", "remotion"] | None = None
 
     @model_validator(mode="before")
@@ -145,13 +147,6 @@ class Project(Model):
     @property
     def total_frames(self) -> int:
         return math.ceil(self.duration * self.fps)
-
-    @property
-    def uses_remotion(self) -> bool:
-        """An explicit backend wins; schema 3 without one is the native Remotion form."""
-        if self.renderer_backend is not None:
-            return self.renderer_backend == "remotion"
-        return self.schema_version == 3
 
     @property
     def image_size(self) -> tuple[int, int]:
@@ -701,6 +696,11 @@ class Script(Model):
         if len(set(ids)) != len(ids):
             raise ValueError("script line IDs must be unique")
         return self
+
+
+#: The storyboard's camera moves, and how far a zoom goes. ``timing.mjs`` holds the same two.
+CAMERA_MOVES = ("hold", "zoom_in", "zoom_out", "pan_left", "pan_right")
+ZOOM_RANGE = 0.08
 
 
 class Shot(Model):

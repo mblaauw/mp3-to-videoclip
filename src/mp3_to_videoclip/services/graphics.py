@@ -6,7 +6,6 @@ from pathlib import Path
 
 from mp3_to_videoclip.graphics import (
     ComposeError,
-    compose,
     load_spec,
     resolve_palette,
     validate_layout,
@@ -14,7 +13,6 @@ from mp3_to_videoclip.graphics import (
 
 __all__ = [
     "ComposeError",
-    "compose",
     "load_spec",
     "resolve_palette",
     "validate_layout",

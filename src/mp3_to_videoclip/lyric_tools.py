@@ -70,6 +70,7 @@ def status() -> dict[str, Any]:
         "supported": reason is None,
         "reason": reason,
         "ready": bool(ready and reason is None),
+        "backend": "mlx" if reason is None else None,
         "download_gb": DOWNLOAD_GB,
     }
 

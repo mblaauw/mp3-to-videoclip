@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .render import _binary
+from .ffmpeg import _binary
 
 WIDTH, HEIGHT = 96, 54
 # Mean brightness change, out of 255, that a frame must jump to be suspect.

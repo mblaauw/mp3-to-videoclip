@@ -1,11 +1,9 @@
-# Rendering: one timeline, two compatible backends
+# Rendering: one timeline, one composition
 
-New schema-3 productions always use Remotion; the legacy creation switch has been
-retired. Legacy schema-1 project JSON that omits `renderer_backend` keeps its
-original FFmpeg path and remains readable/renderable; a schema-3 document without
-the field is Remotion, because schema 3 is the native form. Remotion is visual
-rendering, not generated character animation, a paid service or a second
-production state store.
+Every film is schema 3 and renders through Remotion, in the Player and in the MP4. FFmpeg probes, muxes and
+verifies (`ffmpeg.py`) and draws no picture. Remotion is visual rendering, not generated character animation, a
+paid service or a second production state store. Finished films from before schema 3 are read by
+`domain/archive.py` and never rendered.
 
 ## Local dependencies
 
@@ -99,6 +97,11 @@ legacy camera endpoints with the Python models and renderer;
 `renderers/remotion/tests/edit-primitives.test.mjs` pins every edit primitive and
 the flash refusal.
 
+**A local Chrome or Chromium is required, and Remotion's headless shell is not pinned.** The shell is a
+150 MB per-platform download that needs consent and saves at most about 20 %, and the candidate list plus
+`REMOTION_CHROME` already covers Mac and Linux. The Library says when a render tool is missing. Revisit this
+when someone without Chrome appears.
+
 A Studio preview job writes `work/preview-review.json` itself, binding the movie
 bytes to the current storyboard, proof set, brand and renderer revision, so the
 preview approval is available as soon as the render finishes. Delivery for a
@@ -106,11 +109,8 @@ film with intro and credits is two steps: **Check titles** renders the review
 stills (seconds, not a film), and after the titles approval a **final** render
 draws the pictures and the reviewed titles in one pass. The final therefore needs
 the `stills` and `graphics` approvals, and refuses titles that no longer hash to
-the reviewed ones. A titles review recorded before this change
-(`method` absent, a base plus composited samples) still validates, and its final
-still composites onto that base with `graphics.compose`. Schema 3 selects
-Remotion even when a migrated document no longer carries the legacy
-`renderer_backend` field; an explicit backend wins for older schema-1 projects.
+the reviewed ones. A titles review made by the old compositor (`method` absent) is refused, and the titles are checked again; only
+the CLI's `legacy/` still reads or makes one.
 
 ## Primitive samples
 
