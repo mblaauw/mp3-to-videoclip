@@ -11,7 +11,7 @@ type Section = NonNullable<Music["sections"]>[number];
 const BARS = 24;
 
 /** Each section's loudness, measured against the whole song rather than named. */
-export function loudnessShape(music: Music, start: number, end: number): number[] {
+function loudnessShape(music: Music, start: number, end: number): number[] {
   const windows = music.fine_windows ?? [];
   const levels = windows.map((window) => Number(window.level_db ?? -60));
   if (!levels.length) return [];

@@ -56,7 +56,7 @@ export const UNDO_ARTIFACT: Record<string, string> = {
 
 const MONEY_TOOLS = new Set(["generate_images", "transcribe_lyrics"]);
 
-export function parse(value: string): Record<string, unknown> | null {
+function parse(value: string): Record<string, unknown> | null {
   try {
     const data = JSON.parse(value) as unknown;
     return typeof data === "object" && data ? (data as Record<string, unknown>) : null;

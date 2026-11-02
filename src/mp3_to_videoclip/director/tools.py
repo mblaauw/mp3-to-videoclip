@@ -794,7 +794,7 @@ async def dispatch(
         if isinstance(value, ToolResult):
             return value
         return json.dumps(value, ensure_ascii=False)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return json.dumps({"error": str(exc)})
 
 

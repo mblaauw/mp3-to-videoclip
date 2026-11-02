@@ -138,7 +138,7 @@ class ProjectWatcher:
             idle = False
             try:
                 changed, library_changed = await asyncio.to_thread(self.scan)
-            except Exception:  # noqa: BLE001 - a watcher must never take the app down
+            except Exception:
                 logger.exception("project watcher scan failed")
                 continue
             for slug in changed:

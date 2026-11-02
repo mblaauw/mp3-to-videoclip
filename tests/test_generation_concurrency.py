@@ -186,7 +186,7 @@ def quote_and_authorize(root, client, **kwargs):
 def run_in_thread(result, function):
     try:
         result["value"] = function()
-    except BaseException as exc:  # noqa: BLE001 - test harness records any outcome
+    except BaseException as exc:
         result["error"] = exc
 
 

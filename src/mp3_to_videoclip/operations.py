@@ -255,7 +255,7 @@ def stop_requested() -> bool:
     event = _STOP.get()
     try:
         return bool(event is not None and event.is_set())
-    except Exception:  # noqa: BLE001 - a broken flag never stops real work
+    except Exception:
         return False
 
 
@@ -281,7 +281,7 @@ def _notify(event: str, data: dict) -> None:
                 if value is not None
             },
         )
-    except Exception:  # noqa: BLE001 - monitoring never breaks the observed work
+    except Exception:
         pass
 
 

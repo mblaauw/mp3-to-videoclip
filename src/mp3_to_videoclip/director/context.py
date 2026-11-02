@@ -44,7 +44,7 @@ def _budget(root: Path) -> str:
             f"committed ${budget.fmt(committed)}; "
             f"remaining {('$' + budget.fmt(remaining)) if remaining is not None else 'unbounded'}"
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return f"unavailable ({exc})"
 
 
@@ -74,7 +74,7 @@ def _still_status(root: Path, shot, assets: dict) -> str:
         return "missing (selected file)"
     try:
         current = digest(P.image_spec(root, shot, verify_source=False))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return f"unreadable ({_clip(exc, 80)})"
     if current != chosen.get("input_hash"):
         return f"stale (inputs changed), selected v{selected}"
@@ -93,7 +93,7 @@ def _song(root: Path) -> list[str]:
     heading = "## The song (measured estimates)"
     try:
         song = song_map.song_map(root)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return [heading, f"- Unavailable ({_clip(exc, 80)})."]
     if not song.get("available"):
         return [heading, "- Not analysed yet."]
@@ -196,7 +196,7 @@ def _story_on_song(root: Path, project) -> list[str]:
                 f"- {start:.2f}-{end:.2f}s (frames {first}-{last}): {_clip(item['text'], PASSAGE_LIMIT)}"
             )
             placed += 1
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return [
             heading,
             f"- Unavailable ({_clip(exc, 80)}): treat every passage as not on the song.",
@@ -385,7 +385,7 @@ def build_context(
         lines.extend(shot_lines)
         try:
             cut_report = edits.report(root, edit=edit, board=source_board, project=project)
-        except (OSError, ValueError) as exc:  # noqa: BLE001
+        except (OSError, ValueError) as exc:
             lines.append(f"## Cut\nReport unavailable: {_clip(exc, 180)}")
             return "\n".join(lines)
         if cut_report.get("present"):
@@ -412,5 +412,5 @@ def build_context(
             for finding in cut_report.get("warnings", [])[:8]:
                 lines.append(f"- warning {finding['code']}: {_clip(finding['message'], 180)}")
         return "\n".join(lines)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return f"Project {slug}: {exc}"

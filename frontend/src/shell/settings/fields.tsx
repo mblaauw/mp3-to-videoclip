@@ -93,7 +93,7 @@ export function Row({
 
 const FieldId = createContext("");
 
-export function useFieldId(): string {
+function useFieldId(): string {
   return useContext(FieldId);
 }
 

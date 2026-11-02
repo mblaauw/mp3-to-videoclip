@@ -7,7 +7,6 @@ from . import styles
 DEFAULT_MODEL = "google-nano-banana-2-1"
 DEFAULT_MODEL_AIR = "google:nano-banana@2.1"
 LEGACY_MODEL = "bfl-flux-2-klein-4b"
-LEGACY_STYLE_PRESET_ID = "photoreal-painted-v1"
 STYLE_PRESET_ID = "photographic-painted-v2"
 DEFAULT_MAX_CORRECTIONS = 1
 

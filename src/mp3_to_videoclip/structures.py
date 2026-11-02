@@ -7,9 +7,6 @@ The code table is authoritative for ids, budgets and rules. The Writer's prose l
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-
-PROMPTS = Path(__file__).resolve().parent / "director" / "prompts" / "structures"
 
 
 @dataclass(frozen=True)
@@ -127,7 +124,3 @@ def public() -> list[dict]:
         {"id": item.id, "label": item.label, "length": sum(b.seconds for b in item.beats)}
         for item in STRUCTURES.values()
     ]
-
-
-def prompt_path(structure_id: str) -> str:
-    return f"structures/{get(structure_id).id}.md"

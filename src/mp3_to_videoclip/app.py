@@ -219,7 +219,7 @@ class StudioGuard:
             if watcher is not None:
                 try:
                     watcher.absorb(slug)
-                except Exception:  # noqa: BLE001 - a notice never fails a saved write
+                except Exception:
                     pass
             part = path.split("/")[4:5]
             artifact = part[0] if part else None
