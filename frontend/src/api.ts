@@ -168,6 +168,7 @@ export type LyricLine = {
   text: string;
   /** A `[Spoken Hook]` line: a heading of the song, never sung or timed. */
   tag: string | null;
+  words?: { text: string; start: number; end: number }[];
   start: number | null;
   end: number | null;
   source: "tapped" | "auto" | "lrc" | null;
@@ -1140,6 +1141,24 @@ export const api = {
     request<{ job_id: string }>(`/api/projects/${slug}/depth/setup`, { method: "POST" }),
   runDepth: (slug: string) =>
     request<{ job_id: string }>(`/api/projects/${slug}/depth/run`, { method: "POST" }),
+  decision: (slug: string, id: string) =>
+    request<{ before_after: Record<string, { before: unknown; after: unknown }> }>(
+      `/api/projects/${slug}/decisions/${id}`,
+    ),
+  firstDraft: (slug: string) =>
+    request<{
+      ceiling_usd: string;
+      stills_usd: string;
+      stills: number;
+      model_usd: string;
+      model_tokens: number;
+      drafted: string[];
+    }>(`/api/projects/${slug}/first-draft`),
+  startFirstDraft: (slug: string) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/first-draft`, {
+      method: "POST",
+      body: JSON.stringify({ cast_is_invented: true }),
+    }),
   script: (slug: string) => request<ScriptPayload>(`/api/projects/${slug}/script`),
   saveScript: (slug: string, body: { structure: string; lines: Partial<ScriptLine>[] }) =>
     request<ScriptPayload>(`/api/projects/${slug}/script`, {

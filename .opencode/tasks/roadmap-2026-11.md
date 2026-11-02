@@ -229,8 +229,8 @@ Phase A changes: `needs_new_round` stays a 200 like `needs_budget`, since both a
 ## Where the roadmap stands, 1 Nov 2026
 
 Merged: A (#69), H (#73, #74), B and D (#75), C-1 and C-2 with debt from those phases (#76),
-E-1 (#77), E-2 and F-1 (#78). G-3's resource store, I-1 and I-2 are in the PR after #78. Next in
-the final order: C-3.
+E-1 (#77), E-2 and F-1 (#78), G-3's resource store, I-1 and I-2 (#79). C-3 and E-3 are in the PR after
+#79. Next in the final order: I-3.
 
 Differences from the plans, where the plan was wrong or could not hold:
 
@@ -269,6 +269,8 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   moves only with the renderer revision, as it does for any renderer change. `title-v1` was rendered
   at 16:9 and 9:16 and looked at.
 
+- **After I-2, the owner's word:** an OpenAI model with no OpenAI key goes through OpenCode Go, under
+  the same bare id. That reverses E-1's refusal. No real call has proved OpenCode Go accepts that id.
 - **G-3 store:** subscribers and `useResource` landed, and the Script stage and Spine read through
   them. `request` already shared fetches through `resources.read`, so `FilmShell`, `Images`,
   `useFilmData` and `useStoryData` still make their own `Promise.allSettled` over that shared store;
@@ -287,3 +289,13 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   the loudness target, in place of a `sidechaincompress` and `loudnorm` graph, so no line moves by a sample;
   ambience waits for I-3. The plan's `STUDIO_PROJECTS` does not exist: the flag is `--projects-dir`. Takes, casting
   and the Writer's turn have only met fakes: the $3.00 batch and one live turn need the owner's authorisation.
+
+- **C-3:** a ramp lies in the frame range strictly inside its shot. Look options were measured as 20 stills
+  rather than a 10 s film; none costs a measurable amount. A caption becomes `kinetic_words` only when its whole
+  line was heard and fits one shot.
+- **E-3:** the tools are about 6,800 tokens, not 6,000, because this file's phases added nine tools; the test pins
+  7,000. A required reason is enforced on real turns only, so engine callers and tests can still write. A write
+  result is cut down only past 2,000 characters. `describe_images` is not in the Critic's tools, and neither is
+  `compare_versions`: the rule that the Critic only reads is pinned by name. The model allowance also stops at
+  400,000 tokens, because no text model has a verified price. A first draft refuses a story film. Nothing about a
+  first draft, a caption or a judge has met a real model: each needs the owner's authorisation.

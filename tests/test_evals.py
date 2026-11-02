@@ -7,10 +7,11 @@ from evals import checks
 from mp3_to_videoclip.models import Shot, Storyboard
 
 
-def test_three_fixtures_are_frozen_and_complete():
+def test_the_fixtures_are_frozen_and_complete():
     fixtures = checks.load_fixtures()
     assert [value["name"] for value in fixtures] == [
         "advert-30s",
+        "bright-pastoral-120s",
         "energetic-vocal",
         "slow-instrumental",
     ]

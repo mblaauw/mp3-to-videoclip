@@ -1,0 +1,77 @@
+{
+  "concepts": [
+    {
+      "id": "c1",
+      "title": "Told in order",
+      "structure": "narrative",
+      "logline": "One day of a ceramic bottle, each section later than the last.",
+      "why": "It shows a ceramic bottle changing instead of describing it.",
+      "world": "The ordinary places of a ceramic bottle, in plain daylight.",
+      "signature_moment": "The last image of a ceramic bottle changes how the first one reads.",
+      "risk": "It only works if the small changes are visible at a glance.",
+      "beats": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "Opening",
+          "text": "What is there at first."
+        },
+        {
+          "start": 4,
+          "end": 8,
+          "label": "Change",
+          "text": "What the film changes."
+        },
+        {
+          "start": 8,
+          "end": 12,
+          "label": "Turn",
+          "text": "What that costs."
+        },
+        {
+          "start": 12,
+          "end": 16,
+          "label": "Close",
+          "text": "What is left behind."
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "Only the objects",
+      "structure": "symbolic",
+      "logline": "A ceramic bottle told through what it leaves behind.",
+      "why": "It shows a ceramic bottle changing instead of describing it.",
+      "world": "The ordinary places of a ceramic bottle, in plain daylight.",
+      "signature_moment": "The last image of a ceramic bottle changes how the first one reads.",
+      "risk": "It only works if the small changes are visible at a glance.",
+      "beats": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "Opening",
+          "text": "What is there at first."
+        },
+        {
+          "start": 4,
+          "end": 8,
+          "label": "Change",
+          "text": "What the film changes."
+        },
+        {
+          "start": 8,
+          "end": 12,
+          "label": "Turn",
+          "text": "What that costs."
+        },
+        {
+          "start": 12,
+          "end": 16,
+          "label": "Close",
+          "text": "What is left behind."
+        }
+      ]
+    }
+  ],
+  "chosen_id": "c1"
+}

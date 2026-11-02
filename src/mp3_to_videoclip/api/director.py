@@ -115,8 +115,9 @@ def _can_see(route: Route) -> bool | None:
     """Whether the catalogue knows this model takes pictures. Unknown stays unknown."""
     from mp3_to_videoclip import catalog
 
+    maker = route.listed_under or route.provider
     known = next(
-        (m for m in catalog.load().models if m.id == route.model and m.provider == route.provider),
+        (m for m in catalog.load().models if m.id == route.model and m.provider == maker),
         None,
     )
     return None if known is None or not known.capabilities else "vision" in known.capabilities
@@ -136,6 +137,17 @@ async def get_director_model(slug: str, request: Request, role: str = "writer"):
         "has_key": bool(route.key),
         "can_see": _can_see(route),
     }
+
+
+@router.get("/decisions/{decision_id}")
+async def get_decision(slug: str, decision_id: str, request: Request):
+    """Why one write happened and what it changed, field by field."""
+    from mp3_to_videoclip.director import decisions
+
+    found = decisions.find(project_root(request, slug), decision_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="no such decision")
+    return found
 
 
 @router.get("/model-usage")
@@ -199,7 +211,10 @@ async def post_chat(slug: str, request: Request, payload: dict):
     meta = {**bundle.meta, "provider": route.provider, "model": route.model}
     promptlog.remember(root, meta)
     snapshot = build_context(slug, root.parent, stage=stage, context=context, task=bundle.task)
-    system = bundle.text + "\n\n---\n\n" + snapshot
+    from mp3_to_videoclip.director import decisions
+
+    handoff = decisions.handoff(root, role)
+    system = bundle.text + "\n\n---\n\n" + snapshot + (f"\n\n{handoff}" if handoff else "")
 
     llm = DirectorLLM(
         base_url=route.base_url,

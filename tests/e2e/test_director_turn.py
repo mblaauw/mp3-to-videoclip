@@ -153,6 +153,6 @@ def test_the_director_prices_stills_and_only_the_owners_click_buys(page: Page, s
 
 
 def test_a_role_with_no_key_says_so_and_nothing_else_answers(page: Page, studio):
-    config.save_settings(config.Settings(llm_api_key="go-key", writer_model="openai/gpt-6.1-sol"))
+    config.save_settings(config.Settings(writer_model="openai/gpt-6.1-sol"))
     _ask(page, studio, "Hello?")
     expect(page.locator(".director-error")).to_contain_text("key")

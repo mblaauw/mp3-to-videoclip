@@ -34,6 +34,12 @@ REACH_SECONDS = 1.5
 TRAVEL = {"quiet": 0.03, "middle": 0.06, "full": 0.1}
 MAX_HOLD_SECONDS = 6.0
 PUNCH = 1.05
+#: How far a push-in has travelled by the downbeat it lands on.
+RAMP_SHARE = 0.7
+IMPULSE_AMOUNT = 1.03
+IMPULSE_FRAMES = 8
+#: A bump every few seconds is a heartbeat; more is a nervous tic.
+IMPULSE_GAP_SECONDS = 4.0
 DISSOLVE_FRAMES = 12
 # A crop cut's detail framing. The report calls anything above 1.4 soft.
 DETAIL_ZOOM = 1.25
@@ -62,6 +68,20 @@ def _motion(
     if recent[-2:] == ["push_in", "push_in"]:
         return "pan_right" if framing != "detail" else "pull_back"
     return "push_in"
+
+
+def _landing(material: dict, start: int, end: int) -> int | None:
+    """The downbeat nearest the middle of a shot, where a push-in's weight should land."""
+    inside = [frame for frame in material.get("downbeats", []) if start < frame < end]
+    return min(inside, key=lambda frame: abs(frame - (start + end) / 2)) if inside else None
+
+
+def _strong_downbeat(material: dict, frame: int) -> int | None:
+    """The downbeat a section opens on, when the grid can be trusted to know one."""
+    if not material.get("grid_trusted"):
+        return None
+    near = [hit for hit in material.get("downbeats", []) if abs(hit - frame) <= GRID_LEAD + 1]
+    return min(near, key=lambda hit: abs(hit - frame)) if near else None
 
 
 def _tiers(material: dict) -> list[list[int]]:
@@ -141,6 +161,7 @@ def suggest(root: Path) -> dict[str, Any]:
     shots: list[EditShot] = []
     recent_moves: list[str] = []
     previous_band: str | None = None
+    last_impulse = -(10**9)
     arrivals = {section["start_frame"]: index for index, section in enumerate(sections)}
     for shot, start, end in zip(current.shots, starts, ends, strict=True):
         source = content[shot.shot_id]
@@ -149,7 +170,9 @@ def suggest(root: Path) -> dict[str, Any]:
         seconds = (end - start) / fps
         locked = source.kind not in (None, "scene") or bool(shot.text)
         if locked:
-            motion = shot.motion
+            ramp = shot.motion.ramp
+            fits = ramp is None or start < ramp.frame < end
+            motion = shot.motion if fits else shot.motion.model_copy(update={"ramp": None})
         else:
             closes = any(
                 start < section["end_frame"] <= end + round(MIN_SHOT_SECONDS * fps)
@@ -158,16 +181,27 @@ def suggest(root: Path) -> dict[str, Any]:
             kind = _motion(recent_moves, source.framing, band, seconds, closes)
             travel = TRAVEL[band]
             anchor = list(shot.motion.anchor)
+            grid = material.get("grid_trusted", False)
             if kind == "hold":
                 motion = EditMotion(
-                    type="hold", anchor=anchor, reason=f"{band} passage, let it sit"
+                    type="hold",
+                    anchor=anchor,
+                    reason=f"{band} passage, let it sit",
+                    **({"easing": "ease_out"} if grid else {}),
                 )
             elif kind == "push_in":
+                landing = _landing(material, start, end) if grid and band == "full" else None
                 motion = EditMotion(
                     type="push_in",
                     **{"from": 1.0, "to": round(1 + travel, 3)},
                     anchor=anchor,
                     reason=f"approach in a {band} passage",
+                    **({"ramp": {"frame": landing, "share": RAMP_SHARE}} if landing else {}),
+                    **(
+                        {"easing": "snap"}
+                        if grid and arrivals.get(start) is not None and band == "full"
+                        else {}
+                    ),
                 )
             elif kind == "pull_back":
                 motion = EditMotion(
@@ -195,6 +229,25 @@ def suggest(root: Path) -> dict[str, Any]:
                         amount=PUNCH,
                         reason=f"{sections[arriving]['name']} arrives",
                     )
+                ]
+            bump = _strong_downbeat(material, start)
+            if (
+                bump is not None
+                and bump < end
+                and bump - last_impulse >= round(IMPULSE_GAP_SECONDS * fps)
+                and not any(accent.frame == bump for accent in accents)
+                and band != "quiet"
+            ):
+                last_impulse = bump
+                accents = [
+                    *accents,
+                    EditAccent(
+                        frame=max(bump, start),
+                        type="impulse",
+                        amount=IMPULSE_AMOUNT,
+                        duration_frames=IMPULSE_FRAMES,
+                        reason=f"the downbeat that opens {sections[arriving]['name']}",
+                    ),
                 ]
             elif band == "quiet" and previous_band == "full" and seconds * fps > DISSOLVE_FRAMES:
                 previous_frames = starts[len(shots)] - starts[len(shots) - 1]

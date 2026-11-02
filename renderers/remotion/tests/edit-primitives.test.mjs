@@ -374,3 +374,39 @@ test("a depth entry needs all three layers", () => {
   assert.doesNotThrow(() => validateDepthLayers(undefined, "s"));
   assert.throws(() => validateDepthLayers({far: "a", mid: "b"}, "s"));
 });
+
+test("the new curves start at 0, end at 1 and differ where they should", async () => {
+  const {ease, rampedTravel, editCamera, textSafeBox, lookState, kineticWordStyle} = await import("../src/timing.mjs");
+  for (const name of ["ease_in", "ease_out", "snap"]) {
+    assert.equal(ease(0, name), 0);
+    assert.equal(ease(1, name), 1);
+  }
+  assert.ok(ease(0.5, "ease_in") < 0.5 && ease(0.5, "ease_out") > 0.5);
+  assert.ok(ease(0.2, "snap") > ease(0.2, "ease_out"));
+  // With a ramp, the move reaches its share on the frame, and still finishes.
+  assert.equal(rampedTravel(0.25, "smoothstep", 0.25, 0.7), 0.7);
+  assert.equal(rampedTravel(1, "smoothstep", 0.25, 0.7), 1);
+  assert.ok(rampedTravel(0.5, "smoothstep", 0.25, 0.7) > 0.7);
+  const motion = {type: "push_in", from: 1, to: 1.1, ramp: {frame: 12, share: 0.5}};
+  assert.ok(Math.abs(editCamera(motion, 0.25, 0.25).zoom - 1.05) < 1e-9);
+  // A portrait frame pushes text in from the top and bottom; a landscape one leaves it.
+  assert.deepEqual(textSafeBox({top: 10}, 1920, 1080), {top: 10});
+  assert.equal(textSafeBox({bottom: 10}, 1080, 1920).bottom, 1920 * 0.12);
+  assert.equal(lookState({grain: 0}, 1, "s", 1920, 1080, 24), null);
+  const look = lookState({haze: 0.5, flare: 1}, 1, "s", 1920, 1080, 24);
+  assert.ok(look.haze > 0 && look.flare > 0 && look.flareX > 0 && look.flareX < 1);
+  assert.equal(kineticWordStyle(10, 10, 100, 24).opacity, 0);
+  assert.ok(kineticWordStyle(20, 10, 100, 24).opacity > 0.9);
+});
+
+test("an impulse kicks, dies away and stays within the frame", () => {
+  const accents = [{frame: 10, type: "impulse", amount: 1.1, duration_frames: 8, direction: "left"}];
+  assert.equal(accentState(accents, 9).punch, 1);
+  const first = accentState(accents, 10);
+  assert.ok(first.punch > 1.09);
+  assert.equal(first.shiftX, -0.5);
+  assert.equal(accentState(accents, 18).punch, 1);
+  assert.equal(accentState(accents, 18).shiftX, 0);
+  assert.throws(() => accentState([{...accents[0], amount: 1.15}], 10), /impulse/);
+  assert.throws(() => accentState([{...accents[0], duration_frames: 20}], 10), /impulse/);
+});

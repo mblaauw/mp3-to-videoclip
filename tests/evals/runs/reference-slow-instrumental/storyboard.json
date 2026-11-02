@@ -1,0 +1,139 @@
+{
+  "aspect": "16:9",
+  "fps": 24,
+  "total_frames": 5760,
+  "shots": [
+    {
+      "id": "s001",
+      "start_frame": 0,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show the sea wall doing something it was not doing before",
+      "message": "The sea wall has changed",
+      "framing": "wide",
+      "scene_id": "place-0",
+      "image_prompt": "The sea wall in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s002",
+      "start_frame": 480,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show a wet step doing something it was not doing before",
+      "message": "A wet step has changed",
+      "framing": "detail",
+      "scene_id": "place-1",
+      "image_prompt": "A wet step in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s003",
+      "start_frame": 960,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show one lit room doing something it was not doing before",
+      "message": "One lit room has changed",
+      "framing": "medium",
+      "scene_id": "place-2",
+      "image_prompt": "One lit room in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s004",
+      "start_frame": 1440,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show the tide line doing something it was not doing before",
+      "message": "The tide line has changed",
+      "framing": "close_up",
+      "scene_id": "place-0",
+      "image_prompt": "The tide line in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s005",
+      "start_frame": 1920,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show salt on glassware doing something it was not doing before",
+      "message": "Salt on glassware has changed",
+      "framing": "wide",
+      "scene_id": "place-1",
+      "image_prompt": "Salt on glassware in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s006",
+      "start_frame": 2400,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show a door left open doing something it was not doing before",
+      "message": "A door left open has changed",
+      "framing": "detail",
+      "scene_id": "place-2",
+      "image_prompt": "A door left open in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s007",
+      "start_frame": 2880,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show the sea wall doing something it was not doing before",
+      "message": "The sea wall has changed",
+      "framing": "medium",
+      "scene_id": "place-0",
+      "image_prompt": "The sea wall in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s008",
+      "start_frame": 3360,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show a wet step doing something it was not doing before",
+      "message": "A wet step has changed",
+      "framing": "close_up",
+      "scene_id": "place-1",
+      "image_prompt": "A wet step in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s009",
+      "start_frame": 3840,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show one lit room doing something it was not doing before",
+      "message": "One lit room has changed",
+      "framing": "wide",
+      "scene_id": "place-2",
+      "image_prompt": "One lit room in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s010",
+      "start_frame": 4320,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show the tide line doing something it was not doing before",
+      "message": "The tide line has changed",
+      "framing": "detail",
+      "scene_id": "place-0",
+      "image_prompt": "The tide line in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s011",
+      "start_frame": 4800,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show salt on glassware doing something it was not doing before",
+      "message": "Salt on glassware has changed",
+      "framing": "medium",
+      "scene_id": "place-1",
+      "image_prompt": "Salt on glassware in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s012",
+      "start_frame": 5280,
+      "duration_frames": 480,
+      "kind": "scene",
+      "purpose": "Show a door left open doing something it was not doing before",
+      "message": "A door left open has changed",
+      "framing": "close_up",
+      "scene_id": "place-2",
+      "image_prompt": "A door left open in plain daylight, seen from close to the ground."
+    }
+  ]
+}

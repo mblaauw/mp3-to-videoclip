@@ -159,7 +159,7 @@ def test_the_step_limit_says_so_and_can_be_resumed(tmp_path):
 
 def test_a_role_with_no_key_is_refused_by_name_and_no_other_model_answers(tmp_path, monkeypatch):
     root = make_api_project(tmp_path)
-    settings = Settings(llm_api_key="go-key", writer_model="openai/gpt-6.1-sol")
+    settings = Settings(writer_model="openai/gpt-6.1-sol")
     monkeypatch.setattr("mp3_to_videoclip.api.director.effective_settings", lambda: settings)
     with api_client(tmp_path) as client:
         refused = client.post(

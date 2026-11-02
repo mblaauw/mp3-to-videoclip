@@ -1,0 +1,77 @@
+{
+  "aspect": "16:9",
+  "fps": 24,
+  "total_frames": 720,
+  "shots": [
+    {
+      "id": "s001",
+      "start_frame": 0,
+      "duration_frames": 120,
+      "kind": "scene",
+      "purpose": "Show the glaze doing something it was not doing before",
+      "message": "The glaze has changed",
+      "framing": "wide",
+      "scene_id": "place-0",
+      "image_prompt": "The glaze in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s002",
+      "start_frame": 120,
+      "duration_frames": 120,
+      "kind": "card",
+      "purpose": "Show a hand doing something it was not doing before",
+      "message": "A hand has changed",
+      "framing": "detail",
+      "scene_id": "place-1",
+      "text": [
+        "Made by hand"
+      ]
+    },
+    {
+      "id": "s003",
+      "start_frame": 240,
+      "duration_frames": 120,
+      "kind": "scene",
+      "purpose": "Show white paper doing something it was not doing before",
+      "message": "White paper has changed",
+      "framing": "medium",
+      "scene_id": "place-2",
+      "image_prompt": "White paper in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s004",
+      "start_frame": 360,
+      "duration_frames": 120,
+      "kind": "scene",
+      "purpose": "Show the pour doing something it was not doing before",
+      "message": "The pour has changed",
+      "framing": "close_up",
+      "scene_id": "place-0",
+      "image_prompt": "The pour in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s005",
+      "start_frame": 480,
+      "duration_frames": 120,
+      "kind": "scene",
+      "purpose": "Show a table doing something it was not doing before",
+      "message": "A table has changed",
+      "framing": "wide",
+      "scene_id": "place-1",
+      "image_prompt": "A table in plain daylight, seen from close to the ground."
+    },
+    {
+      "id": "s006",
+      "start_frame": 600,
+      "duration_frames": 120,
+      "kind": "card",
+      "purpose": "Show its shadow doing something it was not doing before",
+      "message": "Its shadow has changed",
+      "framing": "detail",
+      "scene_id": "place-2",
+      "text": [
+        "Made by hand"
+      ]
+    }
+  ]
+}

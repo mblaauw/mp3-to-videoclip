@@ -171,6 +171,17 @@ line is said, estimated or measured; `board.retime_lines` re-derives bound shots
 stills. `structures.py` is the template table, and `analysis.analyze_narration` keeps the keys of
 `analyze` so the Spine and `cut_material` read speech without knowing.
 
+## Decisions and first drafts
+
+Every write a Director turn makes needs a `reason`. `director/decisions.py` works out what changed from the
+artifact itself, before and after, and appends one line to `work/decisions.jsonl`. No approval reads it. The
+other role gets a short "From the Writer" block in its prompt, not the whole thread.
+
+`services/first_draft.py` runs one owner-authorised job from concept to a preview. What it approves is
+recorded `via: "draft"`, only brief, storyboard and proof can be, and a later stage refuses to build on a draft
+until the owner has made it theirs. It spends at most three stills out of its reserve and checks its model
+allowance before every turn, in tokens as well as dollars because text models have no known price.
+
 ## Evaluation and ratings
 
 Three frozen fixtures and their automatic checks live in `tests/evals/`. The

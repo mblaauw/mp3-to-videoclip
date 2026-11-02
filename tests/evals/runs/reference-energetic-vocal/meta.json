@@ -1,0 +1,12 @@
+{
+  "fixture": "energetic-vocal",
+  "role": "writer",
+  "model": "scripted-reference",
+  "synthetic": true,
+  "created_at": "2026-11-01T00:00:00Z",
+  "prompt": {
+    "hash": "reference",
+    "files": [],
+    "task": "storyboard"
+  }
+}

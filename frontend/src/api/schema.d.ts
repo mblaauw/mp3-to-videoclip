@@ -409,6 +409,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{slug}/decisions/{decision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Decision
+         * @description Why one write happened and what it changed, field by field.
+         */
+        get: operations["get_decision_api_projects__slug__decisions__decision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{slug}/depth": {
         parameters: {
             query?: never;
@@ -692,6 +712,27 @@ export interface paths {
         get: operations["play_film_api_projects__slug__film__kind___name__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{slug}/first-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** First Draft Plan */
+        get: operations["first_draft_plan_api_projects__slug__first_draft_get"];
+        put?: never;
+        /**
+         * Start First Draft
+         * @description The owner's one authorisation, with the sentence about the cast in front of them.
+         */
+        post: operations["start_first_draft_api_projects__slug__first_draft_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2057,6 +2098,8 @@ export interface components {
              * @enum {string}
              */
             state: "approved" | "stale" | "missing" | "unavailable";
+            /** Via */
+            via?: string | null;
         };
         /** ApprovalsOut */
         ApprovalsOut: {
@@ -3123,6 +3166,38 @@ export interface operations {
             };
         };
     };
+    get_decision_api_projects__slug__decisions__decision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                decision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_depth_api_projects__slug__depth_get: {
         parameters: {
             query?: never;
@@ -3616,6 +3691,74 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    first_draft_plan_api_projects__slug__first_draft_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_first_draft_api_projects__slug__first_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

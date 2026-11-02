@@ -883,7 +883,7 @@ EditTransitionType = Literal[
     "slide",
 ]
 EditMotionType = Literal["hold", "push_in", "pull_back", "pan_left", "pan_right"]
-EditAccentType = Literal["punch_in", "flash", "light_leak"]
+EditAccentType = Literal["punch_in", "flash", "light_leak", "impulse"]
 EditTextAnimation = Literal["fade", "fade_in", "type_on", "slide_up", "pop", "kinetic_words"]
 EditTextStyle = Literal[
     "super", "title", "lower_third", "lyric", "card", "logotype", "tagline", "cta"
@@ -909,6 +909,13 @@ class EditTransition(Model):
         return value
 
 
+class EditRamp(Model):
+    """How far the move has travelled by an absolute film frame, so its weight lands there."""
+
+    frame: int = Field(ge=0)
+    share: float = Field(ge=0, le=1)
+
+
 class EditMotion(Model):
     """A bounded camera move for one shot, in normalized crop coordinates."""
 
@@ -929,7 +936,8 @@ class EditMotion(Model):
         validation_alias="to",
         serialization_alias="to",
     )
-    easing: Literal["linear", "smoothstep"] = "smoothstep"
+    easing: Literal["linear", "smoothstep", "ease_in", "ease_out", "snap"] = "smoothstep"
+    ramp: EditRamp | None = None
     anchor: list[float] = Field(default_factory=lambda: [0.5, 0.5], min_length=2, max_length=2)
     reason: str = Field(default="", max_length=240)
 
@@ -948,6 +956,9 @@ class EditMotion(Model):
         value = handler(self)
         if value.get("reason") == "":
             value.pop("reason", None)
+        # Absent when unused, so an existing move hashes as it always has.
+        if value.get("ramp") is None:
+            value.pop("ramp", None)
         return value
 
 
@@ -959,12 +970,27 @@ class EditAccent(Model):
     amount: float = Field(default=1.04, ge=1.0, le=1.2)
     duration_frames: int = Field(default=6, ge=1, le=24)
     reason: str = Field(default="", max_length=240)
+    #: Which way an impulse knocks the frame. Without one it only bumps the scale.
+    direction: Literal["left", "right", "up", "down"] | None = None
+
+    @model_validator(mode="after")
+    def check_impulse(self):
+        if self.type == "impulse":
+            if self.amount > 1.1:
+                raise ValueError("an impulse stays at or under 1.1")
+            if not 2 <= self.duration_frames <= 12:
+                raise ValueError("an impulse lasts 2 to 12 frames")
+        elif self.direction is not None:
+            raise ValueError("only an impulse has a direction")
+        return self
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
         value = handler(self)
         if value.get("reason") == "":
             value.pop("reason", None)
+        if value.get("direction") is None:
+            value.pop("direction", None)
         return value
 
 
@@ -985,6 +1011,11 @@ class EditCrop(Model):
         return value
 
 
+class EditWord(Model):
+    text: str = Field(min_length=1, max_length=80)
+    in_frame: int = Field(ge=0)
+
+
 class EditText(Model):
     """One timed text layer. Frames are absolute film frames."""
 
@@ -996,11 +1027,16 @@ class EditText(Model):
     animation: EditTextAnimation = "fade"
     reason: str = Field(default="", max_length=240)
     color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    decoration: Literal["shadow", "outline", "box"] = "shadow"
+    #: When each word lands, for ``kinetic_words``; without them the words split evenly.
+    words: list[EditWord] = Field(default_factory=list, max_length=60)
 
     @model_validator(mode="after")
     def check_window(self):
         if self.out_frame <= self.in_frame:
             raise ValueError("text out_frame must follow in_frame")
+        if any(not self.in_frame <= word.in_frame < self.out_frame for word in self.words):
+            raise ValueError("a word's frame must be inside its text's window")
         return self
 
     @model_serializer(mode="wrap")
@@ -1011,6 +1047,10 @@ class EditText(Model):
         # Absent when unused, so existing text hashes as it always has.
         if value.get("color") is None:
             value.pop("color", None)
+        if value.get("decoration") == "shadow":
+            value.pop("decoration", None)
+        if not value.get("words"):
+            value.pop("words", None)
         return value
 
 
@@ -1048,6 +1088,9 @@ class EditShot(Model):
     @model_validator(mode="after")
     def check_children(self):
         end = self.start_frame + self.duration_frames
+        ramp = self.motion.ramp
+        if ramp is not None and not self.start_frame < ramp.frame < end:
+            raise ValueError(f"motion ramp frame {ramp.frame} is outside shot {self.shot_id}")
         for accent in self.accents:
             if not self.start_frame <= accent.frame < end:
                 raise ValueError(f"accent frame {accent.frame} is outside shot {self.shot_id}")
@@ -1117,13 +1160,19 @@ class FilmLook(Model):
     weave: float = Field(default=0, ge=0, le=1)
     drift: float = Field(default=0, ge=0, le=1)
     depth: float = Field(default=0, ge=0, le=1)
+    bloom: float = Field(default=0, ge=0, le=1)
+    halation: float = Field(default=0, ge=0, le=1)
+    flare: float = Field(default=0, ge=0, le=1)
+    dust: float = Field(default=0, ge=0, le=1)
+    haze: float = Field(default=0, ge=0, le=1)
 
     @model_serializer(mode="wrap")
     def serialize(self, handler):
         value = handler(self)
-        # Absent when off, so a film without depth hashes as it always has.
-        if not value.get("depth"):
-            value.pop("depth", None)
+        # Absent when off, so a film without them hashes as it always has.
+        for key in ("depth", "bloom", "halation", "flare", "dust", "haze"):
+            if not value.get(key):
+                value.pop(key, None)
         return value
 
 

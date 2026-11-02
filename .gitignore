@@ -24,3 +24,4 @@ frontend/openapi.json
 .playwright-mcp/
 
 tests/evals/runs/*/
+!tests/evals/runs/reference-*/

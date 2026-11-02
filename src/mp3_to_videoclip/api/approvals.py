@@ -32,6 +32,7 @@ class ApprovalStateOut(BaseModel):
     error: str | None = None
     blocking_stage: str | None = None
     reason: str | None = None
+    via: str | None = None
 
 
 class ApprovalsOut(BaseModel):
@@ -122,6 +123,7 @@ def _approval(root, stage: str) -> dict:
         "at": (record or {}).get("at"),
         "note": (record or {}).get("note"),
         "reason": reason,
+        "via": (record or {}).get("via"),
     }
 
 

@@ -235,6 +235,11 @@ const LOOK_AMOUNTS: { key: LookAmount; label: string }[] = [
   { key: "weave", label: "Gate weave" },
   { key: "drift", label: "Handheld drift" },
   { key: "depth", label: "Depth" },
+  { key: "bloom", label: "Bloom" },
+  { key: "halation", label: "Halation" },
+  { key: "flare", label: "Flare" },
+  { key: "dust", label: "Dust" },
+  { key: "haze", label: "Haze" },
 ];
 
 /** Which stills have their layers, and the way to make the rest. Local and free. */

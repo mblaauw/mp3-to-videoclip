@@ -88,6 +88,7 @@ def view(root: Path) -> dict[str, Any]:
                 "start": start,
                 "end": item.get("end") if source in SOURCES else None,
                 "source": source,
+                **({"words": item["words"]} if item.get("words") else {}),
             }
         )
     return {"lines": lines}
@@ -97,6 +98,19 @@ def _number(value: Any, what: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{what} must be a number of seconds")
     return float(value)
+
+
+def _words(words: Any, duration: float) -> list[dict[str, Any]]:
+    if not isinstance(words, list):
+        raise ValueError("a line's words must be a list")
+    return [
+        {
+            "text": str(word["text"]),
+            "start": _number(word["start"], "a word's start"),
+            "end": min(_number(word["end"], "a word's end"), duration),
+        }
+        for word in words
+    ]
 
 
 def save(root: Path, payload: dict, duration: float) -> dict[str, Any]:
@@ -110,7 +124,7 @@ def save(root: Path, payload: dict, duration: float) -> dict[str, Any]:
     by_index = {row["index"]: row for row in rows}
     timed: dict[int, dict[str, Any]] = {}
     for item in items:
-        if not isinstance(item, dict) or set(item) - {"index", "start", "end", "source"}:
+        if not isinstance(item, dict) or set(item) - {"index", "start", "end", "source", "words"}:
             raise ValueError("each line needs an index, a start and a source")
         row = by_index.get(item.get("index"))
         if row is None:
@@ -130,6 +144,9 @@ def save(root: Path, payload: dict, duration: float) -> dict[str, Any]:
         if row["index"] in timed:
             raise ValueError("a line may only be timed once")
         timed[row["index"]] = {"start": start, "end": end, "source": item["source"]}
+        words = item.get("words")
+        if words and item["source"] == "auto":
+            timed[row["index"]]["words"] = _words(words, duration)
     ordered = [timed[index]["start"] for index in sorted(timed)]
     if any(later < earlier for earlier, later in zip(ordered, ordered[1:], strict=False)):
         raise ValueError("lyric lines must stay in order")

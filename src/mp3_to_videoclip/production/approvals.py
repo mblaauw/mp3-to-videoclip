@@ -266,7 +266,8 @@ def require_approval(root: Path, stage: str):
         from ..signature import validate_review
 
         validate_review(root, load_project(root))
-    if stage in ("proof", "stills") and creative_workflow(load_project(root)):
+    drafted = stage == "proof" and record.get("via") == "draft"
+    if stage in ("proof", "stills") and creative_workflow(load_project(root)) and not drafted:
         from ..reviews import require_accepted
 
         board = load_board(root)
@@ -287,6 +288,21 @@ def _require_reference_permissions(brief: Brief):
             raise _permission_refusal(reference.id)
 
 
+#: What a first draft may approve for itself. Stills, titles and a final are always the owner's.
+DRAFT_STAGES = ("brief", "storyboard", "proof")
+
+
+def drafted_parent(root: Path, stage: str) -> str | None:
+    """A stage under this one that the first draft approved, not the owner."""
+    approvals = read_json(root / "work/approvals.json")
+    seen = effective_upstream(root, stage)
+    while seen:
+        if (approvals.get(seen) or {}).get("via") == "draft":
+            return seen
+        seen = effective_upstream(root, seen)
+    return None
+
+
 @state_mutation
 def approve(
     root: Path,
@@ -297,6 +313,7 @@ def approve(
     inspected=False,
     expected_hash: str | None = None,
     via: str | None = None,
+    drafted_by: dict | None = None,
     preview_watched: bool = False,
     review_confirmed: bool | None = None,
 ):
@@ -305,6 +322,10 @@ def approve(
     note = note.strip() or None
     if via == "studio" and review_confirmed is not True:
         raise ValueError("Studio decisions require explicit review confirmation")
+    if via == "draft" and stage not in DRAFT_STAGES:
+        raise ValueError("a first draft may only approve the brief, the storyboard and the proof")
+    if via != "draft" and stage not in DRAFT_STAGES and (drafted := drafted_parent(root, stage)):
+        raise ValueError(f"the {drafted} is still a draft; make it yours before approving this")
     if via == "studio" and stage == "preview" and preview_watched is not True:
         raise ValueError("confirm continuous preview playback with the actual music")
     if stage == "lyrics" and load_project(root).music_mode == "instrumental":
@@ -392,7 +413,8 @@ def approve(
                 "inspect the actual composited graphics samples, then approve graphics with --inspected"
             )
         validate_review(root, load_project(root))
-    if stage in ("proof", "stills") and creative_workflow(load_project(root)):
+    # A draft's proof is checked by nobody yet, which is what "Drafted, not yours" says.
+    if stage in ("proof", "stills") and creative_workflow(load_project(root)) and via != "draft":
         from ..reviews import require_accepted
 
         board = load_board(root)
@@ -422,6 +444,8 @@ def approve(
         approvals[stage].update(
             via=via, inspected=bool(inspected), acknowledge_uncertain=bool(acknowledge_uncertain)
         )
+        if drafted_by:
+            approvals[stage]["drafted_by"] = drafted_by
         if via == "studio":
             approvals[stage]["review_confirmed"] = True
             if stage == "preview":

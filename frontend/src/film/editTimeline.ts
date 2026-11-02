@@ -41,6 +41,7 @@ export function editBoundaryLimits(edit: EditPayload, index: number): BoundaryLi
       leftStart + left.transition_in.frames + 1,
       leftStart + right.transition_in.frames + 1,
       ...left.accents.map((accent) => accent.frame + 1),
+      ...(left.motion.ramp ? [left.motion.ramp.frame + 1] : []),
       ...(left.crops ?? []).map((crop) => crop.frame + 1),
       ...left.text.map((item) => item.out_frame),
     ],
@@ -51,6 +52,7 @@ export function editBoundaryLimits(edit: EditPayload, index: number): BoundaryLi
       rightEnd - 1,
       rightEnd - right.transition_in.frames - 1,
       ...right.accents.map((accent) => accent.frame),
+      ...(right.motion.ramp ? [right.motion.ramp.frame] : []),
       // A crop must stay strictly after the shot's first frame.
       ...(right.crops ?? []).map((crop) => crop.frame - 1),
       ...right.text.map((item) => item.in_frame),
@@ -163,7 +165,16 @@ export function setEditMotion(
   };
 }
 
-export type LookAmount = "grain" | "weave" | "drift" | "depth";
+export type LookAmount =
+  | "grain"
+  | "weave"
+  | "drift"
+  | "depth"
+  | "bloom"
+  | "halation"
+  | "flare"
+  | "dust"
+  | "haze";
 
 export function setGradePreset(edit: EditPayload, preset: Grade["preset"]): EditPayload {
   return { ...edit, grade: { ...edit.grade, preset } };

@@ -372,3 +372,18 @@
 .track-edge-actions {
   margin-top: 10px;
 }
+
+.word-ticks {
+  position: relative;
+  display: block;
+  grid-column: 1 / -1;
+  height: 4px;
+}
+.word-ticks i {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 4px;
+  background: currentColor;
+  opacity: 0.5;
+}

@@ -36,14 +36,15 @@ export type EditMotion = {
   type: "hold" | "push_in" | "pull_back" | "pan_left" | "pan_right";
   from: number;
   to: number;
-  easing: "linear" | "smoothstep";
+  easing: "linear" | "smoothstep" | "ease_in" | "ease_out" | "snap";
+  ramp?: { frame: number; share: number } | null;
   anchor: [number, number];
   reason?: string;
 };
 
 export type EditAccent = {
   frame: number;
-  type: "punch_in" | "flash" | "light_leak";
+  type: "punch_in" | "flash" | "light_leak" | "impulse";
   amount?: number;
   duration_frames?: number;
   reason?: string;
@@ -85,7 +86,17 @@ export type Grade = {
   preset: "neutral" | "warm-night" | "clean-day" | "monochrome" | "vivid" | "film-fade";
   strength: number;
   overrides?: PreviewShot["post_effects"];
-  look?: { grain: number; weave: number; drift: number; depth?: number } | null;
+  look?: {
+    grain: number;
+    weave: number;
+    drift: number;
+    depth?: number;
+    bloom?: number;
+    halation?: number;
+    flare?: number;
+    dust?: number;
+    haze?: number;
+  } | null;
   typeface?: "inter" | "fraunces" | "bebas" | null;
 };
 

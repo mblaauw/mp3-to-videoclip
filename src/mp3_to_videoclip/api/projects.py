@@ -386,6 +386,34 @@ async def set_parked(slug: str, body: ParkedBody, request: Request):
     return {"slug": slug, "parked": body.parked}
 
 
+@router.get("/{slug}/first-draft")
+def first_draft_plan(slug: str, request: Request):
+    from mp3_to_videoclip.services import first_draft
+
+    root = _projects_dir(request) / slug
+    return {**first_draft.plan(), "drafted": first_draft.drafted_stages(root)}
+
+
+@router.post("/{slug}/first-draft")
+async def start_first_draft(slug: str, request: Request, payload: dict):
+    """The owner's one authorisation, with the sentence about the cast in front of them."""
+    from mp3_to_videoclip.services import first_draft
+
+    if payload.get("cast_is_invented") is not True:
+        raise HTTPException(status_code=400, detail="confirm that the cast will be invented")
+    root = _projects_dir(request) / slug
+    if not (root / "project.json").is_file():
+        raise HTTPException(status_code=404, detail="no such film")
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+
+    async def work():
+        return await first_draft.run(root, runner=runner)
+
+    return {"job_id": runner.submit("first-draft", slug, work, blocking=True), **first_draft.plan()}
+
+
 @router.post("", status_code=201)
 async def create_project(
     request: Request,
