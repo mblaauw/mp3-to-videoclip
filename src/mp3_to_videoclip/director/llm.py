@@ -66,7 +66,8 @@ def service_failed_message(role: str | None, failure: Exception, model: str = ""
             f"The provider refused the key{named}, so the {_who(role)} couldn't answer. "
             f"Check it in Settings. {NOTHING_LOST}"
         )
-    if status == 404:
+    # OpenCode Go answers 400, not 404, for a model it lists but cannot reach today.
+    if status == 404 or (status == 400 and "model is unavailable" in str(failure).lower()):
         return (
             f"The provider doesn't offer {model or 'that model'} to this key. "
             f"Choose another for the {_who(role)} in Settings. {NOTHING_LOST}"

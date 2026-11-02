@@ -6,6 +6,7 @@ import asyncio
 import json
 
 import httpx
+import openai
 import pytest
 
 from mp3_to_videoclip.config import Settings
@@ -334,6 +335,20 @@ def test_the_owner_hears_what_to_do_about_a_refusal():
     assert "refused the key" in refused and "Settings" in refused
     missing = service_failed_message("writer", ProviderFailure(404), "m")
     assert "doesn't offer m" in missing
+
+
+def test_a_model_the_gateway_cannot_reach_is_named():
+    reply = "Upstream request failed: Model is unavailable. key sk-secret"
+
+    def handler(request):
+        return httpx.Response(400, json={"error": {"message": reply}})
+
+    with pytest.raises(openai.BadRequestError) as caught:
+        run(_llm("openai-compatible", handler))
+    words = service_failed_message("writer", caught.value, "m")
+    assert "doesn't offer m" in words and "Settings" in words and "sk-secret" not in words
+    other = service_failed_message("writer", ProviderFailure(400), "m")
+    assert "error 400" in other
 
 
 def test_every_kind_in_the_catalogue_has_a_provider():
