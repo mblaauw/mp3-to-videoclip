@@ -947,6 +947,7 @@ export type ImageEstimate = {
   uploads_required: boolean;
   shot_ids: string[];
   edit_unavailable?: string | null;
+  reserve_basis?: { published_usd: string; factor: string; user_floor_usd: string } | null;
 };
 
 export type ImageEstimateResponse = {

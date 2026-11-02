@@ -3,6 +3,7 @@
 import copy
 import math
 import subprocess
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -682,3 +683,36 @@ def test_cli_select_and_costs_with_real_mp3(production):
     P.approve(production, "proof", "test user approved fixture proof")
     P.select_asset(production, "s001", 1)
     assert G.costs(production)["reported_or_calculated_usd"] == "0.003"
+
+
+def test_a_reservation_follows_the_published_price_at_this_size():
+    pricing = {
+        "examples": [
+            {"configuration": "text-to-image · 1376×768", "price": 0.0342},
+            {"configuration": "image-to-image · 4K", "price": 0.2},
+        ]
+    }
+    assert G.published_reserve(pricing, (1376, 768)) == Decimal("0.0342") * 3 / 2
+    # No example at this size: the highest published one is all there is to go on.
+    assert G.published_reserve(pricing, (640, 360)) == Decimal("0.2") * 3 / 2
+    assert G.published_reserve({"rates": []}, (1376, 768)) is None
+    assert G.published_reserve(None, (1376, 768)) is None
+
+
+def test_a_quote_never_reserves_less_than_the_published_price(production):
+    client = FakeRunware(production)
+    real_schema = client.schema
+
+    def priced(slug):
+        schema = real_schema(slug)
+        schema["info"]["x-pricing"] = {"examples": [{"configuration": "x", "price": 0.04}]}
+        return schema
+
+    client.schema = priced
+    quote = G.quote_images(production, "proof", "0.01", client=client)
+    assert {task["reserve_usd"] for task in quote["tasks"]} == {"0.0600"}
+    assert quote["reserve_basis"]["user_floor_usd"] == "0.01"
+    client = FakeRunware(production)
+    client.schema = priced
+    high = G.quote_images(production, "proof", "0.10", client=client)
+    assert {task["reserve_usd"] for task in high["tasks"]} == {"0.10"}
