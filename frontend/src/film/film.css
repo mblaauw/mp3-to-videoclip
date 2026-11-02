@@ -1386,3 +1386,19 @@
   border: 1px solid var(--line);
   border-radius: 4px;
 }
+.film-aspect {
+  display: inline-flex;
+  gap: 2px;
+}
+.film-aspect button {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: none;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.film-aspect button.on {
+  border-color: var(--gold);
+  color: var(--ink);
+}

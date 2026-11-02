@@ -1375,6 +1375,8 @@ class RenderShot(Model):
     edit: EditShot | None = None
     grade: Grade | None = None
     clip: RenderClip | None = None
+    #: Where the picture sits in a version of another shape, as ``object-position`` percents.
+    reframe: dict[str, float] | None = None
 
 
 class BrandPackage(Model):

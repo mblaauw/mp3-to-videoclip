@@ -6,6 +6,7 @@ import {
   type CutSummary,
   type DeliveryChecklist,
   type DeliveryLine,
+  type FilmAspect,
   type FinalOptions,
   type FilmExports,
   type FilmFile,
@@ -43,6 +44,7 @@ export function useFilmData(slug: string) {
   const [files, setFiles] = useState<FilmFile[]>([]);
   const [signatureRequired, setSignatureRequired] = useState<boolean | undefined>();
   const [selected, setSelected] = useState<FilmFile | null>(null);
+  const [aspect, setAspect] = useState<FilmAspect | null>(null);
   const [live, setLive] = useState<LiveState | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [graphics, setGraphics] = useState<GraphicsReview | null>(null);
@@ -153,7 +155,7 @@ export function useFilmData(slug: string) {
       return;
     }
     try {
-      const payload = await api.preview(slug);
+      const payload = await api.preview(slug, aspect);
       if (epoch !== liveEpoch.current) return;
       if (!payload.available) {
         setLive(null);
@@ -184,7 +186,7 @@ export function useFilmData(slug: string) {
       if (epoch !== liveEpoch.current) return;
       setLiveError("The live preview could not be read. Check the storyboard and stills.");
     }
-  }, [hasBoard, slug]);
+  }, [aspect, hasBoard, slug]);
 
   useEffect(() => {
     void reloadLive();
@@ -400,6 +402,8 @@ export function useFilmData(slug: string) {
     allSamplesSeen,
     openSample,
     finalHint,
+    aspect,
+    setAspect,
     workflow,
     load,
     seedCut,

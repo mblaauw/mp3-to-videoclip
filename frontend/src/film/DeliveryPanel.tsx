@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { api } from "../api";
+import { notifyProjectChanged } from "../shell/projectEvents";
 import type { Stage } from "../shell/nextStep";
 import { usePlayerControls } from "../spine/player";
 import { CreditsCard } from "../story/CreditsCard";
@@ -23,6 +25,7 @@ export function DeliveryPanel({
     approveTitles, stillsDone, finalHint, seenSamples, allSamplesSeen, openSample, live,
     sampleIndex, samplesOpen, graphics,
   } = film;
+  const [variantError, setVariantError] = useState<string | null>(null);
   const [rate48, setRate48] = useState(false);
   const [loudness, setLoudness] = useState(false);
   const [jpeg, setJpeg] = useState(false);
@@ -209,6 +212,31 @@ export function DeliveryPanel({
         </Button>
       </div>
       <p className="hint">{finalHint}</p>
+      <div className="row-actions">
+        {(["9:16", "1:1"] as const).map((shape) => (
+          <Button
+            key={shape}
+            size="small"
+            disabled={busy !== null || rendering}
+            onClick={() => {
+              setVariantError(null);
+              api
+                .renderVariant(slug, shape)
+                .then(() => notifyProjectChanged({ slug }))
+                .catch((caught) =>
+                  setVariantError(caught instanceof Error ? caught.message : String(caught)),
+                );
+            }}
+          >
+            Render {shape}
+          </Button>
+        ))}
+      </div>
+      <p className="hint">
+        A version of the current final, from the same cut. Check its framing with the shape buttons
+        under the picture first.
+      </p>
+      {variantError && <p className="ui-state error compact" role="alert">{variantError}</p>}
       <CreditsCard slug={slug} />
     </>
   );

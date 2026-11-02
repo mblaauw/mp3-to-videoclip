@@ -20,6 +20,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from .models import Storyboard
+from .storage import read_optional
 from .timeline import TimelineError, is_shot_bound, resolve_captions
 
 #: Seconds a caption keeps clear of the opening and of the credits tail.
@@ -163,3 +164,9 @@ def render_input(root: Path) -> dict:
 
     spec, windows = plan_for(root)
     return titles_input(spec, resolve_palette(spec), windows)
+
+
+def has_layout_for(root: Path, aspect: str) -> bool:
+    """The joint opening is drawn for 16:9 only; a short title sets itself on any shape."""
+    spec = read_optional(Path(root) / "work" / "graphics-spec.json")
+    return isinstance(spec, dict) and spec.get("package") == "title-v1"

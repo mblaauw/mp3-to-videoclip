@@ -14,6 +14,7 @@ import {
   transitionName,
   validateEditShot,
   validateClip,
+  validateReframe,
   validateDepthLayers,
   validateGrade,
   validateGraphicsPart,
@@ -291,6 +292,7 @@ export function validateBaseInput(input, fps) {
     }
     validateDepthLayers(span.depth, `shot ${span.id}`);
     validateClip(span.clip, `shot ${span.id}`);
+    validateReframe(span.reframe, `shot ${span.id}`);
     if (span.grade !== undefined && span.grade !== null) {
       validateGrade(span.grade);
     }

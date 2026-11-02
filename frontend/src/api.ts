@@ -1129,7 +1129,15 @@ export const api = {
         body: JSON.stringify({ cards, use_as_template: useAsTemplate }),
       },
     ),
-  preview: (slug: string) => request<PreviewInput>(`/api/projects/${slug}/preview`),
+  preview: (slug: string, aspect?: FilmAspect | null) =>
+    request<PreviewInput>(
+      `/api/projects/${slug}/preview${aspect ? `?aspect=${encodeURIComponent(aspect)}` : ""}`,
+    ),
+  renderVariant: (slug: string, aspect: FilmAspect) =>
+    request<{ job_id: string }>(`/api/projects/${slug}/film/variant`, {
+      method: "POST",
+      body: JSON.stringify({ aspect }),
+    }),
   edit: (slug: string) => request<EditSummary>(`/api/projects/${slug}/edit`),
   editSummary: async (slug: string): Promise<CutSummary> => {
     const [cut, base] = await Promise.all([
@@ -1587,6 +1595,7 @@ export type FilmFile = {
   reason?: string | null;
   package?: string[];
 };
+export type FilmAspect = "9:16" | "1:1";
 export type FinalOptions = {
   sample_rate?: 48000;
   loudness?: boolean;

@@ -270,6 +270,103 @@ def render_final(root: Path, output: Path | None = None, options: dict | None = 
     return report
 
 
+def _latest_current_final(root: Path) -> Path | None:
+    from mp3_to_videoclip.domain.exports import describe
+
+    directory = root / "renders"
+    if not directory.is_dir():
+        return None
+    finals = sorted(
+        (path for path in directory.glob("*-final-v*.mp4")),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for path in finals:
+        facts = describe(root, "renders", path.name)
+        if facts["classification"] == "final" and facts["current"]:
+            return path
+    return None
+
+
+def variant_source(root: Path, aspect) -> Path:
+    """The current final a version would come from, or why there can be none yet."""
+    from mp3_to_videoclip import reframe
+
+    if aspect not in reframe.ASPECTS:
+        raise ValueError("a version comes in 9:16 or 1:1")
+    project = P.load_project(root)
+    if project.width * 16 == project.height * 9 and aspect == "9:16":
+        raise ValueError("this film is already 9:16")
+    if project.width == project.height and aspect == "1:1":
+        raise ValueError("this film is already square")
+    final = _latest_current_final(root)
+    if final is None:
+        raise ValueError("render the final first: a version comes from the current final")
+    return final
+
+
+def _reframe_shots(shots: list, canvas: tuple[int, int]) -> dict:
+    """Place every still on its anchor, and say which were guessed or will look soft."""
+    from PIL import Image
+
+    from mp3_to_videoclip import reframe, shotkinds
+
+    centred, soft = [], []
+    for rs in shots:
+        if rs.shot.asset_shot_id is None and shotkinds.is_local(rs.shot):
+            continue
+        with Image.open(rs.image) as image:
+            size = image.size
+        anchor = list(rs.edit.motion.anchor) if rs.edit is not None else [0.5, 0.5]
+        place = reframe.position(anchor, size, canvas)
+        rs.reframe = {"x": place["x"], "y": place["y"]}
+        if anchor == [0.5, 0.5]:
+            centred.append(rs.shot.id)
+        if reframe.is_soft(size, canvas):
+            soft.append(rs.shot.id)
+    return {"centred": centred, "soft": soft}
+
+
+@operations.progress_scope(stage="final-render")
+def render_variant(root: Path, aspect: str, output: Path | None = None) -> dict:
+    """The same cut on another canvas. Not an approval: its inputs are approved and current."""
+    from mp3_to_videoclip import reframe, titles
+
+    final = variant_source(root, aspect)
+    P.require_approval(root, "stills")
+    depth.ensure_for_render(root)
+    project = P.load_project(root)
+    signature = P.requires_signature(root, project)
+    canvas = reframe.canvas_for(project.width, project.height, aspect)
+    label = aspect.replace(":", "x")
+    directory = root / "renders"
+    output = output or _next_output(directory, f"{project.slug}-final-{label}")
+    with read_snapshot(root):
+        shots = P.resolved_assets(root, canvas=canvas)
+        drawn = (
+            titles.render_input(root) if signature and titles.has_layout_for(root, aspect) else None
+        )
+        provenance = _provenance(root, "final", graphics=signature)
+    placed = _reframe_shots(shots, canvas)
+    report = _render(
+        project.model_copy(update={"width": canvas[0], "height": canvas[1]}),
+        shots,
+        P.film_audio(root, project, strict=True),
+        output,
+        root / "work",
+        titles=drawn,
+    )
+    report["delivery_ready"] = True
+    report["variant_of"] = {"name": final.name, "sha256": file_hash(final), "aspect": aspect}
+    report["reframe"] = placed
+    if signature and drawn is None:
+        report["titles_note"] = "This film's titles have no layout for this shape, so it has none."
+    report["captions"] = captions.sidecars_for(root, output, project)
+    _stamp(root, output, report, "final", provenance)
+    _write_report(output, report)
+    return report
+
+
 #: Previews are for watching with the music, at half size. Bases and finals are untouched.
 PREVIEW_SIZES = {"16:9": (960, 540), "9:16": (540, 960)}
 

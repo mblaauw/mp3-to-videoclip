@@ -233,13 +233,13 @@ async def get_critique(slug: str, request: Request):
 
 @router.get("/preview")
 @read_endpoint
-def preview_input(slug: str, request: Request):
+def preview_input(slug: str, request: Request, aspect: str | None = None):
     """The live Player payload: the renderer's shot fields plus local URLs."""
     from mp3_to_videoclip import services
 
     root = project_root(request, slug)
     try:
-        return services.preview.player_input(root, slug)
+        return services.preview.player_input(root, slug, aspect)
     except (OSError, ValueError) as exc:
         return {"available": False, "reason": str(exc)}
 
@@ -351,6 +351,28 @@ async def play_archive_still(slug: str, index: int, request: Request):
     if not target.is_file() or not target.resolve().is_relative_to(root.resolve()):
         raise HTTPException(status_code=404, detail="archived still is missing")
     return FileResponse(target, content_disposition_type="inline")
+
+
+@router.post("/film/variant")
+async def render_variant(slug: str, request: Request, payload: dict):
+    """A vertical or square film from the same cut. Derives from what is already approved."""
+    import asyncio
+
+    from mp3_to_videoclip import services
+
+    root = project_root(request, slug)
+    aspect = payload.get("aspect")
+    # Refused here, not after a queue.
+    services.render.variant_source(root, aspect)
+    runner = getattr(request.app.state, "runner", None)
+    if runner is None:
+        raise HTTPException(status_code=503, detail="job runner unavailable")
+
+    async def work():
+        return await asyncio.to_thread(services.render.render_variant, root, aspect)
+
+    job_id = runner.submit("render", slug, work, blocking=True, render_kind="variant")
+    return {"job_id": job_id, "status": "queued"}
 
 
 @router.post("/film/package")

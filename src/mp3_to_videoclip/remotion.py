@@ -776,6 +776,8 @@ def compile_shots(shots: list[RenderShot], workdir: Path, assets: Path, stand_in
                     for layer in depth.LAYERS
                 }
                 entry["depth"] = {**staged, "model": layers["model"]}
+        if rs.reframe is not None:
+            entry["reframe"] = rs.reframe
         if rs.clip is not None:
             clip_name, clip_sha = _stage_asset(Path(rs.clip.path), assets, picture=False)
             entry["clip"] = {

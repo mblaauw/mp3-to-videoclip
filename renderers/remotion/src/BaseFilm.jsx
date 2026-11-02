@@ -362,10 +362,10 @@ const WHIP_BLUR_ID = "whip-blur";
 
 // The MP4 takes exact frames from the file; the Player plays it like any video. Past its end a
 // clip is frozen on its last frame, by rule. Silent always: the film has one soundtrack.
-function ClipLayer({clip, localFrame, absoluteFrame, fps, loop}) {
+function ClipLayer({clip, localFrame, absoluteFrame, fps, loop, position}) {
   const state = timing.clipFrame(clip, localFrame, fps, loop);
   const src = clip.src ?? staticFile(clip.file);
-  const style = {width: "100%", height: "100%", objectFit: "cover", display: "block"};
+  const style = {width: "100%", height: "100%", objectFit: "cover", objectPosition: position, display: "block"};
   const media = getRemotionEnvironment().isRendering ? (
     <OffthreadVideo src={src} muted style={style} />
   ) : (
@@ -404,6 +404,8 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
   );
   const panes = Array.isArray(span.split_panes) ? span.split_panes : [];
   const splitLayout = span.edit?.split_layout ?? "row";
+  // Undefined keeps the browser's centre, so a film of its own shape draws what it always did.
+  const position = span.reframe ? `${span.reframe.x}% ${span.reframe.y}%` : undefined;
   return (
     <AbsoluteFill
       style={{
@@ -438,7 +440,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
             // placeholder marking as a preview render, without loading a file.
             <AbsoluteFill style={{backgroundColor: "#101014"}} />
           ) : span.clip ? (
-            <ClipLayer clip={span.clip} localFrame={localFrame} absoluteFrame={absoluteFrame} fps={fps} loop={span.edit?.clip_loop === true} />
+            <ClipLayer clip={span.clip} localFrame={localFrame} absoluteFrame={absoluteFrame} fps={fps} loop={span.edit?.clip_loop === true} position={position} />
           ) : parallax && span.depth ? (
             ["far", "mid", "near"].map((layer) => (
               <Img
@@ -450,6 +452,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
                   width: "100%",
                   height: "100%",
                   objectFit: "cover",
+                  objectPosition: position,
                   display: "block",
                   transform: `translate(${parallax[layer].x.toFixed(3)}px, ${parallax[layer].y.toFixed(3)}px) scale(${parallax[layer].scale.toFixed(5)})`,
                 }}
@@ -458,7 +461,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
           ) : (
             <Img
               src={span.src ?? staticFile(span.image)}
-              style={{width: "100%", height: "100%", objectFit: "cover", display: "block"}}
+              style={{width: "100%", height: "100%", objectFit: "cover", objectPosition: position, display: "block"}}
             />
           )}
           {look && look.bloom > 0 && span.src !== null && panes.length < 2 && !span.clip ? (
@@ -470,6 +473,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
+                objectPosition: position,
                 filter: `blur(${look.bloomBlur}px)`,
                 mixBlendMode: "screen",
                 opacity: look.bloom,
@@ -485,6 +489,7 @@ export function ShotLayer({span, localFrame, absoluteFrame, reveal, width, heigh
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
+                objectPosition: position,
                 // Only the highlights survive the contrast, then they bleed warm.
                 filter: `contrast(4) brightness(0.55) sepia(1) saturate(4) hue-rotate(-25deg) blur(${look.halationBlur}px)`,
                 mixBlendMode: "screen",

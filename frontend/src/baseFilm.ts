@@ -117,6 +117,7 @@ export type ShotClip = {
 
 export type PreviewShot = {
   clip?: ShotClip;
+  reframe?: { x: number; y: number };
   id: string;
   image: string;
   src: string | null;

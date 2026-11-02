@@ -71,8 +71,37 @@ def _player_depth(root, slug, value, still, edit_shot, grade) -> None:
     value["depth"] = {**names, "src": {layer: f"{base}/{layer}" for layer in depth.LAYERS}}
 
 
-def player_input(root: Path, slug: str) -> dict:
-    from mp3_to_videoclip import edits
+def _reframed(root: Path, slug: str, payload: dict, aspect: str, canvas, assets, board) -> None:
+    """Show the version in the Player: its canvas, cards drawn for it, stills on their anchors."""
+    from PIL import Image
+
+    from mp3_to_videoclip import reframe, titles
+
+    shots = {shot.id: shot for shot in board.shots}
+    for value in payload["shots"]:
+        shot = shots.get(value["id"])
+        if shot is not None and shot.asset_shot_id is None and shotkinds.is_local(shot):
+            if value.get("src"):
+                value["src"] = f"{value['src']}?aspect={aspect}"
+            continue
+        chosen = _selected(root, assets, shot) if shot is not None else None
+        if chosen is None:
+            continue
+        with Image.open(inside(root, chosen["path"])) as image:
+            size = image.size
+        anchor = ((value.get("edit") or {}).get("motion") or {}).get("anchor") or [0.5, 0.5]
+        place = reframe.position(anchor, size, canvas)
+        value["reframe"] = {"x": place["x"], "y": place["y"]}
+    payload["width"], payload["height"] = canvas
+    payload.pop("brand_plate", None)
+    payload.pop("brand_duration_frames", None)
+    if not titles.has_layout_for(root, aspect):
+        payload["titles"] = None
+        payload["titles_note"] = "This film's titles have no layout for this shape."
+
+
+def player_input(root: Path, slug: str, aspect: str | None = None) -> dict:
+    from mp3_to_videoclip import edits, reframe
 
     project = P.load_project(root)
     board = P.load_board(root)
@@ -190,6 +219,9 @@ def player_input(root: Path, slug: str) -> dict:
     if grade and grade.get("typeface"):
         payload["typefaces"] = typefaces_input([grade["typeface"]])
     payload["titles"], payload["titles_note"] = _titles(root, project)
+    if aspect is not None:
+        canvas = reframe.canvas_for(project.width, project.height, aspect)
+        _reframed(root, slug, payload, aspect, canvas, assets, effective)
     return payload
 
 

@@ -687,6 +687,16 @@ export function validateEditCrops(crops, start, duration, id) {
   }
 }
 
+export function validateReframe(reframe, label) {
+  if (reframe === undefined || reframe === null) return;
+  for (const axis of ["x", "y"]) {
+    const value = reframe[axis];
+    if (typeof value !== "number" || !(value >= 0 && value <= 100)) {
+      fail(`${label} reframe ${axis} must be 0 to 100`);
+    }
+  }
+}
+
 export function validateClip(clip, label) {
   if (clip === undefined || clip === null) return;
   if (typeof clip !== "object" || Array.isArray(clip)) fail(`${label} clip must be an object`);

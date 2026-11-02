@@ -18,6 +18,7 @@ import {
   parallaxState,
   clipFrame,
   validateClip,
+  validateReframe,
   validateDepthLayers,
   splitLayout,
   textAnimationStyle,
@@ -441,4 +442,12 @@ test("a looped clip wraps at its own length and never holds", () => {
   assert.equal(state.held, false);
   assert.equal(clipFrame(clip, 47, 24, true).frame, 47);
   assert.equal(clipFrame(clip, 48, 24, true).frame, 0);
+});
+
+test("a reframe is two percentages or nothing", () => {
+  validateReframe(undefined, "shot a");
+  validateReframe({x: 0, y: 100}, "shot a");
+  assert.throws(() => validateReframe({x: -1, y: 50}, "shot a"));
+  assert.throws(() => validateReframe({x: 50, y: 101}, "shot a"));
+  assert.throws(() => validateReframe({x: "50", y: 50}, "shot a"));
 });
