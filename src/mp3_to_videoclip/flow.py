@@ -23,25 +23,27 @@ FILE = "work/guided-flow.json"
 VERSION = 1
 
 
-def _project_identity(root: Path) -> tuple[str | None, str | None]:
+def _project_identity(root: Path) -> tuple[str | None, str | None, bool]:
     project = read_optional(Path(root) / "project.json")
     if not isinstance(project, dict):
-        return None, None
+        return None, None, False
     source = project.get("source_sha256")
     slug = project.get("slug")
     return (
         source if isinstance(source, str) and source else None,
         slug if isinstance(slug, str) and slug else None,
+        # A story film starts from words: its slug alone says the marker is its own.
+        project.get("spine") == "soundtrack",
     )
 
 
 def settings(root: Path) -> dict:
     value = read_optional(Path(root) / FILE)
-    source, slug = _project_identity(root)
+    source, slug, sourceless = _project_identity(root)
     guided = (
         isinstance(value, dict)
         and value.get("version") == VERSION
-        and source is not None
+        and (source is not None or sourceless)
         and slug is not None
         and value.get("source_sha256") == source
         and value.get("slug") == slug
@@ -70,7 +72,7 @@ def mark(root: Path, *, force: bool = False) -> dict:
             "this production already has recorded decisions; guided policy is for "
             "new productions (pass force=True only for an explicit migration)"
         )
-    source, slug = _project_identity(root)
+    source, slug, _ = _project_identity(root)
     value = {"version": VERSION, "source_sha256": source, "slug": slug}
     write_json(Path(root) / FILE, value)
     return value

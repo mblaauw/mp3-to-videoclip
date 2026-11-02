@@ -313,3 +313,14 @@ def test_the_report_names_a_beat_over_its_budget(tmp_path):
     assert "Hook runs 4.5 s over" in report["notes"][0]
     assert report["measured_rate"] == round(1 / 12.0, 2)
     assert narration.read_index(root)["measured_rate"] == report["measured_rate"]
+
+
+def test_a_story_film_buys_its_full_set_after_the_style_check(tmp_path):
+    """No source to hash must not read as an old film, whose gate no placeholder preview can pass."""
+    from mp3_to_videoclip import flow
+
+    root = make_film(tmp_path)
+    assert P.load_project(root).source_sha256 is None
+    assert flow.settings(root) == {"guided": True, "preview_gate": False, "late_credits": True}
+    write_json(root / flow.FILE, {**read_json(root / flow.FILE), "slug": "another-film"})
+    assert flow.settings(root)["guided"] is False
