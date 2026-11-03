@@ -20,6 +20,7 @@ from .models import (
     EditMotion,
     EditSection,
     EditShot,
+    EditText,
     EditTransition,
     FilmLook,
     Grade,
@@ -927,7 +928,7 @@ def report(
         *_reading_findings(edit, content, fps),
         *_soft_push_findings(root, edit, project),
         *_grid_findings(root, edit, windows),
-        *_caption_findings(edit),
+        *_caption_findings(edit, project.width, project.height),
     ]
     motion_counts, transition_counts, accent_counts = _counts(edit)
 
@@ -1146,28 +1147,51 @@ def _grid_findings(root: Path, edit: EditDecisionList, windows: list) -> list[di
     return findings
 
 
-#: Where each text style sits on the frame, as ``BaseFilm.jsx`` draws it. Styles in different
-#: places can share the screen; the brand card's logotype, tagline and CTA are made to.
-_TEXT_PLACE = {
-    "gallery_title": "top",
-    "logotype": "logotype",
-    "tagline": "tagline",
-    "cta": "cta",
-    "title": "middle",
-    "card": "middle",
+#: Each text style's box as ``BaseFilm.jsx`` draws it: the edge it hangs from and how far down or
+#: up, type size as a share of the short side, line height, box width as a share of the frame's
+#: width, letter spacing in em, and vertical padding as a share of the short side.
+#: ``tests/test_edits.py`` reads every number back out of the renderer.
+_TEXT_BOX = {
+    "logotype": ("top", 0.34, 0.086, 1.1, 0.88, 0.2, 0),
+    "gallery_title": ("top", 0.1, 0.052, 1.3, 0.9, 0.26, 0),
+    "gallery_label": ("bottom", 0.075, 0.028, 1.3, 0.9, 0.3, 0),
+    "tagline": ("top", 0.52, 0.032, 1.5, 0.8, 0.32, 0),
+    "cta": ("top", 0.63, 0.044, 1.3, 0.8, 0.22, 0),
+    "title": ("top", 0.38, 0.082, 1.02, 0.8, 0.02, 0),
+    "card": ("top", 0.32, 0.062, 1.12, 0.76, 0, 0),
+    "caption": ("bottom", 0.07, 0.036, 1.45, 0.84, 0, 0),
+    "lyric": ("bottom", 0.14, 0.048, 1.15, 0.8, 0, 0),
+    "lower_third": ("bottom", 0.18, 0.036, 1.14, 0.7, 0.04, 0.016),
+    "super": ("bottom", 0.1, 0.042, 1.08, 0.84, 0.08, 0.014),
 }
+#: An average glyph's width in em, and the clear space two layers keep, as a share of the height.
+_GLYPH_EM = 0.6
+_TEXT_CLEARANCE = 0.02
 
 
-def _caption_findings(edit: EditDecisionList) -> list[dict]:
-    """Two text layers in the same place at once, within one shot or across a dissolve."""
+def _text_band(item: EditText, width: int, height: int) -> tuple[float, float]:
+    """Where a layer's lines fall from top to bottom, as shares of the frame's height."""
+    edge, offset, size, line_height, box, spacing, pad = _TEXT_BOX[item.style]
+    short = min(width, height)
+    per_line = max(1, int(box * width / (size * short * (_GLYPH_EM + spacing))))
+    lines = -(-len(item.text) // per_line)
+    tall = (lines * size * line_height + 2 * pad) * short / height
+    top = offset if edge == "top" else 1 - offset - tall
+    return top, top + tall
+
+
+def _caption_findings(edit: EditDecisionList, width: int = 1920, height: int = 1080) -> list[dict]:
+    """Two text layers drawn over each other at once, within one shot or across a dissolve."""
     findings = []
     for shot in edit.shots:
         layers = sorted(shot.text, key=lambda item: item.in_frame)
         for index, later in enumerate(layers):
+            low, high = _text_band(later, width, height)
             for earlier in layers[:index]:
                 if later.in_frame >= earlier.out_frame:
                     continue
-                if _TEXT_PLACE.get(earlier.style, "low") != _TEXT_PLACE.get(later.style, "low"):
+                top, bottom = _text_band(earlier, width, height)
+                if low >= bottom + _TEXT_CLEARANCE or top >= high + _TEXT_CLEARANCE:
                     continue
                 findings.append(
                     {

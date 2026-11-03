@@ -249,8 +249,8 @@ Differences from the plans, where the plan was wrong or could not hold:
   refused by name if it has no key. `continue` and the model record replace the plan's `/costs`
   route with `/model-usage`. No text model has a verified price yet, so costs read "no price known".
 
-Still open by decision: the OpenAI major version; E-1 still uses that SDK's streaming, and no live
-call has proven the adapter.
+The OpenAI major version was settled on 3 Nov 2026: `openai` 3.x merged (PR 71) after one live
+probe through OpenCode Go streamed text, called a tool and reported usage.
 The narrator voice in Settings is not used until Phase I; `voice.py` keeps its own default.
 `_final_state` keeps its mtime check. C-4 was the last part of C.
 

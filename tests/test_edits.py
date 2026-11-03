@@ -25,6 +25,8 @@ from mp3_to_videoclip.models import (
 from mp3_to_videoclip.services import preview
 from mp3_to_videoclip.storage import read_json, write_json
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def _energetic_root(tmp_path: Path) -> Path:
     root = make_api_project(tmp_path)
@@ -771,3 +773,45 @@ def test_text_overlaps_only_where_it_would_land_on_itself():
         "t1"
     ]
     assert [f["text_id"] for f in edits._caption_findings(_layers("title", "card"))] == ["t1"]
+    # A logotype and a title both sit a third of the way down.
+    assert [f["text_id"] for f in edits._caption_findings(_layers("logotype", "title"))] == ["t1"]
+
+
+def test_a_title_long_enough_to_wrap_reaches_the_tagline_under_it():
+    edit = _layers("title", "tagline")
+    assert edits._caption_findings(edit) == []
+    edit.shots[0].text[0].text = "A title of some forty-odd characters in all"
+    assert [f["text_id"] for f in edits._caption_findings(edit)] == ["t1"]
+
+
+def test_the_text_boxes_are_the_ones_the_renderer_draws():
+    import re
+
+    source = (ROOT / "renderers/remotion/src/BaseFilm.jsx").read_text()
+    body = source[source.index("function textBox(") : source.index("function CaptionBand(")]
+    blocks = re.split(r"\n  if \(|\n  return \{", body)[1:]
+    drawn = {}
+    for block in blocks:
+        names = re.findall(r'style === "(\w+)"', block.split("{", 1)[0]) or ["super"]
+        for name in names:
+            text = re.sub(
+                r"\(?title \? (\{[^}]*\}|[\d.]+|\"[^\"]*\") : (\{[^}]*\}|[\d.]+|\"[^\"]*\")\)?",
+                lambda m, name=name: m.group(1 if name == "gallery_title" else 2),
+                block,
+            )
+            edge, offset = re.search(r"\b(top|bottom): frameHeight \* ([\d.]+)", text).groups()
+            inset = re.search(r"\bleft: width \* ([\d.]+)", text)
+            cap = re.search(r"maxWidth: width \* ([\d.]+)", text)
+            spacing = re.search(r'letterSpacing: "([\d.]+)em"', text)
+            pad = re.search(r"padding: `\$\{height \* ([\d.]+)\}px", text)
+            drawn[name] = (
+                edge,
+                float(offset),
+                float(re.search(r"fontSize: height \* ([\d.]+)", text).group(1)),
+                float(re.search(r"lineHeight: ([\d.]+)", text).group(1)),
+                round(float(cap.group(1)) if cap else 1 - 2 * float(inset.group(1)), 4),
+                float(spacing.group(1)) if spacing else 0,
+                float(pad.group(1)) if pad else 0,
+            )
+    assert drawn == edits._TEXT_BOX
+    assert set(drawn) == set(EditText.model_fields["style"].annotation.__args__)

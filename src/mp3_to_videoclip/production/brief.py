@@ -105,6 +105,18 @@ def _keep_stored_permissions(previous: Brief, brief: Brief) -> Brief:
     return brief.model_copy(update=update)
 
 
+def _refuse_voice_in_words(narrator: Narrator | None) -> None:
+    """A voice id belongs in ``voice_id``; in the narrator's words it would plan a person named so."""
+    if narrator is None:
+        return
+    from .. import voices
+
+    ids = {row["id"].lower() for row in voices.catalogue(with_all=True)}
+    for field in ("persona", "era", "attitude", "gets_wrong"):
+        if getattr(narrator, field).strip().lower() in ids:
+            raise ValueError(f"the narrator's {field} is a voice id; put it in voice_id")
+
+
 def unconfirmed_permissions(brief: Brief) -> list[str]:
     """Character and reference IDs still waiting for the owner's permission."""
     references = brief.creative.references if brief.creative else []
@@ -137,6 +149,7 @@ def update_brief(
         raise ValueError(f"brief patch is invalid: {exc}") from exc
     if not owner:
         brief = _keep_stored_permissions(previous, brief)
+    _refuse_voice_in_words(brief.creative.narrator if brief.creative else None)
     if brief.model_dump() == previous_value:
         return previous
     history = root / f"work/brief-history/{digest(previous_value)}.json"
@@ -219,6 +232,7 @@ def set_creative_profile(
                 section_update[name] = value
     except (TypeError, ValueError) as exc:
         raise ValueError(f"creative profile is invalid: {exc}") from exc
+    _refuse_voice_in_words(section_update.get("narrator"))
 
     character_ids = [value.id for value in character_values]
     if len(set(character_ids)) != len(character_ids):
