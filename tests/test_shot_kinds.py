@@ -359,6 +359,27 @@ def test_a_real_narrator_waits_for_the_owner_and_a_rewrite_cannot_confirm(tmp_pa
     assert renamed.creative.narrator.permission_confirmed is False
 
 
+def test_a_voice_id_in_the_narrators_words_is_refused(tmp_path):
+    root = make_api_project(tmp_path)
+    brief = P.load_brief(root)
+    profile = {
+        "characters": [item.model_dump() for item in brief.characters],
+        "scenes": [item.model_dump() for item in brief.creative.scenes],
+        "arc": [],
+        "image_rules": [],
+        "avoid": [],
+        "look": brief.creative.look,
+    }
+    narrator = {"persona": "A curator in 2317", "era": "English_magnetic_voiced_man"}
+    with pytest.raises(ValueError, match="era is a voice id; put it in voice_id"):
+        P.set_creative_profile(root, **profile, narrator=narrator)
+    with pytest.raises(ValueError, match="voice id"):
+        P.update_brief(root, {"creative": {"narrator": narrator}})
+    narrator = {"persona": "A curator in 2317", "voice_id": "English_magnetic_voiced_man"}
+    saved = P.set_creative_profile(root, **profile, narrator=narrator)
+    assert saved.creative.narrator.voice_id == "English_magnetic_voiced_man"
+
+
 def test_date_and_title_cards_are_drawn_locally(tmp_path):
     root = make_api_project(tmp_path)
     project = P.load_project(root)
