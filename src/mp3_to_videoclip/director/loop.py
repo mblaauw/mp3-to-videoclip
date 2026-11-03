@@ -2,8 +2,9 @@
 
 A turn is a job. It streams text deltas to the UI, executes tool calls through
 ``tools.dispatch``, appends the results and continues, and stops at end_turn, an
-``ask_user`` call, a limit of tool calls the owner can extend, the same call failing
-twice, user cancellation, or a stalled stream. Tool calls only run once their stream has
+``ask_user`` call, a limit of tool calls the owner can extend, the role's token limit,
+the same call failing twice, user cancellation, or a stalled stream. A turn on a priced
+model does not start once the film's cap has no room for it. Tool calls only run once their stream has
 finished, so a stall never applies a half-written one.
 """
 
@@ -13,6 +14,7 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -35,6 +37,36 @@ from .llm import Usage as ModelUsage
 from .tools import CRITIC_TOOLS, ToolResult, dispatch, tools_for
 
 MAX_TOOL_CALLS = 40
+
+
+def cap_refusal(
+    root, provider: str, model: str, role: str | None, max_tokens: int = 0
+) -> str | None:
+    """Why a priced turn can't start: the film's cap has no room for what it may cost."""
+    from mp3_to_videoclip import budget
+
+    if not pricing.is_priced(provider, model):
+        return None
+    try:
+        record = budget.read_budget(root)
+        if record is None:
+            return None
+        cap = budget.money(record["cap_usd"])
+        left = cap - budget.commitment(root)
+    except ValueError:
+        # A paid task waiting on the owner stops pictures; the Director is how they ask.
+        return None
+    most = pricing.most_for(provider, model, max_tokens) if max_tokens else Decimal(0)
+    if left > most:
+        return None
+    who = (role or "director").capitalize()
+    need = (
+        f", and a turn may cost up to ${most:.2f} at its {max_tokens:,}-token limit" if most else ""
+    )
+    return (
+        f"This film has ${max(left, Decimal(0)):.2f} left of its ${cap:.2f} budget{need}, "
+        f"so the {who} didn't start. Add to the budget in the top bar to carry on."
+    )
 
 
 @dataclass
@@ -60,7 +92,12 @@ async def run_turn(
     prompt_meta: dict | None = None,
     role: str | None = None,
     provider: str = "",
+    max_tokens: int = 0,
 ) -> AsyncIterator[TurnEvent]:
+    refusal = cap_refusal(root, provider, getattr(llm, "model", ""), role, max_tokens)
+    if refusal:
+        yield TurnEvent(kind="done", payload={"error": refusal})
+        return
     # A Critic reads with fresh eyes every time, as its own session always did.
     history = [] if role == "critic" else load_messages(root, role)
     messages, summary = compact_messages(history, recorded_reasons=decisions.recent_reasons(root))
@@ -112,6 +149,14 @@ async def run_turn(
 
     calls_counted = [0]
     while tool_calls < max_tool_calls:
+        if max_tokens and spent.prompt_tokens + spent.completion_tokens >= max_tokens:
+            who = (role or "director").capitalize()
+            limit = f"The {who} stopped at the {max_tokens:,}-token limit set in Settings."
+            yield TurnEvent(
+                kind="done",
+                payload=finished({"error": f"{limit} Ask again to carry on, or raise the limit."}),
+            )
+            return
         result: TurnResult | None = None
         assistant_text = ""
         pending: list[ToolCall] = []

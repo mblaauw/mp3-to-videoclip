@@ -15,6 +15,14 @@ images, audio uploads, transcriptions and listening passes) against the cap.
 still fits, which is what stops two independent quote submissions from
 overcommitting the production cap once they start admitting tasks.
 
+Model spend
+-----------
+The Director's model turns come out of the same cap. ``work/model-usage.jsonl`` holds each
+turn's cost, estimated from the catalogue's stated price once the turn has finished; a turn
+whose model has no stated price adds nothing to the commitment and is counted as unpriced
+where the usage is shown. A turn has no reservation, so the Director checks the cap before
+it starts one instead.
+
 Reported costs are provider-reported or locally calculated, never provider
 enforced caps. An ambiguous error is never auto-resolved: it stays an unresolved
 reservation until the user reconciles it explicitly, and the summary never
@@ -30,6 +38,7 @@ requirement once that is used. Only an explicit
 does. Restaging grants no spending by itself.
 """
 
+import json
 import re
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -43,6 +52,7 @@ _SHOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 BUDGET_PATH = "work/production-budget.json"
 RESTAGING_PATH = "work/restaging.json"
 TASKS_PATH = "work/tasks.json"
+MODEL_USAGE_PATH = "work/model-usage.jsonl"
 PROJECT_PATH = "project.json"
 BUDGET_VERSION = 1
 RESTAGING_VERSION = 1
@@ -142,13 +152,28 @@ def read_budget(root: Path) -> dict | None:
     return record
 
 
+def model_spend(root: Path) -> Decimal:
+    """What the Director's priced model turns cost, by the catalogue's stated prices."""
+    path = Path(root) / MODEL_USAGE_PATH
+    total = Decimal(0)
+    for line in path.read_text().splitlines() if path.is_file() else []:
+        try:
+            cost = json.loads(line).get("cost_usd")
+        except (json.JSONDecodeError, AttributeError):
+            continue
+        if cost is not None:
+            total += money(cost)
+    return total
+
+
 def split_commitment(root: Path) -> tuple[Decimal, Decimal, int]:
     """Return reported spend, unresolved reservations and ready paid stills.
 
-    A task with neither a cost nor a reservation blocks admission rather than
-    silently contributing zero. The report still lists such unpriced tasks.
+    Spend includes the Director's priced model turns. A task with neither a cost
+    nor a reservation blocks admission rather than silently contributing zero.
+    The report still lists such unpriced tasks.
     """
-    spent = Decimal(0)
+    spent = model_spend(root)
     reserved = Decimal(0)
     paid_stills = 0
     for task in _journal(root).values():
@@ -183,6 +208,9 @@ def cost_summary(root: Path) -> dict:
             row["reserved"] += money(task["reserve_usd"])
         else:
             unpriced += 1
+    model = model_spend(root)
+    if model:
+        by_kind.setdefault("model", {"spent": Decimal(0), "reserved": Decimal(0)})["spent"] += model
     return {"by_kind": by_kind, "unpriced": unpriced}
 
 
@@ -542,7 +570,8 @@ def summary(root: Path) -> dict:
         latency = _latency_seconds(task)
         if latency is not None:
             latencies.append(latency)
-    total = reported + reserved
+    model = model_spend(root)
+    total = reported + model + reserved
     cap = money(record["cap_usd"]) if record else None
     latency_summary = {
         "count": len(latencies),
@@ -562,6 +591,7 @@ def summary(root: Path) -> dict:
         "max_corrections": record["max_corrections"] if record else None,
         "note": record["note"] if record else None,
         "reported_usd": str(reported),
+        "model_usd": str(model),
         "reserved_unknown_usd": str(reserved),
         "total_accounted_usd": str(total),
         "cap_remaining_usd": str(cap - total) if cap is not None else None,

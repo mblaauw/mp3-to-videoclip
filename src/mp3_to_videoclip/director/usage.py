@@ -1,8 +1,8 @@
 """What the Director's models used: an append-only record beside the money journal.
 
 Kept apart from ``work/tasks.json`` on purpose. The journal's contract is a reservation
-before a request and a cost the provider reports, and a model call has neither. So this is
-shown beside picture spend, and never admitted against a film's cap.
+before a request and a cost the provider reports, and a model call has neither. A turn's
+estimated cost still counts against the film's cap: ``budget.model_spend`` reads it here.
 """
 
 from __future__ import annotations
@@ -12,9 +12,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from ..budget import MODEL_USAGE_PATH
 from .providers.base import Usage
 
-FILE = "work/model-usage.jsonl"
+FILE = MODEL_USAGE_PATH
 
 
 def record(

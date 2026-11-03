@@ -28,7 +28,7 @@ CEILING_USD = Decimal("1.00")
 STILLS_RESERVE_USD = Decimal("0.20")
 RESERVE_PER_STILL = "0.05"
 MAX_STILLS = 3
-#: No text model has a verified price yet, so the model allowance is counted in tokens too.
+#: A model with no stated price can't be held to dollars, so the allowance counts tokens too.
 MODEL_ALLOWANCE_USD = CEILING_USD - STILLS_RESERVE_USD
 MAX_MODEL_TOKENS = 400_000
 MAX_TURN_CALLS = 12

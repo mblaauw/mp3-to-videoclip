@@ -237,6 +237,7 @@ async def post_chat(slug: str, request: Request, payload: dict):
             prompt_meta=meta,
             role=role,
             provider=route.provider,
+            max_tokens=getattr(settings.roles, role).max_tokens_per_turn,
         ):
             _announce_tool(request, slug, event)
             yield _line(event)

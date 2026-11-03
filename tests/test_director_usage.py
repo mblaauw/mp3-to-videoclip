@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from decimal import Decimal
 
+import pytest
 from api_support import api_client, make_api_project
 
 from mp3_to_videoclip import catalog
@@ -39,12 +41,12 @@ def _call(name="get_brief", arguments='{"slug": "production"}', text="", used=No
     ]
 
 
-def _play(root, llm, role="writer", **kwargs):
+def _play(root, llm, role="writer", provider="openai", **kwargs):
     async def go():
         return [
             event
             async for event in loop.run_turn(
-                llm, root, root.name, "Go", "System", role=role, provider="openai",
+                llm, root, root.name, "Go", "System", role=role, provider=provider,
                 projects_dir=root.parent, **kwargs,
             )
         ]  # fmt: skip
@@ -204,3 +206,67 @@ def test_a_chat_uses_the_roles_own_route(tmp_path, monkeypatch):
     assert seen == {"base_url": None, "key": "a", "model": "claude", "kind": "anthropic"}
     last = json.loads(answer.text.strip().splitlines()[-1])
     assert last["payload"]["usage"]["model"] == "claude"
+
+
+class Luna(Script):
+    model = "gpt-6-luna"
+
+
+def _spend(root, cost):
+    usage.record(
+        root, turn_id="t", role="writer", provider="opencode-go", model="gpt-6-luna",
+        usage=Usage(prompt_tokens=1, completion_tokens=1, reported=True), cost_usd=cost,
+        cost_basis=pricing.ESTIMATE,
+    )  # fmt: skip
+
+
+def test_a_priced_turn_comes_out_of_the_films_cap(tmp_path):
+    from mp3_to_videoclip import budget
+
+    root = make_api_project(tmp_path)
+    budget.set_budget(root, "1.00", "test")
+    used = Usage(prompt_tokens=200_000, completion_tokens=20_000, reported=True)
+    events = _play(root, Luna(_text("Done", used=used)), provider="opencode-go")
+    assert events[-1].payload["usage"]["cost_usd"] == "0.030000"
+    assert budget.commitment(root) == Decimal("0.03")
+    assert budget.summary(root)["model_usd"] == "0.030000"
+    assert budget.cost_summary(root)["by_kind"]["model"]["spent"] == Decimal("0.03")
+    with pytest.raises(ValueError, match="exceeds the 1.00 cap"):
+        budget.check_capacity(root, "0.98")
+
+
+def test_a_priced_turn_does_not_start_once_the_cap_is_used(tmp_path):
+    from mp3_to_videoclip import budget
+
+    root = make_api_project(tmp_path)
+    budget.set_budget(root, "1.00", "test")
+    _spend(root, "1.00")
+    llm = Luna(_text("Never"))
+    events = _play(root, llm, provider="opencode-go")
+    assert "has $0.00 left of its $1.00 budget" in events[-1].payload["error"]
+    assert llm.sent == [] and conversation.load_messages(root, "writer") == []
+    # A model with no stated price is held by the turn allowance instead.
+    assert _play(root, Script(_text("Yes")))[-1].text == "Yes"
+
+
+def test_a_turn_with_a_token_limit_needs_room_for_all_of_it(tmp_path):
+    from mp3_to_videoclip import budget
+
+    root = make_api_project(tmp_path)
+    budget.set_budget(root, "1.00", "test")
+    _spend(root, "0.95")
+    events = _play(root, Luna(_text("Never")), provider="opencode-go", max_tokens=200_000)
+    assert "may cost up to $0.10 at its 200,000-token limit" in events[-1].payload["error"]
+    assert (
+        _play(root, Luna(_text("Yes")), provider="opencode-go", max_tokens=50_000)[-1].text == "Yes"
+    )
+
+
+def test_the_token_limit_set_in_settings_stops_a_turn(tmp_path):
+    root = make_api_project(tmp_path)
+    used = Usage(prompt_tokens=900, completion_tokens=200, reported=True)
+    llm = Script(_call(used=used), _text("Never"))
+    events = _play(root, llm, max_tokens=1000)
+    assert "stopped at the 1,000-token limit set in Settings" in events[-1].payload["error"]
+    assert len(llm.sent) == 1
+    assert usage.summary(root)["prompt_tokens"] == 900
