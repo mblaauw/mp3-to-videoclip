@@ -189,7 +189,7 @@
   background:
     radial-gradient(120% 100% at 70% 20%, rgba(217, 179, 108, 0.5), transparent 55%),
     linear-gradient(135deg, #2f3438, #16181b);
-  color: var(--ink);
+  color: #eceae5;
   font-size: var(--t-11);
   text-align: center;
   overflow: hidden;

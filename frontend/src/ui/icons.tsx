@@ -79,6 +79,22 @@ export function GearIcon(props: IconProps) {
   });
 }
 
+export function SunIcon(props: IconProps) {
+  return svg({
+    ...props,
+    children: (
+      <>
+        <circle cx="10" cy="10" r="3.4" />
+        <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4" />
+      </>
+    ),
+  });
+}
+
+export function MoonIcon(props: IconProps) {
+  return svg({ ...props, children: <path d="M16 12.2A6.5 6.5 0 0 1 7.8 4a6.5 6.5 0 1 0 8.2 8.2z" /> });
+}
+
 export function CloseIcon(props: IconProps) {
   return svg({ ...props, children: <path d="M5 5l10 10M15 5L5 15" /> });
 }

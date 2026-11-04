@@ -26,7 +26,7 @@ button {
   padding: 7px 12px;
   cursor: pointer;
 }
-button:hover { border-color: #3a4b59; }
+button:hover { border-color: var(--line-strong); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 a { color: var(--gold); }
 .app {
@@ -205,7 +205,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
   place-items: center;
   text-align: center;
   padding: 30px 18px;
-  border: 1px dashed #3a4b59;
+  border: 1px dashed var(--line-strong);
   border-radius: 10px;
   color: var(--ink);
   cursor: pointer;
@@ -280,7 +280,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
   gap: 1px;
   height: 96px;
   padding: 6px 8px;
-  background: #0a0f14;
+  background: var(--well);
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
@@ -312,8 +312,8 @@ button.active { border-color: var(--gold); color: var(--gold); }
   white-space: nowrap;
   font-size: 11px;
   color: var(--muted);
-  background: rgba(212, 174, 106, 0.06);
-  border-right: 1px solid #0b0f14;
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+  border-right: 1px solid var(--well);
 }
 .boundary {
   position: absolute;
@@ -366,7 +366,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  background: #261719;
+  background: color-mix(in srgb, var(--red) 12%, var(--panel));
   border: 1px solid var(--bad);
   border-radius: 10px;
   color: var(--ink);
@@ -438,7 +438,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
   position: relative;
   height: 96px;
   margin: 10px 0 12px;
-  background: #0a0f14;
+  background: var(--well);
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
@@ -463,7 +463,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
   position: absolute;
   top: 0;
   bottom: 0;
-  background: rgba(212, 174, 106, 0.16);
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
   border-left: 2px solid var(--gold);
   border-right: 2px solid var(--gold);
   pointer-events: none;
@@ -489,7 +489,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
   width: 4px;
   border-radius: 2px;
   background: var(--gold);
-  box-shadow: 0 0 0 1px #0a0f14;
+  box-shadow: 0 0 0 1px var(--well);
 }
 @media (max-width: 700px) {
   .intake-card .grid { grid-template-columns: 1fr; }
@@ -581,7 +581,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
     color var(--dur) var(--ease);
 }
 .ui-btn:hover:not(:disabled) {
-  border-color: #55575f;
+  border-color: var(--line-strong);
 }
 .ui-btn--primary {
   background: var(--gold);
@@ -933,7 +933,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
 .prose-read:hover {
   border-color: var(--line-soft);
   border-left-color: var(--gold);
-  background: rgba(255, 255, 255, 0.015);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
 }
 
 .prose-read:focus-visible {
@@ -1175,7 +1175,7 @@ button.active { border-color: var(--gold); color: var(--gold); }
   align-items: center;
   gap: var(--s-2) var(--s-3);
   padding: var(--s-3) var(--s-4);
-  border: 1px solid rgba(217, 179, 108, 0.35);
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent);
   border-radius: var(--r-surface);
   background: linear-gradient(180deg, var(--gold-wash), transparent 140%);
 }
@@ -1229,8 +1229,8 @@ button.active { border-color: var(--gold); color: var(--gold); }
 }
 
 .toast.error {
-  border-color: rgba(238, 110, 102, 0.55);
-  background: #2a1f20;
+  border-color: color-mix(in srgb, var(--red) 55%, transparent);
+  background: color-mix(in srgb, var(--red) 10%, var(--panel));
 }
 
 @keyframes toast-in {
