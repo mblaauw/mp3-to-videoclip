@@ -34,7 +34,7 @@ SECRETS = (
 #: Honest about what a stored choice does today; the panel shows these words.
 NOTES = {
     "direct_path": "Your own endpoint: any address that speaks OpenAI's chat format.",
-    "thinking": "Thinking level and the per-turn token budget are stored but not enforced yet.",
+    "thinking": "Thinking level is stored but not used yet. Tokens per turn stops a turn at that many.",
     "pictures": "New films still use each look's own model; these choices are stored for later.",
     "narrator": "A story film starts with this voice and can choose another on its Script stage.",
 }
