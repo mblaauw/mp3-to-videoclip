@@ -404,8 +404,11 @@ Critic starts with no history every time.
 
 `work/model-usage.jsonl` records what each turn used, apart from the money journal on purpose: the
 journal's contract is a reservation before a request and a cost the provider reports, and a model
-call has neither. A cost is a catalogue estimate, or unknown; never zero. It is not admitted against
-a film's cap. The Director never authorises spending: `generate_images` prices a batch and the owner
+call has neither. A cost is a catalogue estimate, or unknown; never zero. A priced turn's estimate
+counts against the film's cap with its pictures (`budget.model_spend`), and a priced turn does not
+start once the cap has no room for it, or for its token limit when the role has one in Settings.
+A turn on a model with no stated price is held only by the turn and token limits.
+The Director never authorises spending: `generate_images` prices a batch and the owner
 buys it with the button that puts in the conversation.
 
 `director/mcp.py` remains for outside agents (your own OpenCode, Claude Code, a script), over the

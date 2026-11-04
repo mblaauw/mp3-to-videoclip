@@ -73,6 +73,11 @@ provider = "opencode-go"
 label = "GPT-6 Luna"
 capabilities = ["text", "vision"]
 recommended = ["writer", "editor", "critic"]
+price = { amount = "0.0001", unit = "1k_tokens_in" }
+price_out = { amount = "0.0005", unit = "1k_tokens_out" }
+price_note = "Up to 272K tokens of context; above that the rates double. Drawn from the Go plan's dollar allowance; cached reads are cheaper and counted at the full rate."
+price_source = "https://opencode.ai/docs/go/"
+price_checked = "2026-11-03"
 
 [[models]]
 id = "gpt-6.1-sol"
@@ -85,6 +90,11 @@ id = "deepseek-v4.1-flash"
 provider = "opencode-go"
 label = "DeepSeek V4.1 Flash"
 capabilities = ["text"]
+price = { amount = "0.0003", unit = "1k_tokens_in" }
+price_out = { amount = "0.0012", unit = "1k_tokens_out" }
+price_note = "Peak rate, 01:00-04:00 and 06:00-10:00 UTC on weekdays; off-peak is half. Drawn from the Go plan's dollar allowance."
+price_source = "https://opencode.ai/docs/go/"
+price_checked = "2026-11-03"
 
 [[models]]
 id = "google-nano-banana-2-1"

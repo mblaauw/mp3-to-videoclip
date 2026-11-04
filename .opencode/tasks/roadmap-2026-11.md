@@ -364,3 +364,14 @@ The narrator voice in Settings is not used until Phase I; `voice.py` keeps its o
   and `api.ts` still are, being outside the plan's three folders. `prompt_version` reads stayed, because Look still offers the move to 3. The stylesheet fold was checked by computed
   style rather than the plan's screenshots: 6,868 elements on eleven views at 1440 and 390, no differences, and the harness itself repeats at zero. A state those views do not reach is unchecked. 12 stylesheets and 7,771
   lines against the plan's 11 and 6,000, because no rule was removed: unused on these screens is not unused.
+
+## After the roadmap: model spend is money, 3 Nov 2026
+
+Item 2 of the 3 Nov assessment. `gpt-6-luna` and `deepseek-v4.1-flash` through OpenCode Go now carry the prices on
+opencode.ai/docs/go, read 3 Nov: Luna $0.10 in and $0.50 out per million tokens up to 272K of context, DeepSeek at its
+peak rate. Go is a monthly plan whose usage is metered in dollars at these rates, so a turn's estimate is what it draws
+from the plan. A priced turn's estimate now counts against the film's cap with its pictures; a priced turn does not start
+once the cap has no room, or no room for its token limit when the role has one. The per-role "tokens per turn" in
+Settings was shown but never enforced, and now stops a turn. Turns recorded before this keep their unpriced rows, so the
+Museum's eight Luna turns still read as unpriced. Cached reads and the long-context rate are not modelled: the first
+overcounts, the second could undercount a single request above 272K. Not run live.
