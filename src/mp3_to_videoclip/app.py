@@ -32,6 +32,7 @@ from .api.images import router as images_router
 from .api.jobs import router as jobs_router
 from .api.library import router as library_router
 from .api.projects import router as projects_router
+from .api.publish import router as publish_router
 from .api.ratings import router as ratings_router
 from .api.script import router as script_router
 from .api.settings import router as settings_router
@@ -276,6 +277,7 @@ def create_app(projects_dir: Path | None = None, library_dir: Path | None = None
     app.include_router(settings_router)
     app.include_router(sound_router)
     app.include_router(library_router)
+    app.include_router(publish_router)
     app.include_router(setup_router)
     app.include_router(track_router)
     app.include_router(story_router)
