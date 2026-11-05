@@ -227,7 +227,11 @@ def adopt(root: Path, lib: Path, key: str) -> dict:
         update_brief(
             root,
             {
-                "creative": {**creative, "look": payload["look"], "image_rules": payload["image_rules"]},  # fmt: skip
+                "creative": {
+                    **creative,
+                    "look": payload["look"],
+                    "image_rules": payload["image_rules"],
+                },  # fmt: skip
                 "avoid": payload.get("avoid", brief.avoid),
             },
             owner=True,

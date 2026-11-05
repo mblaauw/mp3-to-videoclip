@@ -298,6 +298,13 @@ def build_context(
             if selected:
                 lines.append("- Selected shots: " + ", ".join(selected))
         lines.append("")
+        if project.series is not None:
+            from .. import library
+
+            lib = library.library_dir(projects_dir)
+            lines.append(f"## Series (episode {project.series.episode})")
+            lines.extend(library.series_context(lib, projects_dir, project.series.id, slug))
+            lines.append("")
         lines.append("## Brief")
         if brief.intent is not None:
             intent = brief.intent

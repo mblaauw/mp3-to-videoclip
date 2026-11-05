@@ -89,6 +89,8 @@ def project_payload(project: Project) -> dict:
     # The cap and its top-up history are administrative: adding budget must not
     # invalidate a creative approval.
     value.pop("budget", None)
+    # Which series a film belongs to is a library fact, not a creative input.
+    value.pop("series", None)
     if value.get("music_mode") is None:
         value.pop("music_mode", None)
     # A soundtrack film's length follows its takes, and the voice stage binds those, so

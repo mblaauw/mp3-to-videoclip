@@ -241,8 +241,10 @@ class StudioGuard:
             runner.bus.publish("library.changed", {"source": "request"})
 
 
-def create_app(projects_dir: Path | None = None) -> FastAPI:
+def create_app(projects_dir: Path | None = None, library_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="mp3-to-videoclip Studio", lifespan=lifespan)
+    if library_dir is not None:
+        app.state.library_dir = str(Path(library_dir).resolve())
     if projects_dir is not None:
         # Keep every API project root absolute. Asset paths are resolved before
         # indexing; a relative root makes path.relative_to(root) fail after a

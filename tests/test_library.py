@@ -185,3 +185,52 @@ def test_a_still_from_another_film_is_a_copy_with_its_provenance(films, tmp_path
         library.bring_still(second, tmp_path / "projects", "third", "s001", 1)
     # The source film was only read.
     assert (first / "work/provenance.json").exists() is False
+
+
+def test_a_film_without_a_series_keeps_its_bytes_and_one_with_is_told_what_came_before(films, tmp_path, monkeypatch):  # fmt: skip
+    from mp3_to_videoclip.director.context import build_context
+    from mp3_to_videoclip.models import Project
+
+    first, second, lib = films
+    stored = read_json(second / "project.json")
+    assert "series" not in stored
+    assert "series" not in Project.model_validate(stored).model_dump()
+    before = P.stage_hash(second, "brief")
+    library.promote(first, lib, "character", "curator")
+    library.write_series(lib, {"id": "museum", "title": "The Museum", "bible": "A curator explains.", "recurring": ["character:curator"]})  # fmt: skip
+    library.add_episode(lib, "museum", "first", 1, "The House Key")
+    monkeypatch.setenv(library.ENV, str(lib))
+    project = Project.model_validate({**stored, "series": {"id": "museum", "episode": 2}})
+    from mp3_to_videoclip.storage import write_json
+
+    write_json(second / "project.json", project.model_dump())
+    assert read_json(second / "project.json")["series"] == {"id": "museum", "episode": 2}
+    # The series field is outside every hash: the brief approval does not move.
+    assert P.stage_hash(second, "brief") == before
+    snapshot = build_context("second", tmp_path / "projects", stage="story", task="revise")
+    assert "## Series (episode 2)" in snapshot
+    assert "- Bible: A curator explains." in snapshot
+    assert "- Episode 1, The House Key: TREATMENT-SECRET" in snapshot
+
+
+def test_intake_with_a_series_adopts_the_cast_and_lists_the_episode(films, tmp_path, monkeypatch):
+    from mp3_to_videoclip.domain import intake
+
+    first, _, lib = films
+    library.promote(first, lib, "character", "curator")
+    library.write_series(lib, {"id": "museum", "title": "The Museum", "recurring": ["character:curator"]})  # fmt: skip
+    created = intake.create_from_upload(
+        tmp_path / "projects",
+        None,
+        title="002 The Lamp",
+        kind="narrative",
+        intent={"kind": "narrative", "fictional": True, "structure": "five-beat-2m"},
+        length_seconds=120,
+        series={"id": "museum", "episode": 2},
+    )
+    root = created["root"]
+    assert P.load_project(root).series.model_dump() == {"id": "museum", "episode": 2}
+    joined = library.join_series(root, lib, "museum", 2)
+    assert joined["adopted"] == ["character:curator"]
+    assert [c.id for c in P.load_brief(root).characters] == ["curator"]
+    assert [ep["slug"] for ep in library.read_series(lib, "museum")["episodes"]] == [root.name]

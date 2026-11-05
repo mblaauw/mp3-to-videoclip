@@ -98,6 +98,13 @@ class AudioWindow(Model):
         return self
 
 
+class SeriesRef(Model):
+    """Which series a film belongs to, and which episode it is. Nothing in a hash reads it."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    episode: int = Field(ge=1)
+
+
 class Project(Model):
     schema_version: Literal[3] = 3
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -128,6 +135,8 @@ class Project(Model):
     source_filename: str | None = None
     #: Written by older intake, left out of every hash. Nothing reads it now.
     renderer_backend: Literal["ffmpeg", "remotion"] | None = None
+    #: The series this film is an episode of; serialised only when set, so no hash moves.
+    series: SeriesRef | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -177,6 +186,7 @@ class Project(Model):
             "bed",
             "source",
             "source_sha256",
+            "series",
         ):
             if value.get(key) is None:
                 value.pop(key, None)

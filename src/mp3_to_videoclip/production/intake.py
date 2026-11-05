@@ -80,6 +80,7 @@ def init_project(
     fade_out=0.0,
     intent=None,
     titles=None,
+    series=None,
 ) -> Project:
     # An empty directory is a reservation made by intake: the caller owns it and
     # must clean it up on failure. A directory with any entry is an existing
@@ -198,6 +199,7 @@ def init_project(
         source_filename=source.name if source is not None else None,
         image_model=selected_model,
         image_settings=selected_settings,
+        series=series,
         image_seed=image_seed,
         style_preset=preset_id,
         native_size=native_size if native_size is not None else profiles.default_size(aspect),
