@@ -136,3 +136,24 @@ contract, the renderer, `voice._duck`.
   refused by name rather than guessed at.
 - A long async music task behaves like a stuck clip: the journal holds the film's
   spending until it resolves. The batch stops at the first task still out.
+
+## Done, 5 Nov 2026
+
+Four commits on `film/phase-j-sound`: `sound.py` and the layer under `film_audio`; the
+purchase through the journal with three catalogue rows and a `sounds` settings section; the
+routes, the W6 task and `write_sound_cues`; the Sound stage. Decisions D1 to D9 as written.
+Found on the way: the JSON guard refused the Script stage's own bed upload
+(`/soundtrack/sound`), now allowed with the cue upload.
+
+**Proved:** 11 engine tests with real WAVs (a film without cues keeps its bytes, a cue on
+lines follows a longer take, a 20 dB duck under a spoken line, a cue past the end is cut,
+a song film takes frames only, suggestions write nothing), 5 journal tests with fakes
+(reservation before the request, no resubmission, a task still out holds spending and is
+recovered by id, a changed prompt is refused), 3 route and tool tests, 5 frontend tests, one
+browser test, and the stage opened on the Museum film with its twenty line marks.
+
+**Not proven:** no paid cue has been bought; the first live bed and effect, under $0.05,
+need the owner's authorisation. The request shape was fitted to three model pages read on
+5 Nov, not to the audio API reference, which was unreachable; the live schema decides. The
+speech margin note is arithmetic on the cue's settings, not a measurement of the mix. The
+report's silence scan decodes the whole mix on every *Listen through*.
