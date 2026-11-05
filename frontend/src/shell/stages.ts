@@ -5,6 +5,7 @@ export const STAGES: readonly { id: Stage; label: string }[] = [
   { id: "story", label: "Story" },
   { id: "storyboard", label: "Storyboard" },
   { id: "images", label: "Images" },
+  { id: "sound", label: "Sound" },
   { id: "film", label: "Film" },
 ];
 
@@ -14,6 +15,7 @@ const STORY_FILM_STAGES: readonly { id: Stage; label: string }[] = [
   { id: "script", label: "Script" },
   { id: "storyboard", label: "Storyboard" },
   { id: "images", label: "Images" },
+  { id: "sound", label: "Sound" },
   { id: "film", label: "Film" },
 ];
 

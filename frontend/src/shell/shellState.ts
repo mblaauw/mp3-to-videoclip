@@ -1,3 +1,4 @@
+import { soundState } from "../sound/cueBands";
 import { type ApprovalState, type ImageShot, type ProjectSummary } from "../api";
 import { type ApprovalFacts, type ApprovalMap, type ImageFacts, type NextAction, type Stage, type StageState } from "./nextStep";
 
@@ -105,6 +106,7 @@ export function derivedStates(
   } else {
     base.images = "you";
   }
+  base.sound = soundState(project.sound_cues ?? 0, project.sound_sounding ?? 0);
   base.film =
     base.film === "done" ? "done" : base.images === "done" ? "you" : "not_ready";
   return base;

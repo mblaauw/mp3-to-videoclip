@@ -223,6 +223,8 @@ export function useFilmShellData({
       : undefined,
     has_model_key: hasModelKey,
     has_storyboard: project.shots > 0,
+    sound_cues: project.sound_cues,
+    sound_sounding: project.sound_sounding,
     placeholder_shot_ids: board?.placeholder_shot_ids,
     permission_pending: (intake?.brief?.characters || [])
       .filter((character) => character.permission_confirmed === false)
@@ -233,7 +235,7 @@ export function useFilmShellData({
   const committedWindow = intake?.audio_window || null;
   // Film is where the voiceover is heard; Track keeps listening to the music alone.
   const playerSrc =
-    stage === "film" && project.film_audio_url
+    (stage === "film" || stage === "sound") && project.film_audio_url
       ? project.film_audio_url
       : committedWindow && project.kind !== "music_video"
         ? `${baseAudio}?v=${committedWindow.start}-${committedWindow.end}-${committedWindow.fade_in}-${committedWindow.fade_out}`
