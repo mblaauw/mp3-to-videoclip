@@ -175,6 +175,12 @@ def record_version(root: Path, cue_id: str, version: dict) -> dict:
     return cue
 
 
+def soundtrack_suffixes() -> set[str]:
+    from .production import soundtrack
+
+    return soundtrack.AUDIO_SUFFIXES
+
+
 def import_sound(root: Path, cue_id: str, source: Path) -> dict:
     """The owner's own file as a version of this cue; nothing is charged."""
     from .ffmpeg import audio_seconds
