@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { nextEpisode, type Series } from "./library/entries";
 import { api, type KindProfile } from "./api";
 import { ErrorState } from "./ui";
 
@@ -110,10 +111,17 @@ export function NewProduction({
   const [cta, setCta] = useState("");
   const [length, setLength] = useState(WHOLE_TRACK);
   const [look, setLook] = useState<string | undefined>(undefined);
+  const [seriesList, setSeriesList] = useState<Series[]>([]);
+  const [series, setSeries] = useState("");
+  const [episode, setEpisode] = useState(1);
   const [kinds, setKinds] = useState<KindProfile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    api.library().then((view) => setSeriesList(view.series), () => setSeriesList([]));
+  }, []);
 
   useEffect(() => {
     api
@@ -206,6 +214,8 @@ export function NewProduction({
         cta_text: kind === "advert" ? cta.trim() : undefined,
         length_seconds: wholeTrack ? undefined : length,
         fade_out: wholeTrack ? undefined : 1.5,
+        series: series || undefined,
+        episode: series ? episode : undefined,
       });
       onCreated(created.slug, isStory ? "story" : "track");
     } catch (caught) {
@@ -376,7 +386,44 @@ export function NewProduction({
             onChange={(event) => setBudget(event.target.value)}
           />
         </label>
+        {seriesList.length > 0 && (
+          <label>
+            Series
+            <select
+              value={series}
+              onChange={(event) => {
+                const picked = event.target.value;
+                setSeries(picked);
+                setEpisode(nextEpisode(seriesList.find((item) => item.id === picked)));
+              }}
+            >
+              <option value="">Not in a series</option>
+              {seriesList.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {series && (
+          <label>
+            Episode
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={episode}
+              onChange={(event) => setEpisode(Math.max(1, Math.round(Number(event.target.value) || 1)))}
+            />
+          </label>
+        )}
       </div>
+      {series && (
+        <p className="hint">
+          The series' recurring cast, places and look join the film before anything is approved.
+        </p>
+      )}
 
       <p className="hint">
         {isVideo

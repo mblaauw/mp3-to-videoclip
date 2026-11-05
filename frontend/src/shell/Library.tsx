@@ -5,6 +5,7 @@ import { Button, EmptyState, ErrorState, LoadingState, StatusDot, useFocusTrap, 
 import { PlusIcon } from "../ui/icons";
 import { notifyProjectChanged } from "./projectEvents";
 import { stageLabel } from "./stages";
+import { WorldLibrary } from "../library/WorldLibrary";
 import type { Stage } from "./nextStep";
 
 const STAGE_ORDER = ["track", "story", "script", "storyboard", "images", "film"] as const;
@@ -108,6 +109,7 @@ function FilmCard({
             : `${project.shots || 0} shots`}
         </span>
         {project.remaining_usd && <span>${project.remaining_usd} left</span>}
+        {project.series && <span>Episode {project.series.episode}</span>}
       </div>
       <div className="todo">
         <StatusDot tone={STATE_TONE[project.stage_states?.[project.next_step || ""] || "you"]} />
@@ -311,6 +313,7 @@ export function Library({
             </div>
           </section>
         )}
+        <WorldLibrary />
         {!!parked.length && (
           <details className="library-section parked-films">
             <summary>Parked ({parked.length})</summary>

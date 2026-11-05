@@ -3,6 +3,7 @@ import { draftError } from "../api/resources";
 import { api, type Brief } from "../api";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { Button, Field } from "../ui";
+import { FromLibrary, PromoteButton } from "../library/FromLibrary";
 
 type Character = NonNullable<Brief["characters"]>[number];
 
@@ -129,7 +130,10 @@ export function CharactersCard({
             )}
           </div>
           <div className="character-fields">
-            <b>{displayName(character.id)}</b>
+            <b>
+              {displayName(character.id)}{" "}
+              <PromoteButton slug={slug} kind="character" id={character.id} label={displayName(character.id)} />
+            </b>
             {states.length > 0 && (
               <div className="chips">
                 {states.map(([state, value]) => (
@@ -221,6 +225,18 @@ export function CharactersCard({
         >
           {adding ? "Adding…" : "Add character"}
         </Button>
+        <FromLibrary
+          slug={slug}
+          kinds={["character"]}
+          onAdopted={() => {
+            draftBase.current = null;
+            void api.brief(slug).then((updated) => {
+              setCharacters(updated.characters || []);
+              onBriefChange(updated);
+              notifyProjectChanged();
+            });
+          }}
+        />
       </div>
       {error && <p className="error">{error}</p>}
     </section>

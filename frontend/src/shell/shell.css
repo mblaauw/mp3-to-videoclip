@@ -1573,3 +1573,86 @@ body {
   display: grid;
   gap: 4px;
 }
+
+/* The world library on the Library screen. */
+.world-library .world-group {
+  margin-top: 12px;
+}
+.world-entries {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.world-entry {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  border-radius: 8px;
+}
+.world-entry img,
+.world-entry .world-blank {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--panel, rgba(127, 127, 127, 0.12));
+}
+.world-entry div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.world-entry .hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.series-row {
+  border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  padding: 8px 0;
+}
+.series-head {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.series-body {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.series-body textarea {
+  width: 100%;
+}
+.series-episodes {
+  margin: 0;
+  padding-left: 18px;
+}
+.from-library {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.from-film .inline-fields {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.from-film input[type="number"] {
+  width: 64px;
+}

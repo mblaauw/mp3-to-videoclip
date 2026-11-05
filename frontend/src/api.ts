@@ -27,6 +27,7 @@ export type ProjectSummary = {
   slug: string;
   sound_cues?: number;
   sound_sounding?: number;
+  series?: { id: string; episode: number } | null;
   spine?: string | null;
   stage_states?: { [key: string]: "done" | "you" | "changed" | "not_ready" };
   still_count: number;
@@ -356,6 +357,7 @@ export type Brief = {
     arc?: { phase?: string; intention?: string }[];
     profile_version?: number;
     sections?: LookSection[];
+    narrator?: { persona?: string; voice_id?: string | null } | null;
   } | null;
 };
 
@@ -804,6 +806,11 @@ export type DeliveryChecklist = {
   outstanding: string[];
 };
 
+export type LibraryView = {
+  entries: import("./library/entries").LibraryEntry[];
+  series: import("./library/entries").Series[];
+};
+
 export type SoundReport = {
   cues: number;
   sounding: number;
@@ -1110,6 +1117,8 @@ export const api = {
       window_start?: number;
       fade_in?: number;
       fade_out?: number;
+      series?: string;
+      episode?: number;
     },
   ) => {
     const params = new URLSearchParams({
@@ -1124,6 +1133,10 @@ export const api = {
     if (meta.titles) params.set("titles", meta.titles);
     if (meta.structure) params.set("structure", meta.structure);
     if (meta.fictional !== undefined) params.set("fictional", String(meta.fictional));
+    if (meta.series) {
+      params.set("series", meta.series);
+      params.set("episode", String(meta.episode ?? 1));
+    }
     if (meta.kind !== "music_video") {
       params.set("objective", meta.objective || "");
       params.set("message", meta.message || "");
@@ -1312,6 +1325,27 @@ export const api = {
       `/api/projects/${slug}/soundtrack/sound?filename=${encodeURIComponent(file.name)}`,
       { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } },
     ),
+  library: () => request<LibraryView>("/api/library"),
+  promoteEntry: (slug: string, kind: string, id: string, label?: string) =>
+    request<LibraryView & { entry: import("./library/entries").LibraryEntry }>("/api/library/promote", {
+      method: "POST",
+      body: JSON.stringify({ slug, kind, id, label: label || "" }),
+    }),
+  adoptEntry: (slug: string, key: string) =>
+    request<{ adopted: string; changed: string[]; skipped_files: string[]; note: string }>(
+      `/api/projects/${slug}/library/adopt`,
+      { method: "POST", body: JSON.stringify({ key }) },
+    ),
+  saveSeries: (id: string, patch: { title?: string; bible?: string; recurring?: string[] }) =>
+    request<LibraryView & { saved: import("./library/entries").Series }>(`/api/library/series/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
+  bringStill: (slug: string, fromSlug: string, shotId: string, version: number) =>
+    request<{ path: string; sha256: string }>(`/api/projects/${slug}/library/bring-still`, {
+      method: "POST",
+      body: JSON.stringify({ from_slug: fromSlug, shot_id: shotId, version }),
+    }),
   sound: (slug: string) => request<SoundPayload>(`/api/projects/${slug}/sound`),
   soundReport: (slug: string) => request<SoundReport>(`/api/projects/${slug}/sound/report`),
   saveSound: (slug: string, cues: unknown[]) =>

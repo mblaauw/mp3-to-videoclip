@@ -13,6 +13,7 @@ import { PaidCard } from "../images/PaidCard";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { AutoTextarea } from "../ui/AutoTextarea";
 import { SHOT_KINDS, isPaidShot, kindMeta, kindOf } from "../shotKinds";
+import { FromAnotherFilm } from "../library/FromAnotherFilm";
 import { Button } from "../ui";
 import { ShotThumb } from "./ShotThumb";
 import { InspectorSaveGuard, leaveInspector, remainingDraft } from "./inspectorSave";
@@ -497,15 +498,23 @@ export function ShotInspector({
           </label>
         )}
         {(kindOf(current) === "upload" || kindOf(current) === "plate") && (
-          <label className="ui-field">
-            <span>Uploaded asset</span>
-            <input
-              value={current.asset || ""}
-              onChange={(event) => change("asset", event.target.value || null)}
-              onBlur={() => void save()}
-              placeholder="Project-relative image path"
+          <>
+            <label className="ui-field">
+              <span>Uploaded asset</span>
+              <input
+                value={current.asset || ""}
+                onChange={(event) => change("asset", event.target.value || null)}
+                onBlur={() => void save()}
+                placeholder="Project-relative image path"
+              />
+            </label>
+            <FromAnotherFilm
+              slug={slug}
+              onBrought={(path) => {
+                changeAndSave("asset", path);
+              }}
             />
-          </label>
+          </>
         )}
         {kindOf(current) === "reprise" && (
           <label className="ui-field">
