@@ -37,6 +37,7 @@ NOTES = {
     "thinking": "Thinking level is stored but not used yet. Tokens per turn stops a turn at that many.",
     "pictures": "New films still use each look's own model; these choices are stored for later.",
     "narrator": "A story film starts with this voice and can choose another on its Script stage.",
+    "sounds": "A cue on the Sound stage is made with these; its price is shown before it is bought.",
 }
 
 

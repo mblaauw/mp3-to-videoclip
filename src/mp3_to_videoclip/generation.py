@@ -551,6 +551,20 @@ def begin_task(root: Path, quote: dict, task: dict, *, kind=None, admitted=()):
             for entry in journal.values()
         ):
             raise ValueError("a conflicting task/version was submitted; recover or requote")
+    if (kind or quote["kind"]) == "sound":
+        from .sound import check_before_spend
+
+        check_before_spend(root, task)
+        if any(
+            entry.get("kind") == "sound"
+            and entry.get("cue_id") == task["cue_id"]
+            and (
+                entry.get("version") == task["version"]
+                or entry.get("status") in ("submitted", "result")
+            )
+            for entry in journal.values()
+        ):
+            raise ValueError("a conflicting task/version was submitted; recover or requote")
     if (kind or quote["kind"]) == "transcription" and quote.get("provider", "openai") == "openai":
         if (root / "work/lyrics.json").exists():
             raise ValueError("lyrics already exist; preserve them rather than overwrite/rebill")
@@ -929,6 +943,10 @@ def recover(root: Path, task_uuid: str, client=None):
         from .clips import recover_clip
 
         return recover_clip(root, task_uuid, client)
+    if task and task.get("kind") == "sound":
+        from .sound import recover_cue
+
+        return recover_cue(root, task_uuid, client)
     if task and task.get("kind") == "music-analysis":
         from .music_analysis import recover_music
 

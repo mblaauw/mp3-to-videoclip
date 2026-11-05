@@ -153,3 +153,198 @@ def test_suggestions_follow_the_structure_and_write_nothing(story):
     assert sound.read(root)["cues"] == []
     sound.set_cues(root, cues)
     assert len(sound.read(root)["cues"]) == 6
+
+
+# ------------------------------------------------------------------ paid cues
+
+from decimal import Decimal  # noqa: E402
+
+from mp3_to_videoclip import budget, generation  # noqa: E402
+
+SCHEMA = {
+    "info": {
+        "x-status": "live",
+        "x-air-id": "runware:ace-step@v1.5-xl-turbo",
+        "x-pricing": {"rates": []},
+    },  # fmt: skip
+    "components": {
+        "schemas": {
+            "RequestBody": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["taskType", "taskUUID", "model", "positivePrompt"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "taskType": {"const": "audioInference"},
+                        "taskUUID": {"type": "string"},
+                        "model": {"const": "runware:ace-step@v1.5-xl-turbo"},
+                        "positivePrompt": {"type": "string", "minLength": 2},
+                        "duration": {
+                            "type": "number",
+                            "minimum": 30,
+                            "maximum": 300,
+                            "multipleOf": 0.1,
+                        },  # fmt: skip
+                        "outputType": {"enum": ["URL"]},
+                        "outputFormat": {"enum": ["MP3", "WAV", "FLAC"]},
+                        "deliveryMethod": {"enum": ["sync", "async"]},
+                        "numberResults": {"type": "integer"},
+                        "includeCost": {"type": "boolean"},
+                        "settings": {
+                            "type": "object",
+                            "properties": {"instrumental": {"type": "boolean"}},
+                        },
+                    },
+                },
+            }
+        }
+    },
+}
+
+
+def effects_schema():
+    value = {"info": {**SCHEMA["info"], "x-air-id": "mirelo:1@1"}, "components": {"schemas": {"RequestBody": {"type": "array", "items": {}}}}}  # fmt: skip
+    item = {**SCHEMA["components"]["schemas"]["RequestBody"]["items"]}
+    props = {**item["properties"], "model": {"const": "mirelo:1@1"}, "duration": {"type": "number", "minimum": 1, "maximum": 10}}  # fmt: skip
+    props.pop("settings")
+    value["components"]["schemas"]["RequestBody"]["items"] = {**item, "properties": props}
+    return value
+
+
+class FakeSound:
+    """Stands in for Runware: counts calls, can answer late, never spends twice."""
+
+    def __init__(self, source, *, schema=None, pending=0, cost=0.0009):
+        self.source = source
+        self.schema_value = schema or SCHEMA
+        self.pending = pending
+        self.cost = cost
+        self.submitted = []
+        self.polls = 0
+
+    def schema(self, slug):
+        return self.schema_value
+
+    def submit_speech(self, request):
+        self.submitted.append(request)
+        if self.pending:
+            return {"taskUUID": request["taskUUID"]}
+        return self._done(request["taskUUID"])
+
+    def recover_speech(self, task_uuid):
+        self.polls += 1
+        if self.polls < self.pending:
+            return None
+        return self._done(task_uuid)
+
+    def _done(self, task_uuid):
+        return {"taskUUID": task_uuid, "audioURL": "https://example.test/a.wav", "cost": self.cost}
+
+    def download_audio(self, url, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(self.source.read_bytes())
+
+    def close(self):
+        pass
+
+
+@pytest.fixture
+def cued(story):
+    root, script = story
+    budget.set_budget(root, "5.00", "test budget")
+    ids = [line.id for line in script.lines]
+    sound.set_cues(root, [
+        {"id": "bed", "kind": "music", "prompt": "a slow instrumental bed"},
+        {"id": "room", "kind": "ambience", "prompt": "a quiet room", "start": {"line": ids[0]}, "end": {"line": ids[2]}},  # fmt: skip
+    ])  # fmt: skip
+    return root
+
+
+def test_a_quote_fits_the_model_schema_and_reserves_from_the_catalogue(cued, tmp_path):
+    root = cued
+    client = FakeSound(tone(tmp_path / "bed.wav", 2.0))
+    quote = sound.quote_cues(root, ["bed"], client=client)
+    task = quote["tasks"][0]
+    request = task["request"]
+    assert request["taskType"] == "audioInference" and request["model"] == "runware:ace-step@v1.5-xl-turbo"  # fmt: skip
+    assert request["duration"] == float(round(P.load_project(root).duration))
+    assert request["settings"] == {"instrumental": True}
+    assert request["outputFormat"] == "WAV" and request["deliveryMethod"] == "async"
+    # A run price is doubled, because compute time is not known in advance, then floored.
+    assert sound._reserve("ace-step-v1-5-xl-turbo", 120.0, 0.2) == Decimal("0.01")
+    assert sound._reserve("minimax-music-2-6", None, 0.2) == Decimal("0.15")
+    assert sound._reserve("mirelo-sfx-1-5", 100.0, 0.2) == Decimal("0.025")
+    assert sound._reserve("no-such-model", None, 0.2) == Decimal("0.2")
+    assert Decimal(task["reserve_usd"]) == Decimal("0.01")
+    assert (root / quote["schema"]).is_file()
+    with pytest.raises(ValueError, match="separately"):
+        sound.quote_cues(root, ["bed", "room"], client=client)
+    with pytest.raises(ValueError, match="choose cues"):
+        sound.quote_cues(root, ["nope"], client=client)
+    # An effects model clamps the span to its own range and says nothing about instruments.
+    effects = sound.quote_cues(root, ["room"], model="mirelo-sfx-1-5", client=FakeSound(tmp_path / "bed.wav", schema=effects_schema()))  # fmt: skip
+    request = effects["tasks"][0]["request"]
+    assert request["duration"] == 6.0 and "settings" not in request  # three 1.5 s takes and pauses
+    assert Decimal(effects["tasks"][0]["reserve_usd"]) == Decimal("0.01")
+
+
+def test_a_speech_model_is_refused_as_a_sound_model(cued, tmp_path):
+    root = cued
+    speaking = {**SCHEMA, "components": {"schemas": {"RequestBody": {"type": "array", "items": {**SCHEMA["components"]["schemas"]["RequestBody"]["items"], "required": ["taskType", "taskUUID", "model", "speech"]}}}}}  # fmt: skip
+    with pytest.raises(ValueError, match="speaks"):
+        sound.quote_cues(root, ["bed"], client=FakeSound(tmp_path / "x.wav", schema=speaking))
+
+
+def test_the_journal_holds_the_reservation_before_the_request_and_never_resubmits(cued, tmp_path):
+    root = cued
+    client = FakeSound(tone(tmp_path / "bed.wav", 2.0), pending=2)
+    quote = sound.quote_cues(root, ["bed"], client=client)
+    generation.authorize(root, quote["id"], quote["reserve_total_usd"], "owner", via="studio", review_confirmed=True)  # fmt: skip
+    slept = []
+    result = sound.generate_cues(root, quote["id"], client=client, sleep=slept.append)
+    assert result["done"] == ["bed"] and len(client.submitted) == 1 and len(slept) == 2
+    journal = read_json(root / "work/tasks.json")
+    task = journal[quote["tasks"][0]["uuid"]]
+    assert task["kind"] == "sound" and task["status"] == "ready" and task["cost_usd"] == "0.0009"
+    cue = sound.read(root)["cues"][0]
+    assert cue["selected"] == 1 and cue["versions"][0]["source"] == "generated"
+    assert cue["versions"][0]["cost_usd"] == "0.0009" and (root / cue["versions"][0]["path"]).is_file()  # fmt: skip
+    # The same quote again is a resubmission, which the journal refuses.
+    with pytest.raises(ValueError, match="needs recover"):
+        sound.generate_cues(root, quote["id"], client=client)
+    assert len(client.submitted) == 1
+    # And the mix now carries the bed.
+    project = P.load_project(root)
+    assert P.film_audio(root, project).name.startswith("sound-")
+
+
+def test_a_cue_still_out_holds_the_spending_until_it_is_recovered(cued, tmp_path):
+    root = cued
+    client = FakeSound(tone(tmp_path / "bed.wav", 2.0), pending=10_000)
+    quote = sound.quote_cues(root, ["bed"], client=client)
+    generation.authorize(root, quote["id"], quote["reserve_total_usd"], "owner", via="studio", review_confirmed=True)  # fmt: skip
+    result = sound.generate_cues(root, quote["id"], client=client, sleep=lambda _s: None)
+    assert result["pending"] == ["bed"] and result["done"] == []
+    task_uuid = quote["tasks"][0]["uuid"]
+    assert read_json(root / "work/tasks.json")[task_uuid]["status"] == "submitted"
+    assert [t["id"] for t in budget.unresolved_tasks(root)] == [task_uuid]
+    with pytest.raises(ValueError, match="unresolved task"):
+        sound.quote_cues(root, ["bed"], client=client)
+    # Recovery is a read, never a resubmission.
+    client.pending = 0
+    assert generation.recover(root, task_uuid, client=client) is True
+    assert len(client.submitted) == 1
+    assert read_json(root / "work/tasks.json")[task_uuid]["status"] == "ready"
+    assert budget.unresolved_tasks(root) == []
+
+
+def test_a_changed_prompt_between_quote_and_spend_is_refused(cued, tmp_path):
+    root = cued
+    client = FakeSound(tone(tmp_path / "bed.wav", 2.0))
+    quote = sound.quote_cues(root, ["bed"], client=client)
+    generation.authorize(root, quote["id"], quote["reserve_total_usd"], "owner", via="studio", review_confirmed=True)  # fmt: skip
+    sound.set_cues(root, [{"id": "bed", "kind": "music", "prompt": "a different bed"}])
+    result = sound.generate_cues(root, quote["id"], client=client)
+    assert result["done"] == [] and "changed since the quote" in result["stopped"]
+    assert client.submitted == [] and read_json(root / "work/tasks.json") == {}

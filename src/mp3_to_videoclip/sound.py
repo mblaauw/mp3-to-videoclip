@@ -526,3 +526,290 @@ def summary_lines(root: Path, project: Project) -> list[str]:
     for note in value["notes"][:8]:
         lines.append(f"- {note['code']}: {note['message']}")
     return lines
+
+
+# ------------------------------------------------------------------ paid cues
+
+from decimal import Decimal  # noqa: E402
+from uuid import uuid4  # noqa: E402
+
+POLL_SECONDS = 5.0
+#: A slow music task stays journaled and is collected later; it is never bought again.
+POLL_LIMIT_SECONDS = 600.0
+MIN_RESERVE = Decimal("0.01")
+#: A price per run is by compute time, which is not known before the run.
+RUN_PRICE_MARGIN = 2
+
+
+def model_for(kind: str, settings=None) -> str:
+    from .config import load_settings
+
+    settings = settings or load_settings()
+    return settings.sounds.music_model if kind == "music" else settings.sounds.effects_model
+
+
+def _reserve(model: str, seconds: float | None, fallback: float) -> Decimal:
+    from . import catalog
+    from .generation import money
+
+    row = next((m for m in catalog.load().models if m.id == model), None)
+    price = row.price if row else None
+    if price is None:
+        return max(MIN_RESERVE, money(str(fallback)))
+    amount = money(price.amount)
+    if price.unit == "second" and seconds:
+        return max(MIN_RESERVE, amount * Decimal(str(round(seconds, 1))))
+    if price.unit == "run":
+        return max(MIN_RESERVE, amount * RUN_PRICE_MARGIN)
+    return max(MIN_RESERVE, amount)
+
+
+def _clamped_duration(rule: dict, wanted: float) -> float | int:
+    """Whole seconds inside the model's range: a float step like 0.1 fails its own check."""
+    low, high = float(rule.get("minimum", wanted)), float(rule.get("maximum", wanted))
+    value = min(max(wanted, low), high)
+    if rule.get("type") == "integer":
+        return int(min(max(round(value), low), high))
+    whole = float(round(value))
+    return whole if low <= whole <= high else value
+
+
+def build_request(cue: dict, span: float, schema: dict, task_uuid: str) -> dict:
+    """The one request shape the three model pages share, fitted to this model's own schema."""
+    from .generation import validate_request
+
+    info = schema["info"]
+    item = schema["components"]["schemas"]["RequestBody"]["items"]
+    props = item.get("properties", {})
+    if props.get("taskType", {}).get("const") not in (None, "audioInference"):
+        raise ValueError(f"{info.get('x-air-id', 'this model')} is not a sound model")
+    if "speech" in item.get("required", []):
+        raise ValueError("this model speaks; choose a music or effects model")
+    formats = props.get("outputFormat", {}).get("enum") or ["WAV"]
+    request = {
+        "taskType": "audioInference",
+        "taskUUID": task_uuid,
+        "model": info["x-air-id"],
+        "positivePrompt": cue["prompt"],
+        "outputType": "URL",
+        "outputFormat": "WAV" if "WAV" in formats else formats[0],
+        "deliveryMethod": "async",
+        "numberResults": 1,
+        "includeCost": True,
+    }
+    if "duration" in props:
+        request["duration"] = _clamped_duration(props["duration"], span)
+    settings = (props.get("settings") or {}).get("properties") or {}
+    if cue["kind"] == "music" and "instrumental" in settings:
+        request["settings"] = {"instrumental": True}
+    validate_request(schema, request)
+    return request
+
+
+def quote_cues(root: Path, cue_ids: list[str] | None = None, *, model: str | None = None, client=None) -> dict:  # fmt: skip
+    """Quote one sound per cue, from the model's public schema. Spends nothing."""
+    from .config import load_settings
+    from .generation import money, save_quote
+    from .production import load_project
+    from .providers import RunwareClient
+
+    root = Path(root)
+    project = load_project(root, verify_source=False)
+    spec = read(root)
+    chosen = [cue for cue in spec["cues"] if cue_ids is None or cue["id"] in cue_ids]
+    if cue_ids is not None and len(chosen) != len(set(cue_ids)):
+        raise ValueError("choose cues from this film")
+    if not chosen:
+        raise ValueError("add a cue first")
+    for cue in chosen:
+        if not cue["prompt"]:
+            raise ValueError(f"{cue['id']} needs a prompt before it can be made")
+    kinds = {cue["kind"] for cue in chosen}
+    if model is None and len({"music" if k == "music" else "effects" for k in kinds}) > 1:
+        raise ValueError("quote music and effects separately; they use different models")
+    settings = load_settings()
+    model = model or model_for(chosen[0]["kind"], settings)
+    if not model:
+        raise ValueError("choose a sound model in Settings first")
+    own = client is None
+    client = client or RunwareClient("public-schema-only")
+    try:
+        schema = client.schema(model)  # public GET only; no generation
+    finally:
+        if own:
+            client.close()
+    info = schema["info"]
+    if info.get("x-status") != "live":
+        raise ValueError("model is not confirmed live")
+    schema_path = f"work/schemas/{digest(schema)}.json"
+    write_json(inside(root, schema_path), schema)
+    rows = _layout(root, project)
+    journal = read_optional(root / "work/tasks.json") or {}
+    tasks = []
+    for cue in chosen:
+        if any(t.get("cue_id") == cue["id"] and t["status"] in ("submitted", "result") for t in journal.values()):  # fmt: skip
+            raise ValueError(f"{cue['id']} has an unresolved task; recover it first")
+        start, end = span_seconds(project, cue, rows)
+        span = max(0.5, min(end, project.duration) - start)
+        task_uuid = str(uuid4())
+        request = build_request(cue, span, schema, task_uuid)
+        seconds = request.get("duration")
+        tasks.append(
+            {
+                "uuid": task_uuid,
+                "cue_id": cue["id"],
+                "kind_of_cue": cue["kind"],
+                "prompt": cue["prompt"],
+                "version": next_version(root, cue["id"]),
+                "input_hash": digest({"model": model, "prompt": cue["prompt"], "seconds": seconds}),
+                "request": request,
+                "seconds": seconds,
+                "model": model,
+                "reserve_usd": str(_reserve(model, seconds, settings.sounds.reserve_usd_per_cue)),
+            }
+        )
+    return save_quote(
+        root,
+        {
+            "kind": "sound",
+            "model": model,
+            "schema": schema_path,
+            "schema_hash": digest(schema),
+            "tasks": tasks,
+            "reserve_total_usd": str(sum((money(t["reserve_usd"]) for t in tasks), Decimal(0))),
+            "published_pricing": info.get("x-pricing"),
+            "warning": "The reserve is a limit on admission, not an exact price.",
+        },
+    )
+
+
+def check_before_spend(root: Path, task: dict) -> None:
+    """Called while the reservation is written: the cue must still ask for what was quoted."""
+    cue = _entry(read(root), task["cue_id"])
+    if cue["prompt"] != task["prompt"]:
+        raise ValueError("a cue changed since the quote; estimate and authorize again")
+
+
+def finish_cue(root: Path, task_uuid: str, result: dict, client) -> bool:
+    """Record what the provider billed, then fetch, measure and index the file."""
+    import shutil
+
+    from .ffmpeg import audio_seconds
+    from .generation import money, update_task
+    from .production.project import now
+    from .storage import state_lock
+
+    if "audioURL" not in result:
+        return False
+    if result.get("taskUUID") != task_uuid:
+        raise ValueError("provider returned another task")
+    cost = str(money(result["cost"]))
+    with state_lock(root):
+        journal = read_optional(root / "work/tasks.json") or {}
+        task = dict(journal[task_uuid])
+        if task.get("status") == "resolved":
+            raise ValueError("task was manually reconciled; inspect the result before recovery")
+        if task.get("cost_usd") is not None and money(task["cost_usd"]) != money(cost):
+            raise ValueError("provider task cost changed; reconcile manually")
+        task.update(status="result", result=result, cost_usd=cost, cost_basis="provider reported")
+        journal[task_uuid] = task
+        write_json(root / "work/tasks.json", journal)  # Billed cost BEFORE download.
+    suffix = ".wav" if task["request"].get("outputFormat", "WAV") == "WAV" else ".mp3"
+    relative = f"work/sound/{task['cue_id']}/v{task['version']:03d}-{task_uuid}{suffix}"
+    path = inside(root, relative)
+    expected = task.get("sha256")
+    if path.exists() and expected and file_hash(path) != expected:
+        quarantine = root / f"work/quarantine/{task_uuid}-{file_hash(path)}{suffix}"
+        quarantine.parent.mkdir(parents=True, exist_ok=True)
+        if not quarantine.exists():
+            shutil.copyfile(path, quarantine)
+        path.unlink()
+    if not path.exists():
+        client.download_audio(result["audioURL"], path)
+    sha = file_hash(path)
+    if expected and sha != expected:
+        raise ValueError("recovered sound differs from its recorded original; inspect manually")
+    version = {
+        "version": task["version"],
+        "path": relative,
+        "sha256": sha,
+        "source": "generated",
+        "model": task["model"],
+        "input_hash": task["input_hash"],
+        "task_id": task_uuid,
+        "seconds": round(audio_seconds(path), 3),
+        "cost_usd": cost,
+        "at": now(),
+    }
+    record_version(root, task["cue_id"], version)
+    update_task(root, task_uuid, status="ready", path=relative, sha256=sha, completed_at=now())
+    return True
+
+
+def generate_cues(root: Path, quote_id: str, client=None, *, sleep=None) -> dict:
+    """Run an authorized quote, one cue at a time. Never retries a paid call."""
+    import time
+
+    from .generation import _check_stop_conditions, authorization, begin_task, budget, read_quote
+    from .providers import RunwareClient, runware_api_key
+
+    sleep = sleep or time.sleep
+    root = Path(root)
+    quote = read_quote(root, quote_id)
+    if quote["kind"] != "sound":
+        raise ValueError("this quote is not for sound")
+    auth = authorization(root, quote)
+    schema = read_optional(inside(root, quote["schema"]))
+    if digest(schema) != quote["schema_hash"]:
+        raise ValueError("quoted model schema changed")
+    budget.require_reconciled(root)
+    journal = read_optional(root / "work/tasks.json") or {}
+    own = client is None
+    client = client or RunwareClient(runware_api_key())
+    done, pending, stopped = [], [], None
+    try:
+        for task in quote["tasks"]:
+            if task["uuid"] in journal:
+                raise ValueError(f"task {task['uuid']} needs recover; no paid resubmission")
+            try:
+                _check_stop_conditions(root, quote, auth)
+                begin_task(root, quote, task)
+            except ValueError as exc:
+                stopped = str(exc)
+                break
+            result = client.submit_speech(task["request"])
+            waited = 0.0
+            while "audioURL" not in result and waited < POLL_LIMIT_SECONDS:
+                sleep(POLL_SECONDS)
+                waited += POLL_SECONDS
+                result = client.recover_speech(task["uuid"]) or result
+            if finish_cue(root, task["uuid"], result, client):
+                done.append(task["cue_id"])
+            else:
+                # Later cues would only be refused: a task still out holds the film's spending.
+                pending.append(task["cue_id"])
+                break
+    finally:
+        if own:
+            client.close()
+    return {"quote_id": quote_id, "done": done, "pending": pending, "stopped": stopped}
+
+
+def recover_cue(root: Path, task_uuid: str, client=None) -> bool:
+    """Collect a paid sound that was interrupted; this never submits anything new."""
+    from .providers import RunwareClient, runware_api_key
+
+    root = Path(root)
+    task = (read_optional(root / "work/tasks.json") or {}).get(task_uuid)
+    if not task or task.get("kind") != "sound":
+        raise ValueError("unknown sound task")
+    if task["status"] == "resolved":
+        raise ValueError("task was manually reconciled; use a newly authorized quote if needed")
+    own = client is None
+    client = client or RunwareClient(runware_api_key())
+    try:
+        result = task.get("result") or client.recover_speech(task_uuid)
+        return finish_cue(root, task_uuid, result, client) if result else False
+    finally:
+        if own:
+            client.close()

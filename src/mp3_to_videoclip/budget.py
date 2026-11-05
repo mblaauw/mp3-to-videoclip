@@ -365,7 +365,7 @@ def unresolved_tasks(root: Path) -> list[dict]:
         {
             "id": t.get("uuid", key),
             "kind": t.get("kind"),
-            "shot_id": t.get("shot_id"),
+            "shot_id": t.get("shot_id") or t.get("line_id") or t.get("cue_id"),
             "reserve_usd": t.get("reserve_usd"),
             "at": t.get("submitted_at") or t.get("at"),
         }
