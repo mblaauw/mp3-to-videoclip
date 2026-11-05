@@ -21,17 +21,22 @@
   --ink-2: #b6b7bc;
   --muted: #9a9ca3;
 
+  --line-strong: #55575f; /* hovered borders */
+  --placeholder: #7d7f86;
+  --scrim: rgba(20, 21, 24, 0.84);              /* labels laid over pictures */
+  --label-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); /* small labels drawn over the spine */
+
   /* accent and status */
   --gold: #d9b36c;          /* brand · primary action · playhead · needs you */
   --gold-strong: #e8c88a;   /* hover of gold */
-  --gold-wash: rgba(217, 179, 108, 0.14);
+  --gold-wash: color-mix(in srgb, var(--gold) 14%, transparent);
   --on-gold: #1b1c1f;
   --sage: #82c29a;          /* done / keep */
-  --sage-wash: rgba(130, 194, 154, 0.14);
+  --sage-wash: color-mix(in srgb, var(--sage) 14%, transparent);
   --violet: #a996f0;        /* made from an older version (outdated) */
-  --violet-wash: rgba(169, 150, 240, 0.16);
+  --violet-wash: color-mix(in srgb, var(--violet) 16%, transparent);
   --red: #ee6e66;           /* error / redo */
-  --red-wash: rgba(238, 110, 102, 0.14);
+  --red-wash: color-mix(in srgb, var(--red) 14%, transparent);
 
   /* music sections on the waveform (cycled; never carry status) */
   --sec-1: #5f7f8c;
@@ -85,6 +90,40 @@
   --dur: 160ms;
 }
 
+/*
+ * Light mode: the same roles on a pale neutral grey, so pictures are still judged
+ * against grey rather than white. The accent and status colours are darker here,
+ * so they keep their contrast as text. index.html sets data-theme before the first
+ * paint; theme.ts owns the choice.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --surround: #e6e6e8;
+  --panel: #f2f2f3;
+  --raised: #fbfbfc;
+  --line: #c9cacf;
+  --line-soft: #dadbde;
+  --well: #d6d7db;
+
+  --ink: #1c1d20;
+  --ink-2: #44464c;
+  --muted: #5f6168;
+  --line-strong: #9a9ca2;
+  --placeholder: #7a7c83;
+  --scrim: rgba(242, 242, 243, 0.9);
+  --label-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+
+  --gold: #8a6421;
+  --gold-strong: #74521a;
+  --on-gold: #fbfbfc;
+  --sage: #2e7a4f;
+  --violet: #6a52c4;
+  --red: #b8392f;
+
+  --float: 0 12px 40px rgba(0, 0, 0, 0.16), 0 0 0 1px var(--line);
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root { --dur: 0ms; }
 }
@@ -101,7 +140,7 @@
   --t-20: 20px;
   --t-28: 28px;
   --spine-transport-w: 232px;
-  --focus-ring: 0 0 0 3px rgba(217, 179, 108, 0.22);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--gold) 22%, transparent);
 }
 
 @media (max-width: 900px) and (min-width: 701px) {

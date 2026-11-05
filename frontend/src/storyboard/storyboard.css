@@ -221,7 +221,7 @@
   background:
     repeating-linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.035) 0 10px,
+      color-mix(in srgb, var(--ink) 4%, transparent) 0 10px,
       transparent 10px 20px
     ),
     var(--well);
@@ -240,8 +240,8 @@
   gap: 5px;
   padding: var(--s-4);
   background:
-    radial-gradient(circle at 70% 20%, rgba(217, 179, 108, 0.12), transparent 55%),
-    linear-gradient(145deg, #2a2b30, #202126);
+    radial-gradient(circle at 70% 20%, color-mix(in srgb, var(--gold) 12%, transparent), transparent 55%),
+    linear-gradient(145deg, var(--raised), var(--panel));
   text-align: center;
 }
 .designed-mark {
@@ -277,7 +277,7 @@
   padding: 2px 6px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(20, 21, 24, 0.82);
+  background: var(--scrim);
   color: var(--ink-2);
   font-size: 10px;
   letter-spacing: 0.04em;

@@ -3,9 +3,30 @@ import { api, type Budget, type Job, type ProjectSummary } from "../api";
 import { useJobs } from "../jobs/store";
 import { toast } from "../toast";
 import { Button, Pill, StatusDot, type PillTone, type StatusTone } from "../ui";
-import { ChatIcon, ClockIcon, GearIcon, MarkIcon } from "../ui/icons";
+import { ChatIcon, ClockIcon, GearIcon, MarkIcon, MoonIcon, SunIcon } from "../ui/icons";
 import { stageWord, type Stage, type StageState } from "./nextStep";
 import { stagesFor } from "./stages";
+import { chooseTheme, currentTheme, followSystemTheme } from "./theme";
+
+function ThemeButton() {
+  const [theme, setTheme] = useState(currentTheme);
+  useEffect(() => followSystemTheme(setTheme), []);
+  const next = theme === "dark" ? "light" : "dark";
+  return (
+    <button
+      type="button"
+      className="icon-btn"
+      aria-label={`Switch to ${next} mode`}
+      title={`Switch to ${next} mode`}
+      onClick={() => {
+        chooseTheme(next);
+        setTheme(next);
+      }}
+    >
+      {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+    </button>
+  );
+}
 
 const JOB_LABEL: Record<string, string> = {
   analysis: "Measuring the song",
@@ -476,6 +497,7 @@ export function TopBar({
             <ChatIcon />
           </button>
         )}
+        <ThemeButton />
         <button type="button" className="icon-btn" aria-label="Settings" onClick={onSettings}>
           <GearIcon />
         </button>

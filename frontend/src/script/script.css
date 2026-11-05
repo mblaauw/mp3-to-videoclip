@@ -26,7 +26,7 @@
   gap: 8px;
 }
 .beat-over {
-  color: var(--danger, #c0392b);
+  color: var(--red);
 }
 .beat-bar {
   height: 4px;
@@ -39,7 +39,7 @@
   background: var(--accent, currentColor);
 }
 .beat-bar span.over {
-  background: var(--danger, #c0392b);
+  background: var(--red);
 }
 .script-line {
   padding: 10px 0;

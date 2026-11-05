@@ -766,7 +766,7 @@
   flex-wrap: wrap;
   gap: var(--s-3);
   padding: 6px var(--s-3);
-  background: rgba(20, 21, 24, 0.86);
+  background: var(--scrim);
   color: var(--ink-2);
   font-size: var(--t-13);
 }
@@ -1139,7 +1139,7 @@
 .film-fullbar {
   height: 8px;
   flex: none;
-  background: rgba(255, 255, 255, 0.14);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
   cursor: ew-resize;
 }
 .film-fullbar i {
@@ -1312,7 +1312,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(236, 234, 229, 0.55);
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
   pointer-events: none;
 }
 

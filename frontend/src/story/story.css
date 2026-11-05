@@ -510,7 +510,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
   pointer-events: none;
 }
 .spine-band.on {
@@ -639,7 +639,7 @@
 }
 
 :where(.shell) :where(input, textarea, select):where(:hover:not(:disabled):not(:focus)) {
-  border-color: #4a4c53;
+  border-color: var(--line-strong);
 }
 
 :where(.shell, .settings-modal) :where(input, textarea, select):focus-visible,
@@ -650,7 +650,7 @@
 }
 
 :where(.shell) :where(input, textarea)::placeholder {
-  color: #7d7f86;
+  color: var(--placeholder);
   opacity: 1;
 }
 

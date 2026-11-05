@@ -999,7 +999,7 @@ body {
   z-index: 2;
   border: 1px solid var(--gold);
   border-radius: 4px;
-  background: rgba(217, 179, 108, 0.12);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
   pointer-events: none;
   overflow: hidden;
 }
@@ -1007,11 +1007,11 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  background: linear-gradient(to right, rgba(27, 28, 31, 0.75), transparent);
+  background: linear-gradient(to right, color-mix(in srgb, var(--surround) 75%, transparent), transparent);
 }
 .spine-fade.out {
   right: 0;
-  background: linear-gradient(to left, rgba(27, 28, 31, 0.75), transparent);
+  background: linear-gradient(to left, color-mix(in srgb, var(--surround) 75%, transparent), transparent);
 }
 .spine-window-label {
   position: absolute;
@@ -1020,7 +1020,7 @@ body {
   color: var(--gold);
   font-size: var(--t-11);
   white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  text-shadow: var(--label-shadow);
 }
 .spine-window-handle {
   position: absolute;
@@ -1087,8 +1087,8 @@ body {
 .spine-cell.none {
   background-image: repeating-linear-gradient(
     135deg,
-    #222327 0 6px,
-    #1a1b1e 6px 12px
+    var(--panel) 0 6px,
+    var(--surround) 6px 12px
   );
 }
 .spine-cell .st {
@@ -1361,7 +1361,7 @@ body {
 }
 
 .tool-group.running {
-  border-color: rgba(217, 179, 108, 0.35);
+  border-color: color-mix(in srgb, var(--gold) 35%, transparent);
 }
 
 /* ------------------------------------------------------------ spine transport */
@@ -1525,7 +1525,7 @@ body {
   z-index: 1;
   border-left: 1px dashed var(--gold);
   border-right: 1px dashed var(--gold);
-  background: rgba(217, 179, 108, 0.08);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
   pointer-events: none;
 }
 
@@ -1535,7 +1535,7 @@ body {
   bottom: 0;
   z-index: 3;
   width: 1px;
-  background: rgba(236, 234, 229, 0.45);
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
   pointer-events: none;
 }
 
