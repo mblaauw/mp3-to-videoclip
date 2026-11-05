@@ -549,7 +549,19 @@ test("film reports a verified final without sending you to Film again", () => {
   );
   assert.equal(step.tone, "done");
   assert.match(step.title, /Final ready/);
-  assert.deepEqual(step.actions, []);
+  // The one way on is Publish, never Film itself.
+  assert.deepEqual(step.actions.map((action) => action.to), ["publish"]);
+});
+
+test("publish waits for the final, then asks for the listening, and rests once released", () => {
+  const before = nextStep("publish", project({ stage_states: states({ film: "you" }) }), approvals(), images(), budget);
+  assert.match(before.title, /Render the final first/);
+  assert.deepEqual(before.actions.map((action) => action.to), ["film"]);
+  const ready = nextStep("publish", project({ stage_states: states({ film: "done" }) }), approvals(), images(), budget);
+  assert.match(ready.title, /Hear it through/);
+  const done = nextStep("publish", project({ stage_states: states({ film: "done" }), released: true }), approvals(), images(), budget);
+  assert.equal(done.tone, "done");
+  assert.match(done.title, /Released/);
 });
 
 test("film skips the preview and titles when this production has neither gate", () => {

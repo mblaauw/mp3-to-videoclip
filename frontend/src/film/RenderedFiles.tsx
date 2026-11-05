@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
+import { useHeard } from "./useHeard";
 import { filmLabel } from "../filmFiles";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { JobBanner } from "../jobs/JobBanner";
@@ -63,6 +64,8 @@ export function RenderedFiles({ film }: { film: FilmData }) {
   const src = selected
     ? `/api/projects/${slug}/film/${selected.kind}/${encodeURIComponent(selected.name)}`
     : null;
+  const [video, setVideo] = useState<HTMLVideoElement | null>(null);
+  useHeard(slug, selected ? `${selected.kind}/${selected.name}` : null, video);
   return (
         <div className="film-files">
           <section className="card player">
@@ -78,12 +81,16 @@ export function RenderedFiles({ film }: { film: FilmData }) {
               <>
                 <video
                   key={src}
+                  ref={setVideo}
                   controls
                   playsInline
                   preload="metadata"
                   aria-label="Rendered film"
                   src={src}
                 />
+                {selected.classification === "final" && (
+                  <p className="hint">What plays here with the sound on counts toward the release.</p>
+                )}
                 <div className="film-meta">
                   <a href={src} download={selected.name}>
                     Download {selected.name}

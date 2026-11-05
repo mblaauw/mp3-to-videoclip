@@ -43,7 +43,11 @@ function FilmShellContent(props: FilmShellContentProps) {
   const { act, approvalStates, approvalsLoaded, audioWindow, board, budget, commitAudioWindow, deliveryAsk, directorBusy, directorOpen, directorPrompt, directorShots, draftOpen, drafted, editOwnsTiming, filmFull, filmLine, filmSide, images, inspectShot, inspectorShot, intake, load, loadError, music, pendingPaid, playerSrc, previousStage, reserve, setAudioWindow, setBoard, setDirectorOpen, setDirectorShots, setDraftOpen, setFilmFull, setFilmLine, setFilmSide, setInspectorShot, setIntake, setPendingPaid, setStoryBands, setTitlesReady, shellStates, shotKinds, slug, spineBoard, spokenLines, step, storyBands, windowBusy } = useFilmShellData(props);
   return (
     <ApprovalsProvider value={{ states: approvalStates, loaded: approvalsLoaded }}>
-    <PlayerProvider src={playerSrc} fallbackDuration={intake?.duration || project.duration || 0}>
+    <PlayerProvider
+      src={playerSrc}
+      fallbackDuration={intake?.duration || project.duration || 0}
+      heardFor={stage === "film" || stage === "sound" ? slug : null}
+    >
       <div className={`shell ${stage === "film" ? "on-film" : ""} ${filmFull ? "film-full" : ""}`}>
         <TopBar
           project={project}

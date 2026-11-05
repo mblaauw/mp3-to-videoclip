@@ -9,6 +9,7 @@ import { type PaidRequest } from "./shellState";
 
 import { ScriptStage } from "../stages/Script";
 import { SoundStage } from "../stages/Sound";
+import { PublishStage } from "../stages/Publish";
 
 export function StageView({
   filmSide,
@@ -60,6 +61,7 @@ export function StageView({
   if (stage === "track") return <TrackStage slug={slug} />;
   if (stage === "script") return <ScriptStage slug={slug} />;
   if (stage === "sound") return <SoundStage slug={slug} />;
+  if (stage === "publish") return <PublishStage slug={slug} />;
   if (stage === "story")
     return (
       <StoryStage

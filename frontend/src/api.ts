@@ -28,6 +28,7 @@ export type ProjectSummary = {
   sound_cues?: number;
   sound_sounding?: number;
   series?: { id: string; episode: number } | null;
+  released?: boolean;
   spine?: string | null;
   stage_states?: { [key: string]: "done" | "you" | "changed" | "not_ready" };
   still_count: number;
@@ -788,7 +789,7 @@ export type HistoryRestore = {
 export type DeliveryLine = {
   id: string;
   label: string;
-  stage: "track" | "script" | "story" | "storyboard" | "images" | "sound" | "film";
+  stage: "track" | "script" | "story" | "storyboard" | "images" | "sound" | "film" | "publish";
   state: "done" | "you" | "blocked" | "optional";
   required: boolean;
   detail: string;
@@ -804,6 +805,33 @@ export type DeliveryChecklist = {
   lines: DeliveryLine[];
   stills: { kept: number; total: number };
   outstanding: string[];
+};
+
+export type PublishLine = {
+  id: string;
+  label: string;
+  stage: string;
+  state: "done" | "you" | "optional";
+  required: boolean;
+  detail: string;
+};
+
+export type PublishCopy = { titles: string[]; description: string; tags: string[]; by: string; at: string };
+
+export type PublishView = {
+  final: string | null;
+  heard: { media?: string; heard: number; total: number; share: number; watched: boolean };
+  lines: PublishLine[];
+  can_release: boolean;
+  outstanding: string[];
+  released: { at: string; final: string; final_sha256: string; presets: string[] } | null;
+  presets: string[];
+  copy: PublishCopy | null;
+  thumbnail: { name: string; frame: number; final: string } | null;
+  thumbnails: { name: string; frame: number; bytes: number; sha256: string }[];
+  plan: { id: string; label: string; aspect?: string; has: string[]; missing: string[] }[];
+  presets_available: { id: string; label: string; aspect: string; wants: string[] }[];
+  has_words: boolean;
 };
 
 export type LibraryView = {
@@ -1325,6 +1353,24 @@ export const api = {
       `/api/projects/${slug}/soundtrack/sound?filename=${encodeURIComponent(file.name)}`,
       { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } },
     ),
+  recordWatched: (slug: string, media: string, seconds: number[], total?: number) =>
+    request<{ heard: number; total: number; share: number; watched: boolean }>(
+      `/api/projects/${slug}/watched`,
+      { method: "POST", body: JSON.stringify({ media, seconds, ...(total ? { total } : {}) }) },
+    ),
+  publish: (slug: string) => request<PublishView>(`/api/projects/${slug}/publish`),
+  savePublishCopy: (slug: string, copy: { titles: string[]; description: string; tags: string[] }) =>
+    request<PublishView>(`/api/projects/${slug}/publish/copy`, { method: "PUT", body: JSON.stringify(copy) }),
+  checkPublishCopy: (slug: string, copy: { titles: string[]; description: string; tags: string[] }) =>
+    request<{ problems: string[] }>(`/api/projects/${slug}/publish/check`, { method: "POST", body: JSON.stringify(copy) }),
+  savePresets: (slug: string, presets: string[]) =>
+    request<PublishView>(`/api/projects/${slug}/publish/presets`, { method: "PUT", body: JSON.stringify({ presets }) }),
+  makeThumbnails: (slug: string, title?: string) =>
+    request<PublishView>(`/api/projects/${slug}/publish/thumbnails`, { method: "POST", body: JSON.stringify(title ? { title } : {}) }),
+  chooseThumbnail: (slug: string, name: string) =>
+    request<PublishView>(`/api/projects/${slug}/publish/choose`, { method: "POST", body: JSON.stringify({ name }) }),
+  release: (slug: string, note: string) =>
+    request<PublishView>(`/api/projects/${slug}/publish/release`, { method: "POST", body: JSON.stringify({ note }) }),
   library: () => request<LibraryView>("/api/library"),
   promoteEntry: (slug: string, kind: string, id: string, label?: string) =>
     request<LibraryView & { entry: import("./library/entries").LibraryEntry }>("/api/library/promote", {

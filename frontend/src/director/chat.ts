@@ -49,6 +49,7 @@ export const SUGGESTIONS: Record<Stage, string[]> = {
   ],
   images: ["Review the stills against the brief.", "Rewrite the prompts of the shots marked Redo."],
   sound: ["Write the sound cues for this film.", "Which moment earns an effect?", "What should the bed avoid?"],
+  publish: ["Write the release copy.", "Three titles that lead with different things.", "Which tags fit this film?"],
   film: ["Make a first cut.", "Where does the cut feel slow?", "Suggest transitions for the chorus."],
 };
 

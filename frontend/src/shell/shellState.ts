@@ -109,6 +109,7 @@ export function derivedStates(
   base.sound = soundState(project.sound_cues ?? 0, project.sound_sounding ?? 0);
   base.film =
     base.film === "done" ? "done" : base.images === "done" ? "you" : "not_ready";
+  base.publish = base.film !== "done" ? "not_ready" : project.released ? "done" : "you";
   return base;
 }
 

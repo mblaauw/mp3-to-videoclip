@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { useHeard } from "../film/useHeard";
 
 /** A span the player repeats while it plays (a shot, a section, the excerpt). */
 export type LoopRange = { start: number; end: number; label: string };
@@ -75,13 +76,17 @@ function storedVolume(): { volume: number; muted: boolean } {
 export function PlayerProvider({
   src,
   fallbackDuration,
+  heardFor = null,
   children,
 }: {
   src: string | null;
   fallbackDuration: number;
+  /** The film whose listening this Player reports; null keeps the Player silent about it. */
+  heardFor?: string | null;
   children: ReactNode;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const timeRef = useRef(0);
   const listeners = useRef(new Set<() => void>());
   const [duration, setDuration] = useState(fallbackDuration || 0);
@@ -116,7 +121,9 @@ export function PlayerProvider({
     setDuration(fallbackDuration || 0);
     setPlaying(false);
     setLoopState(null);
+    setAudioElement(audioRef.current);
   }, [src, fallbackDuration, publish]);
+  useHeard(heardFor, src ? `live:${src}` : null, audioElement, duration);
 
   useEffect(() => {
     const audio = audioRef.current;

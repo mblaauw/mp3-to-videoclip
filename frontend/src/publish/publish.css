@@ -1,0 +1,87 @@
+.publish-stage {
+  display: grid;
+  gap: 16px;
+}
+.publish-stage .panel-gates {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.publish-stage .panel-gates li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.publish-stage .gate-copy {
+  display: grid;
+  gap: 2px;
+}
+.publish-stage .panel-gates li.done .gate-mark {
+  color: var(--green, #2e8b57);
+}
+.heard-bar {
+  height: 4px;
+  margin-top: 4px;
+  background: var(--line, rgba(127, 127, 127, 0.25));
+}
+.heard-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent, currentColor);
+}
+.publish-plan {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.publish-plan li {
+  display: grid;
+  gap: 2px;
+}
+.thumb-grid {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.thumb-grid button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 4px;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.thumb-grid li.chosen button {
+  border-color: var(--accent, currentColor);
+}
+.thumb-grid img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.publish-copy {
+  display: grid;
+  gap: 8px;
+}
+.publish-copy input,
+.publish-copy textarea {
+  width: 100%;
+}
+.publish-problems {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--red);
+}

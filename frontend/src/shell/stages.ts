@@ -7,6 +7,7 @@ export const STAGES: readonly { id: Stage; label: string }[] = [
   { id: "images", label: "Images" },
   { id: "sound", label: "Sound" },
   { id: "film", label: "Film" },
+  { id: "publish", label: "Publish" },
 ];
 
 /** A story film has no song to measure: its words come after its brief. */
@@ -17,6 +18,7 @@ const STORY_FILM_STAGES: readonly { id: Stage; label: string }[] = [
   { id: "images", label: "Images" },
   { id: "sound", label: "Sound" },
   { id: "film", label: "Film" },
+  { id: "publish", label: "Publish" },
 ];
 
 export function stagesFor(spine?: string | null): readonly { id: Stage; label: string }[] {

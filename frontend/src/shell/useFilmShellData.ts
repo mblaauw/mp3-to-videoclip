@@ -225,6 +225,7 @@ export function useFilmShellData({
     has_storyboard: project.shots > 0,
     sound_cues: project.sound_cues,
     sound_sounding: project.sound_sounding,
+    released: project.released,
     placeholder_shot_ids: board?.placeholder_shot_ids,
     permission_pending: (intake?.brief?.characters || [])
       .filter((character) => character.permission_confirmed === false)

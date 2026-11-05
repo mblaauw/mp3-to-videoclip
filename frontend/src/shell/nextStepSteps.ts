@@ -350,3 +350,29 @@ export function soundStep(project: ProjectFacts): NextStep {
     actions: continueTo("film", "Go to Film"),
   };
 }
+
+/** Publish follows the final: nothing to release until Film says the final is ready. */
+export function publishStep(project: ProjectFacts): NextStep {
+  if (stateOf(project, "film") !== "done") {
+    return {
+      tone: "you",
+      title: "Render the final first",
+      detail: "The release list reads the current verified final; there is none yet.",
+      actions: continueTo("film", "Go to Film"),
+    };
+  }
+  if (project.released) {
+    return {
+      tone: "done",
+      title: "Released",
+      detail: "The release is recorded beside the final. A new final starts the list again.",
+      actions: [],
+    };
+  }
+  return {
+    tone: "you",
+    title: "Hear it through, write the copy, pick a thumbnail",
+    detail: "The first line is measured: the final has to play here with the sound on.",
+    actions: [],
+  };
+}

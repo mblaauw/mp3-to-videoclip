@@ -110,6 +110,7 @@ function FilmCard({
         </span>
         {project.remaining_usd && <span>${project.remaining_usd} left</span>}
         {project.series && <span>Episode {project.series.episode}</span>}
+        {project.released && <span>Released</span>}
       </div>
       <div className="todo">
         <StatusDot tone={STATE_TONE[project.stage_states?.[project.next_step || ""] || "you"]} />
