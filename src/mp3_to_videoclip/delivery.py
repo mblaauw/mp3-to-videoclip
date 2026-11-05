@@ -21,7 +21,7 @@ CONTACT_FRAMES = 20
 MIN_CHAPTER_SECONDS = 10.0
 POSTER_SAMPLE_SECONDS = 2.0
 SIDECAR = re.compile(
-    r"[a-z0-9][a-z0-9-]*\.(?:poster-f\d+\.(?:png|jpg)|contact\.png|chapters\.txt|ffmetadata|srt|vtt|package-f\d+\.json)"
+    r"[a-z0-9][a-z0-9-]*\.(?:poster-f\d+\.(?:png|jpg)|contact\.png|chapters\.txt|ffmetadata|srt|vtt|package-f\d+\.json|thumb-f\d+-\d\.jpg|publish\.json)"
 )
 MEDIA = {
     ".png": "image/png",
