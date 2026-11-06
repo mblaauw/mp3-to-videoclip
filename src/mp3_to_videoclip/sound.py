@@ -428,6 +428,9 @@ def placed(root: Path, project: Project) -> list[tuple[dict, dict, float, float,
             continue
         end = min(end, project.duration)
         if end <= start:
+            # A cue at one moment, its end on its start, plays its sound whole from there.
+            end = min(project.duration, start + float(chosen.get("seconds") or 0))
+        if end <= start:
             continue
         times = place_times(project, cue, found, start, end)
         if times is not None and not times:
@@ -666,8 +669,10 @@ def report(root: Path, project: Project | None = None) -> dict:
         except ValueError as exc:
             notes.append({"code": "cue_unplaced", "cue": cue["id"], "message": f"{cue['id']}: {exc}."})  # fmt: skip
             continue
-        if end <= start:
+        if end < start:
             notes.append({"code": "cue_empty", "cue": cue["id"], "message": f"{cue['id']} ends before it starts."})  # fmt: skip
+        elif end == start and chosen is None:
+            notes.append({"code": "cue_moment", "cue": cue["id"], "message": f"{cue['id']} is a moment; its sound will play whole from there once it has one."})  # fmt: skip
         elif end > project.duration + 1e-6:
             notes.append({"code": "cue_past_end", "cue": cue["id"], "message": f"{cue['id']} runs {end - project.duration:.1f} s past the end; it is cut there."})  # fmt: skip
         times = place_times(project, cue, found, start, min(end, project.duration))

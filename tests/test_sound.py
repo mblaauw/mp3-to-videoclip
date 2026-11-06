@@ -203,6 +203,29 @@ def test_a_cue_on_a_shot_follows_the_cut_and_one_sound_lands_at_each_place(song_
     assert receipt["placements"]["tick"] == len(times)
 
 
+def test_an_effect_at_one_moment_plays_its_sound_whole_from_there(song_film, tmp_path):  # noqa: F811
+    root = song_film
+    project = P.load_project(root)
+    sound.set_cues(root, [{"id": "hit", "kind": "effect", "start": {"frame": 24}, "end": {"frame": 24}, "loop": False, "gain_db": -20}])  # fmt: skip
+    assert sound.placed(root, project) == []  # silent: nothing to play yet
+    sound.import_sound(
+        root, "hit", tone(tmp_path / "hit.wav", 0.5, frequency=3000.0, amplitude=0.5)
+    )
+    [(cue, _chosen, start, end, times)] = sound.placed(root, project)
+    assert cue["id"] == "hit" and start == 1.0 and end == 1.5 and times is None
+    report = sound.report(root, project)
+    assert not [note for note in report["notes"] if note.get("code") in ("cue_empty", "cue_moment")]
+    mixed = voice._decode(P.film_audio(root, project), 2)
+    sound.select(root, "hit", None)
+    quiet = voice._decode(P.film_audio(root, project), 2)
+    diff = mixed - quiet
+    rate = music.SAMPLE_RATE
+    assert float(np.sqrt(np.mean(np.square(diff[round(1.05 * rate) : round(1.45 * rate)])))) > 0.01
+    assert float(np.sqrt(np.mean(np.square(diff[round(1.6 * rate) : round(1.9 * rate)])))) < 1e-4
+    # Muted, the moment is named so the owner knows it waits for a sound.
+    assert [note["code"] for note in sound.report(root, project)["notes"] if note.get("cue") == "hit"] == ["cue_silent", "cue_moment"]  # fmt: skip
+
+
 def test_a_cue_on_a_beat_spans_its_lines_and_an_unplaced_cue_is_reported(story, tmp_path):
     root, script = story
     ids = [line.id for line in script.lines]

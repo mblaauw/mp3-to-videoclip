@@ -187,3 +187,14 @@ proving step is not part of this branch.
 - No cue has been bought and no ElevenLabs take has been made: the first of each, under
   five cents, needs the owner's authorization in the Studio. Whether a placed effect reads
   as one at the cut is the owner's ear to judge on a real film.
+
+## Found on the owner's film, 6 Nov 2026
+
+- Every effect the Writer placed on Cool Cat had its end on its start, a moment, and
+  a moment spanned nothing, so the five bought effects were silent and the owner heard
+  no cue at all under the song. A cue whose end is on its start now plays its sound
+  whole from there, and the report names a muted moment instead of calling it empty.
+- "Approve this cut" on Film failed, because the full set signs off on top of the
+  style check and this film's style check had gone stale on 31 October. The Film step
+  now sends the owner to Images to approve the style check first instead of offering
+  a button that can only be refused.
