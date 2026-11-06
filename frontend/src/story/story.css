@@ -688,3 +688,45 @@
 .next-bar .ui-btn[aria-busy="true"] {
   cursor: progress;
 }
+
+/* The Narration card: who speaks, with what, at what price. */
+.narration-persona {
+  margin: 0 0 var(--s-3);
+}
+.narration-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-3) var(--s-4);
+  align-items: start;
+}
+.narration-fields audio {
+  width: 100%;
+  max-width: 320px;
+}
+.narration-hear {
+  display: grid;
+  gap: 4px;
+}
+.narration-hear small {
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.narration-beats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-12);
+}
+.narration-beats li {
+  display: grid;
+}
+.narration-beats b {
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}
+.narration-beats span {
+  color: var(--muted);
+}

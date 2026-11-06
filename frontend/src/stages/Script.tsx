@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { api, type ScriptLine, type ScriptPayload, type Take } from "../api";
 import { useResource } from "../api/useResource";
+import { Buy } from "../script/Buy";
 import { lineAt, parsePasted } from "../script/parse";
 import { notifyProjectChanged } from "../shell/projectEvents";
+import { goFilm } from "../shell/route";
 import { Button, ErrorState } from "../ui";
 import "../script/script.css";
 
@@ -83,72 +85,6 @@ function BeatSheet({ data }: { data: ScriptPayload }) {
 }
 
 /** Two clicks: first the price, then the purchase. */
-function Buy({
-  slug,
-  label,
-  lineIds,
-  regenerate,
-}: {
-  slug: string;
-  label: string;
-  lineIds?: string[];
-  regenerate?: boolean;
-}) {
-  const [quote, setQuote] = useState<{ id: string; price: string; lines: number } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const run = async (step: () => Promise<void>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await step();
-    } catch (caught) {
-      setError(String(caught));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <span className="make-sharper">
-      {quote ? (
-        <>
-          <Button
-            size="small"
-            variant="primary"
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                const started = await api.generateLines(slug, quote.id);
-                if (started.needs_budget) throw new Error("The budget has no room for this.");
-                setQuote(null);
-              })
-            }
-          >
-            Buy {quote.lines} line{quote.lines === 1 ? "" : "s"} · ${quote.price}
-          </Button>
-          <Button size="small" variant="quiet" disabled={busy} onClick={() => setQuote(null)}>
-            Not now
-          </Button>
-        </>
-      ) : (
-        <Button
-          size="small"
-          disabled={busy}
-          onClick={() =>
-            void run(async () => {
-              const made = await api.estimateLines(slug, { line_ids: lineIds, regenerate });
-              setQuote({ id: made.quote_id, price: made.reserve_usd, lines: made.tasks });
-            })
-          }
-        >
-          {busy ? "Working it out…" : label}
-        </Button>
-      )}
-      {error && <ErrorState what="pricing the takes" error={error} compact />}
-    </span>
-  );
-}
-
 function LineRow({
   slug,
   line,
@@ -356,23 +292,25 @@ export function ScriptStage({ slug }: { slug: string }) {
           <>
             <section className="stage-block">
               <h2>
-                Voice <small>{data.narration.voice}</small>
+                Voice{" "}
+                <small>
+                  {data.voices.find((voice) => voice.id === data.narration.voice)?.label ?? data.narration.voice} ·{" "}
+                  {data.narration.model}
+                </small>
               </h2>
               <div className="row-actions">
-                <select
-                  aria-label="Narrator"
-                  value={data.narration.voice}
-                  onChange={(event) => void act(() => api.chooseVoice(slug, event.target.value))}
+                <Button
+                  size="small"
+                  variant="quiet"
+                  onClick={() => {
+                    goFilm(slug, "story");
+                    window.setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent("studio:story-part", { detail: "world" }));
+                    }, 0);
+                  }}
                 >
-                  {data.voices.map((voice) => (
-                    <option key={voice.id} value={voice.id}>
-                      {voice.label || voice.id}
-                    </option>
-                  ))}
-                  {!data.voices.some((voice) => voice.id === data.narration.voice) && (
-                    <option value={data.narration.voice}>{data.narration.voice}</option>
-                  )}
-                </select>
+                  Change the voice on Story
+                </Button>
                 <Buy slug={slug} label="Hear the first line" lineIds={[lines[0]?.id]} regenerate />
                 <Buy slug={slug} label="Record the lines" />
                 <Button

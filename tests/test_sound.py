@@ -144,6 +144,90 @@ def test_a_song_film_takes_cues_by_frame_only(song_film, tmp_path):  # noqa: F81
     assert P.stage_hash(root, "brief") == P.stage_hash(root, "brief")
 
 
+def test_a_cue_on_a_shot_follows_the_cut_and_one_sound_lands_at_each_place(song_film, tmp_path):  # noqa: F811
+    root = song_film
+    project = P.load_project(root)
+    board = P.load_board(root)
+    first, second = board.shots[0], board.shots[1]
+    with pytest.raises(ValueError, match="no shot nope"):
+        sound.set_cues(root, [{"id": "x", "start": {"shot": "nope"}}])
+    with pytest.raises(ValueError, match="only a story film"):
+        sound.set_cues(root, [{"id": "x", "start": {"beat": "hook"}}])
+    sound.set_cues(root, [
+        {"id": "cut", "kind": "effect", "start": {"shot": second.id}, "end": {"shot": second.id}, "loop": False, "gain_db": 0},  # fmt: skip
+        {"id": "tick", "kind": "effect", "start": {"frame": 0}, "end": {"frame": -1}, "loop": False, "gain_db": 0, "places": {"every": 1.0}},  # fmt: skip
+        {"id": "cuts", "kind": "effect", "start": {"frame": 0}, "end": {"frame": -1}, "loop": False, "gain_db": 0, "places": {"at": [{"shot": first.id}, {"shot": second.id}]}},  # fmt: skip
+    ])  # fmt: skip
+    found = sound.sources(root, project)
+    cut = sound.read(root)["cues"][0]
+    start, end = sound.span_seconds(project, cut, found)
+    assert start == second.start_frame / project.fps
+    assert end == (second.start_frame + second.duration_frames) / project.fps
+    tick = sound.read(root)["cues"][1]
+    times = sound.place_times(project, tick, found, 0.0, project.duration)
+    assert times == [float(index) for index in range(len(times))] and len(times) >= 2
+    assert times[-1] < project.duration <= times[-1] + 1.0
+    cuts = sound.read(root)["cues"][2]
+    assert sound.place_times(project, cuts, found, 0.0, project.duration) == sorted(
+        [first.start_frame / project.fps, second.start_frame / project.fps]
+    )
+    # Jitter is fixed per placement, so the same list mixes the same bytes.
+    sound.set_cues(root, [{**tick, "id": "tick", "places": {"every": 1.0, "jitter": 0.2}}])
+    jittered = sound.read(root)["cues"][0]
+    once = sound.place_times(project, jittered, found, 0.0, project.duration)
+    assert once == sound.place_times(project, jittered, found, 0.0, project.duration)
+    assert all(abs(at - index * 1.0) <= 0.2 for index, at in enumerate(once))
+    with pytest.raises(ValueError, match="every must be between"):
+        sound.set_cues(root, [{"id": "x", "places": {"every": 0.1}}])
+    with pytest.raises(ValueError, match="not both"):
+        sound.set_cues(root, [{"id": "x", "places": {"every": 1, "at": [{"frame": 0}]}}])
+
+    # One short sound, bought once, heard at every second.
+    sound.set_cues(root, [{**tick, "id": "tick", "places": {"every": 1.0}}])
+    sound.import_sound(root, "tick", tone(tmp_path / "tick.wav", 0.2, frequency=3000.0, amplitude=0.5))  # fmt: skip
+    before = voice._decode(P.film_audio(root, P.load_project(root)), 2)
+    sound.select(root, "tick", None)
+    quiet = voice._decode(P.film_audio(root, P.load_project(root)), 2)
+    layer = before - quiet
+    rate = music.SAMPLE_RATE
+
+    def level(first_s: float, last_s: float) -> float:
+        return float(
+            np.sqrt(np.mean(np.square(layer[round(first_s * rate) : round(last_s * rate)])))
+        )
+
+    assert level(0.0, 0.15) > 0.05 and level(1.0, 1.15) > 0.05
+    assert level(0.4, 0.9) < 1e-4  # between placements: nothing
+    sound.select(root, "tick", 1)
+    receipt = read_json(P.film_audio(root, P.load_project(root)).with_suffix(".json"))
+    assert receipt["placements"]["tick"] == len(times)
+
+
+def test_a_cue_on_a_beat_spans_its_lines_and_an_unplaced_cue_is_reported(story, tmp_path):
+    root, script = story
+    ids = [line.id for line in script.lines]
+    beat = script.lines[0].beat
+    with pytest.raises(ValueError, match="no beat nope"):
+        sound.set_cues(root, [{"id": "x", "start": {"beat": "nope"}}])
+    sound.set_cues(root, [
+        {"id": "air", "kind": "ambience", "start": {"beat": beat}, "end": {"beat": beat}},
+        {"id": "late", "kind": "effect", "start": {"frame": 10}, "end": {"frame": 20}, "places": {"at": [{"frame": 0}]}},  # fmt: skip
+    ])  # fmt: skip
+    project = P.load_project(root)
+    rows = {row["id"]: row for row in narration_timing.layout(root)}
+    mine = [row for row in rows.values() if row["beat"] == beat]
+    start, end = sound.span_seconds(
+        project, sound.read(root)["cues"][0], sound.sources(root, project)
+    )
+    assert start == min(row["start"] for row in mine)
+    assert end == max(row["end"] + row["pause_after"] for row in mine)
+    assert ids[0] in rows
+    report = sound.report(root, project)
+    assert {note["code"] for note in report["notes"] if note.get("cue") == "late"} >= {
+        "cue_no_places"
+    }
+
+
 def test_suggestions_follow_the_structure_and_write_nothing(story):
     root, script = story
     cues = sound.suggest(root)
@@ -287,6 +371,23 @@ def test_a_quote_fits_the_model_schema_and_reserves_from_the_catalogue(cued, tmp
     request = effects["tasks"][0]["request"]
     assert request["duration"] == 6.0 and "settings" not in request  # three 1.5 s takes and pauses
     assert Decimal(effects["tasks"][0]["reserve_usd"]) == Decimal("0.01")
+    # A cue that names its model is made with it; a model the catalogue lacks is refused.
+    with pytest.raises(ValueError, match="lists no music model"):
+        sound.set_cues(
+            root, [{"id": "bed", "kind": "music", "prompt": "x", "model": "mirelo-sfx-1-5"}]
+        )
+    sound.set_cues(root, [
+        {"id": "bed", "kind": "music", "prompt": "a slow instrumental bed", "model": "minimax-music-2-6"},
+        {"id": "bed-2", "kind": "music", "prompt": "another bed"},
+    ])  # fmt: skip
+    with pytest.raises(ValueError, match="different models separately"):
+        sound.quote_cues(root, ["bed", "bed-2"], client=client)
+    named = sound.quote_cues(root, ["bed"], client=FakeSound(tmp_path / "bed.wav", schema=effects_schema()))  # fmt: skip
+    assert named["model"] == "minimax-music-2-6"
+    # A sound placed every two seconds is bought once, two seconds long.
+    sound.set_cues(root, [{"id": "tick", "kind": "effect", "prompt": "a clock tick", "places": {"every": 2.0}}])  # fmt: skip
+    ticks = sound.quote_cues(root, ["tick"], model="mirelo-sfx-1-5", client=FakeSound(tmp_path / "bed.wav", schema=effects_schema()))  # fmt: skip
+    assert ticks["tasks"][0]["request"]["duration"] == 2.0
 
 
 def test_a_speech_model_is_refused_as_a_sound_model(cued, tmp_path):

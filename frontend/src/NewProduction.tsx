@@ -34,15 +34,12 @@ const KIND_HINT: Record<string, string> = {
   narrative: "A narrator leads. It starts from words; music is optional.",
 };
 
-type Voice = NonNullable<Settings["voice_list"]>[number];
-
 type Loaded = {
   kinds: KindProfile[];
   formats: Format[];
   looks: StylePreset[];
   destinations: Destination[];
   structures: NonNullable<Settings["structures"]>;
-  voices: Voice[];
   defaultTitles: Record<string, string>;
   defaultLook: string;
   defaultKind: string;
@@ -58,7 +55,6 @@ function read(settings: Settings): Loaded {
     looks: settings.style_presets ?? [],
     destinations: settings.publish_presets ?? [],
     structures: settings.structures ?? [],
-    voices: settings.voice_list ?? [],
     defaultTitles: settings.default_titles ?? {},
     defaultLook: start.look,
     defaultKind: start.kind,
@@ -117,7 +113,6 @@ export function NewProduction({
   const [message, setMessage] = useState("");
   const [cta, setCta] = useState("");
   const [ctaUrl, setCtaUrl] = useState("");
-  const [voice, setVoice] = useState("");
   const [fictional, setFictional] = useState(false);
   const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [series, setSeries] = useState("");
@@ -148,7 +143,6 @@ export function NewProduction({
         const value = read(settings);
         setLoaded(value);
         if (settings.new_films.budget_usd > 0) setBudget(settings.new_films.budget_usd.toFixed(2));
-        setVoice(value.voices.find((item) => item.recommended)?.id ?? value.voices[0]?.id ?? "");
         const opening = openingFormat(value);
         if (opening) pick(opening, value);
       })
@@ -229,6 +223,9 @@ export function NewProduction({
   const look = looks.find((item) => item.id === choices.look);
   const storyTemplates = loaded.structures;
   const changed = adjusted(choices, start);
+  const structureLabel = isStory
+    ? storyTemplates.find((item) => item.id === choices.structure)?.label ?? ""
+    : choices.structure ?? "";
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -253,7 +250,6 @@ export function NewProduction({
         length_seconds: wholeTrack ? undefined : choices.length,
         fade_out: wholeTrack ? undefined : 1.5,
         destinations: choices.destinations,
-        voice: isStory ? voice || undefined : undefined,
         series: series || undefined,
         episode: series ? episode : undefined,
       });
@@ -265,12 +261,119 @@ export function NewProduction({
     }
   };
 
+  // The format's answers, each a fact the preview shows and a click can change.
+  const facts = (
+    <dl className="nf-facts">
+      <dt>Length</dt>
+      <dd>
+        {lengths.length > 1 ? (
+          <Segmented label="Length">
+            {lengths.map((value) => (
+              <Option key={value} checked={choices.length === value} onPick={() => set({ length: value })}>
+                {value === WHOLE_TRACK ? "Whole song" : clock(value)}
+              </Option>
+            ))}
+          </Segmented>
+        ) : (
+          <span>The whole song</span>
+        )}
+      </dd>
+      <dt>Shape</dt>
+      <dd>
+        <Segmented label="Shape">
+          {(["16:9", "9:16"] as const).map((value) => (
+            <Option key={value} checked={choices.aspect === value} onPick={() => changeShape(value)}>
+              <span className={`nf-glyph small ${value === "9:16" ? "tall" : "wide"}`} aria-hidden="true" />
+              {value === "16:9" ? "16:9 landscape" : "9:16 portrait"}
+            </Option>
+          ))}
+        </Segmented>
+      </dd>
+      <dt>{isStory ? "Structure" : "First concept"}</dt>
+      <dd>
+        <span>{structureLabel || "The Writer proposes three on Story"}</span>
+        <small>
+          {isStory
+            ? "The beats the script fills, scaled to the length. A format is its structure."
+            : structureLabel
+              ? "Story's first concept uses it; the other two may differ."
+              : "Story offers concepts in different structures to choose from."}
+        </small>
+      </dd>
+      <dt>Titles</dt>
+      <dd>
+        <select aria-label="Titles" value={choices.titles} onChange={(event) => set({ titles: event.target.value })}>
+          {titleOptions.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        <small>{TITLES.find((item) => item.id === choices.titles)?.hint}</small>
+      </dd>
+      <dt>Look</dt>
+      <dd>
+        <span className="nf-look-row">
+          <span className={`look-swatch nf-swatch preset-${choices.look}`} aria-hidden="true" />
+          <select aria-label="Look" value={choices.look} onChange={(event) => set({ look: event.target.value })}>
+            {looks.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </span>
+        <small>{look?.description ? `${look.description} ` : ""}Change it on Story, beside the cast and places.</small>
+      </dd>
+      <dt>Goes to</dt>
+      <dd>
+        <fieldset className="nf-places">
+          <legend className="sr-only">Goes to</legend>
+          <div className="chips">
+            {places.map((item) => (
+              <label className="ui-chip" key={item.id}>
+                <input
+                  type="checkbox"
+                  checked={choices.destinations.includes(item.id)}
+                  onChange={(event) => {
+                    const next = event.target.checked
+                      ? [...choices.destinations, item.id]
+                      : choices.destinations.filter((id) => id !== item.id);
+                    if (next.length) set({ destinations: next });
+                  }}
+                />{" "}
+                {item.label}
+              </label>
+            ))}
+          </div>
+          <small>Publish packs a version for each. You can change them there.</small>
+        </fieldset>
+      </dd>
+      {isStory && (
+        <>
+          <dt>Narrator</dt>
+          <dd>
+            <span>Settings' voice</span>
+            <small>Chosen and heard on Story, where the words are, before any line is recorded.</small>
+          </dd>
+        </>
+      )}
+      <dt>Budget</dt>
+      <dd>
+        {money === null ? "Not set" : `$${money.toFixed(2)}`}
+        {stillsFor(money, loaded.reservePerStill) !== null && (
+          <small> about {stillsFor(money, loaded.reservePerStill)} stills</small>
+        )}
+      </dd>
+    </dl>
+  );
+
   return (
     <form className="new-film" onSubmit={submit} aria-label="New film">
       <div className="nf-main">
         <header className="nf-head">
           <h2>New film</h2>
-          <p>Choose what you're making. Everything here can still change on Story; nothing is spent until you make pictures.</p>
+          <p>Choose what you're making; the format answers the rest, shown beside it. Everything can still change on Story; nothing is spent until you make pictures.</p>
         </header>
         {error && <ErrorState what="creating the film" error={error} compact />}
 
@@ -315,10 +418,19 @@ export function NewProduction({
           </div>
         </section>
 
-        <section className="nf-section" aria-labelledby="nf-source">
-          <h3 id="nf-source">{isStory ? "Music bed" : "The song"}</h3>
+        <section className="nf-section nf-grid" aria-labelledby="nf-brief">
+          <h3 id="nf-brief" className="nf-span">The film</h3>
+          <label className="nf-field nf-span">
+            <span>Title</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={isStory ? "Name the film" : "Taken from the MP3's name when you add it"}
+              maxLength={120}
+            />
+          </label>
           <label
-            className={`nf-drop ${dragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
+            className={`nf-drop nf-span ${isStory ? "compact" : ""} ${dragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
             onDragOver={(event) => {
               event.preventDefault();
               setDragging(true);
@@ -346,24 +458,25 @@ export function NewProduction({
               </>
             ) : (
               <>
-                <strong>{isStory ? "Drop a music bed, if you want one" : "Drop an MP3 or choose a file"}</strong>
-                <span>{isStory ? "Optional. " : ""}MP3, up to 50 MB. It stays on this computer.</span>
+                <strong>{isStory ? "Add a music bed, optional" : "Drop the song, or choose a file"}</strong>
+                <span>
+                  {isStory
+                    ? "MP3, up to 50 MB. The Sound stage can also make one or take one later."
+                    : "MP3, up to 50 MB. It stays on this computer."}
+                </span>
               </>
             )}
           </label>
-        </section>
-
-        <section className="nf-section nf-grid" aria-labelledby="nf-brief">
-          <h3 id="nf-brief" className="nf-span">The film</h3>
-          <label className="nf-field nf-span">
-            <span>Title</span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder={isStory ? "Name the film" : "Taken from the MP3's name when you add it"}
-              maxLength={120}
-            />
-          </label>
+          {!isStory && (
+            <Segmented label="Music" className="nf-field">
+              <Option checked={mode === "vocal"} onPick={() => setMode("vocal")}>
+                Vocals
+              </Option>
+              <Option checked={mode === "instrumental"} onPick={() => setMode("instrumental")}>
+                Instrumental
+              </Option>
+            </Segmented>
+          )}
           {!isVideo && !isStory && (
             <>
               <label className="nf-field nf-span">
@@ -396,144 +509,14 @@ export function NewProduction({
             </>
           )}
           {isStory && (
-            <>
-              <label className="nf-field">
-                <span>Narrator</span>
-                <select value={voice} onChange={(event) => setVoice(event.target.value)}>
-                  {loaded.voices.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                      {item.recommended ? " (Settings' choice)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <small>Hear it, and change it, on Script before any line is recorded.</small>
-              </label>
-              <label className="nf-switch">
-                <input type="checkbox" checked={fictional} onChange={(event) => setFictional(event.target.checked)} />
-                <span>
-                  <b>An invented world</b>
-                  <small>The Writer may invent people and places, and lists everything it invents.</small>
-                </span>
-              </label>
-            </>
+            <label className="nf-switch nf-span">
+              <input type="checkbox" checked={fictional} onChange={(event) => setFictional(event.target.checked)} />
+              <span>
+                <b>An invented world</b>
+                <small>The Writer may invent people and places, and lists everything it invents.</small>
+              </span>
+            </label>
           )}
-        </section>
-
-        <section className="nf-section nf-grid" aria-labelledby="nf-details">
-          <h3 id="nf-details" className="nf-span">
-            Details{" "}
-            <small>{changed && format ? `Adjusted from ${format.label}` : format ? `As ${format.label}` : ""}</small>
-          </h3>
-          {lengths.length > 1 ? (
-            <Choice label="Length" className="nf-span">
-              {lengths.map((value) => (
-                <Option key={value} checked={choices.length === value} onPick={() => set({ length: value })}>
-                  {value === WHOLE_TRACK ? "Whole song" : clock(value)}
-                </Option>
-              ))}
-            </Choice>
-          ) : (
-            <p className="nf-field nf-span">
-              <span>Length</span>
-              <small>A music video runs the whole song.</small>
-            </p>
-          )}
-          <Choice label="Shape">
-            {(["16:9", "9:16"] as const).map((value) => (
-              <Option key={value} checked={choices.aspect === value} onPick={() => changeShape(value)}>
-                <span className={`nf-glyph small ${value === "9:16" ? "tall" : "wide"}`} aria-hidden="true" />
-                {value === "16:9" ? "16:9 landscape" : "9:16 portrait"}
-              </Option>
-            ))}
-          </Choice>
-          {!isStory && (
-            <Choice label="Music">
-              <Option checked={mode === "vocal"} onPick={() => setMode("vocal")}>
-                Vocals
-              </Option>
-              <Option checked={mode === "instrumental"} onPick={() => setMode("instrumental")}>
-                Instrumental
-              </Option>
-            </Choice>
-          )}
-          <label className="nf-field">
-            <span>Structure</span>
-            <select
-              value={choices.structure ?? ""}
-              onChange={(event) => set({ structure: event.target.value || null })}
-            >
-              {isStory
-                ? storyTemplates.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))
-                : [
-                    <option key="" value="">
-                      Let the Writer propose three
-                    </option>,
-                    ...profile.structures.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    )),
-                  ]}
-            </select>
-            <small>
-              {isStory
-                ? "The beats the script fills, scaled to the length."
-                : choices.structure
-                  ? "The first concept on Story uses it; the others may differ."
-                  : "Story offers concepts in different structures to choose from."}
-            </small>
-          </label>
-          <label className="nf-field">
-            <span>Titles</span>
-            <select value={choices.titles} onChange={(event) => set({ titles: event.target.value })}>
-              {titleOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <small>{TITLES.find((item) => item.id === choices.titles)?.hint}</small>
-          </label>
-          <label className="nf-field nf-look">
-            <span>Look</span>
-            <span className="nf-look-row">
-              <span className={`look-swatch nf-swatch preset-${choices.look}`} aria-hidden="true" />
-              <select value={choices.look} onChange={(event) => set({ look: event.target.value })}>
-                {looks.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </span>
-            {look?.description && <small>{look.description}</small>}
-          </label>
-          <fieldset className="nf-field nf-places">
-            <legend>Goes to</legend>
-            <div className="chips">
-              {places.map((item) => (
-                <label className="ui-chip" key={item.id}>
-                  <input
-                    type="checkbox"
-                    checked={choices.destinations.includes(item.id)}
-                    onChange={(event) => {
-                      const next = event.target.checked
-                        ? [...choices.destinations, item.id]
-                        : choices.destinations.filter((id) => id !== item.id);
-                      if (next.length) set({ destinations: next });
-                    }}
-                  />{" "}
-                  {item.label}
-                </label>
-              ))}
-            </div>
-            <small>Publish packs a version for each. You can change them there.</small>
-          </fieldset>
           <label className="nf-field">
             <span>Budget</span>
             <span className="nf-money">
@@ -592,30 +575,24 @@ export function NewProduction({
         title={title}
         choices={choices}
         formatLabel={changed || !format ? "Your own format" : format.label}
+        adjustedFrom={changed && format ? format.label : null}
         kindLabel={profile.label}
-        lookName={look?.name ?? choices.look}
-        destinations={loaded.destinations.filter((item) => choices.destinations.includes(item.id))}
-        structureLabel={
-          isStory
-            ? storyTemplates.find((item) => item.id === choices.structure)?.label ?? ""
-            : choices.structure ?? "The Writer proposes"
-        }
         bar={timeline(choices, storyTemplates.map((item) => ({ ...item, beats: item.beats ?? [] })), file ? songSeconds : null)}
         hasSong={!!file}
-        stills={stillsFor(money, loaded.reservePerStill)}
-        money={money}
         missing={missing}
         busy={busy}
         onCancel={onCancel}
-      />
+      >
+        {facts}
+      </Glance>
     </form>
   );
 }
 
-function Choice({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+function Segmented({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
   return (
-    <div className={`nf-field ${className ?? ""}`} role="radiogroup" aria-label={label}>
-      <span>{label}</span>
+    <div className={className ?? ""} role="radiogroup" aria-label={label}>
+      {className && <span>{label}</span>}
       <div className="nf-segmented">{children}</div>
     </div>
   );
@@ -633,32 +610,26 @@ function Glance({
   title,
   choices,
   formatLabel,
+  adjustedFrom,
   kindLabel,
-  lookName,
-  destinations,
-  structureLabel,
   bar,
   hasSong,
-  stills,
-  money,
   missing,
   busy,
   onCancel,
+  children,
 }: {
   title: string;
   choices: Choices;
   formatLabel: string;
+  adjustedFrom: string | null;
   kindLabel: string;
-  lookName: string;
-  destinations: Destination[];
-  structureLabel: string;
   bar: ReturnType<typeof timeline>;
   hasSong: boolean;
-  stills: number | null;
-  money: number | null;
   missing: string[];
   busy: boolean;
   onCancel: () => void;
+  children: ReactNode;
 }) {
   const isStory = choices.kind === "narrative";
   const total = bar.segments.reduce((sum, item) => sum + item.seconds, 0) || 1;
@@ -678,6 +649,7 @@ function Glance({
         <b>{formatLabel}</b>
         <span>
           {kindLabel} · {length} · {choices.aspect}
+          {adjustedFrom ? ` · Adjusted from ${adjustedFrom}` : ""}
         </span>
       </p>
 
@@ -711,19 +683,7 @@ function Glance({
         </p>
       )}
 
-      <dl className="nf-facts">
-        <dt>Structure</dt>
-        <dd>{structureLabel}</dd>
-        <dt>Look</dt>
-        <dd>{lookName}</dd>
-        <dt>Goes to</dt>
-        <dd>{destinations.map((item) => item.label).join(", ")}</dd>
-        <dt>Budget</dt>
-        <dd>
-          {money === null ? "Not set" : `$${money.toFixed(2)}`}
-          {stills !== null && <small> about {stills} stills</small>}
-        </dd>
-      </dl>
+      {children}
 
       <div className="nf-actions">
         <Button type="submit" variant="primary" disabled={missing.length > 0 || busy}>

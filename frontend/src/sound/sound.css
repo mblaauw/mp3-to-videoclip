@@ -83,3 +83,154 @@
   display: grid;
   gap: 4px;
 }
+
+/* The spine: shots, beats, lines, cue lanes and the playhead over one timeline. */
+.sound-spine {
+  display: grid;
+  gap: 4px;
+}
+.spine-shots {
+  position: relative;
+  height: 44px;
+}
+.spine-shot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: grid;
+  place-items: end start;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  border-radius: 4px;
+  background: var(--panel, transparent);
+  color: var(--ink-2, inherit);
+  font: inherit;
+  font-size: 10px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.spine-shot img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.85;
+}
+.spine-shot span {
+  position: relative;
+  padding: 0 3px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border-radius: 0 3px 0 0;
+}
+.spine-shot.picked {
+  outline: 2px solid var(--gold, currentColor);
+  outline-offset: -1px;
+}
+.spine-beats {
+  position: relative;
+  height: 16px;
+}
+.spine-beat {
+  position: absolute;
+  top: 0;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--gold-wash, rgba(127, 127, 127, 0.15));
+  color: var(--ink-2, inherit);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sound-ruler {
+  cursor: pointer;
+}
+.sound-ruler .cue-place {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent, currentColor);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.sound-ruler .cue-place.music { top: 4px; height: 18px; bottom: auto; }
+.sound-ruler .cue-place.ambience { top: 20px; height: 18px; bottom: auto; }
+.sound-ruler .cue-place.effect { top: 36px; height: 18px; bottom: auto; }
+.sound-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--gold, currentColor);
+  pointer-events: none;
+}
+.spine-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+
+/* A cue folds to one line; opened, it shows its fields. */
+.cue-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+}
+.cue-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  align-items: center;
+}
+.cue-kind {
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--gold-wash, rgba(127, 127, 127, 0.15));
+  font-size: 11px;
+}
+.cue-anchor {
+  display: grid;
+  gap: 2px;
+}
+.cue-anchor label {
+  display: grid;
+  gap: 2px;
+}
+.cue-places {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+.cue-places label {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+.cue-places > small {
+  grid-column: 1 / -1;
+}
+.cue-at {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.cue-at .ui-chip button {
+  margin-left: 4px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

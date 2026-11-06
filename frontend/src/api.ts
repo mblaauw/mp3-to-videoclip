@@ -865,6 +865,8 @@ export type SoundPayload = {
   fps: number;
   story_film: boolean;
   lines: { id: string; start: number; end: number }[];
+  shots: { id: string; start: number; end: number; still: string | null }[];
+  beats: { id: string; start: number; end: number }[];
   models: { id: string; label: string; for: "music" | "effects"; price: { amount: string; unit: string } | null; price_note: string; chosen: boolean }[];
   report: SoundReport | null;
   suggestions: number;
@@ -1013,6 +1015,42 @@ export type MixSpec = {
   ambience?: { path: string; from_line: string; to_line: string; gain_db: number; duck_db: number }[];
 };
 
+export type NarrationPrice = { amount: string; unit: string; checked: string } | null;
+
+export type NarrationVoice = {
+  id: string;
+  provider: string;
+  provider_label: string;
+  label: string;
+  language: string;
+  recommended: boolean;
+  model: string;
+  model_label: string;
+  price: NarrationPrice;
+  preview_url: string;
+};
+
+/** Who speaks, with what, at what price: the Story's Narration card. */
+export type NarrationFacts = {
+  voice: string;
+  provider: string;
+  provider_label: string;
+  model: string;
+  model_label: string;
+  price: NarrationPrice;
+  persona: string | null;
+  voices: NarrationVoice[];
+  elevenlabs_models: { id: string; label: string; price: NarrationPrice }[];
+  script: {
+    lines: number;
+    recorded: number;
+    characters: number;
+    cost_usd: string | null;
+    beats: { id: string; label: string; lines: number; characters: number; recorded: number }[];
+    first_line: string | null;
+  };
+};
+
 export type ScriptPayload = {
   script: { structure: string; reading_rate_wps: number; lines: ScriptLine[]; notes: string } | null;
   beats: {
@@ -1037,6 +1075,8 @@ export type ScriptPayload = {
   };
   narration: {
     voice: string;
+    provider: string;
+    model: string;
     measured_rate: number | null;
     stale: string[];
     lines: Record<string, { selected: number | null; kept: number[]; versions: Take[] }>;
@@ -1437,10 +1477,11 @@ export const api = {
       `/api/projects/${slug}/sound/generate`,
       { method: "POST", body: JSON.stringify({ quote_id: quoteId }) },
     ),
-  chooseVoice: (slug: string, voice: string) =>
+  narration: (slug: string) => request<NarrationFacts>(`/api/projects/${slug}/narration`),
+  chooseVoice: (slug: string, voice: string, model?: string) =>
     request<ScriptPayload>(`/api/projects/${slug}/narration/voice`, {
       method: "POST",
-      body: JSON.stringify({ voice }),
+      body: JSON.stringify({ voice, model }),
     }),
   keepTake: (slug: string, lineId: string, version: number) =>
     request<ScriptPayload>(`/api/projects/${slug}/narration/keep`, {

@@ -125,11 +125,18 @@ def get_take(slug: str, line_id: str, version: int, request: Request):
     )
 
 
+@router.get("/narration")
+def get_narration(slug: str, request: Request):
+    """Who speaks, with what, at what price. Spends nothing."""
+    return narration.facts(_story_film(request, slug))
+
+
 @router.post("/narration/voice")
 def choose_voice(slug: str, request: Request, payload: dict):
     root = _story_film(request, slug)
+    model = payload.get("model")
     with project_lock(root):
-        narration.lock_voice(root, payload.get("voice"))
+        narration.lock_voice(root, payload.get("voice"), model if isinstance(model, str) else None)
     return _payload(root)
 
 

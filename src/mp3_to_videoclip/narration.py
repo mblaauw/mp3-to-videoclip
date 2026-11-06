@@ -68,14 +68,42 @@ def current_voice(root: Path) -> str:
 
 
 @state_mutation
-def lock_voice(root: Path, voice_id: str) -> str:
-    """The voice for the next takes. Takes already made keep the voice they were made with."""
+def lock_voice(root: Path, voice_id: str, model: str | None = None) -> str:
+    """The voice, its provider and its model for the next takes.
+
+    Takes already made keep what they were made with. A MiniMax voice carries its model;
+    an ElevenLabs voice takes the one named here, else Settings' choice, and the film keeps
+    it from then on, however Settings change.
+    """
     if not isinstance(voice_id, str) or not voice_id.strip():
         raise ValueError("choose a voice")
+    voice_id = voice_id.strip()
+    provider = voices.get(voice_id).provider
+    if model is not None and (not isinstance(model, str) or not model.strip()):
+        raise ValueError("choose a model")
+    if provider != "elevenlabs":
+        model = _catalogue_model(voice_id) or _default_model(provider)
+    elif model is None:
+        model = _default_model(provider)
     index = read_index(root)
-    index["voice"] = voice_id.strip()
+    index.update(voice=voice_id, provider=provider, model=model.strip())
     write_json(root / FILE, index)
     return index["voice"]
+
+
+def _catalogue_model(voice_id: str) -> str | None:
+    from . import catalog
+
+    return next((v.model for v in catalog.load().voices if v.id == voice_id and v.model), None)
+
+
+def locked_model(root: Path, voice_id: str) -> str:
+    """The model the film records this voice with: what it locked, else the voice's own."""
+    index = read_index(root)
+    if index.get("voice") == voice_id and isinstance(index.get("model"), str) and index["model"]:
+        return index["model"]
+    provider = voices.get(voice_id).provider
+    return _catalogue_model(voice_id) or _default_model(provider)
 
 
 def input_hash(text: str, voice_id: str, model: str) -> str:
@@ -243,7 +271,7 @@ def quote_lines(
     voice = voices.get(voice_id)
     if voice.provider not in ("runware", "elevenlabs"):
         raise ValueError(f"{voice.provider} voices can't be bought yet; choose another voice")
-    model = model or _default_model(voice.provider)
+    model = model or locked_model(root, voice_id)
     own = client is None
     client = client or (ElevenLabsClient(elevenlabs_api_key()) if voice.provider == "elevenlabs" else RunwareClient("public-schema-only"))  # fmt: skip
     try:
@@ -508,11 +536,106 @@ def recover_take(root: Path, task_uuid: str, client=None) -> bool:
 def view(root: Path) -> dict:
     index = read_index(root)
     stale = set(stale_lines(root))
+    voice_id = current_voice(root)
     return {
-        "voice": current_voice(root),
+        "voice": voice_id,
+        "provider": voices.get(voice_id).provider,
+        "model": locked_model(root, voice_id),
         "measured_rate": index.get("measured_rate"),
         "stale": sorted(stale),
         "lines": index["lines"],
+    }
+
+
+def _price(model) -> dict | None:
+    if model is None or model.price is None:
+        return None
+    return {"amount": model.price.amount, "unit": model.price.unit, "checked": model.price_checked}
+
+
+def _cost(price: dict | None, characters: int) -> str | None:
+    """What these characters cost at a per-thousand rate; nothing for any other unit."""
+    if not price or price["unit"] != "1k_chars":
+        return None
+    return str((money(price["amount"]) / 1000 * characters).quantize(Decimal("0.0001")))
+
+
+def facts(root: Path) -> dict:
+    """What the Story's Narration card shows: who speaks, with what, at what price.
+
+    Every voice the catalogue offers with its provider and the model it speaks with; the
+    script's characters and what recording them costs at the catalogue rate; where the
+    lines fall per beat. A free preview where the provider publishes one. Spends nothing.
+    """
+    from . import catalog
+    from .production.script import read_beats
+
+    loaded = catalog.load()
+    providers = {p.id: p.label for p in loaded.providers}
+    models = {(m.provider, m.id): m for m in loaded.models}
+    voice_id = current_voice(root)
+    provider = voices.get(voice_id).provider
+    model = locked_model(root, voice_id)
+    rows = []
+    for row in voices.catalogue():
+        catalogued = next((v for v in loaded.voices if v.id == row["id"]), None)
+        own = catalogued.model if catalogued and catalogued.model else None
+        spoken_with = own or (model if row["provider"] == provider else _default_model(row["provider"]))  # fmt: skip
+        spoken = models.get((row["provider"], spoken_with))
+        rows.append(
+            {
+                **row,
+                "provider_label": providers.get(row["provider"], row["provider"]),
+                "model": spoken_with,
+                "model_label": spoken.label if spoken else spoken_with,
+                "price": _price(spoken),
+                "preview_url": catalogued.preview_url if catalogued else "",
+            }
+        )
+    speech_models = [
+        {"id": m.id, "label": m.label or m.id, "price": _price(m)}
+        for m in loaded.models
+        if m.provider == "elevenlabs" and "speech" in m.capabilities
+    ]
+    script = load_script(root)
+    beats = read_beats(root)
+    price = _price(models.get((provider, model)))
+    lines = script.lines if script else []
+    characters = sum(len(line.text) for line in lines)
+    takes = selected_takes(root)
+    per_beat = []
+    for beat in (beats or {}).get("beats", []):
+        mine = [line for line in lines if line.beat == beat["id"]]
+        per_beat.append(
+            {
+                "id": beat["id"],
+                "label": beat["label"],
+                "lines": len(mine),
+                "characters": sum(len(line.text) for line in mine),
+                "recorded": sum(1 for line in mine if line.id in takes),
+            }
+        )
+    narrator = _narrator(root)
+    return {
+        "voice": voice_id,
+        "provider": provider,
+        "provider_label": providers.get(provider, provider),
+        "model": model,
+        "model_label": (
+            models.get((provider, model)).label if (provider, model) in models else model
+        ),  # fmt: skip
+        "price": price,
+        "persona": narrator.persona if narrator else None,
+        "voices": rows,
+        "elevenlabs_models": speech_models,
+        "script": {
+            "lines": len(lines),
+            "recorded": sum(1 for line in lines if line.id in takes),
+            "characters": characters,
+            "cost_usd": _cost(price, characters),
+            "beats": per_beat,
+            "first_line": lines[0].id if lines else None,
+        },
     }
 
 

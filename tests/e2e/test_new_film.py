@@ -48,12 +48,13 @@ def test_a_format_fills_the_form_and_says_when_it_was_adjusted(page: Page, studi
     expect(page.get_by_role("radio", name="9:16 portrait")).to_have_attribute(
         "aria-checked", "true"
     )
-    expect(page.get_by_label("Structure")).to_have_value("Release teaser")
+    expect(glance).to_contain_text("Release teaser")
+    expect(page.get_by_label("Structure")).to_have_count(0)
     expect(page.get_by_role("checkbox", name="YouTube Shorts")).to_be_checked()
     expect(page.get_by_role("checkbox", name="Instagram Reels")).to_be_checked()
     expect(page.get_by_role("checkbox", name="YouTube", exact=True)).to_have_count(0)
     page.get_by_role("radio", name="1 min").click()
-    expect(page.get_by_text("Adjusted from Release teaser")).to_be_visible()
+    expect(glance).to_contain_text("Adjusted from Release teaser")
     expect(glance).to_contain_text("Your own format")
     expect(page.get_by_role("button", name="Create film")).to_be_disabled()
     expect(glance).to_contain_text("Still needed: an MP3, a title, the one message.")

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bandFor, chosen, describeAnchor, freshId, soundState } from "../src/sound/cueBands.ts";
+import { anchorKind, anchorOf, bandFor, chosen, describeAnchor, freshId, placesWords, soundState } from "../src/sound/cueBands.ts";
 
 test("a band is a slice of the ruler and never leaves it", () => {
   assert.deepEqual(bandFor({ start_seconds: 30, end_seconds: 60 }, 120), { left: 25, width: 25 });
@@ -37,4 +37,21 @@ test("anchors read as a line, a time or the end", () => {
   assert.equal(describeAnchor({ line: "l003" }, 24), "l003");
   assert.equal(describeAnchor({ frame: 48 }, 24), "2.0 s");
   assert.equal(describeAnchor({ frame: -1 }, 24), "end");
+  assert.equal(describeAnchor({ shot: "s004" }, 24), "cut of s004");
+  assert.equal(describeAnchor({ beat: "hook" }, 24), "beat hook");
+  assert.equal(anchorKind({ shot: "s1" }), "shot");
+  assert.equal(anchorKind({ frame: 3 }), "frame");
+});
+
+test("places read as once, a gap or a count, and anchors are made from a kind and a value", () => {
+  assert.equal(placesWords(null, null), "once");
+  assert.equal(placesWords({ every: 2 }, 12), "every 2 s, 12 times");
+  assert.equal(placesWords({ every: 1.5, jitter: 0.2 }, undefined), "every 1.5 s ± 0.2 s");
+  assert.equal(placesWords({ at: [{ shot: "a" }, { shot: "b" }] }, null), "at 2 places");
+  assert.equal(placesWords({ at: [{ shot: "a" }] }, 1), "at 1 place");
+  assert.deepEqual(anchorOf("shot", "s2", 24, false), { shot: "s2" });
+  assert.deepEqual(anchorOf("frame", "2.5", 24, false), { frame: 60 });
+  assert.deepEqual(anchorOf("frame", "", 24, true), { frame: -1 });
+  assert.deepEqual(anchorOf("frame", "oops", 24, false), { frame: 0 });
+  assert.deepEqual(anchorOf("beat", "hook", 24, true), { beat: "hook" });
 });
