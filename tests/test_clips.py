@@ -497,3 +497,20 @@ def test_a_models_options_come_from_its_schema():
     auto = schema()
     auto["components"]["schemas"]["RequestBody"]["items"]["properties"]["duration"] = {"anyOf": [{"const": "auto"}, {"type": "integer", "minimum": 6, "maximum": 10}]}  # fmt: skip
     assert clips.options_for("ltx", client=FakeClient(auto))["durations"] == [6, 7, 8, 9, 10]
+
+
+def test_a_models_typical_time_is_the_median_of_the_providers_examples():
+    info = {
+        "x-pricing": {
+            "examples": [{"latencyMs": 54000}, {"latencyMs": 89000}, {"latencyMs": 70000}]
+        }
+    }
+    assert clips.typical_seconds(info) == 70.0
+    assert (
+        clips.typical_seconds(
+            {"x-pricing": {"examples": [{"latencyMs": 40000}, {"latencyMs": 60000}]}}
+        )
+        == 50.0
+    )
+    assert clips.typical_seconds({"x-pricing": {"examples": [{"latencyMs": "slow"}]}}) is None
+    assert clips.typical_seconds({}) is None

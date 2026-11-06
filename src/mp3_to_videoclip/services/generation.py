@@ -178,6 +178,7 @@ def estimate_clips(root: Path, shot_ids: list[str], **choices) -> dict:
         "choices": quote.get("choices"),
         "price_basis": quote.get("price_basis"),
         "rate": quote.get("rate"),
+        "typical_seconds": quote.get("typical_seconds"),
         "warning": quote.get("warning"),
         "pricing": quote.get("published_pricing"),
     }

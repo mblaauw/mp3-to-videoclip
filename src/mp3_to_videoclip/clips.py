@@ -159,6 +159,26 @@ def _rate_matches(label: str, resolution: str | None, audio: bool) -> bool:
     return not audio or not named
 
 
+def typical_seconds(info: dict) -> float | None:
+    """How long the provider's own example runs took, the median in seconds; None without any."""
+    examples = (
+        ((info.get("x-pricing") or {}).get("examples") or []) if isinstance(info, dict) else []
+    )
+    times = sorted(
+        float(item["latencyMs"]) / 1000
+        for item in examples
+        if isinstance(item, dict)
+        and isinstance(item.get("latencyMs"), (int, float))
+        and not isinstance(item.get("latencyMs"), bool)
+        and item["latencyMs"] > 0
+    )
+    if not times:
+        return None
+    middle = len(times) // 2
+    value = times[middle] if len(times) % 2 else (times[middle - 1] + times[middle]) / 2
+    return round(value, 1)
+
+
 def published_price(info: dict, resolution: str | None, audio: bool, length: float) -> dict | None:
     """The model's published price for these choices, or ``None`` when no rate fits.
 
@@ -366,6 +386,7 @@ def quote_clips(
             },  # fmt: skip
             "price_basis": basis,
             "rate": published,
+            "typical_seconds": typical_seconds(info),
             "schema": schema_path,
             "schema_hash": digest(schema),
             "tasks": tasks,
@@ -396,6 +417,7 @@ def options_for(model: str, client=None) -> dict:
     return {
         "model": model,
         "live": info.get("x-status") == "live",
+        "typical_seconds": typical_seconds(info),
         **model_options(props),
         "rates": [
             {

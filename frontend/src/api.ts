@@ -440,6 +440,8 @@ export type ClipModel = {
 export type ClipOptions = {
   model: string;
   live: boolean;
+  /** The median of the provider's own example runs, in seconds; null without any. */
+  typical_seconds: number | null;
   durations: number[];
   resolutions: string[];
   sized: boolean;
@@ -458,6 +460,7 @@ export type ClipEstimate = {
   choices: { resolution: string | null; audio: boolean | null; prompt: string | null } | null;
   price_basis: "published rate" | "settings reserve" | null;
   rate: { amount: string; unit: "second" | "clip"; label: string; display: string; usd: string } | null;
+  typical_seconds: number | null;
   warning: string | null;
 };
 
