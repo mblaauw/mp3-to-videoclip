@@ -198,3 +198,9 @@ proving step is not part of this branch.
   style check and this film's style check had gone stale on 31 October. The Film step
   now sends the owner to Images to approve the style check first instead of offering
   a button that can only be refused.
+- Images and Film sent the owner to each other: the shell counted Images as done when
+  every picture was kept and only the cut had moved, without looking at the style
+  check, which a used clip had retired, while Film refused the cut's sign-off until the
+  style check was current. A stale style check no longer counts as the cut moving, so
+  Images offers "Approve style check" and Film follows. On Cool Cat the style check and
+  the full set were then approved on the owner's instruction, and the final rendered.

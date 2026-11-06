@@ -1,6 +1,6 @@
-import { soundState } from "../sound/cueBands";
-import { type ApprovalState, type ImageShot, type ProjectSummary } from "../api";
-import { type ApprovalFacts, type ApprovalMap, type ImageFacts, type NextAction, type Stage, type StageState } from "./nextStep";
+import { soundState } from "../sound/cueBands.ts";
+import type { ApprovalState, ImageShot, ProjectSummary } from "../api.ts";
+import type { ApprovalFacts, ApprovalMap, ImageFacts, NextAction, Stage, StageState } from "./nextStep.ts";
 
 
 export const APPROVED: Record<string, string> = {
@@ -95,11 +95,14 @@ export function derivedStates(
     base.images = "done";
   } else if (
     approvals.stills?.state === "stale" &&
+    approvals.proof?.state !== "stale" &&
     images.total > 0 &&
     images.kept === images.total &&
     !images.stale
   ) {
     // Every picture is still kept; only the cut moved, and Film asks for that sign-off.
+    // A stale style check is not that case: the cut signs off on top of it, so Images
+    // must offer the style check again first, or Film and Images send you to each other.
     base.images = "done";
   } else if (approvals.stills?.state === "stale" || approvals.proof?.state === "stale") {
     base.images = "changed";
