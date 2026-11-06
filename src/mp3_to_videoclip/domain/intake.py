@@ -82,6 +82,7 @@ def create_from_upload(
     fade_in: float = 0.0,
     fade_out: float = 0.0,
     titles: str | None = None,
+    series: dict | None = None,
 ) -> dict:
     """Copy, probe and migrate one MP3 into a new production folder."""
     title = title.strip()
@@ -149,6 +150,7 @@ def create_from_upload(
                 fade_in=fade_in,
                 fade_out=fade_out,
                 titles=titles,
+                series=series,
             )
         except (RuntimeError, OSError, json.JSONDecodeError) as exc:
             raise ValueError("the file is not a readable MP3") from exc

@@ -24,8 +24,12 @@ def make_api_project(tmp_path: Path, name: str = "production") -> Path:
     return root
 
 
-def api_client(projects_dir: Path) -> TestClient:
-    return TestClient(create_app(projects_dir=projects_dir), base_url="http://127.0.0.1")
+def api_client(projects_dir: Path, library_dir: Path | None = None) -> TestClient:
+    """A Studio over this folder; its library sits inside it unless a test names one."""
+    library = library_dir or projects_dir / "_library"
+    return TestClient(
+        create_app(projects_dir=projects_dir, library_dir=library), base_url="http://127.0.0.1"
+    )
 
 
 def add_assets(root: Path, versions: int = 2) -> None:

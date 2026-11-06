@@ -59,7 +59,11 @@ def studio(tmp_path, monkeypatch):
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     server = uvicorn.Server(
-        uvicorn.Config(create_app(projects_dir=tmp_path), port=port, log_level="warning")
+        uvicorn.Config(
+            create_app(projects_dir=tmp_path, library_dir=tmp_path / "_library"),
+            port=port,
+            log_level="warning",
+        )
     )
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()

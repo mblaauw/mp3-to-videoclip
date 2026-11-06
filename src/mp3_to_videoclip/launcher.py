@@ -70,6 +70,7 @@ def _build_frontend(repo: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Start the mp3-to-videoclip Studio")
     parser.add_argument("--projects-dir", type=Path, default=Path("projects"))
+    parser.add_argument("--library-dir", type=Path, default=None, help="defaults to library/ beside the projects")  # fmt: skip
     parser.add_argument("--port", type=int, default=0)
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
@@ -77,7 +78,7 @@ def main() -> None:
     _build_frontend(repo)
 
     port = args.port or _free_port()
-    app = create_app(projects_dir=args.projects_dir)
+    app = create_app(projects_dir=args.projects_dir, library_dir=args.library_dir)
     url = f"http://127.0.0.1:{port}/"
 
     def _serve():

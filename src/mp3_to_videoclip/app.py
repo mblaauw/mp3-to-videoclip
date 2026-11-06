@@ -30,6 +30,7 @@ from .api.film import router as film_router
 from .api.history import router as history_router
 from .api.images import router as images_router
 from .api.jobs import router as jobs_router
+from .api.library import router as library_router
 from .api.projects import router as projects_router
 from .api.ratings import router as ratings_router
 from .api.script import router as script_router
@@ -241,8 +242,10 @@ class StudioGuard:
             runner.bus.publish("library.changed", {"source": "request"})
 
 
-def create_app(projects_dir: Path | None = None) -> FastAPI:
+def create_app(projects_dir: Path | None = None, library_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="mp3-to-videoclip Studio", lifespan=lifespan)
+    if library_dir is not None:
+        app.state.library_dir = str(Path(library_dir).resolve())
     if projects_dir is not None:
         # Keep every API project root absolute. Asset paths are resolved before
         # indexing; a relative root makes path.relative_to(root) fail after a
@@ -272,6 +275,7 @@ def create_app(projects_dir: Path | None = None) -> FastAPI:
     app.include_router(projects_router)
     app.include_router(settings_router)
     app.include_router(sound_router)
+    app.include_router(library_router)
     app.include_router(setup_router)
     app.include_router(track_router)
     app.include_router(story_router)

@@ -95,3 +95,21 @@ permission ownership, the never-delete rule (extended to `library/`).
 - A library entry can go stale against the film it came from; the entry records its
   source and date, and nothing is kept in sync by magic.
 - `library/` is a new never-delete folder; `caches.py` does not list it.
+
+## Done, 5 Nov 2026
+
+Four commits on `film/phase-k-library`, stacked on the Sound phase: `library.py`; the series
+field, intake and the Writer's `## Series` section; the routes and the `--library-dir` flag;
+the screen. Decisions D1 to D6 as written, with one change: the `titles` entry kind was left
+out, because a titles package lives in the graphics spec and the brand kit rather than in the
+brief, and promoting it would have meant a third write path for no proven need.
+
+**Proved:** 10 engine tests (bytes copied not moved, an id refused unless identical, a new
+version for other content, adopting un-approves the story and keeps permission, an unpermitted
+character travels without its pictures, a look sets the preset, a series keeps its episodes,
+a still from another film is a copy with provenance, the series field moves no hash, the
+snapshot names an earlier episode's treatment), 2 route tests including a new episode made
+through `POST /api/projects` with the recurring cast from its first byte, 4 frontend tests.
+
+**Not proven:** the screen was not driven in a browser test; the Museum's curator has not
+been promoted for real (the owner's click); no second episode has been made.

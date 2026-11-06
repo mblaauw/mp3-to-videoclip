@@ -29,6 +29,13 @@ def _projects_dir(request: Request) -> Path:
     return Path(getattr(request.app.state, "projects_dir", "projects"))
 
 
+def _library_dir(request: Request) -> Path:
+    from mp3_to_videoclip import library
+
+    named = getattr(request.app.state, "library_dir", None)
+    return Path(named) if named else library.library_dir(_projects_dir(request))
+
+
 class ProjectSummary(BaseModel):
     slug: str
     title: str
@@ -54,6 +61,7 @@ class ProjectSummary(BaseModel):
     film_audio_url: str | None = None
     sound_cues: int = 0
     sound_sounding: int = 0
+    series: dict | None = None
     updated_at: str | None = None
 
 
@@ -349,6 +357,7 @@ def _film_summary(entry: Path, parked: set[str], result: list[ProjectSummary]) -
                 spine=project.spine,
                 film_audio_url=_film_audio_url(entry, project),
                 **_sound_counts(entry),
+                series=project.series.model_dump() if project.series else None,
                 updated_at=_updated_at(
                     entry,
                     [
@@ -469,6 +478,8 @@ async def create_project(
     titles: Literal["joint-v1", "title-v1", "none"] | None = None,
     structure: str | None = None,
     fictional: bool | None = None,
+    series: str | None = None,
+    episode: int | None = None,
 ):
     """Upload one MP3, create a schema 3 production and queue local analysis."""
     from mp3_to_videoclip import services
@@ -495,6 +506,18 @@ async def create_project(
     if cap is None:
         cap = f"{effective_settings().default_budget_usd:.2f}"
     projects_dir = _projects_dir(request)
+    series_ref = None
+    if series:
+        from mp3_to_videoclip import library
+
+        lib = _library_dir(request)
+        try:
+            library.read_series(lib, series)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if episode is None or episode < 1:
+            raise HTTPException(status_code=400, detail="an episode number is a whole number from 1")  # fmt: skip
+        series_ref = {"id": series, "episode": episode}
     intent = None
     if kind != "music_video" or any(
         (objective, message, audience, cta_text, cta_url, length_seconds)
@@ -534,9 +557,15 @@ async def create_project(
             fade_in=fade_in if kind != "music_video" else 0.0,
             fade_out=fade_out if kind != "music_video" else 0.0,
             titles=titles,
+            series=series_ref,
         )
 
     root = created["root"]
+    if series_ref is not None:
+        from mp3_to_videoclip import library
+
+        # Before any approval exists: the recurring cast is part of the film from its first byte.
+        library.join_series(root, _library_dir(request), series_ref["id"], series_ref["episode"])
     project = P.load_project(root)
     job_id = None
     runner = getattr(request.app.state, "runner", None)

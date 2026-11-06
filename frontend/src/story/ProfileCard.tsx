@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type Brief, type SheetRow } from "../api";
 import { useProjectChanged } from "../shell/projectEvents";
 import { Button } from "../ui";
+import { FromLibrary, PromoteButton } from "../library/FromLibrary";
+import { notifyProjectChanged } from "../shell/projectEvents";
 import { ColourScript } from "./ColourScript";
 import { MakeSheet } from "./MakeSheet";
 
@@ -97,6 +99,7 @@ export function ProfileCard({
                 <div className="profile-row" key={scene.id}>
                   <b>{scene.id}</b>
                   <span>{scene.description || "No description"}</span>
+                  <PromoteButton slug={slug} kind="place" id={scene.id} label={scene.id} />
                   <MakeSheet
                     slug={slug}
                     entryId={scene.id}
@@ -109,6 +112,23 @@ export function ProfileCard({
               ))}
             </div>
           )}
+
+          <div className="row-actions">
+            {look && <PromoteButton slug={slug} kind="look" id={slug} label={`Look of ${slug}`} />}
+            {creative?.narrator?.persona && (
+              <PromoteButton slug={slug} kind="narrator" id={slug} label={creative.narrator.persona.slice(0, 60)} />
+            )}
+            <FromLibrary
+              slug={slug}
+              kinds={["place", "narrator", "look"]}
+              onAdopted={() => {
+                void api.brief(slug).then((updated) => {
+                  onBriefChange(updated);
+                  notifyProjectChanged();
+                });
+              }}
+            />
+          </div>
 
           <ColourScript sections={creative?.sections || []} />
 
