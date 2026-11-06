@@ -1,8 +1,8 @@
 """Who can read a story film, and how to ask each of them.
 
-``Voice`` is the one interface. MiniMax through Runware is what a film can buy today. ElevenLabs
-is scaffolded behind the same interface and proved only against a fake: it is listed when a key
-exists, and a quote refuses it plainly until a client is written.
+``Voice`` is the one interface. MiniMax through Runware and ElevenLabs can both be bought: a
+voice says which provider it belongs to and builds that provider's request, and ``narration``
+picks the client. ElevenLabs is listed only when a key exists.
 """
 
 from __future__ import annotations
@@ -63,10 +63,13 @@ class ElevenLabsVoice:
     settings: dict[str, Any] = field(default_factory=dict)
 
     def build_request(self, text: str, task_uuid: str, air_id: str) -> dict:
+        body: dict[str, Any] = {"text": text, "model_id": air_id}
+        if self.settings:
+            body["voice_settings"] = dict(self.settings)
         return {
             "path": f"/v1/text-to-speech/{self.id}/with-timestamps",
             "taskUUID": task_uuid,
-            "body": {"text": text, "model_id": air_id, "voice_settings": self.settings},
+            "body": body,
         }
 
     def parse_result(self, result: dict) -> dict:

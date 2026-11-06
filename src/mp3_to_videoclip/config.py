@@ -57,6 +57,8 @@ class Voices(BaseModel):
     provider: str = "runware"
     default_voice: str = "English_magnetic_voiced_man"
     favourites: list[str] = []
+    #: The model every ElevenLabs voice speaks with; a MiniMax voice carries its own.
+    elevenlabs_model: str = "eleven_multilingual_v2"
 
 
 class Pictures(BaseModel):

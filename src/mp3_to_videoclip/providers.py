@@ -12,6 +12,7 @@ claimed but unverified, so no dry-run is exposed.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import io
 import ipaddress
@@ -29,6 +30,9 @@ from PIL import Image, UnidentifiedImageError
 __all__ = ["ProviderError", "RunwareClient", "transcribe"]
 
 RUNWARE_API_URL = "https://api.runware.ai/v1"
+ELEVENLABS_API_URL = "https://api.elevenlabs.io"
+#: The one audio format every ElevenLabs tier may ask for.
+ELEVENLABS_OUTPUT_FORMAT = "mp3_44100_128"
 RUNWARE_SCHEMA_URL = "https://runware.ai/docs/models/{slug}/schema.json"
 OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions"
 
@@ -162,10 +166,14 @@ def _image_format(data: bytes) -> str:
     return fmt
 
 
+#: MPEG audio frame syncs: layer III at MPEG-1 and MPEG-2, with or without CRC.
+_MPEG_SYNCS = (b"\xff\xfb", b"\xff\xfa", b"\xff\xf3", b"\xff\xf2")
+
+
 def _check_speech(data: bytes) -> None:
     """Refuse anything that is not plainly an audio file before it is saved."""
     if not (
-        data[:4] in (b"RIFF", b"fLaC", b"OggS") or data[:3] == b"ID3" or data[:2] == b"\xff\xfb"
+        data[:4] in (b"RIFF", b"fLaC", b"OggS") or data[:3] == b"ID3" or data[:2] in _MPEG_SYNCS
     ):
         raise ProviderError("invalid_audio")
 
@@ -742,3 +750,241 @@ def transcribe(
     if not isinstance(payload, dict):
         raise ProviderError("invalid_response")
     return payload
+
+
+# ------------------------------------------------------------------ ElevenLabs
+
+_ELEVENLABS_TERMS = (
+    "tier",
+    "status",
+    "currency",
+    "character_count",
+    "character_limit",
+    "next_character_count_reset_unix",
+    "can_extend_character_limit",
+)
+_ELEVENLABS_SPEECH = "/v1/text-to-speech/"
+
+
+def _unix(value) -> int | None:
+    """An ISO time as the provider's unix seconds, or ``None`` when there is none."""
+    from datetime import datetime
+
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return int(datetime.fromisoformat(value).timestamp())
+    except ValueError:
+        return None
+
+
+class ElevenLabsClient:
+    """Single-attempt ElevenLabs client.
+
+    The provider returns no task id and no price. A take's audio comes back in the
+    answer, so it is held here until the journal has written the take's cost and
+    asks for it. An interrupted take is found again, read-only, among the account's
+    generations by its words, voice, model and time.
+    """
+
+    def __init__(self, api_key: str, client: httpx.Client | None = None):
+        if not isinstance(api_key, str) or not api_key:
+            raise ProviderError("invalid_request")
+        self._api_key = api_key
+        self._owns_client = client is None
+        self._client = client if client is not None else httpx.Client(timeout=_TIMEOUT)
+        self._held: dict[str, bytes] = {}
+
+    def close(self) -> None:
+        self._held.clear()
+        if self._owns_client:
+            self._client.close()
+
+    def __enter__(self) -> ElevenLabsClient:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def _request(self, method: str, path: str, *, params=None, body=None) -> httpx.Response:
+        try:
+            response = self._client.request(
+                method,
+                f"{ELEVENLABS_API_URL}{path}",
+                params=params,
+                headers={"xi-api-key": self._api_key},
+                json=body,
+            )
+        except _network_errors() as exc:
+            raise ProviderError("network_error") from exc
+        if response.status_code >= 400:
+            # The envelope's detail is free text from the provider; never echo it.
+            raise ProviderError("http_error", status=response.status_code)
+        return response
+
+    def _json(self, method: str, path: str, **kwargs) -> dict:
+        response = self._request(method, path, **kwargs)  # a ProviderError is a ValueError too
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise ProviderError("invalid_response") from exc
+        if not isinstance(data, dict):
+            raise ProviderError("invalid_response")
+        return data
+
+    def terms(self) -> dict:
+        """The account's period as the provider states it: what a quote is made on."""
+        data = self._json("GET", "/v1/user/subscription")
+        terms = {key: data.get(key) for key in _ELEVENLABS_TERMS}
+        for key in ("character_count", "character_limit"):
+            value = terms[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ProviderError("invalid_response")
+        return terms
+
+    def _count(self) -> int | None:
+        """The period's character count, or ``None`` when the free read fails."""
+        try:
+            return self.terms()["character_count"]
+        except ProviderError:
+            return None
+
+    def submit_speech(self, request: dict) -> dict:
+        """One take, held until the journal asks for it. Never answers pending."""
+        if not isinstance(request, dict):
+            raise ProviderError("invalid_request")
+        path, task_uuid, body = request.get("path"), request.get("taskUUID"), request.get("body")
+        if not isinstance(path, str) or not path.startswith(_ELEVENLABS_SPEECH):
+            raise ProviderError("invalid_request")
+        if not isinstance(task_uuid, str) or not task_uuid:
+            raise ProviderError("invalid_request")
+        if not isinstance(body, dict) or not isinstance(body.get("text"), str) or not body["text"]:
+            raise ProviderError("invalid_request")
+        before = self._count()
+        data = self._json(
+            "POST", path, params={"output_format": ELEVENLABS_OUTPUT_FORMAT}, body=body
+        )
+        encoded = data.get("audio_base64")
+        if not isinstance(encoded, str) or not encoded:
+            raise ProviderError("invalid_response")
+        if len(encoded) > MAX_DOWNLOAD_BYTES * 4 // 3 + 4:
+            raise ProviderError("download_too_large")
+        try:
+            audio = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ProviderError("invalid_response") from exc
+        _check_speech(audio)
+        after = self._count()
+        self._held[task_uuid] = audio
+        alignment = data.get("alignment")
+        return {
+            "taskUUID": task_uuid,
+            "audioURL": f"elevenlabs:take:{task_uuid}",
+            "audio_format": "mp3",
+            "characters": len(body["text"]),
+            "provider_characters": (
+                after - before if before is not None and after is not None else None
+            ),
+            "alignment": alignment if isinstance(alignment, dict) else None,
+        }
+
+    def recover_speech(self, task_uuid: str, task: dict | None = None) -> dict | None:
+        """Read-only: the account's generation of this task's words after it was submitted.
+
+        Returns the finished result, or ``None`` when the history holds no such take.
+        """
+        if not isinstance(task_uuid, str) or not task_uuid:
+            raise ProviderError("invalid_request")
+        if task_uuid in self._held:
+            return {
+                "taskUUID": task_uuid,
+                "audioURL": f"elevenlabs:take:{task_uuid}",
+                "audio_format": "mp3",
+                "characters": None,
+                "provider_characters": None,
+                "alignment": None,
+            }
+        if not isinstance(task, dict):
+            return None
+        request = task.get("request") if isinstance(task.get("request"), dict) else {}
+        body = request.get("body") if isinstance(request.get("body"), dict) else {}
+        path = request.get("path") if isinstance(request.get("path"), str) else ""
+        voice_id = path[len(_ELEVENLABS_SPEECH) :].split("/", 1)[0]
+        text, model = task.get("text"), body.get("model_id")
+        if not voice_id or not isinstance(text, str) or not isinstance(model, str):
+            raise ProviderError("invalid_request")
+        since = _unix(task.get("submitted_at"))
+        params = {
+            "voice_id": voice_id,
+            "model_id": model,
+            "page_size": 100,
+            "sort_direction": "asc",
+        }
+        if since is not None:
+            params["date_after_unix"] = since - 60
+        data = self._json("GET", "/v1/history", params=params)
+        items = data.get("history")
+        found = [
+            item
+            for item in (items if isinstance(items, list) else [])
+            if isinstance(item, dict)
+            and item.get("text") == text
+            and isinstance(item.get("history_item_id"), str)
+            and _TOKEN_RE.fullmatch(item["history_item_id"])
+            and (
+                since is None
+                or (isinstance(item.get("date_unix"), int) and item["date_unix"] >= since - 60)
+            )
+        ]
+        if not found:
+            return None
+        item = min(found, key=lambda entry: entry.get("date_unix") or 0)
+        return {
+            "taskUUID": task_uuid,
+            "audioURL": f"elevenlabs:history:{item['history_item_id']}",
+            "audio_format": "mp3",
+            "characters": len(text),
+            "provider_characters": None,
+            "alignment": None,
+            "history_item_id": item["history_item_id"],
+        }
+
+    def download_audio(self, url: str, path: Path) -> None:
+        """Write a held or recovered take to ``path`` without overwriting an existing asset."""
+        path = Path(path)
+        if path.exists():
+            raise ProviderError("asset_exists")
+        if not isinstance(url, str) or not url.startswith("elevenlabs:"):
+            raise ProviderError("invalid_media_url")
+        kind, _, key = url[len("elevenlabs:") :].partition(":")
+        if kind == "take":
+            audio = self._held.get(key)
+            if audio is None:
+                raise ProviderError("take_not_held")
+        elif kind == "history" and _TOKEN_RE.fullmatch(key):
+            response = self._request("GET", f"/v1/history/{key}/audio")
+            audio = response.content
+            if len(audio) > MAX_DOWNLOAD_BYTES:
+                raise ProviderError("download_too_large")
+            _check_speech(audio)
+        else:
+            raise ProviderError("invalid_media_url")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(audio)
+            os.replace(temporary, path)
+        except BaseException:
+            Path(temporary).unlink(missing_ok=True)
+            raise
+        self._held.pop(key, None)
+
+
+def elevenlabs_api_key() -> str:
+    from .config import effective_settings
+
+    key = effective_settings().keys.elevenlabs
+    if not key:
+        raise MissingProviderKey("add an ElevenLabs key in Settings")
+    return key

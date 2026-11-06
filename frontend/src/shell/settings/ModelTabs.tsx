@@ -130,7 +130,11 @@ export function VoicesTab() {
   const voices = settings.voices;
   const offered = catalog.voices.filter((voice) => voice.provider === voices.provider);
   const chosen = offered.find((voice) => voice.id === voices.default_voice);
-  const voiceModel = catalog.models.find((model) => model.id === chosen?.model);
+  const elevenlabs = voices.provider === "elevenlabs";
+  const elevenModels = modelsFor(catalog, ["speech"], "elevenlabs");
+  const voiceModel = catalog.models.find((model) =>
+    elevenlabs ? model.id === voices.elevenlabs_model : model.id === chosen?.model,
+  );
   const providers = catalog.providers
     .filter((provider) => provider.unlocks.includes("voices"))
     .map((provider) => ({ value: provider.id, label: provider.label }));
@@ -155,9 +159,19 @@ export function VoicesTab() {
         options={offered.map((voice) => ({ value: voice.id, label: `${voice.label} (${voice.id})` }))}
         extra={<Sample voice={voices.default_voice} />}
       />
-      <Row label="Spoken by" hint={`The voice's own model. ${priceWords(voiceModel)}.`}>
-        <output>{voiceModel ? voiceModel.label || voiceModel.id : chosen?.model || "The provider's model"}</output>
-      </Row>
+      {elevenlabs ? (
+        <ChoiceRow
+          path="voices.elevenlabs_model"
+          label="Spoken with"
+          hint="Every ElevenLabs voice speaks with this model. Its characters count against the plan."
+          options={modelOptions(elevenModels)}
+          extra={<span className="settings-price">{priceWords(voiceModel)}</span>}
+        />
+      ) : (
+        <Row label="Spoken by" hint={`The voice's own model. ${priceWords(voiceModel)}.`}>
+          <output>{voiceModel ? voiceModel.label || voiceModel.id : chosen?.model || "The provider's model"}</output>
+        </Row>
+      )}
       <Row label="Favourites" hint="Offered first when a film chooses a voice.">
         <span className="settings-chips" role="group" aria-label="Favourite voices">
           {offered.map((voice) => (

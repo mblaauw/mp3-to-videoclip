@@ -139,6 +139,39 @@ price_note = "HD rate."
 price_source = "https://runware.ai/docs/models-api/pricing"
 price_checked = "2026-11-01"
 
+# ElevenLabs bills characters against a plan's allowance and reports no price per
+# call. These are its API prices per 1,000 characters; what a plan charges past
+# its allowance is not stated on that page, so a take's cost is this rate.
+[[models]]
+id = "eleven_multilingual_v2"
+provider = "elevenlabs"
+label = "Eleven Multilingual v2"
+capabilities = ["speech"]
+price = { amount = "0.08", unit = "1k_chars" }
+price_note = "API rate per 1,000 characters. A plan's included characters are used first."
+price_source = "https://elevenlabs.io/pricing/api"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "eleven_v3"
+provider = "elevenlabs"
+label = "Eleven v3"
+capabilities = ["speech"]
+price = { amount = "0.08", unit = "1k_chars" }
+price_note = "API rate per 1,000 characters. Lines of up to 5,000 characters."
+price_source = "https://elevenlabs.io/pricing/api"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "eleven_flash_v2_5"
+provider = "elevenlabs"
+label = "Eleven Flash v2.5"
+capabilities = ["speech"]
+price = { amount = "0.04", unit = "1k_chars" }
+price_note = "API rate per 1,000 characters; half the rate of v2 and v3."
+price_source = "https://elevenlabs.io/pricing/api"
+price_checked = "2026-11-06"
+
 [[models]]
 id = "ace-step-v1-5-xl-turbo"
 provider = "runware"

@@ -448,7 +448,7 @@ export type RoleSettings = {
 
 export type Settings = {
   roles: Record<"writer" | "editor" | "critic" | "narrator", RoleSettings>;
-  voices: { provider: string; default_voice: string; favourites: string[] };
+  voices: { provider: string; default_voice: string; favourites: string[]; elevenlabs_model?: string };
   pictures: {
     image_model_by_look: Record<string, string>;
     video_model: string;
