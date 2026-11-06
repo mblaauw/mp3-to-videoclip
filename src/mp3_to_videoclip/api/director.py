@@ -82,13 +82,9 @@ def _context(payload: dict) -> dict | None:
     context: dict = {}
     stage = value.get("stage")
     if stage is not None:
-        if not isinstance(stage, str) or stage not in (
-            "track",
-            "story",
-            "storyboard",
-            "images",
-            "film",
-        ):
+        # The stages the prompt suite answers on: one list, so a new stage is never
+        # refused here after it was given a role there.
+        if not isinstance(stage, str) or stage not in prompt_suite.STAGE_ROLE:
             raise HTTPException(status_code=400, detail="context stage is invalid")
         context["stage"] = stage
     time = value.get("time")

@@ -1,6 +1,6 @@
-import { type TurnUsage } from "../shell/modelCost";
+import type { TurnUsage } from "../shell/modelCost";
 import type { Stage } from "../shell/nextStep";
-import { type ToolItem } from "./ToolRows";
+import type { ToolItem } from "./ToolRows";
 
 export type Role = "writer" | "editor" | "critic";
 
@@ -29,6 +29,22 @@ export type DirectorPrompt = {
   task?: string;
   role?: Role;
 };
+
+/** Who opens the drawer on each stage; the engine's STAGE_ROLE says the same. */
+export const STAGE_ROLE: Record<Stage, Role> = {
+  track: "editor",
+  script: "writer",
+  story: "writer",
+  storyboard: "writer",
+  images: "writer",
+  sound: "writer",
+  film: "editor",
+  publish: "writer",
+};
+
+export function roleForStage(stage: Stage): Role {
+  return STAGE_ROLE[stage] ?? "writer";
+}
 
 export const SUGGESTIONS: Record<Stage, string[]> = {
   script: [
