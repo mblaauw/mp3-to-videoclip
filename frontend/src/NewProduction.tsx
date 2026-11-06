@@ -1,86 +1,99 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { nextEpisode, type Series } from "./library/entries";
-import { api, type KindProfile } from "./api";
-import { ErrorState } from "./ui";
+import { api, type KindProfile, type Settings, type StylePreset } from "./api";
+import { Button, ErrorState } from "./ui";
+import {
+  adjusted,
+  clock,
+  destinationsFor,
+  keepDestinations,
+  parseBudget,
+  startFrom,
+  stillsFor,
+  timeline,
+  titleFromFile,
+  WHOLE_TRACK,
+  type Aspect,
+  type Choices,
+  type Destination,
+  type Format,
+} from "./newFilm/model";
 
 const MAX_BYTES = 50_000_000;
 
-const FALLBACK_KINDS: KindProfile[] = [
-  {
-    id: "music_video",
-    label: "Music video",
-    purpose: "",
-    lengths: [],
-    default_length: null,
-    allows_full_track: true,
-    structures: [],
-    text_density: "",
-    signature_required: true,
-    style_presets: ["photographic-painted-v2", "clean-photographic-v1"],
-    default_style: "photographic-painted-v2",
-  },
-  {
-    id: "narrative",
-    label: "Story film",
-    purpose: "",
-    lengths: [60, 90, 120, 140, 180, 300],
-    default_length: 120,
-    allows_full_track: false,
-    structures: [],
-    text_density: "",
-    signature_required: false,
-    style_presets: ["painted-documentary-v1"],
-    default_style: "painted-documentary-v1",
-  },
-  {
-    id: "promo",
-    label: "Promo",
-    purpose: "",
-    lengths: [30, 60, 90, 120],
-    default_length: 60,
-    allows_full_track: true,
-    structures: [],
-    text_density: "",
-    signature_required: false,
-    style_presets: ["clean-photographic-v1"],
-    default_style: "clean-photographic-v1",
-  },
-  {
-    id: "advert",
-    label: "Advert",
-    purpose: "",
-    lengths: [6, 15, 20, 30, 60],
-    default_length: 30,
-    allows_full_track: false,
-    structures: [],
-    text_density: "",
-    signature_required: false,
-    style_presets: ["clean-photographic-v1"],
-    default_style: "clean-photographic-v1",
-  },
-];
-
 const TITLES = [
-  { id: "joint-v1", label: "25/40 signature" },
-  { id: "title-v1", label: "Short title and end card" },
-  { id: "none", label: "None" },
+  { id: "joint-v1", label: "25/40 signature", hint: "Your brand kit's opening and closing, landscape only" },
+  { id: "title-v1", label: "Short title and end card", hint: "The title over the first picture, a card at the end" },
+  { id: "none", label: "None", hint: "Picture from the first frame to the last" },
 ];
-
-/** The whole track, as a length choice for kinds that allow it. */
-const WHOLE_TRACK = 0;
 
 const KIND_HINT: Record<string, string> = {
-  narrative: "A narrator leads. It starts from words; music, if any, sits under the voice.",
-  music_video: "The song leads. Look, lyrics and story are decided next.",
-  promo: "One message and an ending, on the whole track or an excerpt. Everything else moves to Story.",
-  advert: "One message, a call to action and a length. The rest of the brief is on Story.",
+  music_video: "The song leads, from its first note to its last.",
+  promo: "One message, on the song or an excerpt of it.",
+  advert: "One audience, one action, a fixed length.",
+  narrative: "A narrator leads. It starts from words; music is optional.",
 };
 
-/** The length a film starts with: the saved one if this kind offers it. */
-function startingLength(profile: KindProfile, saved: number): number {
-  if (profile.lengths.includes(saved)) return saved;
-  if (profile.allows_full_track) return WHOLE_TRACK;
-  return profile.default_length || profile.lengths[0] || 30;
+type Voice = NonNullable<Settings["voice_list"]>[number];
+
+type Loaded = {
+  kinds: KindProfile[];
+  formats: Format[];
+  looks: StylePreset[];
+  destinations: Destination[];
+  structures: NonNullable<Settings["structures"]>;
+  voices: Voice[];
+  defaultTitles: Record<string, string>;
+  defaultLook: string;
+  defaultKind: string;
+  defaultAspect: string;
+  reservePerStill: number;
+};
+
+function read(settings: Settings): Loaded {
+  const start = settings.new_films;
+  return {
+    kinds: settings.kinds ?? [],
+    formats: settings.formats ?? [],
+    looks: settings.style_presets ?? [],
+    destinations: settings.publish_presets ?? [],
+    structures: settings.structures ?? [],
+    voices: settings.voice_list ?? [],
+    defaultTitles: settings.default_titles ?? {},
+    defaultLook: start.look,
+    defaultKind: start.kind,
+    defaultAspect: start.aspect,
+    reservePerStill: settings.pictures?.reserve_usd_per_still ?? 0,
+  };
+}
+
+/** The format a new film opens on: the kind and shape Settings prefer, else the first. */
+function openingFormat(loaded: Loaded): Format | undefined {
+  const ofKind = loaded.formats.filter((item) => item.kind === loaded.defaultKind);
+  return (
+    ofKind.find((item) => item.aspect === loaded.defaultAspect) ?? ofKind[0] ?? loaded.formats[0]
+  );
+}
+
+/** A song's length, read in the browser before anything is uploaded. */
+function useSongSeconds(file: File | null): number | null {
+  const [seconds, setSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    setSeconds(null);
+    if (!file || typeof URL.createObjectURL !== "function") return;
+    const url = URL.createObjectURL(file);
+    const audio = new Audio();
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      if (Number.isFinite(audio.duration)) setSeconds(audio.duration);
+    };
+    audio.src = url;
+    return () => {
+      audio.onloadedmetadata = null;
+      URL.revokeObjectURL(url);
+    };
+  }, [file]);
+  return seconds;
 }
 
 export function NewProduction({
@@ -92,56 +105,59 @@ export function NewProduction({
   onCancel: () => void;
   initialFile?: File | null;
 }) {
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formatId, setFormatId] = useState<string | null>(null);
+  const [start, setStart] = useState<Choices | null>(null);
+  const [choices, setChoices] = useState<Choices | null>(null);
   const [file, setFile] = useState<File | null>(initialFile);
-  const [title, setTitle] = useState(
-    initialFile
-      ? initialFile.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim()
-      : "",
-  );
-  const [kind, setKind] = useState("music_video");
-  const [aspect, setAspect] = useState<"16:9" | "9:16">("16:9");
-  const [structure, setStructure] = useState("five-beat-2m");
-  const [structures, setStructures] = useState<{ id: string; label: string }[]>([]);
-  const [fictional, setFictional] = useState(false);
-  const [titles, setTitles] = useState<string | null>(null);
-  const [defaultTitles, setDefaultTitles] = useState<Record<string, string>>({});
+  const [title, setTitle] = useState(initialFile ? titleFromFile(initialFile.name) : "");
   const [mode, setMode] = useState("vocal");
   const [budget, setBudget] = useState("5.00");
   const [message, setMessage] = useState("");
   const [cta, setCta] = useState("");
-  const [length, setLength] = useState(WHOLE_TRACK);
-  const [look, setLook] = useState<string | undefined>(undefined);
+  const [ctaUrl, setCtaUrl] = useState("");
+  const [voice, setVoice] = useState("");
+  const [fictional, setFictional] = useState(false);
   const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [series, setSeries] = useState("");
   const [episode, setEpisode] = useState(1);
-  const [kinds, setKinds] = useState<KindProfile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const songSeconds = useSongSeconds(file);
 
-  useEffect(() => {
-    api.library().then((view) => setSeriesList(view.series), () => setSeriesList([]));
+  const pick = useCallback((format: Format, from: Loaded) => {
+    const profile = from.kinds.find((item) => item.id === format.kind);
+    const first = startFrom(format, {
+      titles: from.defaultTitles,
+      look: from.defaultLook,
+      looks: profile?.style_presets,
+    });
+    setFormatId(format.id);
+    setStart(first);
+    setChoices(first);
+    setError(null);
   }, []);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoadError(null);
     api
       .settings()
       .then((settings) => {
-        const start = settings.new_films;
-        if (start.budget_usd > 0) setBudget(start.budget_usd.toFixed(2));
-        const known = settings.kinds || [];
-        setDefaultTitles(settings.default_titles || {});
-        setStructures(settings.structures || []);
-        if (start.aspect === "9:16") setAspect("9:16");
-        setKinds(known);
-        setLook(start.look || undefined);
-        const profile = known.find((item) => item.id === start.kind);
-        if (profile) {
-          setKind(profile.id);
-          setLength(startingLength(profile, start.length_s));
-        }
+        const value = read(settings);
+        setLoaded(value);
+        if (settings.new_films.budget_usd > 0) setBudget(settings.new_films.budget_usd.toFixed(2));
+        setVoice(value.voices.find((item) => item.recommended)?.id ?? value.voices[0]?.id ?? "");
+        const opening = openingFormat(value);
+        if (opening) pick(opening, value);
       })
-      .catch(() => {});
+      .catch((caught) => setLoadError(String(caught)));
+  }, [pick]);
+
+  useEffect(load, [load]);
+  useEffect(() => {
+    api.library().then((view) => setSeriesList(view.series), () => setSeriesList([]));
   }, []);
 
   const choose = (picked: File | null) => {
@@ -156,64 +172,88 @@ export function NewProduction({
     }
     setError(null);
     setFile(picked);
-    if (!title.trim()) {
-      setTitle(picked.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim());
-    }
+    if (!title.trim()) setTitle(titleFromFile(picked.name));
   };
 
-  const options = kinds.length ? kinds : FALLBACK_KINDS;
-  const profile = options.find((item) => item.id === kind);
-  // The signature is a landscape package: a portrait film can't have it.
-  const titleOptions = TITLES.filter((item) => aspect === "16:9" || item.id !== "joint-v1");
-  const wantedTitles = titles ?? defaultTitles[kind] ?? "title-v1";
-  const chosenTitles = titleOptions.some((item) => item.id === wantedTitles)
-    ? wantedTitles
-    : "title-v1";
-  const lengthOptions = [
-    ...(profile?.allows_full_track ? [WHOLE_TRACK] : []),
-    ...(profile?.lengths ?? []),
-  ];
-  const isVideo = kind === "music_video";
-  const isStory = kind === "narrative";
-  const wholeTrack = isVideo || length === WHOLE_TRACK;
+  const profile = loaded?.kinds.find((item) => item.id === choices?.kind);
+  const format = loaded?.formats.find((item) => item.id === formatId);
+  const isStory = choices?.kind === "narrative";
+  const isVideo = choices?.kind === "music_video";
+  const money = parseBudget(budget);
 
-  const changeKind = (next: string) => {
-    setKind(next);
-    const nextProfile = options.find((item) => item.id === next);
-    // A kind that can use the whole track starts there; an excerpt is a choice.
-    setLength(nextProfile ? startingLength(nextProfile, WHOLE_TRACK) : 30);
-    setError(null);
+  const missing = useMemo(() => {
+    const out: string[] = [];
+    if (!file && !isStory) out.push("an MP3");
+    if (!title.trim()) out.push("a title");
+    if (!isVideo && !isStory && !message.trim()) out.push("the one message");
+    if (choices?.kind === "advert" && !cta.trim()) out.push("a call to action");
+    if (money === null) out.push("a budget");
+    return out;
+  }, [file, isStory, isVideo, title, message, choices?.kind, cta, money]);
+
+  if (loadError) {
+    return (
+      <div className="new-film">
+        <h2>New film</h2>
+        <ErrorState what="reading the formats" error={loadError} onRetry={load} />
+      </div>
+    );
+  }
+  if (!loaded || !choices || !profile) {
+    return (
+      <div className="new-film">
+        <h2>New film</h2>
+        <p className="hint">Reading the formats…</p>
+      </div>
+    );
+  }
+
+  const set = (patch: Partial<Choices>) => setChoices({ ...choices, ...patch });
+  const changeShape = (aspect: Aspect) =>
+    set({
+      aspect,
+      // The signature is a landscape package: a portrait film can't have it.
+      titles: aspect === "9:16" && choices.titles === "joint-v1" ? "title-v1" : choices.titles,
+      destinations: keepDestinations(choices.destinations, aspect, loaded.destinations),
+    });
+  const changeKind = (kind: string) => {
+    const first = loaded.formats.find((item) => item.kind === kind);
+    if (first) pick(first, loaded);
   };
+
+  const lengths = [...(profile.allows_full_track ? [WHOLE_TRACK] : []), ...profile.lengths];
+  const titleOptions = TITLES.filter((item) => choices.aspect === "16:9" || item.id !== "joint-v1");
+  const places = destinationsFor(choices.aspect, loaded.destinations);
+  const looks = profile.style_presets
+    .map((id) => loaded.looks.find((item) => item.id === id) ?? { id, name: id, description: "" });
+  const look = looks.find((item) => item.id === choices.look);
+  const storyTemplates = loaded.structures;
+  const changed = adjusted(choices, start);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if ((!file && !isStory) || !title.trim() || busy) return;
-    if (!isVideo && !isStory && !message.trim()) {
-      setError("Give the promo or advert one message.");
-      return;
-    }
-    if (kind === "advert" && !cta.trim()) {
-      setError("An advert needs a call to action.");
-      return;
-    }
+    if (missing.length || busy || money === null) return;
     setBusy(true);
     setError(null);
+    const wholeTrack = choices.length === WHOLE_TRACK;
     try {
       const created = await api.createProject(file, {
         title: title.trim(),
-        aspect,
-        titles: chosenTitles,
-        structure: isStory ? structure : undefined,
+        kind: choices.kind,
+        aspect: choices.aspect,
+        titles: choices.titles,
+        structure: choices.structure ?? undefined,
         fictional: isStory ? fictional : undefined,
         music_mode: mode,
-        budget,
-        kind,
-        // A saved look only applies to a kind that offers it.
-        style_preset: look && profile?.style_presets.includes(look) ? look : undefined,
+        budget: money.toFixed(2),
+        style_preset: choices.look,
         message: isVideo || isStory ? undefined : message.trim(),
-        cta_text: kind === "advert" ? cta.trim() : undefined,
-        length_seconds: wholeTrack ? undefined : length,
+        cta_text: isVideo || isStory ? undefined : cta.trim(),
+        cta_url: isVideo || isStory ? undefined : ctaUrl.trim(),
+        length_seconds: wholeTrack ? undefined : choices.length,
         fade_out: wholeTrack ? undefined : 1.5,
+        destinations: choices.destinations,
+        voice: isStory ? voice || undefined : undefined,
         series: series || undefined,
         episode: series ? episode : undefined,
       });
@@ -226,220 +266,480 @@ export function NewProduction({
   };
 
   return (
-    <form className="intake new-film" onSubmit={submit}>
-      <h2>New film</h2>
-      <p className="sub">
-        Start from a song. It stays on this computer; nothing is spent until you make pictures.
-      </p>
-      {error && <ErrorState what="creating the film" error={error} compact />}
+    <form className="new-film" onSubmit={submit} aria-label="New film">
+      <div className="nf-main">
+        <header className="nf-head">
+          <h2>New film</h2>
+          <p>Choose what you're making. Everything here can still change on Story; nothing is spent until you make pictures.</p>
+        </header>
+        {error && <ErrorState what="creating the film" error={error} compact />}
 
-      <div className="kind-picker" role="group" aria-label="Kind of film">
-        {options.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="kind-choice"
-            aria-pressed={kind === item.id}
-            onClick={() => changeKind(item.id)}
-          >
-            <b>{item.label}</b>
-            <span>{KIND_HINT[item.id]}</span>
-          </button>
-        ))}
-      </div>
-
-      <label
-        className={`drop ${dragging ? "dragging" : ""}`}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragging(false);
-          choose(event.dataTransfer.files?.[0] || null);
-        }}
-      >
-        <input
-          type="file"
-          accept=".mp3,audio/mpeg"
-          onChange={(event) => choose(event.target.files?.[0] || null)}
-        />
-        {file ? (
-          <>
-            <strong>{file.name}</strong>
-            <span className="meta">{(file.size / 1_000_000).toFixed(1)} MB</span>
-          </>
-        ) : (
-          <>
-            <strong>
-              {isStory ? "Drop a music bed here, if you want one" : "Drop an MP3 here or choose a file"}
-            </strong>
-            <span className="meta">
-              {isStory ? "Optional · " : ""}MP3 only · up to 50 MB · stays on this machine
-            </span>
-          </>
-        )}
-      </label>
-
-      <div className="new-film-fields">
-        <label>
-          Title
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Films need a name"
-            maxLength={120}
-          />
-        </label>
-        {!isStory && <label>
-          Music
-          <select value={mode} onChange={(event) => setMode(event.target.value)}>
-            <option value="vocal">Vocals</option>
-            <option value="instrumental">Instrumental</option>
-          </select>
-        </label>}
-        {!isVideo && !isStory && (
-          <label>
-            One message
-            <input
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="The one thing a stranger should repeat"
-              maxLength={400}
-            />
-          </label>
-        )}
-        {!isVideo && (
-          <label>
-            Length
-            <select value={length} onChange={(event) => setLength(Number(event.target.value))}>
-              {lengthOptions.map((value) => (
-                <option key={value} value={value}>
-                  {value === WHOLE_TRACK ? "Whole track" : `${value} s`}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {isStory && (
-          <>
-            <label>
-              Structure
-              <select value={structure} onChange={(event) => setStructure(event.target.value)}>
-                {structures.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="check-line">
-              <input
-                type="checkbox"
-                checked={fictional}
-                onChange={(event) => setFictional(event.target.checked)}
-              />
-              Fictional world: the Writer may invent, and lists everything it invents
-            </label>
-          </>
-        )}
-        <label>
-          Shape
-          <select
-            value={aspect}
-            onChange={(event) => setAspect(event.target.value as "16:9" | "9:16")}
-          >
-            <option value="16:9">16:9, landscape</option>
-            <option value="9:16">9:16, portrait</option>
-          </select>
-        </label>
-        <label>
-          Titles
-          <select value={chosenTitles} onChange={(event) => setTitles(event.target.value)}>
-            {titleOptions.map((item) => (
-              <option key={item.id} value={item.id}>
+        <section className="nf-section" aria-labelledby="nf-kind">
+          <h3 id="nf-kind">What are you making?</h3>
+          <div className="nf-kinds">
+            {loaded.kinds.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="nf-kind"
+                aria-pressed={choices.kind === item.id}
+                onClick={() => changeKind(item.id)}
+              >
                 {item.label}
-              </option>
+              </button>
             ))}
-          </select>
-        </label>
-        {kind === "advert" && (
-          <label>
-            Call to action
+          </div>
+          <p className="nf-kind-hint">
+            {KIND_HINT[choices.kind] ?? profile.purpose}
+          </p>
+          <div className="nf-formats" role="group" aria-label="Format">
+            {loaded.formats
+              .filter((item) => item.kind === choices.kind)
+              .map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="nf-format"
+                  aria-pressed={formatId === item.id}
+                  aria-label={`${item.label}, ${item.length ? clock(item.length) : "whole song"}, ${item.aspect}`}
+                  onClick={() => pick(item, loaded)}
+                >
+                  <span className={`nf-glyph ${item.aspect === "9:16" ? "tall" : "wide"}`} aria-hidden="true" />
+                  <b>{item.label}</b>
+                  <span className="nf-format-facts">
+                    {item.length ? clock(item.length) : "Whole song"} · {item.aspect}
+                  </span>
+                  <span className="nf-format-blurb">{item.blurb}</span>
+                </button>
+              ))}
+          </div>
+        </section>
+
+        <section className="nf-section" aria-labelledby="nf-source">
+          <h3 id="nf-source">{isStory ? "Music bed" : "The song"}</h3>
+          <label
+            className={`nf-drop ${dragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              choose(event.dataTransfer.files?.[0] || null);
+            }}
+          >
             <input
-              value={cta}
-              onChange={(event) => setCta(event.target.value)}
-              placeholder="Pre-save now"
+              type="file"
+              accept=".mp3,audio/mpeg"
+              aria-label={isStory ? "Music bed MP3" : "Song MP3"}
+              onChange={(event) => choose(event.target.files?.[0] || null)}
+            />
+            {file ? (
+              <>
+                <strong>{file.name}</strong>
+                <span>
+                  {songSeconds !== null ? `${clock(songSeconds)} · ` : ""}
+                  {(file.size / 1_000_000).toFixed(1)} MB · choose another to replace it
+                </span>
+              </>
+            ) : (
+              <>
+                <strong>{isStory ? "Drop a music bed, if you want one" : "Drop an MP3 or choose a file"}</strong>
+                <span>{isStory ? "Optional. " : ""}MP3, up to 50 MB. It stays on this computer.</span>
+              </>
+            )}
+          </label>
+        </section>
+
+        <section className="nf-section nf-grid" aria-labelledby="nf-brief">
+          <h3 id="nf-brief" className="nf-span">The film</h3>
+          <label className="nf-field nf-span">
+            <span>Title</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={isStory ? "Name the film" : "Taken from the MP3's name when you add it"}
               maxLength={120}
             />
           </label>
-        )}
-        <label>
-          Starting budget (USD)
-          <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={budget}
-            onChange={(event) => setBudget(event.target.value)}
-          />
-        </label>
-        {seriesList.length > 0 && (
-          <label>
-            Series
+          {!isVideo && !isStory && (
+            <>
+              <label className="nf-field nf-span">
+                <span>One message</span>
+                <input
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  placeholder="The one thing a stranger should repeat"
+                  maxLength={400}
+                />
+              </label>
+              <label className="nf-field">
+                <span>{choices.kind === "advert" ? "Call to action" : "Ending line (optional)"}</span>
+                <input
+                  value={cta}
+                  onChange={(event) => setCta(event.target.value)}
+                  placeholder={choices.kind === "advert" ? "Pre-save now" : "Out Friday"}
+                  maxLength={120}
+                />
+              </label>
+              <label className="nf-field">
+                <span>Link (optional)</span>
+                <input
+                  value={ctaUrl}
+                  onChange={(event) => setCtaUrl(event.target.value)}
+                  placeholder="example.com"
+                  maxLength={300}
+                />
+              </label>
+            </>
+          )}
+          {isStory && (
+            <>
+              <label className="nf-field">
+                <span>Narrator</span>
+                <select value={voice} onChange={(event) => setVoice(event.target.value)}>
+                  {loaded.voices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                      {item.recommended ? " (Settings' choice)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <small>Hear it, and change it, on Script before any line is recorded.</small>
+              </label>
+              <label className="nf-switch">
+                <input type="checkbox" checked={fictional} onChange={(event) => setFictional(event.target.checked)} />
+                <span>
+                  <b>An invented world</b>
+                  <small>The Writer may invent people and places, and lists everything it invents.</small>
+                </span>
+              </label>
+            </>
+          )}
+        </section>
+
+        <section className="nf-section nf-grid" aria-labelledby="nf-details">
+          <h3 id="nf-details" className="nf-span">
+            Details{" "}
+            <small>{changed && format ? `Adjusted from ${format.label}` : format ? `As ${format.label}` : ""}</small>
+          </h3>
+          {lengths.length > 1 ? (
+            <Choice label="Length" className="nf-span">
+              {lengths.map((value) => (
+                <Option key={value} checked={choices.length === value} onPick={() => set({ length: value })}>
+                  {value === WHOLE_TRACK ? "Whole song" : clock(value)}
+                </Option>
+              ))}
+            </Choice>
+          ) : (
+            <p className="nf-field nf-span">
+              <span>Length</span>
+              <small>A music video runs the whole song.</small>
+            </p>
+          )}
+          <Choice label="Shape">
+            {(["16:9", "9:16"] as const).map((value) => (
+              <Option key={value} checked={choices.aspect === value} onPick={() => changeShape(value)}>
+                <span className={`nf-glyph small ${value === "9:16" ? "tall" : "wide"}`} aria-hidden="true" />
+                {value === "16:9" ? "16:9 landscape" : "9:16 portrait"}
+              </Option>
+            ))}
+          </Choice>
+          {!isStory && (
+            <Choice label="Music">
+              <Option checked={mode === "vocal"} onPick={() => setMode("vocal")}>
+                Vocals
+              </Option>
+              <Option checked={mode === "instrumental"} onPick={() => setMode("instrumental")}>
+                Instrumental
+              </Option>
+            </Choice>
+          )}
+          <label className="nf-field">
+            <span>Structure</span>
             <select
-              value={series}
-              onChange={(event) => {
-                const picked = event.target.value;
-                setSeries(picked);
-                setEpisode(nextEpisode(seriesList.find((item) => item.id === picked)));
-              }}
+              value={choices.structure ?? ""}
+              onChange={(event) => set({ structure: event.target.value || null })}
             >
-              <option value="">Not in a series</option>
-              {seriesList.map((item) => (
+              {isStory
+                ? storyTemplates.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))
+                : [
+                    <option key="" value="">
+                      Let the Writer propose three
+                    </option>,
+                    ...profile.structures.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    )),
+                  ]}
+            </select>
+            <small>
+              {isStory
+                ? "The beats the script fills, scaled to the length."
+                : choices.structure
+                  ? "The first concept on Story uses it; the others may differ."
+                  : "Story offers concepts in different structures to choose from."}
+            </small>
+          </label>
+          <label className="nf-field">
+            <span>Titles</span>
+            <select value={choices.titles} onChange={(event) => set({ titles: event.target.value })}>
+              {titleOptions.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.title}
+                  {item.label}
                 </option>
               ))}
             </select>
+            <small>{TITLES.find((item) => item.id === choices.titles)?.hint}</small>
           </label>
-        )}
-        {series && (
-          <label>
-            Episode
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={episode}
-              onChange={(event) => setEpisode(Math.max(1, Math.round(Number(event.target.value) || 1)))}
-            />
+          <label className="nf-field nf-look">
+            <span>Look</span>
+            <span className="nf-look-row">
+              <span className={`look-swatch nf-swatch preset-${choices.look}`} aria-hidden="true" />
+              <select value={choices.look} onChange={(event) => set({ look: event.target.value })}>
+                {looks.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </span>
+            {look?.description && <small>{look.description}</small>}
           </label>
-        )}
+          <fieldset className="nf-field nf-places">
+            <legend>Goes to</legend>
+            <div className="chips">
+              {places.map((item) => (
+                <label className="ui-chip" key={item.id}>
+                  <input
+                    type="checkbox"
+                    checked={choices.destinations.includes(item.id)}
+                    onChange={(event) => {
+                      const next = event.target.checked
+                        ? [...choices.destinations, item.id]
+                        : choices.destinations.filter((id) => id !== item.id);
+                      if (next.length) set({ destinations: next });
+                    }}
+                  />{" "}
+                  {item.label}
+                </label>
+              ))}
+            </div>
+            <small>Publish packs a version for each. You can change them there.</small>
+          </fieldset>
+          <label className="nf-field">
+            <span>Budget</span>
+            <span className="nf-money">
+              <span aria-hidden="true">$</span>
+              <input
+                inputMode="decimal"
+                aria-label="Budget in dollars"
+                value={budget}
+                onChange={(event) => setBudget(event.target.value)}
+                aria-invalid={money === null}
+              />
+            </span>
+            <small>
+              {money === null
+                ? "An amount in dollars, like 5.00."
+                : "The most this film may spend. You can add to it later."}
+            </small>
+          </label>
+          {seriesList.length > 0 && (
+            <label className="nf-field">
+              <span>Series</span>
+              <select
+                value={series}
+                onChange={(event) => {
+                  const picked = event.target.value;
+                  setSeries(picked);
+                  setEpisode(nextEpisode(seriesList.find((item) => item.id === picked)));
+                }}
+              >
+                <option value="">Not in a series</option>
+                {seriesList.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+              {series && <small>Its recurring cast, places and look join the film from the start.</small>}
+            </label>
+          )}
+          {series && (
+            <label className="nf-field">
+              <span>Episode</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={episode}
+                onChange={(event) => setEpisode(Math.max(1, Math.round(Number(event.target.value) || 1)))}
+              />
+            </label>
+          )}
+        </section>
       </div>
-      {series && (
-        <p className="hint">
-          The series' recurring cast, places and look join the film before anything is approved.
+
+      <Glance
+        title={title}
+        choices={choices}
+        formatLabel={changed || !format ? "Your own format" : format.label}
+        kindLabel={profile.label}
+        lookName={look?.name ?? choices.look}
+        destinations={loaded.destinations.filter((item) => choices.destinations.includes(item.id))}
+        structureLabel={
+          isStory
+            ? storyTemplates.find((item) => item.id === choices.structure)?.label ?? ""
+            : choices.structure ?? "The Writer proposes"
+        }
+        bar={timeline(choices, storyTemplates.map((item) => ({ ...item, beats: item.beats ?? [] })), file ? songSeconds : null)}
+        hasSong={!!file}
+        stills={stillsFor(money, loaded.reservePerStill)}
+        money={money}
+        missing={missing}
+        busy={busy}
+        onCancel={onCancel}
+      />
+    </form>
+  );
+}
+
+function Choice({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <div className={`nf-field ${className ?? ""}`} role="radiogroup" aria-label={label}>
+      <span>{label}</span>
+      <div className="nf-segmented">{children}</div>
+    </div>
+  );
+}
+
+function Option({ checked, onPick, children }: { checked: boolean; onPick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" role="radio" aria-checked={checked} onClick={onPick}>
+      {children}
+    </button>
+  );
+}
+
+function Glance({
+  title,
+  choices,
+  formatLabel,
+  kindLabel,
+  lookName,
+  destinations,
+  structureLabel,
+  bar,
+  hasSong,
+  stills,
+  money,
+  missing,
+  busy,
+  onCancel,
+}: {
+  title: string;
+  choices: Choices;
+  formatLabel: string;
+  kindLabel: string;
+  lookName: string;
+  destinations: Destination[];
+  structureLabel: string;
+  bar: ReturnType<typeof timeline>;
+  hasSong: boolean;
+  stills: number | null;
+  money: number | null;
+  missing: string[];
+  busy: boolean;
+  onCancel: () => void;
+}) {
+  const isStory = choices.kind === "narrative";
+  const total = bar.segments.reduce((sum, item) => sum + item.seconds, 0) || 1;
+  const length = isStory || choices.length ? clock(choices.length) : bar.total ? clock(bar.total) : "Whole song";
+  return (
+    <aside className="nf-glance" aria-label="At a glance">
+      <div className={`nf-frame ${choices.aspect === "9:16" ? "tall" : "wide"}`}>
+        <div className={`look-swatch nf-frame-picture preset-${choices.look}`}>
+          {choices.titles !== "none" ? (
+            <b>{title.trim() || "Your title"}</b>
+          ) : (
+            <span>No title card</span>
+          )}
+        </div>
+      </div>
+      <p className="nf-glance-name">
+        <b>{formatLabel}</b>
+        <span>
+          {kindLabel} · {length} · {choices.aspect}
+        </span>
+      </p>
+
+      <div className="nf-bar" aria-label={isStory ? "Beats" : "The song"}>
+        {bar.segments.map((item, index) => (
+          <span
+            key={`${item.label}-${index}`}
+            className={`nf-seg ${item.tone}`}
+            style={{ flexGrow: item.seconds / total }}
+            title={`${item.label}, ${clock(item.seconds)}`}
+          />
+        ))}
+      </div>
+      <ol className="nf-bar-key">
+        {bar.segments
+          .filter((item) => item.tone !== "rest")
+          .map((item, index) => (
+            <li key={`${item.label}-${index}`}>
+              {item.label}
+              {isStory ? <small> {clock(item.seconds)}</small> : null}
+            </li>
+          ))}
+      </ol>
+      {!isStory && (
+        <p className="nf-note">
+          {!hasSong
+            ? "Add the song to see how much of it the film uses."
+            : choices.length === WHOLE_TRACK
+              ? "Track measures the song when the film is made."
+              : "Drag the excerpt along the song on the spine to move it."}
         </p>
       )}
 
-      <p className="hint">
-        {isVideo
-          ? "Look, lyrics and story are decided in Track and Story."
-          : "The look preset defaults from the kind and is changed on Story. The rest of the brief is there too."}
-      </p>
+      <dl className="nf-facts">
+        <dt>Structure</dt>
+        <dd>{structureLabel}</dd>
+        <dt>Look</dt>
+        <dd>{lookName}</dd>
+        <dt>Goes to</dt>
+        <dd>{destinations.map((item) => item.label).join(", ")}</dd>
+        <dt>Budget</dt>
+        <dd>
+          {money === null ? "Not set" : `$${money.toFixed(2)}`}
+          {stills !== null && <small> about {stills} stills</small>}
+        </dd>
+      </dl>
 
-      <div className="actions">
-        <button type="submit" disabled={(!file && !isStory) || !title.trim() || busy}>
+      <div className="nf-actions">
+        <Button type="submit" variant="primary" disabled={missing.length > 0 || busy}>
           {busy ? "Creating…" : "Create film"}
-        </button>
-        <button type="button" onClick={onCancel} disabled={busy}>
+        </Button>
+        <Button variant="quiet" onClick={onCancel} disabled={busy}>
           Cancel
-        </button>
-        <span className="meta">Analysis is local and free.</span>
+        </Button>
       </div>
-    </form>
+      <p className="nf-note" role="status">
+        {missing.length
+          ? `Still needed: ${missing.join(", ")}.`
+          : isStory
+            ? "Story opens next. Nothing is spent until you record lines or make pictures."
+            : "Track opens next and measures the song on this computer, for free."}
+      </p>
+    </aside>
   );
 }

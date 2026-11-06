@@ -336,7 +336,7 @@ export function Library({
       {newOpen && (
         <div className="modal-scrim" role="presentation" onMouseDown={() => setNewOpen(false)}>
           <div
-            className="modal-panel"
+            className="modal-panel modal-wide"
             role="dialog"
             aria-modal="true"
             aria-label="New film"

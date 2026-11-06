@@ -93,6 +93,17 @@ credits. Promo and advert are created with `signature_required=false`, no
 `brand.json` and no `graphics-spec.json`; their final render is the film itself,
 without intro or credits.
 
+The New film form opens on a **format** from `formats.py`, a preset per kind of job:
+music video, vertical video, lyric video, release and event teasers, an artist promo,
+a bumper, a social ad, a spot, and one story film per template. A format fills the
+form's kind, length, shape, titles, look, structure and destinations; the film keeps
+those answers and never the format's id, and `formats.check` (pinned by a test) proves
+every row against the kind, structure, titles, publish and look tables. A structure is
+`brief.intent.structure` for every kind: a story film's is its beat template, and any
+other kind's is the owner's pick, which the Writer's snapshot names so the first
+concept on Story uses it. The form also sets the film's Publish destinations and, for
+a story film, its narrator's voice (`narration.lock_voice`) before anything is spent.
+
 The Story intake is one card over `GET/PUT /api/projects/<slug>/intake`. It
 writes `brief.intent` (objective, audience, message, reasons, tone,
 mandatories, avoid, CTA, length, window), selects a style preset and, for
