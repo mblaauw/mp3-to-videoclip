@@ -94,6 +94,7 @@ def get_images(slug: str, request: Request):
                     "review": review,
                     "stale": stale,
                     **({"motion_why": motion_why} if motion_why else {}),
+                    "motion_prompt": shot.motion_prompt,
                 }
             )
     return {"shots": shots}
@@ -150,7 +151,7 @@ async def get_clip_file(slug: str, owner: str, version: int, request: Request):
     return FileResponse(target, media_type="video/mp4")
 
 
-@router.get("/images/clips/models")
+@router.get("/images/clip-models")
 async def clip_models(slug: str, request: Request):
     """The catalogue's video models with their prices; Settings' choice first. Free."""
     from mp3_to_videoclip import catalog
@@ -174,7 +175,7 @@ async def clip_models(slug: str, request: Request):
     return {"models": rows}
 
 
-@router.get("/images/clips/options")
+@router.get("/images/clip-options")
 async def clip_options(slug: str, request: Request, model: str):
     """What one video model lets the owner choose, read from its public schema. Free."""
     from mp3_to_videoclip import services

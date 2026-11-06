@@ -80,3 +80,35 @@ at 1080p, the published price", and buys exactly that; a Vidu quote prices per c
 Kling 2.5 Standard quote sends no size; a Veo quote sends `resolution` and omits width
 and height; an unmatched rate falls back to Settings' reserve and says so. Every suite
 green. No live call in tests.
+
+## Done, 6 Nov 2026
+
+Commits on `film/phase-p-clips`, stacked on Phase O: P1 the engine, P2 and P3 the screen.
+
+### Proved
+
+- P1. Eleven video models in the catalogue with their lowest published rate, the tiers
+  in the note, source and read date. `quote_clips` takes seconds, model, resolution, own
+  sound and a prompt of the owner's own; follows the schema for the length (enum, range,
+  "auto"), sends `resolution` when the schema names sizes with a frame and the film's own
+  size when it takes one, says the own-sound switch wherever the schema has one, and
+  prices from the published rates that fit (per second times the length, per clip once,
+  a cent at least), falling back to Settings' reserve and saying so when none fits
+  (`tests/test_clips.py`, schemas of each shape). `options_for` reads a model's choices
+  from its schema; the routes offer the models and the options and take the choices.
+- P2. On a still, the panel offers the catalogue's video models with their price,
+  Settings' choice first; the chosen model's lengths, sizes and own-sound switch from
+  its schema; the motion prompt, editable; "Price a clip", then "Make it · $0.80 for 8 s
+  at 1080p, the published rate" or "up to $…, Settings' reserve". Looked at on Cool Cat's
+  s019: Kling offers 5 s or 10 s and no size; Veo 3.1 Fast, read live, offers 4, 6, 7 and
+  8 s, 720p, 1080p and 4K, and its own sound. No quote was made on the owner's film.
+- P3. On the Images grid a shot that plays its clip wears a gold edge and "▶ Clip ·
+  5.0 s", and the tile plays the clip in place on hover. Looked at on Cool Cat's s019.
+- Every suite green; the committed frontend build is current.
+
+### Not proven
+
+- No clip was bought in this phase. The first clip from a model other than Kling 2.5
+  Turbo Standard proves the request shape against the live provider: a Veo or Vidu
+  request validated here against its public schema has not been answered by Runware.
+  A grid tile's hover play was seen in the preview, not measured.
