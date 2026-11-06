@@ -46,17 +46,41 @@ def _models() -> list[dict]:
     return rows
 
 
+def _stills(root: Path) -> dict[str, str]:
+    """Each shot's chosen still, for the spine's tiles; a shot without one has none."""
+    from mp3_to_videoclip.storage import read_optional
+
+    assets = read_optional(root / "work/assets.json")
+    if not isinstance(assets, dict):
+        return {}
+    try:
+        board = P.load_board(root)
+    except (OSError, ValueError):
+        return {}
+    stills = {}
+    for shot in board.shots:
+        owner = shot.asset_shot_id or shot.id
+        entry = assets.get(owner)
+        selected = entry.get("selected") if isinstance(entry, dict) else None
+        if selected is not None:
+            stills[shot.id] = f"/api/projects/{root.name}/images/{owner}/{selected}"
+    return stills
+
+
 def _payload(root: Path, *, measure: bool = False) -> dict:
     project = P.load_project(root, verify_source=False)
     spec = sound.read(root)
-    rows = sound._layout(root, project)
+    found = sound.sources(root, project)
+    stills = _stills(root)
     cues = []
     for cue in spec["cues"]:
         try:
-            start, end = sound.span_seconds(project, cue, rows)
+            start, end = sound.span_seconds(project, cue, found)
         except ValueError:
             start = end = None
-        cues.append({**cue, "start_seconds": start, "end_seconds": min(end, project.duration) if end is not None else None})  # fmt: skip
+        end = min(end, project.duration) if end is not None else None
+        times = sound.place_times(project, cue, found, start, end) if start is not None and end is not None else None  # fmt: skip
+        cues.append({**cue, "start_seconds": start, "end_seconds": end, "places_seconds": times})
     return {
         "cues": cues,
         "duration": project.duration,
@@ -64,7 +88,15 @@ def _payload(root: Path, *, measure: bool = False) -> dict:
         "story_film": project.spine == "soundtrack",
         "lines": [
             {"id": row["id"], "start": row["start"], "end": row["end"] + row["pause_after"]}
-            for row in rows
+            for row in found["rows"]
+        ],  # fmt: skip
+        "shots": [
+            {"id": shot_id, "start": start, "end": end, "still": stills.get(shot_id)}
+            for shot_id, (start, end) in found["shots"].items()
+        ],
+        "beats": [
+            {"id": beat_id, "start": start, "end": end}
+            for beat_id, (start, end) in found["beats"].items()
         ],  # fmt: skip
         "models": _models(),
         "report": sound.report(root, project) if measure else None,

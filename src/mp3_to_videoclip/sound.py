@@ -62,10 +62,20 @@ def _number(value, low: float, high: float, name: str) -> float:
     return float(value)
 
 
-def _anchor(value, project: Project, *, lines: set[str]) -> dict:
-    """``{"frame": n}`` on any film, ``{"line": id}`` on a story film; -1 is the end."""
+#: How often a repeated sound may recur, at the least, and how many placements a cue may name.
+MIN_EVERY_SECONDS = 0.25
+MAX_PLACES = 200
+_ANCHOR_WORDS = "an anchor is {frame: n}, {shot: id}, {line: id} or {beat: id}"
+
+
+def _anchor(value, project: Project, *, known: dict) -> dict:
+    """Where a cue starts or ends: a frame, a shot's cut, or on a story film a line or a beat.
+
+    ``{"frame": -1}`` is the film's end. A shot or a beat follows the cut and the takes, as
+    a line does, so a sound placed on them moves with the film.
+    """
     if not isinstance(value, dict) or len(value) != 1:
-        raise ValueError("an anchor is {frame: n} or {line: id}")
+        raise ValueError(_ANCHOR_WORDS)
     if "frame" in value:
         frame = value["frame"]
         if isinstance(frame, bool) or not isinstance(frame, int) or frame < -1:
@@ -73,13 +83,45 @@ def _anchor(value, project: Project, *, lines: set[str]) -> dict:
         if frame > project.total_frames:
             raise ValueError("an anchor frame is inside the film")
         return {"frame": frame}
+    if "shot" in value:
+        if value["shot"] not in known["shots"]:
+            raise ValueError(f"the storyboard has no shot {value['shot']}")
+        return {"shot": value["shot"]}
     if "line" in value:
         if project.spine != "soundtrack":
             raise ValueError("only a story film anchors a sound to a line")
-        if value["line"] not in lines:
+        if value["line"] not in known["lines"]:
             raise ValueError(f"the script has no line {value['line']}")
         return {"line": value["line"]}
-    raise ValueError("an anchor is {frame: n} or {line: id}")
+    if "beat" in value:
+        if project.spine != "soundtrack":
+            raise ValueError("only a story film anchors a sound to a beat")
+        if value["beat"] not in known["beats"]:
+            raise ValueError(f"the structure has no beat {value['beat']}")
+        return {"beat": value["beat"]}
+    raise ValueError(_ANCHOR_WORDS)
+
+
+def _places(value, project: Project, *, known: dict) -> dict | None:
+    """One sound in many places: every so many seconds, or at a list of anchors."""
+    if value is None:
+        return None
+    if (
+        not isinstance(value, dict)
+        or len(value) == 0
+        or not set(value) <= {"every", "jitter", "at"}
+    ):
+        raise ValueError("places are {every: seconds, jitter: seconds} or {at: [anchors]}")
+    if "at" in value:
+        if "every" in value or "jitter" in value:
+            raise ValueError("places are either every so many seconds or at anchors, not both")
+        anchors = value["at"]
+        if not isinstance(anchors, list) or not 1 <= len(anchors) <= MAX_PLACES:
+            raise ValueError(f"places name between 1 and {MAX_PLACES} anchors")
+        return {"at": [_anchor(item, project, known=known) for item in anchors]}
+    every = _number(value.get("every"), MIN_EVERY_SECONDS, max(project.duration, MIN_EVERY_SECONDS), "every")  # fmt: skip
+    jitter = _number(value.get("jitter", 0.0), 0.0, every / 2, "jitter")
+    return {"every": every, "jitter": jitter}
 
 
 def _script_lines(root: Path, project: Project) -> set[str]:
@@ -91,7 +133,52 @@ def _script_lines(root: Path, project: Project) -> set[str]:
     return {line.id for line in script.lines} if script else set()
 
 
-def _cue(root: Path, project: Project, value: dict, previous: dict | None, lines: set[str]) -> dict:
+def sources(root: Path, project: Project) -> dict:
+    """Everything an anchor can name, with where each thing is in seconds.
+
+    The shots are the cut's, so a sound on a cut follows the Film stage's edit; the beats
+    are the story film's, from the first word of their first line to the pause after their
+    last. The line rows are the narration layout, as before.
+    """
+    from . import edits
+    from .production import load_board
+
+    rows = _layout(root, project)
+    shots: dict[str, tuple[float, float]] = {}
+    try:
+        board = edits.effective_board(root, load_board(root))
+    except (OSError, ValueError):
+        board = None
+    if board is not None:
+        for shot in board.shots:
+            start = shot.start_frame / project.fps
+            shots[shot.id] = (start, (shot.start_frame + shot.duration_frames) / project.fps)
+    beats: dict[str, tuple[float, float]] = {}
+    for row in rows:
+        beat = row.get("beat")
+        if not beat:
+            continue
+        first, last = beats.get(beat, (row["start"], row["end"] + row["pause_after"]))
+        beats[beat] = (min(first, row["start"]), max(last, row["end"] + row["pause_after"]))
+    return {"rows": rows, "shots": shots, "beats": beats}
+
+
+def _sound_models() -> list:
+    from . import catalog
+
+    return [m for m in catalog.load().models if {"music", "effects"} & set(m.capabilities)]
+
+
+def _known(root: Path, project: Project) -> dict:
+    found = sources(root, project)
+    return {
+        "lines": _script_lines(root, project),
+        "shots": set(found["shots"]),
+        "beats": set(found["beats"]),
+    }
+
+
+def _cue(root: Path, project: Project, value: dict, previous: dict | None, known: dict) -> dict:
     if not isinstance(value, dict):
         raise ValueError("a cue is an object")
     cue_id = value.get("id")
@@ -103,8 +190,17 @@ def _cue(root: Path, project: Project, value: dict, previous: dict | None, lines
     prompt = value.get("prompt", "")
     if not isinstance(prompt, str) or len(prompt) > MAX_PROMPT:
         raise ValueError(f"a cue's prompt is text of at most {MAX_PROMPT} characters")
-    start = _anchor(value.get("start", {"frame": 0}), project, lines=lines)
-    end = _anchor(value.get("end", {"frame": -1}), project, lines=lines)
+    start = _anchor(value.get("start", {"frame": 0}), project, known=known)
+    end = _anchor(value.get("end", {"frame": -1}), project, known=known)
+    places = _places(value.get("places"), project, known=known)
+    model = value.get("model")
+    if model is not None:
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("a cue's model is a catalogue id, or left out for Settings' choice")
+        model = model.strip()
+        wanted = "music" if kind == "music" else "effects"
+        if model not in {m.id for m in _sound_models() if wanted in m.capabilities}:
+            raise ValueError(f"the catalogue lists no {wanted} model {model}")
     cue = {
         "id": cue_id,
         "kind": kind,
@@ -114,6 +210,9 @@ def _cue(root: Path, project: Project, value: dict, previous: dict | None, lines
         "gain_db": _number(value.get("gain_db", GAIN_DB[kind]), -60, 12, "gain"),
         "duck_db": _number(value.get("duck_db", DUCK_DB[kind]), -40, 0, "duck"),
         "loop": bool(value.get("loop", kind != "effect")),
+        "places": places,
+        # The model this cue is made with; absent, Settings' choice for its kind.
+        "model": model,
         # Versions are immutable evidence: a cue list can never rewrite them.
         "versions": list((previous or {}).get("versions", [])),
         "selected": (previous or {}).get("selected"),
@@ -132,9 +231,9 @@ def set_cues(root: Path, cues: list) -> dict:
     if not isinstance(cues, list):
         raise ValueError("cues is a list")
     project = load_project(root, verify_source=False)
-    lines = _script_lines(root, project)
-    known = {cue["id"]: cue for cue in read(root)["cues"]}
-    rows = [_cue(root, project, item, known.get(item.get("id")), lines) for item in cues]
+    known = _known(root, project)
+    before = {cue["id"]: cue for cue in read(root)["cues"]}
+    rows = [_cue(root, project, item, before.get(item.get("id")), known) for item in cues]
     if len({row["id"] for row in rows}) != len(rows):
         raise ValueError("name each cue once")
     spec = {"version": VERSION, "cues": rows}
@@ -223,20 +322,75 @@ def _layout(root: Path, project: Project) -> list[dict]:
     return narration_timing.layout(root)
 
 
-def span_seconds(project: Project, cue: dict, rows: list[dict]) -> tuple[float, float]:
-    """Where a cue plays, in seconds of the film. A line anchor follows its take."""
-    places = {row["id"]: row for row in rows}
+def _sources(found) -> dict:
+    """The line rows alone, as older callers pass them, or everything an anchor can name."""
+    if isinstance(found, dict):
+        return found
+    return {"rows": found, "shots": {}, "beats": {}}
 
-    def at(anchor: dict, *, end: bool) -> float:
-        if "frame" in anchor:
-            frame = anchor["frame"]
-            return project.duration if frame == -1 else frame / project.fps
-        row = places.get(anchor["line"])
-        if row is None:
-            raise ValueError(f"line {anchor['line']} has left the script")
-        return row["end"] + row["pause_after"] if end else row["start"]
 
-    return at(cue["start"], end=False), at(cue["end"], end=True)
+def anchor_seconds(project: Project, anchor: dict, found, *, end: bool = False) -> float:
+    """Where an anchor is in the film now: a frame, a shot's cut, a line's take or a beat."""
+    found = _sources(found)
+    if "frame" in anchor:
+        frame = anchor["frame"]
+        return project.duration if frame == -1 else frame / project.fps
+    if "shot" in anchor:
+        span = found["shots"].get(anchor["shot"])
+        if span is None:
+            raise ValueError(f"shot {anchor['shot']} has left the cut")
+        return span[1] if end else span[0]
+    if "beat" in anchor:
+        span = found["beats"].get(anchor["beat"])
+        if span is None:
+            raise ValueError(f"beat {anchor['beat']} has no lines yet")
+        return span[1] if end else span[0]
+    row = next((row for row in found["rows"] if row["id"] == anchor["line"]), None)
+    if row is None:
+        raise ValueError(f"line {anchor['line']} has left the script")
+    return row["end"] + row["pause_after"] if end else row["start"]
+
+
+def span_seconds(project: Project, cue: dict, found) -> tuple[float, float]:
+    """Where a cue plays, in seconds of the film. Every anchor follows what it names."""
+    return (
+        anchor_seconds(project, cue["start"], found),
+        anchor_seconds(project, cue["end"], found, end=True),
+    )
+
+
+def _jitter(cue_id: str, index: int, jitter: float) -> float:
+    """A fixed offset per placement, so the same cue list mixes the same bytes every time."""
+    if jitter <= 0:
+        return 0.0
+    share = int(digest([cue_id, index])[:8], 16) / 0xFFFFFFFF
+    return (share * 2 - 1) * jitter
+
+
+def place_times(project: Project, cue: dict, found, start: float, end: float) -> list[float] | None:
+    """Where one sound is placed between a cue's start and end; ``None`` for a plain cue."""
+    places = cue.get("places")
+    if not places:
+        return None
+    if "at" in places:
+        times = []
+        for anchor in places["at"]:
+            try:
+                at = anchor_seconds(project, anchor, found)
+            except ValueError:
+                continue
+            if start <= at < end:
+                times.append(round(at, 4))
+        return sorted(times)
+    every, jitter = places["every"], places.get("jitter", 0.0)
+    times = []
+    index = 0
+    while start + index * every < end and index < MAX_PLACES * 10:
+        at = start + index * every + _jitter(cue["id"], index, jitter)
+        if start <= at < end:
+            times.append(round(at, 4))
+        index += 1
+    return times
 
 
 def speech_spans(root: Path, project: Project) -> list[tuple[int, int]]:
@@ -260,29 +414,32 @@ def speech_spans(root: Path, project: Project) -> list[tuple[int, int]]:
     return spans
 
 
-def placed(root: Path, project: Project) -> list[tuple[dict, dict, float, float]]:
-    """Every cue with a selected sound and a span that is still in the film."""
-    rows = _layout(root, project)
+def placed(root: Path, project: Project) -> list[tuple[dict, dict, float, float, list[float] | None]]:  # fmt: skip
+    """Every cue with a selected sound and a span still in the film, with its placements."""
+    found = sources(root, project)
     result = []
     for cue in read(root)["cues"]:
         chosen = _chosen(cue)
         if chosen is None:
             continue
         try:
-            start, end = span_seconds(project, cue, rows)
+            start, end = span_seconds(project, cue, found)
         except ValueError:
             continue
         end = min(end, project.duration)
         if end <= start:
             continue
-        result.append((cue, chosen, start, end))
+        times = place_times(project, cue, found, start, end)
+        if times is not None and not times:
+            continue
+        result.append((cue, chosen, start, end, times))
     return result
 
 
 # ------------------------------------------------------------------ the layer
 
 
-def key(base: Path, rows: list[tuple[dict, dict, float, float]], spans) -> str:
+def key(base: Path, rows: list, spans) -> str:
     return digest(
         {
             "version": VERSION,
@@ -298,8 +455,9 @@ def key(base: Path, rows: list[tuple[dict, dict, float, float]], spans) -> str:
                     "duck_db": cue["duck_db"],
                     "loop": cue["loop"],
                     "fade": FADE_SECONDS[cue["kind"]],
+                    "times": times,
                 }
-                for cue, chosen, start, end in rows
+                for cue, chosen, start, end, times in rows
             ],
         }
     )[:20]
@@ -338,21 +496,26 @@ def with_cues(root: Path, project: Project, base: Path, spans: list[tuple[int, i
     # 0 where nobody speaks, 1 in the middle of a line, with the speech mixer's own ramps.
     depth = (1 - voice._duck(total, spans)) / (1 - 10 ** (voice.DUCK_DB / 20))
     layer = np.zeros_like(out)
-    for cue, chosen, start, end in rows:
+    for cue, chosen, start, end, times in rows:
         path = inside(root, chosen["path"])
         if file_hash(path) != chosen["sha256"]:
             raise ValueError(f"the sound {chosen['path']} changed on disk; recover it")
-        first = min(total, round(start * rate))
         last = min(total, round(end * rate))
-        if last <= first:
-            continue
-        sound = voice._decode(path, music.CHANNELS)
-        if cue["loop"] and sound.shape[0] < last - first:
-            sound = np.tile(sound, (int(np.ceil((last - first) / max(1, sound.shape[0]))), 1))
-        sound = sound[: last - first] * 10 ** (float(cue["gain_db"]) / 20)
-        _fades(sound, FADE_SECONDS[cue["kind"]])
-        duck = 1 - depth[first : first + sound.shape[0]] * (1 - 10 ** (float(cue["duck_db"]) / 20))
-        layer[first : first + sound.shape[0]] += sound * duck[:, None]
+        decoded = voice._decode(path, music.CHANNELS)
+        gain = 10 ** (float(cue["gain_db"]) / 20)
+        # One sound in many places plays whole at each, cut only by the cue's end.
+        starts = [start] if times is None else times
+        for at in starts:
+            first = min(total, round(at * rate))
+            if last <= first:
+                continue
+            sound = decoded
+            if times is None and cue["loop"] and sound.shape[0] < last - first:
+                sound = np.tile(sound, (int(np.ceil((last - first) / max(1, sound.shape[0]))), 1))
+            sound = sound[: last - first] * gain
+            _fades(sound, FADE_SECONDS[cue["kind"]])
+            duck = 1 - depth[first : first + sound.shape[0]] * (1 - 10 ** (float(cue["duck_db"]) / 20))  # fmt: skip
+            layer[first : first + sound.shape[0]] += sound * duck[:, None]
     mixed = out + layer
     peak = float(np.max(np.abs(mixed))) if mixed.size else 0.0
     if peak > PEAK:
@@ -371,6 +534,7 @@ def with_cues(root: Path, project: Project, base: Path, spans: list[tuple[int, i
             "key": value,
             "base": base.name,
             "cues": [cue["id"] for cue, *_ in rows],
+            "placements": {cue["id"]: len(times) for cue, _c, _s, _e, times in rows if times},
             "peak": round(float(np.max(np.abs(mixed))), 4) if mixed.size else 0.0,
             "layer_scaled": peak > PEAK,
         },
@@ -386,8 +550,17 @@ def layer_version(root: Path, project: Project) -> str | None:
         return None
     return digest(
         [
-            [cue["id"], chosen["sha256"], start, end, cue["gain_db"], cue["duck_db"], cue["loop"]]
-            for cue, chosen, start, end in rows
+            [
+                cue["id"],
+                chosen["sha256"],
+                start,
+                end,
+                cue["gain_db"],
+                cue["duck_db"],
+                cue["loop"],
+                times,
+            ]  # fmt: skip
+            for cue, chosen, start, end, times in rows
         ]
     )[:12]
 
@@ -482,14 +655,14 @@ def report(root: Path, project: Project | None = None) -> dict:
 
     project = project or load_project(root, verify_source=False)
     spec = read(root)
-    rows = _layout(root, project)
+    found = sources(root, project)
     notes = []
     for cue in spec["cues"]:
         chosen = _chosen(cue)
         if chosen is None:
             notes.append({"code": "cue_silent", "cue": cue["id"], "message": f"{cue['id']} has no sound yet."})  # fmt: skip
         try:
-            start, end = span_seconds(project, cue, rows)
+            start, end = span_seconds(project, cue, found)
         except ValueError as exc:
             notes.append({"code": "cue_unplaced", "cue": cue["id"], "message": f"{cue['id']}: {exc}."})  # fmt: skip
             continue
@@ -497,6 +670,9 @@ def report(root: Path, project: Project | None = None) -> dict:
             notes.append({"code": "cue_empty", "cue": cue["id"], "message": f"{cue['id']} ends before it starts."})  # fmt: skip
         elif end > project.duration + 1e-6:
             notes.append({"code": "cue_past_end", "cue": cue["id"], "message": f"{cue['id']} runs {end - project.duration:.1f} s past the end; it is cut there."})  # fmt: skip
+        times = place_times(project, cue, found, start, min(end, project.duration))
+        if times is not None and not times:
+            notes.append({"code": "cue_no_places", "cue": cue["id"], "message": f"{cue['id']} is placed nowhere between its start and its end."})  # fmt: skip
         if cue["gain_db"] + cue["duck_db"] > SPEECH_LEVEL_DB - MARGIN_DB:
             notes.append({"code": "cue_under_speech", "cue": cue["id"], "message": f"{cue['id']} sits within {MARGIN_DB:g} dB of the voice while someone speaks; lower it or duck it more."})  # fmt: skip
     measured = None
@@ -543,6 +719,8 @@ POLL_SECONDS = 5.0
 #: A slow music task stays journaled and is collected later; it is never bought again.
 POLL_LIMIT_SECONDS = 600.0
 MIN_RESERVE = Decimal("0.01")
+#: How long a sound placed at anchors is bought for, when its places set no gap.
+PLACED_HIT_SECONDS = 1.5
 #: A price per run is by compute time, which is not known before the run.
 RUN_PRICE_MARGIN = 2
 
@@ -634,7 +812,12 @@ def quote_cues(root: Path, cue_ids: list[str] | None = None, *, model: str | Non
     if model is None and len({"music" if k == "music" else "effects" for k in kinds}) > 1:
         raise ValueError("quote music and effects separately; they use different models")
     settings = load_settings()
-    model = model or model_for(chosen[0]["kind"], settings)
+    if model is None:
+        # A cue that named its model is made with it; cues of different models go separately.
+        named = {cue["model"] for cue in chosen if cue.get("model")}
+        if len(named) > 1 or (named and any(not cue.get("model") for cue in chosen)):
+            raise ValueError("quote cues of different models separately")
+        model = named.pop() if named else model_for(chosen[0]["kind"], settings)
     if not model:
         raise ValueError("choose a sound model in Settings first")
     own = client is None
@@ -649,14 +832,17 @@ def quote_cues(root: Path, cue_ids: list[str] | None = None, *, model: str | Non
         raise ValueError("model is not confirmed live")
     schema_path = f"work/schemas/{digest(schema)}.json"
     write_json(inside(root, schema_path), schema)
-    rows = _layout(root, project)
+    found = sources(root, project)
     journal = read_optional(root / "work/tasks.json") or {}
     tasks = []
     for cue in chosen:
         if any(t.get("cue_id") == cue["id"] and t["status"] in ("submitted", "result") for t in journal.values()):  # fmt: skip
             raise ValueError(f"{cue['id']} has an unresolved task; recover it first")
-        start, end = span_seconds(project, cue, rows)
+        start, end = span_seconds(project, cue, found)
         span = max(0.5, min(end, project.duration) - start)
+        if cue.get("places"):
+            # One sound placed many times is bought once, as long as its gap or a short hit.
+            span = max(0.5, min(span, cue["places"].get("every") or PLACED_HIT_SECONDS))
         task_uuid = str(uuid4())
         request = build_request(cue, span, schema, task_uuid)
         seconds = request.get("duration")

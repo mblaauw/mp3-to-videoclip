@@ -292,7 +292,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "write_sound_cues",
-        "Replace the cues: id, kind (music, ambience, effect), prompt, start and end as {frame} or {line}, gain_db, why. Only the owner buys.",
+        "Replace the cues: id, kind (music, ambience, effect), prompt, start and end as {frame}, {shot}, {line} or {beat}; places as {every, jitter} or {at: [anchors]} for one sound in many places; gain_db, why. Only the owner buys.",
         {"slug": {"type": "string"}, "cues": {"type": "array", "items": {"type": "object"}}},
         ["slug", "cues"],
     ),
