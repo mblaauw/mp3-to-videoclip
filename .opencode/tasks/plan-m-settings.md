@@ -61,3 +61,33 @@ Posting a chat context with stage "publish" or "sound" is accepted. The drawer
 on Publish opens on the Writer. The Sounds tab shows the two models with their
 prices and saves a choice. "$0.0009 per run" and "$0.15 per clip" read as such.
 A fresh film starts on the presets the settings name. Every suite green.
+
+## Done, 6 Nov 2026
+
+### Proved
+
+- `tests/test_api_director_context.py`: every stage in `STAGE_ROLE` passes the
+  chat route's context check; sound, publish and script reach the Writer; an
+  unknown stage is still refused.
+- `frontend/tests/chat.test.ts`: the drawer opens on the Writer on sound,
+  publish and script, on the Editor on track and film, and every stage with
+  suggestions has a role.
+- The Sounds tab shows ACE-Step at "$0.0009 per run" and Mirelo at "$0.00025
+  per second", saves a choice, shows "$0.15 per clip" for MiniMax, and resets to
+  the catalogue's recommendation (browser test).
+- New films shows the presets a film starts with; the last one cannot be taken
+  away (browser test). `publish.read` starts an unchosen film on them, drops a
+  preset the app does not know, falls back to YouTube, and leaves a film that
+  chose alone (`tests/test_publish.py`).
+- This computer shows the productions folder with its film count, the world
+  library with its entry and series counts, and the settings file (browser and
+  route tests). The catalogue route reports the folders.
+- The Roles hints name every stage each role answers; the Pictures note says the
+  video model and upscaler are used. Looked at in the real Studio on port 18990
+  with the owner's own settings: 7 films, 0 library entries.
+- Every suite green; the committed frontend build is current.
+
+### Not proven
+
+- A live Writer turn on the Publish stage. The route no longer refuses it; the
+  model's answer is the owner's to read. No paid call was made.
