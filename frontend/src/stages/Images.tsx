@@ -6,6 +6,8 @@ import { MakeSharper } from "../images/MakeSharper";
 import { NewRoundCard } from "../images/NewRoundCard";
 import { PaidCard } from "../images/PaidCard";
 import { JobBanner } from "../jobs/JobBanner";
+import { useProjectJobs } from "../jobs/store";
+import { readClipJobs } from "../images/clipJobs";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { kindMeta } from "../shotKinds";
 import { Button, EmptyState, ErrorState, LoadingState } from "../ui";
@@ -17,6 +19,9 @@ export function ImagesStage(props: ImagesStageProps) {
   const { slug, reserve, onNavigate } = props;
   const data = useImagesData(props);
   const { activeIndex, answerRef, budget, counts, current, currentShot, error, filter, fps, imageJobs, keep, kept, lightboxRef, load, loaded, make, makeFromLightbox, making, move, older, open, paid, paidShots, price, proofApproved, proofIds, redo, redoNote, redoOpen, sectionAt, selectVersion, setActiveId, setFilter, setRedoNote, setRedoOpen, shotById, shots, submitRedo, visible, visibleMissing, visibleOlder, working } = data;
+  const clipJobs = useProjectJobs(slug, "clip");
+  const clipNotes = readClipJobs();
+  const clipping = new Set(clipJobs.map((job) => clipNotes[job.id]?.shot).filter((id): id is string => !!id));
   return (
     <>
       <div className="stage-head images-head">
@@ -141,7 +146,7 @@ export function ImagesStage(props: ImagesStageProps) {
                 type="button"
                 key={shot.id}
                 data-still={shot.id}
-                className={`still-tile ${status.tone} ${clip ? "clip" : ""} ${making.has(shot.owner) || making.has(shot.id) ? "making" : ""}`}
+                className={`still-tile ${status.tone} ${clip ? "clip" : ""} ${making.has(shot.owner) || making.has(shot.id) || clipping.has(shot.id) ? "making" : ""}`}
                 onClick={() => open(shot.id)}
                 aria-label={`Open ${shot.id}, ${status.label}${clip ? `, a clip of ${clip.seconds.toFixed(1)} s` : ""}`}
                 aria-busy={making.has(shot.owner) || making.has(shot.id)}
@@ -154,10 +159,10 @@ export function ImagesStage(props: ImagesStageProps) {
                   }
                 }}
               >
-                {(making.has(shot.owner) || making.has(shot.id)) && (
+                {(making.has(shot.owner) || making.has(shot.id) || clipping.has(shot.id)) && (
                   <span className="still-making">
                     <i aria-hidden="true" />
-                    Making…
+                    {clipping.has(shot.id) ? "Making a clip…" : "Making…"}
                   </span>
                 )}
                 {clipSrc && src ? (

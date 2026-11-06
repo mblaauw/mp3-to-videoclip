@@ -254,7 +254,8 @@ async def generate_clips(slug: str, request: Request, payload: dict):
     async def work():
         return await asyncio.to_thread(services.generation.run_clips, root, quote_id)
 
-    job_id = runner.submit("images", slug, work, blocking=True)
+    # Its own kind, so the still's panel can show the clip being made and the grid can say so.
+    job_id = runner.submit("clip", slug, work, blocking=True)
     return {
         "job_id": job_id,
         "quote_id": quote_id,

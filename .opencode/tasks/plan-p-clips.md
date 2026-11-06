@@ -112,3 +112,18 @@ Commits on `film/phase-p-clips`, stacked on Phase O: P1 the engine, P2 and P3 th
   Turbo Standard proves the request shape against the live provider: a Veo or Vidu
   request validated here against its public schema has not been answered by Runware.
   A grid tile's hover play was seen in the preview, not measured.
+
+## After the owner's look, 6 Nov 2026
+
+- P4. The panel read as a loose stack of controls, and a clip being made looked like
+  nothing. Now it is a card: a header with what it does and the model's lowest rate
+  as a pill, the model as a full-width menu with its note, length and size as
+  segmented choices, sound as a switch with a sentence, the motion prompt, and a
+  footer with the price and how long the provider's own example runs took (the
+  median of `x-pricing.examples`, as `typical_seconds` on the options and the quote).
+  The clip purchase runs as a job of its own kind, `clip`; the panel remembers which
+  job makes which shot in this tab, shows a ring that fills over the usual time and
+  stops short of full, says the minutes so far against the usual, says when it runs
+  long and that a slow clip is collected from the journal, and the grid tile says
+  "Making a clip…". Looked at on Cool Cat's s002. The ring itself has not been
+  watched over a live purchase.

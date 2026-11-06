@@ -656,35 +656,166 @@
   line-height: 1.6;
 }
 
-/* The clip panel: the model and its choices, then the price with its basis. */
-.make-clip-choices {
-  flex-basis: 100%;
+/* The clip card: the model and its choices, then the price with its basis, then the clips. */
+.clip-maker {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+  padding: var(--s-4) var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  background: var(--raised);
+}
+.clip-maker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.clip-maker-head > div {
+  display: grid;
+  gap: 2px;
+}
+.clip-maker-head b {
+  font-size: var(--t-15);
+}
+.clip-maker-head span:not(.clip-price-pill) {
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.clip-price-pill {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--gold-wash);
+  color: var(--ink);
+  font-size: var(--t-12);
+  white-space: nowrap;
+}
+.clip-maker-note {
+  margin: 0;
+}
+.clip-maker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--s-3) var(--s-4);
+  align-items: start;
 }
-.make-clip-prompt {
-  grid-column: 1 / -1;
+.clip-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--t-13);
 }
-.make-clip-prompt textarea {
+.clip-field > span:first-child {
+  color: var(--ink-2);
+  font-size: var(--t-12);
+  font-weight: var(--w-medium);
+  letter-spacing: 0.01em;
+}
+.clip-field small {
+  color: var(--muted);
+  font-size: var(--t-12);
+  line-height: 1.4;
+}
+.clip-field select,
+.clip-field textarea {
   width: 100%;
 }
-.make-clip-switch > span:last-child {
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
+.clip-field-model,
+.clip-field-prompt {
+  grid-column: 1 / -1;
 }
-.make-clip-actions {
-  flex-basis: 100%;
+.clip-seg {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-2);
-  align-items: center;
+  gap: var(--s-1);
 }
-.make-clip .ui-chip[role="radio"] {
+.clip-seg button {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--panel, transparent);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--t-13);
   cursor: pointer;
 }
-.make-clip .ui-chip.on {
+.clip-seg button:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.clip-seg button[aria-checked="true"] {
   border-color: var(--gold);
   background: var(--gold-wash);
+  color: var(--ink);
+}
+.clip-switch {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  min-height: 32px;
+}
+.clip-switch input {
+  margin-top: 3px;
+}
+.clip-maker-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  align-items: center;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line-soft);
+}
+.clip-maker-foot .hint {
+  margin: 0;
+  flex-basis: 100%;
+}
+.clip-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+/* The clip being made: a ring that fills over the provider's usual time. */
+.clip-progress {
+  display: flex;
+  gap: var(--s-4);
+  align-items: center;
+  padding: var(--s-3) 0;
+}
+.clip-ring {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  transform: rotate(-90deg);
+}
+.clip-ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+.clip-ring-track {
+  stroke: var(--gold-wash);
+}
+.clip-ring-fill {
+  stroke: var(--gold);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s linear;
+}
+.clip-ring.spinning {
+  animation: spin 1.6s linear infinite;
+}
+.clip-progress-copy {
+  display: grid;
+  gap: 2px;
+  font-size: var(--t-13);
+}
+.clip-progress-copy b {
+  font-size: var(--t-15);
+}
+.clip-progress-copy span {
+  color: var(--ink-2);
+}
+.clip-progress-copy small {
+  color: var(--muted);
 }

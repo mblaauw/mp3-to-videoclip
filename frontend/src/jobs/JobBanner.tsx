@@ -6,6 +6,7 @@ import { DELIVERY_STAGES } from "../film/deliveryWorkflow";
 
 const TITLE: Record<string, string> = {
   images: "Making stills",
+  clip: "Making a clip",
   voice: "Making the voiceover",
   render: "Rendering",
   analysis: "Measuring the song",
