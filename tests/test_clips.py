@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -76,7 +77,8 @@ def make_clip(path: Path, seconds=2, fps=24, codec="libx264") -> Path:
 
 
 class FakeClient:
-    def __init__(self, *, polls=0, seconds=2):
+    def __init__(self, schema_value=None, *, polls=0, seconds=2):
+        self.schema_value = schema_value
         self.polls = polls
         self.seconds = seconds
         self.submitted = []
@@ -84,7 +86,7 @@ class FakeClient:
         self.downloads = 0
 
     def schema(self, slug):
-        return schema()
+        return self.schema_value or schema()
 
     def reference_image(self, path):
         return "data:image/jpeg;base64,AAAA"
@@ -361,3 +363,137 @@ def test_a_looped_clip_is_not_reported_short_and_is_absent_until_set(film):
     assert "clip_loop" not in edit.shots[0].model_dump()
     looped = edit.shots[0].model_copy(update={"clip_loop": True})
     assert looped.model_dump()["clip_loop"] is True
+
+
+def veo_schema():
+    """A Veo-shaped schema: a resolution word with a frame, its own sound, labeled rates."""
+    value = schema()
+    info = value["info"]
+    info["x-air-id"] = "google:3@3"
+    info["x-pricing"] = {
+        "rates": [
+            {
+                "amount": 0.10,
+                "unit": "durationSecond",
+                "label": "720p / 1080p",
+                "display": "$0.10 per second",
+            },
+            {"amount": 0.15, "unit": "durationSecond", "label": "720p / 1080p · with audio"},
+            {"amount": 0.30, "unit": "durationSecond", "label": "4K"},
+            {"amount": 0.35, "unit": "durationSecond", "label": "4K · with audio"},
+        ]
+    }
+    props = value["components"]["schemas"]["RequestBody"]["items"]["properties"]
+    props["model"] = {"const": "google:3@3"}
+    props["duration"] = {"enum": [4, 6, 8]}
+    props["resolution"] = {"enum": ["720p", "1080p", "4K"]}
+    props["providerSettings"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "google": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"generateAudio": {"type": "boolean", "default": True}},
+            }
+        },
+    }
+    return value
+
+
+def vidu_schema():
+    """A Vidu-shaped schema: a range of seconds, a price per clip by size and length."""
+    value = schema()
+    info = value["info"]
+    info["x-air-id"] = "vidu:3@1"
+    info["x-pricing"] = {
+        "rates": [
+            {"amount": 0.09625, "unit": "output", "label": "720p · 5s"},
+            {"amount": 0.1375, "unit": "output", "label": "720p · 8s"},
+            {"amount": 0.165, "unit": "output", "label": "1080p · 5s"},
+        ]
+    }
+    props = value["components"]["schemas"]["RequestBody"]["items"]["properties"]
+    props["model"] = {"const": "vidu:3@1"}
+    props["duration"] = {"type": "integer", "minimum": 1, "maximum": 8}
+    props["width"] = {"type": "integer"}
+    props["height"] = {"type": "integer"}
+    return value
+
+
+def test_a_quote_follows_the_schema_and_prices_from_the_published_rate(film):
+    root = film
+    kling = schema()
+    kling["info"]["x-pricing"] = {"rates": [{"amount": 0.042, "unit": "durationSecond"}]}
+    quote = clips.quote_clips(root, ["s001"], model="kling", client=FakeClient(kling))
+    request = quote["tasks"][0]["request"]
+    assert request["duration"] == 5 and "width" not in request and "resolution" not in request
+    assert "providerSettings" not in request
+    assert quote["price_basis"] == "published rate" and quote["rate"]["unit"] == "second"
+    assert Decimal(quote["reserve_total_usd"]) == Decimal("0.21")
+    assert quote["choices"] == {"resolution": None, "audio": None, "prompt": None}
+
+    veo = clips.quote_clips(root, ["s001"], model="veo", seconds=8, resolution="1080p", client=FakeClient(veo_schema()))  # fmt: skip
+    request = veo["tasks"][0]["request"]
+    assert request["duration"] == 8 and request["resolution"] == "1080p" and "width" not in request
+    # The model's own sound is priced, so the switch is always said, off unless asked.
+    assert request["providerSettings"] == {"google": {"generateAudio": False}}
+    assert (
+        Decimal(veo["reserve_total_usd"]) == Decimal("0.80")
+        and veo["rate"]["label"] == "720p / 1080p"
+    )
+    loud = clips.quote_clips(root, ["s001"], model="veo", seconds=4, resolution="4K", audio=True, client=FakeClient(veo_schema()))  # fmt: skip
+    assert loud["tasks"][0]["request"]["providerSettings"] == {"google": {"generateAudio": True}}
+    assert (
+        Decimal(loud["reserve_total_usd"]) == Decimal("1.40")
+        and loud["rate"]["label"] == "4K · with audio"
+    )
+    with pytest.raises(ValueError, match="offers 720p, 1080p, 4K, not 540p"):
+        clips.quote_clips(
+            root, ["s001"], model="veo", resolution="540p", client=FakeClient(veo_schema())
+        )
+    with pytest.raises(ValueError, match="makes no sound of its own"):
+        clips.quote_clips(root, ["s001"], model="kling", audio=True, client=FakeClient(kling))
+
+
+def test_a_per_clip_rate_counts_once_and_an_unmatched_rate_falls_back_to_settings(film):
+    root = film
+    vidu = clips.quote_clips(
+        root, ["s001"], model="vidu", seconds=7, client=FakeClient(vidu_schema())
+    )
+    assert vidu["tasks"][0]["request"]["duration"] == 7
+    # Without a size word the labeled rates do not fit; Settings' reserve stands in and says so.
+    assert vidu["price_basis"] == "settings reserve" and "Settings' rate" in vidu["warning"]
+    assert Decimal(vidu["reserve_total_usd"]) == Decimal("0.10") * 7
+    # The film's own size is sent when the schema takes one with a frame.
+    assert vidu["tasks"][0]["request"]["width"] == P.load_project(root).width
+    assert clips.published_price({"x-pricing": {"rates": [{"amount": 0.165, "unit": "output", "label": "1080p · 5s"}]}}, "1080p", False, 5.0)["usd"] == "0.1650"  # fmt: skip
+    assert clips.published_price({"x-pricing": {"rates": [{"amount": 0.1, "unit": "durationSecond", "label": "720p · with audio"}]}}, "720p", False, 5.0) is None  # fmt: skip
+    assert clips.published_price({}, None, False, 5.0) is None
+
+
+def test_a_prompt_of_the_owners_own_is_what_the_model_animates(film):
+    root = film
+    quote = clips.quote_clips(root, ["s001"], model="kling", prompt="the harbour mist drifts right", client=FakeClient())  # fmt: skip
+    assert quote["tasks"][0]["request"]["positivePrompt"] == "the harbour mist drifts right"
+    assert quote["choices"]["prompt"] == "the harbour mist drifts right"
+    with pytest.raises(ValueError, match="one at a time"):
+        clips.quote_clips(root, ["s001", "s002"], model="kling", prompt="x", client=FakeClient())
+    with pytest.raises(ValueError, match="motion prompt is text"):
+        clips.quote_clips(root, ["s001"], model="kling", prompt="   ", client=FakeClient())
+
+
+def test_a_models_options_come_from_its_schema():
+    options = clips.options_for("veo", client=FakeClient(veo_schema()))
+    assert options["durations"] == [4, 6, 8] and options["resolutions"] == ["720p", "1080p", "4K"]
+    assert options["audio"] is True and options["sized"] is False and options["live"] is True
+    assert options["rates"][1]["label"] == "720p / 1080p · with audio"
+    ranged = clips.options_for("vidu", client=FakeClient(vidu_schema()))
+    assert (
+        ranged["durations"] == list(range(1, 9))
+        and ranged["sized"] is True
+        and ranged["audio"] is False
+    )
+    auto = schema()
+    auto["components"]["schemas"]["RequestBody"]["items"]["properties"]["duration"] = {"anyOf": [{"const": "auto"}, {"type": "integer", "minimum": 6, "maximum": 10}]}  # fmt: skip
+    assert clips.options_for("ltx", client=FakeClient(auto))["durations"] == [6, 7, 8, 9, 10]

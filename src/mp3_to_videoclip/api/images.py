@@ -150,6 +150,44 @@ async def get_clip_file(slug: str, owner: str, version: int, request: Request):
     return FileResponse(target, media_type="video/mp4")
 
 
+@router.get("/images/clips/models")
+async def clip_models(slug: str, request: Request):
+    """The catalogue's video models with their prices; Settings' choice first. Free."""
+    from mp3_to_videoclip import catalog
+    from mp3_to_videoclip.config import effective_settings
+
+    project_root(request, slug)
+    chosen = effective_settings().pictures.video_model
+    rows = [
+        {
+            "id": model.id,
+            "label": model.label or model.id,
+            "price": model.price.model_dump() if model.price else None,
+            "price_note": model.price_note,
+            "price_checked": model.price_checked,
+            "chosen": model.id == chosen,
+        }
+        for model in catalog.load().models
+        if "video" in model.capabilities
+    ]
+    rows.sort(key=lambda row: not row["chosen"])
+    return {"models": rows}
+
+
+@router.get("/images/clips/options")
+async def clip_options(slug: str, request: Request, model: str):
+    """What one video model lets the owner choose, read from its public schema. Free."""
+    from mp3_to_videoclip import services
+
+    project_root(request, slug)
+    try:
+        return await asyncio.to_thread(services.generation.clip_options, model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # the provider's schema could not be read; say so plainly
+        raise HTTPException(status_code=502, detail=f"the model's schema could not be read: {exc}") from exc  # fmt: skip
+
+
 @router.post("/images/clips/estimate")
 async def estimate_clips(slug: str, request: Request, payload: dict):
     from mp3_to_videoclip import services
@@ -158,7 +196,24 @@ async def estimate_clips(slug: str, request: Request, payload: dict):
     shot_ids = payload.get("shot_ids") or []
     if not shot_ids:
         raise HTTPException(status_code=400, detail="select at least one shot")
-    estimate = services.generation.estimate_clips(root, shot_ids)
+    choices = {}
+    seconds = payload.get("seconds")
+    if seconds is not None:
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or seconds <= 0:
+            raise HTTPException(status_code=400, detail="seconds is a number above zero")
+        choices["seconds"] = seconds
+    for key in ("model", "resolution", "prompt"):
+        value = payload.get(key)
+        if value is not None:
+            if not isinstance(value, str) or not value.strip():
+                raise HTTPException(status_code=400, detail=f"{key} is text")
+            choices[key] = value.strip()
+    if payload.get("audio") is not None:
+        choices["audio"] = bool(payload["audio"])
+    try:
+        estimate = services.generation.estimate_clips(root, shot_ids, **choices)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Still before a price is shown: nothing can be bought without the key.
     runware_api_key()
     return {

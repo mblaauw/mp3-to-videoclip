@@ -10,7 +10,9 @@ and it is only used when the owner chooses it.
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -44,6 +46,8 @@ from .storage import (
 )
 
 DEFAULT_SECONDS = 5
+#: No clip is admitted for less than a cent, whatever the rate says.
+MIN_RESERVE = Decimal("0.01")
 MOTION_FILE = "work/motion-proposals.json"
 POLL_SECONDS = 5.0
 #: A slow clip stays journaled and is collected later; it is never bought again.
@@ -56,28 +60,160 @@ def _chosen(entry: dict) -> dict | None:
     )
 
 
-def _duration(props: dict, wanted: int) -> int:
+def _numeric_rule(rule) -> dict | None:
+    """The numeric branch of a duration rule: a plain rule, or one branch of an anyOf/oneOf."""
+    if not isinstance(rule, dict):
+        return None
+    if rule.get("enum") or "minimum" in rule or "maximum" in rule:
+        return rule
+    for branch in rule.get("anyOf") or rule.get("oneOf") or []:
+        found = _numeric_rule(branch)
+        if found is not None:
+            return found
+    return None
+
+
+def durations(props: dict) -> list:
+    """The lengths a model offers: its enum, or its range's whole seconds; [] for none."""
+    rule = _numeric_rule(props.get("duration"))
+    if rule is None:
+        return []
+    if rule.get("enum"):
+        return sorted(value for value in rule["enum"] if isinstance(value, (int, float)))
+    low = rule.get("minimum", 1)
+    high = rule.get("maximum", low)
+    first = int(math.ceil(low))
+    return list(range(first, int(math.floor(high)) + 1))
+
+
+def _duration(props: dict, wanted: float) -> float | int:
     """The length this model offers nearest above the one wanted, else the longest it has."""
-    rule = props.get("duration")
-    if not rule:
+    rule = _numeric_rule(props.get("duration"))
+    if rule is None:
         raise ValueError("this model does not say how long its clips are")
     if rule.get("enum"):
-        offered = sorted(rule["enum"])
+        offered = sorted(value for value in rule["enum"] if isinstance(value, (int, float)))
+        if not offered:
+            raise ValueError("this model does not say how long its clips are")
         return next((value for value in offered if value >= wanted), offered[-1])
     low, high = rule.get("minimum", wanted), rule.get("maximum", wanted)
-    return int(min(max(wanted, low), high))
+    value = min(max(wanted, low), high)
+    return int(value) if float(value).is_integer() else float(value)
+
+
+def resolutions(props: dict) -> list[str]:
+    """The sizes a model names when it starts from a still, as the schema words them."""
+    rule = props.get("resolution")
+    if isinstance(rule, dict) and isinstance(rule.get("enum"), list):
+        return [str(value) for value in rule["enum"]]
+    return []
+
+
+def _audio_path(props: dict) -> tuple[str, ...] | None:
+    """Where this model takes its own-sound switch, or ``None`` when it has none."""
+    settings = props.get("settings")
+    if isinstance(settings, dict) and "audio" in (settings.get("properties") or {}):
+        return ("settings", "audio")
+    provider = props.get("providerSettings")
+    for vendor, rule in ((provider or {}).get("properties") or {}).items():
+        keys = (rule or {}).get("properties") or {}
+        for key in ("generateAudio", "sound", "audio"):
+            if key in keys:
+                return ("providerSettings", vendor, key)
+    return None
+
+
+def _with_audio(request: dict, path: tuple[str, ...], on: bool) -> dict:
+    """The request with its own-sound switch set, so a priced default is never left unsaid."""
+    request = dict(request)
+    target = request
+    for key in path[:-1]:
+        target[key] = dict(target.get(key) or {})
+        target = target[key]
+    target[path[-1]] = on
+    return request
+
+
+def model_options(props: dict) -> dict:
+    """What a model lets the owner choose: lengths, sizes, and whether it makes its own sound."""
+    return {
+        "durations": durations(props),
+        "resolutions": resolutions(props),
+        "sized": "width" in props and "height" in props,
+        "audio": _audio_path(props) is not None,
+    }
+
+
+_RESOLUTION_WORDS = re.compile(r"(\d{3,4}p|4k)", re.IGNORECASE)
+
+
+def _rate_matches(label: str, resolution: str | None, audio: bool) -> bool:
+    words = label.lower()
+    named = {word.lower() for word in _RESOLUTION_WORDS.findall(words)}
+    if named and (resolution is None or resolution.lower() not in named):
+        return False
+    says_audio = "audio" in words or "sound" in words
+    without = "without" in words or "no audio" in words or "no sound" in words
+    if says_audio:
+        return audio is not without
+    return not audio or not named
+
+
+def published_price(info: dict, resolution: str | None, audio: bool, length: float) -> dict | None:
+    """The model's published price for these choices, or ``None`` when no rate fits.
+
+    A rate per second is multiplied by the length; a rate per clip ("output") counts
+    once. Unlabeled rates fit any choice; a labeled one must name the resolution and say
+    the same about the model's own sound.
+    """
+    rates = ((info.get("x-pricing") or {}).get("rates") or []) if isinstance(info, dict) else []
+    fitting = []
+    for rate in rates:
+        if not isinstance(rate, dict):
+            continue
+        amount, unit = rate.get("amount"), rate.get("unit")
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount < 0:
+            continue
+        if unit not in ("durationSecond", "output"):
+            continue
+        label = str(rate.get("label") or "")
+        if label and not _rate_matches(label, resolution, audio):
+            continue
+        fitting.append(rate)
+    if not fitting:
+        return None
+    # The most specific rate wins: a labeled one over an unlabeled one.
+    rate = sorted(fitting, key=lambda item: 0 if item.get("label") else 1)[0]
+    amount = Decimal(str(rate["amount"]))
+    usd = amount * Decimal(str(length)) if rate["unit"] == "durationSecond" else amount
+    return {
+        "amount": str(amount),
+        "unit": "second" if rate["unit"] == "durationSecond" else "clip",
+        "label": str(rate.get("label") or ""),
+        "display": str(rate.get("display") or ""),
+        "usd": str(usd.quantize(Decimal("0.0001"))),
+    }
 
 
 def quote_clips(
     root: Path,
     shot_ids: list[str],
     *,
-    seconds: int = DEFAULT_SECONDS,
+    seconds: float | None = None,
     model: str | None = None,
+    resolution: str | None = None,
+    audio: bool = False,
+    prompt: str | None = None,
     reserve_per_second: str | None = None,
     client=None,
 ) -> dict:
-    """Quote one clip per chosen still. Reads the free public schema and spends nothing."""
+    """Quote one clip per chosen still. Reads the free public schema and spends nothing.
+
+    The request takes the schema's shape: the nearest length it offers, its ``resolution``
+    word or the film's own size when it accepts one with a frame, and its own-sound switch
+    set as asked whenever it has one. The price is the rate the model publishes for these
+    choices; when no rate fits, Settings' reserve per second stands in and the quote says so.
+    """
     from .config import load_settings
 
     root = Path(root)
@@ -95,6 +231,10 @@ def quote_clips(
         shot = shots[shot_id]
         if _motion_problem(shot):
             raise ValueError(f"shot {shot_id} has no still of its own to make a clip from")
+    if prompt is not None and (not isinstance(prompt, str) or not prompt.strip()):
+        raise ValueError("a motion prompt is text")
+    if prompt is not None and len(named) > 1:
+        raise ValueError("one motion prompt fits one shot; quote the shots one at a time")
     own = client is None
     client = client or RunwareClient("public-schema-only")
     try:
@@ -111,13 +251,26 @@ def quote_clips(
         raise ValueError(f"{model} is not a video model")
     if "frameImages" not in props.get("inputs", {}).get("properties", {}):
         raise ValueError(f"{model} cannot start from a still")
-    length = _duration(props, seconds)
-    per_second = money(
-        reserve_per_second
-        if reserve_per_second is not None
-        else str(pictures.reserve_usd_per_clip_second)
-    )
-    allowance = per_second * Decimal(length)
+    length = _duration(props, seconds if seconds is not None else DEFAULT_SECONDS)
+    offered = resolutions(props)
+    if resolution is not None and offered and resolution not in offered:
+        raise ValueError(f"{model} offers {', '.join(offered)}, not {resolution}")
+    chosen_resolution = resolution or (offered[0] if offered else None)
+    sound = _audio_path(props)
+    if audio and sound is None:
+        raise ValueError(f"{model} makes no sound of its own")
+    published = published_price(info, chosen_resolution, bool(audio), float(length))
+    if published is not None:
+        allowance = max(MIN_RESERVE, money(published["usd"]))
+        basis = "published rate"
+    else:
+        per_second = money(
+            reserve_per_second
+            if reserve_per_second is not None
+            else str(pictures.reserve_usd_per_clip_second)
+        )
+        allowance = max(MIN_RESERVE, per_second * Decimal(str(length)))
+        basis = "settings reserve"
     schema_path = f"work/schemas/{digest(schema)}.json"
     write_json(inside(root, schema_path), schema)
     # Refuses a still that isn't the current one, so a stale picture never starts moving.
@@ -145,21 +298,26 @@ def quote_clips(
             + 1
         )
         shot = shots[shot_id]
-        prompt = shot.motion_prompt.strip() or shot.image_prompt.strip()
+        words = (prompt or "").strip() or shot.motion_prompt.strip() or shot.image_prompt.strip()
         task_uuid = str(uuid4())
         request = {
             "taskType": "videoInference",
             "taskUUID": task_uuid,
             "model": info["x-air-id"],
-            "positivePrompt": prompt,
+            "positivePrompt": words,
             "duration": length,
             "outputType": "URL",
             "outputFormat": "MP4",
             "deliveryMethod": "async",
             "includeCost": True,
         }
+        if sound is not None:
+            request = _with_audio(request, sound, bool(audio))
         check = {**request, "inputs": {"frameImages": [str(uuid4())]}}
-        if "width" in props and "height" in props:
+        if chosen_resolution is not None and "resolution" in props:
+            request["resolution"] = chosen_resolution
+            check["resolution"] = chosen_resolution
+        elif "width" in props and "height" in props:
             sized = {**check, "width": project.width, "height": project.height}
             try:
                 validate_request(schema, sized)
@@ -187,7 +345,9 @@ def quote_clips(
                         "model": model,
                         "seconds": length,
                         "source": chosen["sha256"],
-                        "prompt": prompt,
+                        "prompt": words,
+                        "resolution": chosen_resolution,
+                        "audio": bool(audio),
                     }
                 ),
             }
@@ -199,14 +359,55 @@ def quote_clips(
             "scope": "clip",
             "model": model,
             "seconds": length,
+            "choices": {
+                "resolution": chosen_resolution,
+                "audio": bool(audio) if sound else None,
+                "prompt": prompt,
+            },  # fmt: skip
+            "price_basis": basis,
+            "rate": published,
             "schema": schema_path,
             "schema_hash": digest(schema),
             "tasks": tasks,
             "reserve_total_usd": str(allowance * len(tasks)),
             "published_pricing": info.get("x-pricing"),
-            "warning": "The reserve is a limit on admission, not an exact price.",
+            "warning": (
+                "The price is the model's published rate for these choices."
+                if basis == "published rate"
+                else "No published rate fits these choices; the reserve is Settings' rate per second, a limit on admission, not an exact price."  # fmt: skip
+            ),
         },
     )
+
+
+def options_for(model: str, client=None) -> dict:
+    """What a model lets the owner choose, from its free public schema. Spends nothing."""
+    own = client is None
+    client = client or RunwareClient("public-schema-only")
+    try:
+        schema = client.schema(model)
+    finally:
+        if own:
+            client.close()
+    info = schema.get("info") or {}
+    props = schema["components"]["schemas"]["RequestBody"]["items"]["properties"]
+    if props.get("taskType", {}).get("const") != "videoInference":
+        raise ValueError(f"{model} is not a video model")
+    return {
+        "model": model,
+        "live": info.get("x-status") == "live",
+        **model_options(props),
+        "rates": [
+            {
+                "amount": str(r.get("amount")),
+                "unit": r.get("unit"),
+                "label": str(r.get("label") or ""),
+                "display": str(r.get("display") or ""),
+            }  # fmt: skip
+            for r in ((info.get("x-pricing") or {}).get("rates") or [])
+            if isinstance(r, dict)
+        ],
+    }
 
 
 def _motion_problem(shot) -> str | None:
