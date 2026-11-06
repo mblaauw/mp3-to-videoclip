@@ -865,6 +865,8 @@ export type SoundPayload = {
   fps: number;
   story_film: boolean;
   lines: { id: string; start: number; end: number }[];
+  shots: { id: string; start: number; end: number; still: string | null }[];
+  beats: { id: string; start: number; end: number }[];
   models: { id: string; label: string; for: "music" | "effects"; price: { amount: string; unit: string } | null; price_note: string; chosen: boolean }[];
   report: SoundReport | null;
   suggestions: number;
