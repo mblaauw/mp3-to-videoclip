@@ -693,7 +693,11 @@ test("a running batch replaces the make button instead of offering a second batc
 });
 
 test("a new cut with every still kept is approved on Film, not sent back to Images", () => {
-  const stale = { ...approvals(), stills: { state: "stale" as const, expected_hash: "h" } };
+  const stale = {
+    ...approvals(),
+    proof: { state: "approved" as const, expected_hash: "p" },
+    stills: { state: "stale" as const, expected_hash: "h" },
+  };
   const step = nextStep(
     "film",
     project({ stage_states: states({ story: "done", storyboard: "done", images: "done", film: "you" }) }),
@@ -703,6 +707,17 @@ test("a new cut with every still kept is approved on Film, not sent back to Imag
   );
   assert.match(step.title, /The cut changed/);
   assert.equal(step.actions[0].approve, "stills");
+  // A stale style check would refuse that button, so the step sends you to Images first.
+  const proofStale = nextStep(
+    "film",
+    project({ stage_states: states({ story: "done", storyboard: "done", images: "done", film: "you" }) }),
+    { ...stale, proof: { state: "stale" as const, expected_hash: "p" } },
+    { ...images(), total: 3, selected: 3, kept: 3, stale: 0 },
+    budget,
+  );
+  assert.match(proofStale.title, /style check changed/);
+  assert.equal(proofStale.actions[0].to, "images");
+  assert.equal(proofStale.actions[0].approve, undefined);
   const changedPicture = nextStep(
     "film",
     project({ stage_states: states({ story: "done", storyboard: "done", images: "changed", film: "not_ready" }) }),

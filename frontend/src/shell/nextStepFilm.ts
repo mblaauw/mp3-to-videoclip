@@ -180,6 +180,16 @@ export function filmStep(project: ProjectFacts, approvals: ApprovalMap, images: 
     };
   }
   if (onlyTheCutChanged(approvals, images)) {
+    // The full set signs off on top of the style check: a stale one refuses this button.
+    const proof = approval(approvals, "proof");
+    if (proof && proof.state !== "approved") {
+      return {
+        tone: "you",
+        title: "The style check changed.",
+        detail: "Approve the style check on Images again; the cut is signed off on top of it.",
+        actions: continueTo("images", "Go to Images"),
+      };
+    }
     return {
       tone: "changed",
       title: "The cut changed.",

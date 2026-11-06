@@ -127,3 +127,12 @@ Commits on `film/phase-p-clips`, stacked on Phase O: P1 the engine, P2 and P3 th
   long and that a slow clip is collected from the journal, and the grid tile says
   "Making a clip…". Looked at on Cool Cat's s002. The ring itself has not been
   watched over a live purchase.
+
+## Found on the owner's film, 6 Nov 2026
+
+- A clip on any shot but the first showed black in the Player and would have in a
+  render: `ClipLayer` sits inside its shot's Sequence and gave its own Sequence the
+  shot's absolute start, which a nested Sequence counts from its parent, so the video
+  began at twice the shot's start and was never on the film. It now counts from the
+  shot's first frame. Seen and fixed on Cool Cat's s019 at 0:42, where the Player now
+  fetches the clip and decodes it. The renderer's revision moves with this, as it must.
