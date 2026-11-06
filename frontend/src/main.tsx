@@ -11,6 +11,7 @@ import "./film/film.css";
 import "./story/story.css";
 import "./track/track.css";
 import "./shell/settings/settings.css";
+import "./newFilm/newFilm.css";
 import "./rating.css";
 import { App } from "./App";
 

@@ -1,6 +1,7 @@
 import { toastAction } from "./api/errorAction.ts";
 import { readApiError } from "./api/errors.ts";
 import type { PreviewShot } from "./baseFilm";
+import type { Format } from "./newFilm/model";
 import { toast } from "./toast.ts";
 import { bindRevision, resources, revisionHeaders } from "./api/resources.ts";
 import type { FilmUsage } from "./shell/modelCost.ts";
@@ -42,6 +43,8 @@ export type AudioWindow = {
   fade_in: number;
   fade_out: number;
 };
+
+export type { Format } from "./newFilm/model";
 
 export type StylePreset = {
   id: string;
@@ -495,7 +498,11 @@ export type Settings = {
   style_presets?: StylePreset[];
   kinds?: KindProfile[];
   default_titles?: Record<string, string>;
-  structures?: { id: string; label: string; length: number }[];
+  structures?: { id: string; label: string; length: number; beats?: { label: string; seconds: number }[] }[];
+  /** The New film form's presets; each only promises what the engine makes. */
+  formats?: Format[];
+  /** The voices a story film can start with, the recommended one first. */
+  voice_list?: { id: string; label: string; language: string; recommended: boolean }[];
   shot_kinds?: {
     id: ShotKind;
     label: string;
@@ -1152,6 +1159,8 @@ export const api = {
       fade_out?: number;
       series?: string;
       episode?: number;
+      destinations?: string[];
+      voice?: string;
     },
   ) => {
     const params = new URLSearchParams({
@@ -1165,6 +1174,8 @@ export const api = {
     if (meta.style_preset) params.set("style_preset", meta.style_preset);
     if (meta.titles) params.set("titles", meta.titles);
     if (meta.structure) params.set("structure", meta.structure);
+    if (meta.destinations?.length) params.set("destinations", meta.destinations.join(","));
+    if (meta.voice) params.set("voice", meta.voice);
     if (meta.fictional !== undefined) params.set("fictional", String(meta.fictional));
     if (meta.series) {
       params.set("series", meta.series);

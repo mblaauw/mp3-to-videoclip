@@ -488,14 +488,29 @@ async def create_project(
     fictional: bool | None = None,
     series: str | None = None,
     episode: int | None = None,
+    destinations: str | None = None,
+    voice: str | None = None,
 ):
     """Upload one MP3, create a schema 3 production and queue local analysis."""
-    from mp3_to_videoclip import services
+    from mp3_to_videoclip import formats, narration, publish, services, voices
     from mp3_to_videoclip.config import effective_settings
     from mp3_to_videoclip.domain import intake
     from mp3_to_videoclip.models import CallToAction, Intent
 
     story_film = kind == "narrative"
+    structure = (structure or "").strip() or None
+    if structure is not None and structure not in formats.structure_ids(kind):
+        raise HTTPException(status_code=400, detail=f"{structure!r} isn't a structure this kind of film offers")  # fmt: skip
+    places = [item for item in (destinations or "").split(",") if item.strip()]
+    places = list(dict.fromkeys(item.strip() for item in places))
+    if any(item not in publish.PRESETS for item in places):
+        raise HTTPException(status_code=400, detail=f"destinations are some of {', '.join(publish.PRESETS)}")  # fmt: skip
+    voice = (voice or "").strip() or None
+    if voice is not None:
+        if not story_film:
+            raise HTTPException(status_code=400, detail="only a story film has a narrator")
+        if voice not in {row["id"] for row in voices.catalogue(with_all=True)}:
+            raise HTTPException(status_code=400, detail=f"no voice {voice!r} in the catalogue")
     content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if not story_film and content_type not in ("audio/mpeg", "audio/mp3", "application/octet-stream"):  # fmt: skip
         raise HTTPException(status_code=415, detail="upload an audio/mpeg file")
@@ -528,7 +543,7 @@ async def create_project(
         series_ref = {"id": series, "episode": episode}
     intent = None
     if kind != "music_video" or any(
-        (objective, message, audience, cta_text, cta_url, length_seconds)
+        (objective, message, audience, cta_text, cta_url, length_seconds, structure)
     ):
         intent = Intent(
             kind=kind,
@@ -540,7 +555,7 @@ async def create_project(
             else None,
             length_seconds=int(length_seconds) if length_seconds is not None else None,
             fictional=fictional if story_film else None,
-            structure=structure if story_film else None,
+            structure=structure,
         ).model_dump()
     with tempfile.TemporaryDirectory(prefix="mp3-intake-") as temp:
         source = Path(temp) / "source.mp3"
@@ -574,6 +589,11 @@ async def create_project(
 
         # Before any approval exists: the recurring cast is part of the film from its first byte.
         library.join_series(root, _library_dir(request), series_ref["id"], series_ref["episode"])
+    # Where it goes and who speaks are the owner's first answers, not Settings' guesses.
+    if places:
+        publish.set_presets(root, places)
+    if voice is not None:
+        narration.lock_voice(root, voice)
     project = P.load_project(root)
     job_id = None
     runner = getattr(request.app.state, "runner", None)

@@ -221,6 +221,29 @@
     radial-gradient(38% 46% at 26% 72%, rgba(126, 87, 194, 0.5), transparent 72%),
     #101218;
 }
+.look-swatch.preset-painted-documentary-v1 {
+  background:
+    radial-gradient(90% 80% at 65% 30%, rgba(222, 186, 128, 0.55), transparent 62%),
+    linear-gradient(150deg, #3b352c, #17140f);
+}
+.look-swatch.preset-archival-v1 {
+  background:
+    repeating-linear-gradient(0deg, rgba(236, 234, 229, 0.06) 0 1px, transparent 1px 3px),
+    radial-gradient(80% 80% at 50% 45%, rgba(214, 205, 186, 0.45), transparent 70%),
+    #23211d;
+}
+.look-swatch.preset-illustrated-v1 {
+  background:
+    radial-gradient(40% 50% at 30% 35%, rgba(130, 194, 154, 0.55), transparent 70%),
+    radial-gradient(45% 55% at 72% 65%, rgba(217, 179, 108, 0.6), transparent 70%),
+    #1d2226;
+}
+.look-swatch.preset-future-museum-v1 {
+  background:
+    linear-gradient(90deg, transparent 48%, rgba(190, 205, 212, 0.35) 50%, transparent 52%),
+    radial-gradient(70% 60% at 50% 30%, rgba(169, 150, 240, 0.45), transparent 70%),
+    linear-gradient(180deg, #20232b, #0f1115);
+}
 .look-swatch.preset-custom {
   background:
     conic-gradient(from 45deg, #2a2c30, #3a3d42, #2a2c30, #3a3d42, #2a2c30);
@@ -422,63 +445,6 @@
   color: var(--ink);
 }
 
-/* ------------------------------------------------------------------ new film */
-.new-film-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3) var(--s-4);
-  margin: var(--s-4) 0;
-}
-.new-film-fields label {
-  display: grid;
-  gap: var(--s-1);
-  color: var(--ink-2);
-  font-size: var(--t-13);
-}
-.new-film-fields input,
-.new-film-fields select {
-  background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: var(--r-control);
-  padding: 8px 10px;
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--t-15);
-}
-.kind-picker {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s-2);
-  margin: var(--s-4) 0;
-}
-.kind-choice {
-  display: grid;
-  gap: 4px;
-  padding: var(--s-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-surface);
-  background: transparent;
-  color: var(--ink-2);
-  text-align: left;
-  font: inherit;
-}
-.kind-choice b {
-  color: var(--ink);
-  font-size: var(--t-15);
-}
-.kind-choice span {
-  color: var(--muted);
-  font-size: var(--t-12);
-  line-height: 1.4;
-}
-.kind-choice[aria-pressed="true"] {
-  border-color: var(--gold);
-  background: var(--gold-wash);
-}
-.new-film .drop {
-  margin: var(--s-3) 0;
-}
-
 /* ------------------------------------------------------------------ storyboard stars */
 .proof-list label .star {
   color: var(--muted);
@@ -528,10 +494,6 @@
   .sec-row .t,
   .sec-row .e {
     grid-column: 2;
-  }
-  .new-film-fields,
-  .kind-picker {
-    grid-template-columns: minmax(0, 1fr);
   }
   .direction-style {
     grid-template-columns: minmax(0, 1fr);

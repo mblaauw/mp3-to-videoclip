@@ -1,0 +1,497 @@
+/*
+ * New film. Quiet form on the left, one picture of the film on the right: its frame in the
+ * chosen shape and look, and its length as beats or as the part of the song it uses.
+ */
+
+.modal-panel.modal-wide {
+  width: min(1120px, 100%);
+  padding: 0;
+}
+
+.new-film {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  color: var(--ink);
+}
+.new-film > h2,
+.new-film > .hint {
+  margin: var(--s-5);
+}
+
+.nf-main {
+  display: grid;
+  gap: var(--s-5);
+  padding: var(--s-5) var(--s-5) var(--s-6);
+  min-width: 0;
+}
+.nf-head h2 {
+  margin: 0 0 var(--s-1);
+  font-size: var(--t-24);
+  line-height: var(--lh-tight);
+}
+.nf-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-13);
+  max-width: 60ch;
+}
+
+.nf-section {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.nf-section h3 {
+  margin: 0;
+  font-size: var(--t-15);
+  font-weight: var(--w-bold);
+}
+.nf-section h3 small {
+  margin-left: var(--s-2);
+  color: var(--muted);
+  font-size: var(--t-12);
+  font-weight: var(--w-regular);
+}
+
+/* kind: one row, the choice that sets everything below it */
+.nf-kinds {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  padding: var(--s-1);
+  justify-self: start;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surround);
+}
+.nf-kind {
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--t-13);
+  font-weight: var(--w-medium);
+  cursor: pointer;
+}
+.nf-kind:hover {
+  color: var(--ink);
+}
+.nf-kind[aria-pressed="true"] {
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.nf-kind-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-13);
+}
+
+/* formats */
+.nf-formats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: var(--s-2);
+}
+.nf-format {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "glyph name"
+    "glyph facts"
+    "blurb blurb";
+  column-gap: var(--s-3);
+  row-gap: 2px;
+  align-items: center;
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  background: var(--raised);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.nf-format:hover {
+  border-color: var(--line-strong);
+}
+.nf-format[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+}
+.nf-format > .nf-glyph {
+  grid-area: glyph;
+}
+.nf-format b {
+  grid-area: name;
+  font-size: var(--t-13);
+  font-weight: var(--w-bold);
+}
+.nf-format-facts {
+  grid-area: facts;
+  color: var(--muted);
+  font-size: var(--t-12);
+  font-variant-numeric: tabular-nums;
+}
+.nf-format-blurb {
+  grid-area: blurb;
+  margin-top: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-12);
+  line-height: 1.4;
+}
+
+/* a frame drawn in the film's shape */
+.nf-glyph {
+  display: inline-block;
+  flex: none;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  color: var(--muted);
+}
+.nf-glyph.wide {
+  width: 28px;
+  height: 16px;
+}
+.nf-glyph.tall {
+  width: 12px;
+  height: 21px;
+  margin: 0 8px;
+}
+.nf-glyph.small.wide {
+  width: 16px;
+  height: 9px;
+}
+.nf-glyph.small.tall {
+  width: 8px;
+  height: 14px;
+  margin: 0 4px;
+}
+[aria-pressed="true"] > .nf-glyph,
+[aria-checked="true"] > .nf-glyph {
+  color: var(--gold);
+}
+
+/* the song */
+.nf-drop {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: var(--s-4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-surface);
+  cursor: pointer;
+}
+.nf-drop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.nf-drop strong {
+  font-size: var(--t-15);
+  font-weight: var(--w-medium);
+}
+.nf-drop span {
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.nf-drop.dragging,
+.nf-drop:focus-within {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+}
+.nf-drop.has-file {
+  border-style: solid;
+  border-color: var(--line);
+  background: var(--raised);
+}
+
+/* fields */
+.nf-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4) var(--s-4);
+}
+.nf-span {
+  grid-column: 1 / -1;
+}
+.nf-field {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: var(--t-13);
+}
+.nf-field > span:first-child,
+.nf-field > legend {
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}
+.nf-field > legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+.nf-field small,
+.nf-switch small {
+  color: var(--muted);
+  font-size: var(--t-12);
+  line-height: 1.4;
+}
+.new-film input:not([type="checkbox"]):not([type="file"]),
+.new-film select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-15);
+}
+.new-film input[aria-invalid="true"] {
+  border-color: var(--red);
+}
+.nf-money {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--muted);
+}
+
+.nf-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.nf-segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--t-13);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.nf-segmented button:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.nf-segmented button[aria-checked="true"] {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  color: var(--ink);
+}
+
+.nf-look-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.look-swatch.nf-swatch {
+  width: 56px;
+  padding: 0;
+}
+
+.nf-switch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-2);
+  align-items: start;
+  align-self: end;
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+.nf-switch input {
+  margin: 2px 0 0;
+  accent-color: var(--gold);
+}
+.nf-switch span {
+  display: grid;
+  gap: 2px;
+}
+.nf-switch b {
+  font-size: var(--t-13);
+  font-weight: var(--w-medium);
+}
+
+.nf-places .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+
+/* at a glance */
+.nf-glance {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: var(--s-3);
+  align-self: stretch;
+  align-content: start;
+  padding: var(--s-5);
+  border-left: 1px solid var(--line-soft);
+  background: var(--surround);
+  border-radius: 0 var(--r-surface) var(--r-surface) 0;
+}
+.nf-frame {
+  display: grid;
+  place-items: center;
+  height: 196px;
+}
+.nf-frame .nf-frame-picture {
+  width: 100%;
+  height: auto;
+  padding: var(--s-3);
+  border: 0;
+  font-size: var(--t-15);
+  line-height: var(--lh-tight);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.nf-frame.tall .nf-frame-picture {
+  width: auto;
+  height: 100%;
+  aspect-ratio: 9 / 16;
+}
+.nf-frame-picture b {
+  max-width: 90%;
+  font-weight: var(--w-bold);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  overflow-wrap: anywhere;
+}
+.nf-frame-picture span {
+  font-size: var(--t-11);
+  opacity: 0.75;
+}
+
+.nf-glance-name {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.nf-glance-name b {
+  font-size: var(--t-18);
+  line-height: var(--lh-tight);
+}
+.nf-glance-name span {
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+
+.nf-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+}
+.nf-seg {
+  min-width: 3px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.nf-seg.excerpt {
+  background: var(--gold);
+}
+.nf-seg.rest {
+  background: var(--line-soft);
+}
+.nf-seg.beat:nth-child(5n + 1) { background: var(--sec-1); }
+.nf-seg.beat:nth-child(5n + 2) { background: var(--sec-2); }
+.nf-seg.beat:nth-child(5n + 3) { background: var(--sec-3); }
+.nf-seg.beat:nth-child(5n + 4) { background: var(--sec-4); }
+.nf-seg.beat:nth-child(5n + 5) { background: var(--sec-5); }
+.nf-bar-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font-size: var(--t-12);
+}
+.nf-bar-key small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nf-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-1) var(--s-3);
+  margin: var(--s-2) 0 0;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--t-13);
+}
+.nf-facts dt {
+  color: var(--muted);
+}
+.nf-facts dd {
+  margin: 0;
+  color: var(--ink);
+}
+.nf-facts dd small {
+  color: var(--muted);
+}
+
+.nf-actions {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+.nf-actions .ui-btn--primary {
+  flex: 1;
+  justify-content: center;
+}
+.nf-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-12);
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .new-film {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nf-glance {
+    position: static;
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+    border-radius: 0 0 var(--r-surface) var(--r-surface);
+  }
+}
+@media (max-width: 600px) {
+  .nf-main,
+  .nf-glance {
+    padding: var(--s-4);
+  }
+  .nf-kinds {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-self: stretch;
+    border-radius: var(--r-surface);
+  }
+  .nf-kind {
+    border-radius: var(--r-control);
+  }
+  .nf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

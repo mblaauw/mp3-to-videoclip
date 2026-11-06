@@ -121,6 +121,11 @@ def instance(structure_id: str, length: float) -> dict:
 
 def public() -> list[dict]:
     return [
-        {"id": item.id, "label": item.label, "length": sum(b.seconds for b in item.beats)}
+        {
+            "id": item.id,
+            "label": item.label,
+            "length": sum(b.seconds for b in item.beats),
+            "beats": [{"label": b.label, "seconds": b.seconds} for b in item.beats],
+        }
         for item in STRUCTURES.values()
     ]
