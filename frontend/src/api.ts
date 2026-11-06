@@ -456,6 +456,7 @@ export type Settings = {
     reserve_usd_per_still: number;
     reserve_usd_per_clip_second: number;
   };
+  sounds: { music_model: string; effects_model: string; reserve_usd_per_cue: number };
   keys: {
     openai_compatible: { base_url: string; model: string };
     [key: string]: unknown;
@@ -470,8 +471,12 @@ export type Settings = {
     depth: number;
     signature_package: boolean;
     credit_roles: string[];
+    presets?: string[];
     brand: { name: string; partner: string; logo: string; palette: string[]; font: string };
   };
+  /** Where the file is, so the owner knows what a save writes. */
+  file?: string;
+  publish_presets?: { id: string; label: string; aspect: string }[];
   prices: Record<string, string>;
   computer: { render_workers: number };
   role_keys: Record<"writer" | "editor" | "critic", boolean>;

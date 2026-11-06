@@ -4,7 +4,7 @@ import { ErrorState, useFocusTrap } from "../../ui";
 import { CloseIcon } from "../../ui/icons";
 import { CostsTab, ComputerTab, NewFilmsTab } from "./FilmTabs";
 import { KeysTab } from "./KeysTab";
-import { PicturesTab, RolesTab, VoicesTab } from "./ModelTabs";
+import { PicturesTab, RolesTab, SoundsTab, VoicesTab } from "./ModelTabs";
 import { PanelContext, type Panel } from "./fields";
 import { missingForFilm, TABS, type Catalog, type Missing, type TabId } from "./settingsModel";
 
@@ -12,6 +12,7 @@ const CONTENT = {
   roles: RolesTab,
   voices: VoicesTab,
   pictures: PicturesTab,
+  sounds: SoundsTab,
   keys: KeysTab,
   "new-films": NewFilmsTab,
   computer: ComputerTab,
@@ -103,6 +104,11 @@ export function SettingsPanel({ onClose, onSaved }: { onClose: () => void; onSav
       <div className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title" ref={dialog}>
         <header>
           <h2 id="settings-title">Settings</h2>
+          {settings?.file && (
+            <span className="settings-file" title={settings.file}>
+              Saved as you go to {settings.file}
+            </span>
+          )}
           <input
             type="search"
             className="settings-search"
@@ -137,7 +143,8 @@ export function SettingsPanel({ onClose, onSaved }: { onClose: () => void; onSav
                     event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
                   }}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  <small>{item.hint}</small>
                 </button>
               ))}
             </nav>

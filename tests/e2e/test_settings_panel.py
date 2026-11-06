@@ -108,3 +108,42 @@ def test_no_field_is_cut_off_on_a_phone(page: Page, panel, width):
             )].map((item) => item.getBoundingClientRect().right))"""
         )
         assert widest <= width, f"{name} reaches {widest} on a {width} px screen"
+
+
+def test_the_sounds_tab_names_the_models_with_their_prices(page: Page, panel):
+    _tab(panel, "Sounds")
+    expect(panel.get_by_label("Music model")).to_have_value("ace-step-v1-5-xl-turbo")
+    expect(panel.get_by_label("Effects model")).to_have_value("mirelo-sfx-1-5")
+    expect(panel).to_contain_text("$0.0009 per run")
+    expect(panel).to_contain_text("$0.00025 per second")
+    panel.get_by_label("Music model").select_option("minimax-music-2-6")
+    expect(panel.locator(".save-state.saved").first).to_contain_text("Saved")
+    expect(panel).to_contain_text("$0.15 per clip")
+    panel.get_by_role("button", name="Reset to recommended").click()
+    expect(panel.get_by_label("Music model")).to_have_value("ace-step-v1-5-xl-turbo")
+
+
+def test_a_new_film_starts_where_the_presets_say(page: Page, panel):
+    _tab(panel, "New films")
+    group = panel.get_by_role("group", name="Presets a new film starts with")
+    expect(group.get_by_role("button", name="YouTube (16:9)")).to_have_attribute(
+        "aria-pressed", "true"
+    )
+    group.get_by_role("button", name="YouTube Shorts (9:16)").click()
+    expect(group.get_by_role("button", name="YouTube Shorts (9:16)")).to_have_attribute(
+        "aria-pressed", "true"
+    )
+    # The last preset cannot be taken away: a film must go somewhere.
+    group.get_by_role("button", name="YouTube (16:9)").click()
+    group.get_by_role("button", name="YouTube Shorts (9:16)").click()
+    expect(group.get_by_role("button", name="YouTube Shorts (9:16)")).to_have_attribute(
+        "aria-pressed", "true"
+    )
+
+
+def test_this_computer_says_where_things_are(page: Page, panel, studio):
+    _tab(panel, "This computer")
+    expect(panel).to_contain_text("World library")
+    expect(panel).to_contain_text("0 entries, 0 series")
+    expect(panel).to_contain_text(str(studio.root.parent))
+    expect(panel).to_contain_text("settings.toml")

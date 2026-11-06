@@ -42,11 +42,24 @@ _MONEY = re.compile(r"(?:[$€£]\s?\d[\d.,]*|\b\d[\d.,]*\s?(?:%|\b(?:percent|eu
 # ------------------------------------------------------------------ the record
 
 
+def preset_rows() -> list[dict]:
+    return [{"id": key, **spec} for key, spec in PRESETS.items()]
+
+
+def default_presets() -> list[str]:
+    """The presets a film starts on, from Settings; one the app does not know is dropped."""
+    from .config import load_settings
+
+    chosen = [p for p in load_settings().new_films.presets if p in PRESETS]
+    return list(dict.fromkeys(chosen)) or ["youtube"]
+
+
 def read(root: Path) -> dict:
     value = read_optional(Path(root) / FILE)
     if not isinstance(value, dict):
-        return {"version": VERSION, "presets": ["youtube"], "copy": None, "thumbnail": None, "released": None}  # fmt: skip
-    value.setdefault("presets", ["youtube"])
+        return {"version": VERSION, "presets": default_presets(), "copy": None, "thumbnail": None, "released": None}  # fmt: skip
+    if not value.get("presets"):
+        value["presets"] = default_presets()
     for key in ("copy", "thumbnail", "released"):
         value.setdefault(key, None)
     return value
@@ -508,7 +521,7 @@ def view(root: Path) -> dict:
         "thumbnail": value.get("thumbnail"),
         "thumbnails": listing(final) if final else [],
         "plan": plan(root, final),
-        "presets_available": [{"id": key, **spec} for key, spec in PRESETS.items()],
+        "presets_available": preset_rows(),
         "has_words": _has_words(root),
     }
 

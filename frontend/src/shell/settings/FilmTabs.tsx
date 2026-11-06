@@ -42,6 +42,12 @@ export function NewFilmsTab() {
         <ToggleRow path="new_films.signature_package" label="Open and close a music video with titles" hint="With a name below it uses the 25/40 signature; without one, a short title. Each film can choose." />
         <ListRow path="new_films.credit_roles" label="Credit roles" hint={STORED_ONLY} placeholder="director, music, visuals" />
       </Section>
+      <Section
+        title="Where it goes"
+        note="The presets a new film starts with on Publish. A film that has chosen there keeps its choice."
+      >
+        <PresetChips />
+      </Section>
       <Section title="Brand kit" note="Used in the opening and closing graphics. A film keeps the names it was made with.">
         <TextRow path="new_films.brand.name" label="Artist or brand" />
         <TextRow path="new_films.brand.partner" label="Partner" />
@@ -50,6 +56,32 @@ export function NewFilmsTab() {
         <TextRow path="new_films.brand.font" label="Font" hint={STORED_ONLY} />
       </Section>
     </>
+  );
+}
+
+function PresetChips() {
+  const { settings, save } = usePanel();
+  const chosen = settings.new_films.presets ?? [];
+  const offered = settings.publish_presets ?? [];
+  const toggle = (id: string) => {
+    const next = chosen.includes(id) ? chosen.filter((item) => item !== id) : [...chosen, id];
+    if (next.length) void save({ new_films: { presets: next } });
+  };
+  return (
+    <Row label="Presets" hint="At least one. Each adds its own lines to the release list.">
+      <span className="settings-chips" role="group" aria-label="Presets a new film starts with">
+        {offered.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            aria-pressed={chosen.includes(preset.id)}
+            onClick={() => toggle(preset.id)}
+          >
+            {preset.label} ({preset.aspect})
+          </button>
+        ))}
+      </span>
+    </Row>
   );
 }
 
@@ -113,7 +145,7 @@ function CacheRow({ cache, onCleared }: { cache: SettingsCache; onCleared: () =>
 }
 
 export function ComputerTab() {
-  const { catalog, reloadCatalog } = usePanel();
+  const { catalog, settings, reloadCatalog } = usePanel();
   const [caches, setCaches] = useState<SettingsCache[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installing, setInstalling] = useState(false);
@@ -169,6 +201,27 @@ export function ComputerTab() {
           <output className={catalog.depth_tools.ready ? "settings-good" : "settings-muted"}>
             {catalog.depth_tools.ready ? "Ready" : "Not set up"}
           </output>
+        </Row>
+      </Section>
+      <Section
+        title="Where things are"
+        note="Read-only. Start the app with --projects-dir or --library-dir, or set MP3_TO_VIDEOCLIP_LIBRARY, to point elsewhere."
+      >
+        {catalog.folders && (
+          <>
+            <Row label="Productions" hint={`${catalog.folders.projects.films} films`}>
+              <output className="settings-path">{catalog.folders.projects.path}</output>
+            </Row>
+            <Row
+              label="World library"
+              hint={`${catalog.folders.library.entries} entries, ${catalog.folders.library.series} series. Beside the productions unless pointed elsewhere.`}
+            >
+              <output className="settings-path">{catalog.folders.library.path}</output>
+            </Row>
+          </>
+        )}
+        <Row label="Settings file" hint="Every field here saves to it as you leave the field. Keys are stored in it, readable by you only.">
+          <output className="settings-path">{settings.file}</output>
         </Row>
       </Section>
       <Section title="Rendering">

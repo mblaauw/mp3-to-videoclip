@@ -9,7 +9,9 @@ import {
   readAt,
   recommendedPictures,
   recommendedRoles,
+  recommendedSounds,
   recommendedVoices,
+  TABS,
   type Catalog,
   type CatalogModel,
 } from "../src/shell/settings/settingsModel.ts";
@@ -24,6 +26,8 @@ const catalog = {
     model("sol", "openai", ["text", "vision"], ["writer", "critic"]),
     model("flash", "opencode-go", ["text"], ["editor"]),
     model("speech", "runware", ["speech"], ["narrator"]),
+    model("bed", "runware", ["music"], ["music"]),
+    model("sfx", "runware", ["effects"], ["effects"]),
   ],
   voices: [
     { id: "a", provider: "runware", model: "speech", label: "A", language: "en", preview_url: "", recommended: false },
@@ -52,6 +56,17 @@ test("a model with no verified price says so, and no price is made up", () => {
   assert.equal(priceWords(undefined), "Price unknown");
   const priced = { ...model("x", "y", []), price: { amount: "0.10", unit: "1k_chars" }, price_checked: "2026-11-01" };
   assert.equal(priceWords(priced), "$0.10 per 1,000 characters, read 2026-11-01");
+  const run = { ...model("x", "y", []), price: { amount: "0.0009", unit: "run" }, price_checked: "2026-11-05" };
+  assert.equal(priceWords(run), "$0.0009 per run, read 2026-11-05");
+  const clip = { ...model("x", "y", []), price: { amount: "0.15", unit: "clip" }, price_checked: "" };
+  assert.equal(priceWords(clip), "$0.15 per clip");
+});
+
+test("the Sounds tab resets to the catalogue's bed and effects models", () => {
+  assert.deepEqual(recommendedSounds(catalog), { sounds: { music_model: "bed", effects_model: "sfx" } });
+  assert.deepEqual(recommendedSounds({ ...catalog, models: [] }), { sounds: {} });
+  assert.ok(TABS.some((tab) => tab.id === "sounds"));
+  assert.ok(TABS.every((tab) => tab.hint.length > 0));
 });
 
 test("reset restores each recommended choice and leaves the rest of a role alone", () => {

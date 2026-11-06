@@ -33,6 +33,14 @@
   font-size: var(--t-20);
   font-weight: var(--w-bold);
 }
+.settings-file {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--t-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .settings-search {
   flex: 1;
   min-width: 0;
@@ -60,6 +68,9 @@
   overflow-y: auto;
 }
 .settings-rail button {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   padding: var(--s-2) var(--s-3);
   border: 0;
   border-radius: var(--r-control);
@@ -68,6 +79,11 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.settings-rail button small {
+  color: var(--muted);
+  font-size: var(--t-12);
+  line-height: 1.2;
 }
 .settings-rail button:hover {
   background: var(--raised);
@@ -201,6 +217,11 @@
   text-decoration: underline;
   cursor: pointer;
 }
+.settings-path {
+  color: var(--muted);
+  font-size: var(--t-12);
+  overflow-wrap: anywhere;
+}
 .settings-price,
 .settings-size {
   color: var(--muted);
@@ -306,6 +327,10 @@
   }
   .settings-rail button {
     flex: none;
+  }
+  .settings-rail button small,
+  .settings-file {
+    display: none;
   }
   .settings-body {
     padding: var(--s-3) var(--s-4);

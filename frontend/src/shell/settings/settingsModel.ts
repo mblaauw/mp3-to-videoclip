@@ -1,15 +1,16 @@
 /** The panel's decisions, free of React so they can be tested on their own. */
 
-export type TabId = "roles" | "voices" | "pictures" | "keys" | "new-films" | "computer" | "costs";
+export type TabId = "roles" | "voices" | "pictures" | "sounds" | "keys" | "new-films" | "computer" | "costs";
 
-export const TABS: { id: TabId; label: string }[] = [
-  { id: "roles", label: "Roles" },
-  { id: "voices", label: "Voices" },
-  { id: "pictures", label: "Pictures" },
-  { id: "keys", label: "Keys" },
-  { id: "new-films", label: "New films" },
-  { id: "computer", label: "This computer" },
-  { id: "costs", label: "Costs" },
+export const TABS: { id: TabId; label: string; hint: string }[] = [
+  { id: "roles", label: "Roles", hint: "Who answers in the Director" },
+  { id: "voices", label: "Voices", hint: "The narrator" },
+  { id: "pictures", label: "Pictures", hint: "Stills, clips, upscaling" },
+  { id: "sounds", label: "Sounds", hint: "Beds and effects" },
+  { id: "keys", label: "Keys", hint: "Each provider's key" },
+  { id: "new-films", label: "New films", hint: "Starting defaults" },
+  { id: "computer", label: "This computer", hint: "Tools and folders" },
+  { id: "costs", label: "Costs", hint: "Spent and reserved" },
 ];
 
 export type CatalogPrice = { amount: string; unit: string };
@@ -50,6 +51,11 @@ export type CatalogProvider = {
   };
 };
 
+export type CatalogFolders = {
+  projects: { path: string; films: number };
+  library: { path: string; entries: number; series: number };
+};
+
 export type Catalog = {
   providers: CatalogProvider[];
   models: CatalogModel[];
@@ -57,6 +63,7 @@ export type Catalog = {
   computer: Record<string, boolean>;
   lyric_tools: { supported: boolean; reason: string | null; ready: boolean; download_gb: number };
   depth_tools: { supported: boolean; reason: string | null; ready: boolean; download_gb: number };
+  folders?: CatalogFolders;
   notes: Record<string, string>;
 };
 
@@ -88,6 +95,8 @@ const UNIT: Record<string, string> = {
   image: "per image",
   second: "per second",
   "1k_chars": "per 1,000 characters",
+  run: "per run",
+  clip: "per clip",
 };
 
 /** A price only ever appears as the catalogue states it, with the day it was read. */
@@ -124,6 +133,16 @@ export function recommendedRoles(catalog: Catalog): Record<string, unknown> {
 export function recommendedVoices(catalog: Catalog): Record<string, unknown> {
   const voice = catalog.voices.find((item) => item.recommended);
   return voice ? { voices: { provider: voice.provider, default_voice: voice.id } } : {};
+}
+
+/** The catalogue's recommended bed and effects models; the reserve is left alone. */
+export function recommendedSounds(catalog: Catalog): Record<string, unknown> {
+  const sounds: Record<string, string> = {};
+  const music = catalog.models.find((item) => item.recommended.includes("music"));
+  const effects = catalog.models.find((item) => item.recommended.includes("effects"));
+  if (music) sounds.music_model = music.id;
+  if (effects) sounds.effects_model = effects.id;
+  return { sounds };
 }
 
 /** Empty choices mean each look's own model, which is what films use today. */
