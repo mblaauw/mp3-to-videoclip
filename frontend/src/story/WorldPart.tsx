@@ -1,6 +1,7 @@
 import type { IntakePayload } from "../api";
 import { CharactersCard } from "./CharactersCard";
 import { LookCard } from "./LookCard";
+import { NarrationCard } from "./NarrationCard";
 import { ProfileCard } from "./ProfileCard";
 import type { StoryData } from "./useStoryData";
 
@@ -30,6 +31,7 @@ export function WorldPart({
           <p className="hint">Loading the appearance…</p>
         </section>
       )}
+      {intake?.kind === "narrative" && <NarrationCard slug={slug} />}
       {brief && (intake?.prompt_version ?? 0) >= 2 && (
         <ProfileCard slug={slug} brief={brief} onAsk={askWriter} onBriefChange={briefChanged} />
       )}

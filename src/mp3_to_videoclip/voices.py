@@ -120,6 +120,7 @@ def catalogue(*, with_all: bool = False) -> list[dict]:
             "label": voice.label,
             "language": voice.language,
             "recommended": voice.id == chosen,
+            "preview_url": voice.preview_url,
         }
         for voice in catalog.load().voices
         if with_all or voice.provider != "elevenlabs" or settings.keys.elevenlabs

@@ -388,3 +388,39 @@ def test_the_writer_sees_the_beats_lines_and_voice(film):
     assert f"Voice: {VOICE}" in text
     assert "l001 (hook, estimate)" in text
     assert "## The song" not in text
+
+
+def test_a_film_locks_the_voice_with_its_provider_and_model(film, monkeypatch):
+    narration.lock_voice(film, VOICE)
+    index = narration.read_index(film)
+    assert index["provider"] == "runware" and index["model"] == "minimax-speech-2-8"
+    assert narration.view(film)["model"] == "minimax-speech-2-8"
+
+    monkeypatch.setattr(
+        voices, "get", lambda _: voices.ElevenLabsVoice(id="rachel", label="Rachel")
+    )
+    narration.lock_voice(film, "rachel", "eleven_flash_v2_5")
+    assert narration.read_index(film)["model"] == "eleven_flash_v2_5"
+    # Settings may change; the film records with what it locked.
+    quote = narration.quote_lines(film, ["l001"], client=ElevenFake())
+    assert quote["model"] == "eleven_flash_v2_5"
+    with pytest.raises(ValueError, match="choose a model"):
+        narration.lock_voice(film, "rachel", "  ")
+
+
+def test_the_narration_facts_price_the_script_and_say_where_the_lines_fall(film):
+    facts = narration.facts(film)
+    assert facts["voice"] == VOICE and facts["provider"] == "runware"
+    assert facts["model"] == "minimax-speech-2-8" and facts["model_label"] == "MiniMax Speech 2.8"
+    assert facts["price"] == {"amount": "0.10", "unit": "1k_chars", "checked": "2026-11-01"}
+    script = facts["script"]
+    assert script["lines"] == 14 and script["recorded"] == 0 and script["first_line"] == "l001"
+    assert Decimal(script["cost_usd"]) == (Decimal("0.10") / 1000 * script["characters"]).quantize(Decimal("0.0001"))  # fmt: skip
+    assert sum(beat["lines"] for beat in script["beats"]) == 14
+    assert all(beat["characters"] > 0 for beat in script["beats"])
+    rows = {row["id"]: row for row in facts["voices"]}
+    assert (
+        rows[VOICE]["provider_label"] == "Runware" and rows[VOICE]["model"] == "minimax-speech-2-8"
+    )
+    assert rows[VOICE]["price"]["amount"] == "0.10" and rows[VOICE]["preview_url"] == ""
+    assert {m["id"] for m in facts["elevenlabs_models"]} == {"eleven_multilingual_v2", "eleven_v3", "eleven_flash_v2_5"}  # fmt: skip

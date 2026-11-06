@@ -77,3 +77,25 @@ def test_an_edited_line_saves_and_moves_the_estimate(page: Page, studio):
     words.fill("A key.")
     words.blur()
     expect(page.locator(".script-line").first).to_contain_text("0.9 s estimate")
+
+
+def test_the_narration_card_names_the_voice_its_model_and_the_price(page: Page, studio):
+    slug = _make(page, studio)
+    page.goto(f"{studio.url}/#/{slug}/script")
+    page.get_by_label("Paste the script").fill(SCRIPT)
+    page.get_by_role("button", name="Save these lines").click()
+    expect(page.get_by_label("Words of l001")).to_be_visible()
+    page.get_by_role("button", name="Change the voice on Story").click()
+    card = page.locator(".narration-card")
+    expect(card).to_contain_text("MiniMax Speech 2.8")
+    expect(card).to_contain_text("$0.10 per 1,000 characters")
+    expect(card).to_contain_text("5 lines")
+    expect(card).to_contain_text("to record at the catalogue rate")
+    expect(card.get_by_role("button", name="Hear line 1")).to_be_visible()
+    narrator = card.get_by_label("Narrator")
+    narrator.select_option("English_magnetic_voiced_man")
+    expect(card).to_contain_text("Magnetic-voiced man")
+    page.goto(f"{studio.url}/#/{slug}/script")
+    expect(page.locator(".stage-block", has_text="Voice")).to_contain_text(
+        "Magnetic-voiced man · minimax-speech-2-8"
+    )
