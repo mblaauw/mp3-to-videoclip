@@ -138,12 +138,17 @@ def test_archived_summary_and_player_routes_are_read_only(tmp_path):
         assert client.get("/api/projects/old/archive/stills/9").status_code == 404
 
 
-def test_film_is_done_only_for_a_verified_final_newer_than_its_inputs(tmp_path):
+def test_film_is_done_only_for_a_verified_final_on_todays_inputs(tmp_path, monkeypatch):
     import os
 
+    from mp3_to_videoclip import remotion
     from mp3_to_videoclip.api.projects import _final_state
+    from mp3_to_videoclip.signature import current_input_hash
 
     root = make_api_project(tmp_path)
+    approve_prerequisites(root)
+    P.approve(root, "storyboard", "test user approved shots")
+    record_stills(root, [shot.id for shot in P.load_board(root).shots])
     renders = root / "renders"
     renders.mkdir(exist_ok=True)
     assert _final_state(root) is None
@@ -158,14 +163,27 @@ def test_film_is_done_only_for_a_verified_final_newer_than_its_inputs(tmp_path):
         "verified": True,
         "delivery_ready": True,
         "current": True,
+        "input_hash": current_input_hash(root),
     }
     (renders / "production-final-v002.mp4").write_bytes(b"movie")
     write_json(renders / "production-final-v002.json", report)
     assert _final_state(root) == "done"
 
+    # A touched file is not a changed film: the library compares hashes, as Publish does.
     board = root / "work" / "storyboard.json"
     later = (renders / "production-final-v002.json").stat().st_mtime + 60
     os.utime(board, (later, later))
+    assert _final_state(root) == "done"
+
+    # A new renderer revision retires the final here exactly as it does on Publish.
+    monkeypatch.setattr(remotion, "implementation_hash", lambda: "another renderer")
+    assert _final_state(root) == "changed"
+    monkeypatch.undo()
+    assert _final_state(root) == "done"
+
+    # A final stamped without its inputs' hash cannot be shown current.
+    unstamped = {key: value for key, value in report.items() if key != "input_hash"}
+    write_json(renders / "production-final-v002.json", unstamped)
     assert _final_state(root) == "changed"
 
     write_json(renders / "production-final-v002.json", {**report, "current": False})

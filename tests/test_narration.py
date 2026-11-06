@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -223,12 +224,84 @@ def test_changed_bytes_are_kept_aside_and_the_paid_take_restored(film):
     assert list((film / "work/quarantine").iterdir())
 
 
-def test_an_elevenlabs_voice_is_scaffolded_and_cannot_be_bought(film, monkeypatch):
+class ElevenFake:
+    """What ``providers.ElevenLabsClient`` answers, without the network."""
+
+    def __init__(self, *, pending=(), count=1_000, limit=10_000, extend=False, history=()):
+        self.pending = set(pending)
+        self.count = count
+        self.limit = limit
+        self.extend = extend
+        self.history = list(history)
+        self.submitted = []
+        self.downloaded = []
+
+    def terms(self):
+        return {
+            "tier": "creator",
+            "status": "active",
+            "currency": "usd",
+            "character_count": self.count,
+            "character_limit": self.limit,
+            "next_character_count_reset_unix": 1_800_000_000,
+            "can_extend_character_limit": self.extend,
+        }
+
+    def submit_speech(self, request):
+        self.submitted.append(request)
+        uuid = request["taskUUID"]
+        text = request["body"]["text"]
+        if text in self.pending:
+            return {"taskUUID": uuid}
+        self.count += len(text)
+        return {
+            "taskUUID": uuid,
+            "audioURL": f"elevenlabs:take:{uuid}",
+            "audio_format": "mp3",
+            "characters": len(text),
+            "provider_characters": len(text),
+            "alignment": {
+                "characters": list(text),
+                "character_start_times_seconds": [i * 0.1 for i in range(len(text))],
+                "character_end_times_seconds": [(i + 1) * 0.1 for i in range(len(text))],
+            },
+        }
+
+    def recover_speech(self, uuid, task=None):
+        if task is None or task["text"] not in self.history:
+            return None
+        return {
+            "taskUUID": uuid,
+            "audioURL": "elevenlabs:history:h1",
+            "audio_format": "mp3",
+            "characters": len(task["text"]),
+            "provider_characters": None,
+            "alignment": None,
+            "history_item_id": "h1",
+        }
+
+    def download_audio(self, url, path):
+        self.downloaded.append(url)
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        tone(Path(path), 1.0)
+
+    def close(self):
+        pass
+
+
+@pytest.fixture
+def eleven(film, monkeypatch):
+    monkeypatch.setattr(
+        voices, "get", lambda _: voices.ElevenLabsVoice(id="rachel", label="Rachel")
+    )
+    narration.lock_voice(film, "rachel")
+    return film
+
+
+def test_an_elevenlabs_voice_reads_words_and_asks_with_timestamps():
     voice = voices.ElevenLabsVoice(id="rachel", label="Rachel")
     parsed = voice.parse_result(
         {
-            "audio_url": "https://x.test/a.mp3",
-            "cost": 0.02,
             "alignment": {
                 "characters": list("hi yo"),
                 "character_start_times_seconds": [0.0, 0.1, 0.2, 0.3, 0.4],
@@ -238,10 +311,69 @@ def test_an_elevenlabs_voice_is_scaffolded_and_cannot_be_bought(film, monkeypatc
     )
     assert [word["text"] for word in parsed["words"]] == ["hi", "yo"]
     assert parsed["words"][1]["start"] == 0.3
-    assert "with-timestamps" in voice.build_request("hi", "u", "m")["path"]
-    monkeypatch.setattr(voices, "get", lambda _: voice)
-    with pytest.raises(ValueError, match="can't be bought"):
-        narration.quote_lines(film, client=Fake())
+    request = voice.build_request("hi", "u", "eleven_v3")
+    assert request["path"] == "/v1/text-to-speech/rachel/with-timestamps"
+    assert request["body"] == {"text": "hi", "model_id": "eleven_v3"}
+
+
+def test_an_elevenlabs_quote_stands_on_the_period_and_the_catalogue_price(eleven):
+    client = ElevenFake(count=9_000, limit=10_000)
+    quote = narration.quote_lines(eleven, ["l001"], model="eleven_flash_v2_5", client=client)
+    text = quote["tasks"][0]["text"]
+    assert quote["provider"] == "elevenlabs" and quote["model"] == "eleven_flash_v2_5"
+    assert quote["tasks"][0]["request"]["body"] == {"text": text, "model_id": "eleven_flash_v2_5"}
+    assert Decimal(quote["tasks"][0]["reserve_usd"]) == max(Decimal("0.01"), Decimal("0.00004") * len(text))  # fmt: skip
+    assert quote["warning"].startswith("1,000 characters left this period")
+    terms = read_json(eleven / quote["schema"])
+    assert terms["price"] == {"amount": "0.04", "unit": "1k_chars", "checked": "2026-11-06", "source": "https://elevenlabs.io/pricing/api"}  # fmt: skip
+    assert terms["subscription"]["character_limit"] == 10_000
+    assert client.submitted == [] and read_json(eleven / "work/tasks.json") == {}
+
+
+def test_an_elevenlabs_quote_past_the_period_is_refused_by_number_unless_the_plan_extends(eleven):
+    with pytest.raises(ValueError, match="has 10 characters left this period; these lines need"):
+        narration.quote_lines(eleven, ["l001"], model="eleven_v3", client=ElevenFake(count=9_990))
+    quote = narration.quote_lines(eleven, ["l001"], model="eleven_v3", client=ElevenFake(count=9_990, extend=True))  # fmt: skip
+    assert "the plan charges the rest" in quote["warning"]
+
+
+def test_an_unpriced_elevenlabs_model_is_not_quoted(eleven):
+    with pytest.raises(ValueError, match="no catalogue price per character"):
+        narration.quote_lines(eleven, ["l001"], model="eleven_turbo_v2", client=ElevenFake())
+
+
+def test_an_elevenlabs_take_is_journaled_at_the_catalogue_rate_with_its_basis(eleven):
+    client = ElevenFake()
+    quote = _authorized(eleven, ["l001"], client=client, model="eleven_multilingual_v2")
+    result = narration.generate(eleven, quote["id"], client=client)
+    assert result["done"] == ["l001"]
+    task = read_json(eleven / "work/tasks.json")[quote["tasks"][0]["uuid"]]
+    text = task["text"]
+    assert task["status"] == "ready"
+    assert Decimal(task["cost_usd"]) == Decimal("0.00008") * len(text)
+    assert task["cost_basis"] == "catalogue price, read 2026-11-06"
+    assert task["provider_characters"] == len(text) and task["provider"] == "elevenlabs"
+    take = narration.read_index(eleven)["lines"]["l001"]["versions"][0]
+    assert take["provider"] == "elevenlabs" and take["path"].endswith(".mp3")
+    assert take["cost_usd"] == task["cost_usd"]
+    assert [word["text"] for word in take["words"]] == text.split()
+    assert client.downloaded == [f"elevenlabs:take:{task['uuid']}"]
+
+
+def test_an_interrupted_elevenlabs_take_is_found_in_the_history_never_bought_twice(eleven):
+    text = read_json(eleven / "work/script.json")["lines"][0]["text"]
+    client = ElevenFake(pending=[text])
+    quote = _authorized(eleven, ["l001"], client=client, model="eleven_v3")
+    assert narration.generate(eleven, quote["id"], client=client)["pending"] == ["l001"]
+    uuid = quote["tasks"][0]["uuid"]
+    assert narration.recover_take(eleven, uuid, client=ElevenFake()) is False
+    assert read_json(eleven / "work/tasks.json")[uuid]["status"] == "submitted"
+    assert narration.recover_take(eleven, uuid, client=ElevenFake(history=[text])) is True
+    task = read_json(eleven / "work/tasks.json")[uuid]
+    assert task["status"] == "ready" and task["cost_basis"] == "catalogue price, read 2026-11-06"
+    assert Decimal(task["cost_usd"]) == Decimal("0.00008") * len(text)
+    assert narration.read_index(eleven)["lines"]["l001"]["versions"][0]["path"].endswith(".mp3")
+    assert len(client.submitted) == 1
 
 
 def test_the_catalogue_lists_elevenlabs_only_with_a_key(monkeypatch):

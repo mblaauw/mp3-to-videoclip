@@ -75,7 +75,6 @@ test("reset restores each recommended choice and leaves the rest of a role alone
       writer: { provider: "openai", model: "sol" },
       editor: { provider: "opencode-go", model: "flash" },
       critic: { provider: "openai", model: "sol" },
-      narrator: { provider: "runware", model: "speech" },
     },
   });
   assert.deepEqual(recommendedVoices(catalog), { voices: { provider: "runware", default_voice: "b" } });

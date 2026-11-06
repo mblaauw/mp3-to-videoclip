@@ -91,3 +91,22 @@ A fresh film starts on the presets the settings name. Every suite green.
 
 - A live Writer turn on the Publish stage. The route no longer refuses it; the
   model's answer is the owner's to read. No paid call was made.
+
+## After the owner's look, 6 Nov 2026
+
+- M4. What confused: ten "Stills for …" rows that all said the look's own model
+  at the same price, because the catalogue lists one still model and nothing
+  reads the per-look choice; a Narrator model under Roles that nothing reads
+  either, since a voice carries its model; "Stored for when clips arrive" under
+  a reserve that clips already use; an upscaler "None yet" that really means
+  Real-ESRGAN. Now: Pictures names the one still model once (the per-look grid
+  returns only when the catalogue lists a second), the Narrator left Roles and
+  Voices says which model speaks the chosen voice at what price, the blank
+  upscaler is named as the recommendation, and the clip reserve says what it is.
+  `pictures.image_model_by_look` and `roles.narrator` stay in the file, unread.
+- The library said "Final ready" where Publish said there was no current final:
+  the library compared clocks and Publish compared hashes, and the renderer's
+  revision had moved. `_final_state` now asks `exports.render_currency`, the
+  same check Publish uses minus the movie's bytes, so the two cannot disagree.
+  Every finished film today reads "Render the final again" for that reason.
+- `library/` is ignored like `projects/`.

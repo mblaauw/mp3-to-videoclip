@@ -34,6 +34,44 @@ def _current_input_hash(root: Path) -> str:
     return current_input_hash(root)
 
 
+def render_currency(root: Path, report: dict, kind: str) -> tuple[bool, str | None]:
+    """Whether a verified render still matches today's inputs, and why not.
+
+    Reads the film's small files and the renderer's revision, never the movie: the
+    library asks this of every film, so Film's export list keeps the byte check.
+    """
+    current, reason = True, None
+    if kind == "final" and report.get("input_hash"):
+        try:
+            current_input = _current_input_hash(root)
+        except (OSError, ValueError, KeyError, TypeError):
+            current_input = None
+        if report["input_hash"] != current_input:
+            current, reason = False, "Render inputs have changed"
+    elif kind == "final":
+        current, reason = False, "Current render inputs cannot be verified"
+    if report.get("input_metadata_hash") and report["input_metadata_hash"] != input_metadata_hash(
+        root
+    ):
+        current, reason = False, "Render inputs have changed"
+    graphics_provenance = report.get("graphics_approval_hash")
+    signature_required = kind == "final" and P.requires_signature(root)
+    if signature_required and (
+        not isinstance(graphics_provenance, str) or not graphics_provenance.strip()
+    ):
+        current, reason = False, "Graphics provenance cannot be verified"
+    elif graphics_provenance:
+        try:
+            graphics_hash = P.stage_hash(root, "graphics")
+        except (OSError, ValueError, KeyError, TypeError):
+            graphics_hash = None
+        if graphics_provenance != graphics_hash:
+            current, reason = False, "Graphics approval has changed"
+    if report.get("current") is False:
+        current, reason = False, "Inputs changed during rendering"
+    return current, reason
+
+
 def describe(root: Path, directory: str, name: str) -> dict:
     output = root / directory / name
     result = {
@@ -65,34 +103,9 @@ def describe(root: Path, directory: str, name: str) -> dict:
         if kind == "final" and not expected:
             return result
         result.update(classification=kind, verified=True, current=True, reason=None)
-        if kind == "final" and report.get("input_hash"):
-            try:
-                current_input = _current_input_hash(root)
-            except (OSError, ValueError, KeyError, TypeError):
-                current_input = None
-            if report["input_hash"] != current_input:
-                result.update(current=False, reason="Render inputs have changed")
-        elif kind == "final":
-            result.update(current=False, reason="Current render inputs cannot be verified")
-        if report.get("input_metadata_hash") and report[
-            "input_metadata_hash"
-        ] != input_metadata_hash(root):
-            result.update(current=False, reason="Render inputs have changed")
-        graphics_provenance = report.get("graphics_approval_hash")
-        signature_required = kind == "final" and P.requires_signature(root)
-        if signature_required and (
-            not isinstance(graphics_provenance, str) or not graphics_provenance.strip()
-        ):
-            result.update(current=False, reason="Graphics provenance cannot be verified")
-        elif graphics_provenance:
-            try:
-                graphics_hash = P.stage_hash(root, "graphics")
-            except (OSError, ValueError, KeyError, TypeError):
-                graphics_hash = None
-            if graphics_provenance != graphics_hash:
-                result.update(current=False, reason="Graphics approval has changed")
-        if report.get("current") is False:
-            result.update(current=False, reason="Inputs changed during rendering")
+        current, reason = render_currency(root, report, kind)
+        if not current:
+            result.update(current=False, reason=reason)
         result["delivery_ready"] = (
             kind == "final" and result["current"] and report.get("delivery_ready") is True
         )
