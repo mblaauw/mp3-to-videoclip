@@ -28,7 +28,7 @@ from .generation import (
 from .production.approvals import require_approval
 from .production.project import now
 from .production.script import load_script, require_script
-from .providers import RunwareClient, runware_api_key
+from .providers import ElevenLabsClient, RunwareClient, elevenlabs_api_key, runware_api_key
 from .storage import (
     digest,
     file_hash,
@@ -217,11 +217,16 @@ def quote_lines(
     line_ids: list[str] | None = None,
     *,
     voice_id: str | None = None,
-    model: str = voices.DEFAULT_MODEL,
+    model: str | None = None,
     regenerate: bool = False,
     client=None,
 ) -> dict:
-    """Quote a take of each line with none of its current words. Spends nothing."""
+    """Quote a take of each line with none of its current words. Spends nothing.
+
+    A MiniMax voice is quoted on Runware's public schema; an ElevenLabs voice on the
+    account's period and the catalogue's price, since that provider states no price
+    per call. Either document is kept under ``work/schemas`` and hashed into the quote.
+    """
     require_approval(root, "script")
     narrator = _narrator(root)
     if narrator is not None and narrator.real_person and not narrator.permission_confirmed:
@@ -236,22 +241,28 @@ def quote_lines(
     chosen = [line for line in script.lines if line_ids is None or line.id in line_ids]
     voice_id = voice_id or current_voice(root)
     voice = voices.get(voice_id)
-    if voice.provider != "runware":
-        raise ValueError(f"{voice.provider} voices can't be bought yet; choose a Runware voice")
+    if voice.provider not in ("runware", "elevenlabs"):
+        raise ValueError(f"{voice.provider} voices can't be bought yet; choose another voice")
+    model = model or _default_model(voice.provider)
     own = client is None
-    client = client or RunwareClient("public-schema-only")
+    client = client or (ElevenLabsClient(elevenlabs_api_key()) if voice.provider == "elevenlabs" else RunwareClient("public-schema-only"))  # fmt: skip
     try:
-        schema = client.schema(model)  # public GET only; no generation
+        if voice.provider == "elevenlabs":
+            schema, rate = _elevenlabs_terms(client, model)  # free GET; no generation
+            info: dict = {"x-air-id": model}
+        else:
+            schema = client.schema(model)  # public GET only; no generation
+            info = schema["info"]
+            if info.get("x-status") != "live":
+                raise ValueError("model is not confirmed live")
+            props = schema["components"]["schemas"]["RequestBody"]["items"]["properties"]
+            offered = ((props.get("speech") or {}).get("properties") or {}).get("voice", {}).get("enum")  # fmt: skip
+            if offered and voice_id not in offered:
+                raise ValueError(f"{model} does not offer the voice {voice_id}; choose another one")
+            rate = RESERVE_PER_CHARACTER
     finally:
         if own:
             client.close()
-    info = schema["info"]
-    if info.get("x-status") != "live":
-        raise ValueError("model is not confirmed live")
-    props = schema["components"]["schemas"]["RequestBody"]["items"]["properties"]
-    offered = ((props.get("speech") or {}).get("properties") or {}).get("voice", {}).get("enum")
-    if offered and voice_id not in offered:
-        raise ValueError(f"{model} does not offer the voice {voice_id}; choose another one")
     schema_path = f"work/schemas/{digest(schema)}.json"
     write_json(inside(root, schema_path), schema)
     journal = read_json(root / "work/tasks.json")
@@ -266,36 +277,98 @@ def quote_lines(
             raise ValueError(f"line {line.id} has an unresolved task; recover it first")
         task_uuid = str(uuid4())
         request = voice.build_request(line.text, task_uuid, info["x-air-id"])
-        validate_request(schema, request)
+        if voice.provider == "runware":
+            validate_request(schema, request)
         tasks.append(
             {
                 "uuid": task_uuid,
                 "line_id": line.id,
                 "text": line.text,
                 "voice": voice_id,
+                "provider": voice.provider,
                 "version": _next_version(root, line.id),
                 "input_hash": wanted,
                 "request": request,
-                "reserve_usd": str(max(MIN_RESERVE, RESERVE_PER_CHARACTER * len(line.text))),
+                "reserve_usd": str(max(MIN_RESERVE, rate * len(line.text))),
             }
         )
     if not tasks:
         raise ValueError("every line already has a take of these words; choose redo")
+    characters = sum(len(task["text"]) for task in tasks)
+    warning = "The reserve is a limit on admission, not an exact price."
+    if voice.provider == "elevenlabs":
+        warning = _elevenlabs_capacity(schema["subscription"], characters)
     return save_quote(
         root,
         {
             "kind": "narration",
+            "provider": voice.provider,
             "model": model,
             "voice": voice_id,
             "schema": schema_path,
             "schema_hash": digest(schema),
             "tasks": tasks,
-            "characters": sum(len(task["text"]) for task in tasks),
+            "characters": characters,
             "reserve_total_usd": str(sum((money(t["reserve_usd"]) for t in tasks), Decimal(0))),
             "published_pricing": info.get("x-pricing"),
-            "warning": "The reserve is a limit on admission, not an exact price.",
+            "warning": warning,
         },
     )
+
+
+def _default_model(provider: str) -> str:
+    if provider == "elevenlabs":
+        from .config import load_settings
+
+        return load_settings().voices.elevenlabs_model
+    return voices.DEFAULT_MODEL
+
+
+def _elevenlabs_terms(client, model: str) -> tuple[dict, Decimal]:
+    """The account's period and the catalogue's price for ``model``, and the rate per character."""
+    from . import catalog
+
+    row = next(
+        (m for m in catalog.load().models if m.provider == "elevenlabs" and m.id == model), None
+    )
+    if row is None or row.price is None or row.price.unit != "1k_chars":
+        raise ValueError(
+            f"{model} has no catalogue price per character; choose a priced ElevenLabs model in Settings"  # fmt: skip
+        )
+    terms = {
+        "provider": "elevenlabs",
+        "model": model,
+        "price": {
+            "amount": row.price.amount,
+            "unit": row.price.unit,
+            "checked": row.price_checked,
+            "source": row.price_source,
+        },
+        "subscription": client.terms(),
+    }
+    return terms, money(row.price.amount) / 1000
+
+
+def _elevenlabs_capacity(subscription: dict, characters: int) -> str:
+    """What the period has left against what these lines need; refuses by number."""
+    remaining = subscription["character_limit"] - subscription["character_count"]
+    if characters <= remaining:
+        return f"{remaining:,} characters left this period; these lines use {characters:,} at the catalogue rate."  # fmt: skip
+    if not subscription.get("can_extend_character_limit"):
+        raise ValueError(
+            f"ElevenLabs has {remaining:,} characters left this period; these lines need {characters:,}"  # fmt: skip
+        )
+    return f"These lines need {characters:,} characters and the period has {remaining:,} left; the plan charges the rest, and the cost here is the catalogue rate."  # fmt: skip
+
+
+def _priced(root: Path, task: dict, result: dict) -> dict:
+    """An ElevenLabs result with the cost the quote's terms give it; the provider states none."""
+    if "cost" in result:
+        return result
+    terms = read_json(inside(root, read_quote(root, task["quote_id"])["schema"]))
+    price = terms["price"]
+    cost = money(price["amount"]) / 1000 * len(task["text"])
+    return {**result, "cost": str(cost), "cost_basis": f"catalogue price, read {price['checked']}"}
 
 
 def check_before_spend(root: Path, task: dict) -> None:
@@ -318,15 +391,23 @@ def finish_take(root: Path, task_uuid: str, result: dict, client) -> bool:
             raise ValueError("task was manually reconciled; inspect the result before recovery")
         if task.get("cost_usd") is not None and money(task["cost_usd"]) != money(cost):
             raise ValueError("provider task cost changed; reconcile manually")
-        task.update(status="result", result=result, cost_usd=cost, cost_basis="provider reported")
+        task.update(
+            status="result",
+            result=result,
+            cost_usd=cost,
+            cost_basis=result.get("cost_basis") or "provider reported",
+        )
+        if result.get("provider_characters") is not None:
+            task["provider_characters"] = result["provider_characters"]
         journal[task_uuid] = task
         write_json(root / "work/tasks.json", journal)  # Billed cost BEFORE download.
-    relative = f"work/narration/{task['line_id']}/v{task['version']:03d}-{task_uuid}.wav"
+    suffix = "mp3" if result.get("audio_format") == "mp3" else "wav"
+    relative = f"work/narration/{task['line_id']}/v{task['version']:03d}-{task_uuid}.{suffix}"
     path = inside(root, relative)
     expected = task.get("sha256")
     if path.exists() and expected and file_hash(path) != expected:
         # Keep whatever changed these bytes, then restore the paid original.
-        quarantine = root / f"work/quarantine/{task_uuid}-{file_hash(path)}.wav"
+        quarantine = root / f"work/quarantine/{task_uuid}-{file_hash(path)}.{suffix}"
         quarantine.parent.mkdir(parents=True, exist_ok=True)
         if not quarantine.exists():
             shutil.copyfile(path, quarantine)
@@ -342,7 +423,7 @@ def finish_take(root: Path, task_uuid: str, result: dict, client) -> bool:
         "sha256": sha,
         "text": task["text"],
         "input_hash": task["input_hash"],
-        "provider": "runware",
+        "provider": task.get("provider") or "runware",
         "voice": task.get("voice"),
         "source": "generated",
         "task_id": task_uuid,
@@ -350,6 +431,9 @@ def finish_take(root: Path, task_uuid: str, result: dict, client) -> bool:
         "cost_usd": cost,
         "at": now(),
     }
+    if isinstance(result.get("alignment"), dict):
+        # The provider's own character times, kept as words beside the take.
+        take["words"] = voices.ElevenLabsVoice(id=str(task.get("voice"))).parse_result(result)["words"]  # fmt: skip
     _record(root, task["line_id"], take)
     update_task(root, task_uuid, status="ready", path=relative, sha256=sha, completed_at=now())
     return True
@@ -366,8 +450,9 @@ def generate(root: Path, quote_id: str, client=None) -> dict:
         raise ValueError("quoted model schema changed")
     budget.require_reconciled(root)
     journal = read_json(root / "work/tasks.json")
+    provider = quote.get("provider") or "runware"
     own = client is None
-    client = client or RunwareClient(runware_api_key())
+    client = client or _client_for(provider)
     done, pending, stopped = [], [], None
     try:
         for task in quote["tasks"]:
@@ -380,6 +465,8 @@ def generate(root: Path, quote_id: str, client=None) -> dict:
                 stopped = str(exc)
                 break
             result = client.submit_speech(task["request"])
+            if provider == "elevenlabs" and result and "audioURL" in result:
+                result = _priced(root, {**task, "quote_id": quote_id}, result)
             if finish_take(root, task["uuid"], result, client):
                 done.append(task["line_id"])
             else:
@@ -399,10 +486,16 @@ def recover_take(root: Path, task_uuid: str, client=None) -> bool:
         raise ValueError("unknown narration task")
     if task["status"] == "resolved":
         raise ValueError("task was manually reconciled; use a newly authorized quote if needed")
+    provider = task.get("provider") or "runware"
     own = client is None
-    client = client or RunwareClient(runware_api_key())
+    client = client or _client_for(provider)
     try:
-        result = task.get("result") or client.recover_speech(task_uuid)
+        if provider == "elevenlabs":
+            result = task.get("result") or client.recover_speech(task_uuid, task)
+            if result and "audioURL" in result:
+                result = _priced(root, task, result)
+        else:
+            result = task.get("result") or client.recover_speech(task_uuid)
         finished = finish_take(root, task_uuid, result, client) if result else False
     finally:
         if own:
@@ -421,3 +514,10 @@ def view(root: Path) -> dict:
         "stale": sorted(stale),
         "lines": index["lines"],
     }
+
+
+def _client_for(provider: str):
+    """A paying client for the provider a quote or task names."""
+    if provider == "elevenlabs":
+        return ElevenLabsClient(elevenlabs_api_key())
+    return RunwareClient(runware_api_key())

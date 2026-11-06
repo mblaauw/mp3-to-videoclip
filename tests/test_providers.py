@@ -666,3 +666,117 @@ def test_runware_client_requires_api_key():
     with pytest.raises(ProviderError) as excinfo:
         RunwareClient("")
     assert excinfo.value.code == "invalid_request"
+
+
+# ------------------------------------------------------------------ ElevenLabs
+
+ELEVEN_KEY = "eleven-secret-key"
+MP3 = b"ID3\x04\x00" + b"\x00" * 60
+
+
+def eleven_handler(*, counts=(100, 143), history=(), audio=MP3, status=200):
+    """Answers the subscription, a take, the history and a history download; records calls."""
+    calls = []
+    remaining = list(counts)
+
+    def handler(request):
+        calls.append(request)
+        assert request.headers["xi-api-key"] == ELEVEN_KEY
+        if request.url.path == "/v1/user/subscription":
+            count = remaining.pop(0) if remaining else counts[-1]
+            return httpx.Response(200, json={"tier": "creator", "status": "active", "currency": "usd", "character_count": count, "character_limit": 1000, "next_character_count_reset_unix": 1, "can_extend_character_limit": False})  # fmt: skip
+        if request.url.path.startswith("/v1/text-to-speech/"):
+            if status != 200:
+                return httpx.Response(status, json={"detail": {"status": "quota_exceeded"}})
+            return httpx.Response(200, json={"audio_base64": base64.b64encode(audio).decode(), "alignment": {"characters": ["h", "i"], "character_start_times_seconds": [0.0, 0.1], "character_end_times_seconds": [0.1, 0.2]}})  # fmt: skip
+        if request.url.path == "/v1/history":
+            return httpx.Response(200, json={"history": list(history), "has_more": False})
+        if request.url.path.startswith("/v1/history/") and request.url.path.endswith("/audio"):
+            return httpx.Response(200, content=audio, headers={"content-type": "audio/mpeg"})
+        return httpx.Response(404, json={})
+
+    return handler, calls
+
+
+def eleven_request(text="hi"):
+    return {
+        "path": "/v1/text-to-speech/rachel/with-timestamps",
+        "taskUUID": UUID,
+        "body": {"text": text, "model_id": "eleven_v3"},
+    }
+
+
+def test_elevenlabs_take_is_asked_as_json_held_and_counted(tmp_path):
+    handler, calls = eleven_handler()
+    client = providers.ElevenLabsClient(ELEVEN_KEY, client_for(handler))
+    result = client.submit_speech(eleven_request("hi"))
+    post = next(call for call in calls if call.method == "POST")
+    assert post.url.path == "/v1/text-to-speech/rachel/with-timestamps"
+    assert post.url.params["output_format"] == "mp3_44100_128"
+    assert json.loads(post.content) == {"text": "hi", "model_id": "eleven_v3"}
+    assert result["audioURL"] == f"elevenlabs:take:{UUID}" and result["audio_format"] == "mp3"
+    assert result["characters"] == 2 and result["provider_characters"] == 43
+    assert result["alignment"]["characters"] == ["h", "i"]
+    assert "cost" not in result
+    path = tmp_path / "take.mp3"
+    client.download_audio(result["audioURL"], path)
+    assert path.read_bytes() == MP3
+    with pytest.raises(ProviderError, match="asset_exists"):
+        client.download_audio(result["audioURL"], path)
+    with pytest.raises(ProviderError, match="take_not_held"):
+        client.download_audio(result["audioURL"], tmp_path / "again.mp3")
+
+
+def test_elevenlabs_terms_are_the_subscription_as_stated():
+    handler, _calls = eleven_handler(counts=(5,))
+    terms = providers.ElevenLabsClient(ELEVEN_KEY, client_for(handler)).terms()
+    assert terms == {"tier": "creator", "status": "active", "currency": "usd", "character_count": 5, "character_limit": 1000, "next_character_count_reset_unix": 1, "can_extend_character_limit": False}  # fmt: skip
+
+
+def test_elevenlabs_refusals_never_echo_the_provider(tmp_path):
+    handler, _calls = eleven_handler(status=401)
+    with pytest.raises(ProviderError, match="http_error") as caught:
+        providers.ElevenLabsClient(ELEVEN_KEY, client_for(handler)).submit_speech(eleven_request())
+    assert caught.value.status == 401
+    handler, _calls = eleven_handler(audio=b"<html>not audio</html>")
+    with pytest.raises(ProviderError, match="invalid_audio"):
+        providers.ElevenLabsClient(ELEVEN_KEY, client_for(handler)).submit_speech(eleven_request())
+    client = providers.ElevenLabsClient(ELEVEN_KEY, client_for(handler))
+    with pytest.raises(ProviderError, match="invalid_request"):
+        client.submit_speech({**eleven_request(), "path": "/v1/history"})
+    with pytest.raises(ProviderError, match="invalid_media_url"):
+        client.download_audio("https://x.test/a.mp3", tmp_path / "x.mp3")
+
+
+def test_elevenlabs_interrupted_take_is_found_by_words_voice_model_and_time(tmp_path):
+    from datetime import UTC, datetime
+
+    task = {
+        "text": "hi",
+        "submitted_at": datetime.fromtimestamp(1_793_000_000, UTC).isoformat(),
+        "request": eleven_request("hi"),
+    }
+    history = [
+        {"history_item_id": "old", "text": "hi", "date_unix": 1_700_000_000},
+        {"history_item_id": "other", "text": "bye", "date_unix": 1_793_000_000},
+        {"history_item_id": "later", "text": "hi", "date_unix": 1_793_000_100},
+        {"history_item_id": "mine", "text": "hi", "date_unix": 1_793_000_000},
+    ]
+    handler, calls = eleven_handler(history=history)
+    client = providers.ElevenLabsClient(ELEVEN_KEY, client_for(handler))
+    result = client.recover_speech(UUID, task)
+    listing = next(call for call in calls if call.url.path == "/v1/history")
+    assert (
+        listing.url.params["voice_id"] == "rachel" and listing.url.params["model_id"] == "eleven_v3"
+    )
+    assert result["audioURL"] == "elevenlabs:history:mine" and result["history_item_id"] == "mine"
+    path = tmp_path / "take.mp3"
+    client.download_audio(result["audioURL"], path)
+    assert path.read_bytes() == MP3
+    assert calls[-1].url.path == "/v1/history/mine/audio"
+    handler, _calls = eleven_handler(history=[])
+    assert (
+        providers.ElevenLabsClient(ELEVEN_KEY, client_for(handler)).recover_speech(UUID, task)
+        is None
+    )
+    assert providers.ElevenLabsClient(ELEVEN_KEY, client_for(handler)).recover_speech(UUID) is None
