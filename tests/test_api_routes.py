@@ -745,7 +745,7 @@ def test_settings_catalog_says_what_each_entry_needs(monkeypatch, tmp_path):
     rows = {row["id"]: row for row in body["providers"]}
     assert rows["runware"]["ready"]["key"] is True
     assert rows["runware"]["ready"]["reachable"] is None
-    assert rows["runware"]["ready"]["unlocks"] == ["pictures", "clips", "voices"]
+    assert rows["runware"]["ready"]["unlocks"] == ["pictures", "clips", "voices", "sounds"]
     assert rows["openai"]["ready"]["key"] is False
     assert "elevenlabs" not in rows
     assert "renderer" in body["computer"]

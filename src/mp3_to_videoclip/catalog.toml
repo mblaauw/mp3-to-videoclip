@@ -55,7 +55,7 @@ kind = "runware"
 key_setting = "keys.runware"
 env_var = "PROJECT_VEIL_RUNWARE_API"
 lists_models = true
-unlocks = ["pictures", "clips", "voices"]
+unlocks = ["pictures", "clips", "voices", "sounds"]
 
 [[providers]]
 id = "elevenlabs"
@@ -138,6 +138,38 @@ price = { amount = "0.10", unit = "1k_chars" }
 price_note = "HD rate."
 price_source = "https://runware.ai/docs/models-api/pricing"
 price_checked = "2026-11-01"
+
+[[models]]
+id = "ace-step-v1-5-xl-turbo"
+provider = "runware"
+label = "ACE-Step v1.5 XL Turbo"
+capabilities = ["music"]
+recommended = ["music"]
+price = { amount = "0.0009", unit = "run" }
+price_note = "From, per run, billed by compute time: 60 s at 8 steps measured $0.0009, 300 s $0.00285. Length 30 to 300 s, with bpm and key."
+price_source = "https://runware.ai/docs/models/ace-step-v1-5-xl-turbo"
+price_checked = "2026-11-05"
+
+[[models]]
+id = "minimax-music-2-6"
+provider = "runware"
+label = "MiniMax Music 2.6"
+capabilities = ["music"]
+price = { amount = "0.15", unit = "clip" }
+price_note = "Per clip; a sung piece from lyrics or an instrumental from a prompt. No length control; about 2 min 20 s a request."
+price_source = "https://runware.ai/docs/models/minimax-music-2-6"
+price_checked = "2026-11-05"
+
+[[models]]
+id = "mirelo-sfx-1-5"
+provider = "runware"
+label = "Mirelo SFX 1.5"
+capabilities = ["effects"]
+recommended = ["effects"]
+price = { amount = "0.00025", unit = "second" }
+price_note = "Per second of sound, 1 to 10 s a request; about 5 s to answer."
+price_source = "https://runware.ai/docs/models/mirelo-sfx-1-5"
+price_checked = "2026-11-05"
 
 [[voices]]
 id = "English_magnetic_voiced_man"

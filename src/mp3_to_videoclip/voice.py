@@ -419,7 +419,9 @@ def _placed(root: Path, project: Project, *, strict: bool) -> list[tuple[EditVoi
     return result
 
 
-def mix_key(project: Project, placed: list[tuple[EditVoice, dict]]) -> str:
+def mix_key(
+    project: Project, placed: list[tuple[EditVoice, dict]], layer: str | None = None
+) -> str:
     return digest(
         {
             "version": MIX_VERSION,
@@ -430,27 +432,38 @@ def mix_key(project: Project, placed: list[tuple[EditVoice, dict]]) -> str:
                 {"start_frame": line.start_frame, "gain_db": line.gain_db, "sha256": take["sha256"]}
                 for line, take in placed
             ],
+            # Named only when a cue plays, so every key made before cues existed holds.
+            **({"layer": layer} if layer else {}),
         }
     )[:20]
 
 
 def audio_version(root: Path, project: Project) -> str | None:
     """Identifies the mix a Player should load, or ``None`` when there is only music."""
+    from . import sound
+
     placed = _placed(root, project, strict=False)
-    return mix_key(project, placed) if placed else None
+    layer = sound.layer_version(root, project)
+    return mix_key(project, placed, layer) if placed or layer else None
 
 
 def film_audio(root: Path, project: Project, *, strict: bool = False) -> Path:
     """The music alone with no takes; otherwise the mix, built once per set of takes.
 
-    A final passes ``strict`` so a line without a take stops the render instead of
-    silently delivering a film with a sentence missing.
+    The sound cues are laid under the base first, so the voice lines sit over them; a
+    film without cues keeps the file it always had. A final passes ``strict`` so a line
+    without a take stops the render instead of silently delivering a film with a
+    sentence missing.
     """
+    from . import sound
+
     base = production.render_audio(root, project)
     placed = _placed(root, project, strict=strict)
+    base = sound.with_cues(root, project, base, sound.speech_spans(root, project))
     if not placed:
         return base
-    target = root / "work" / "audio" / f"mix-{mix_key(project, placed)}.wav"
+    layer = sound.layer_version(root, project)
+    target = root / "work" / "audio" / f"mix-{mix_key(project, placed, layer)}.wav"
     if target.is_file():
         return target
     for _line, take in placed:

@@ -30,7 +30,7 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 ELEVENLABS_URL = "https://api.elevenlabs.io"
 _TIMEOUT = 15.0
 
-Capability = Literal["text", "vision", "image", "video", "speech", "music", "upscale"]
+Capability = Literal["text", "vision", "image", "video", "speech", "music", "effects", "upscale"]
 ProviderKind = Literal["openai-compatible", "anthropic", "gemini", "opencode-go", "runware", "elevenlabs"]  # fmt: skip
 
 
@@ -47,7 +47,7 @@ class Provider(BaseModel):
 
 class Price(BaseModel):
     amount: str
-    unit: Literal["1k_tokens_in", "1k_tokens_out", "image", "second", "1k_chars"]
+    unit: Literal["1k_tokens_in", "1k_tokens_out", "image", "second", "1k_chars", "clip", "run"]
 
 
 class Model(BaseModel):

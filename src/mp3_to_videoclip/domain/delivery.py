@@ -231,6 +231,25 @@ def build(root: Path) -> dict:
             )
         )
 
+    from mp3_to_videoclip import sound
+
+    cues = sound.read(root)["cues"]
+    if cues:
+        sounding = sum(1 for cue in cues if sound._chosen(cue) is not None)
+        lines.append(
+            _line(
+                "sound",
+                "Sound cues",
+                "sound",
+                sounding == len(cues),
+                None,
+                None,
+                f"{len(cues)} cue{'s' if len(cues) != 1 else ''}, {len(cues) - sounding} silent."
+                if sounding < len(cues)
+                else f"All {len(cues)} cue{'s' if len(cues) != 1 else ''} sound.",
+                required=False,
+            )
+        )
     can_final = stills_ok and (graphics_ok if signature else True)
     required = [line for line in lines if line["required"]]
     outstanding = [line["label"] for line in required if line["state"] != "done"]

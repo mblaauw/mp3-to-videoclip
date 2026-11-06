@@ -25,6 +25,7 @@ STAGE_ROLE: dict[str, Role] = {
     "story": "writer",
     "storyboard": "writer",
     "images": "writer",
+    "sound": "writer",
     "film": "editor",
 }
 
@@ -40,6 +41,7 @@ TASKS: dict[Role, dict[str, str]] = {
         "narration_pass": "writer/narration_pass.md",
         "profile": "writer/profile.md",
         "storyboard": "writer/storyboard.md",
+        "sound": "writer/sound.md",
         "prompts": "writer/prompts.md",
         "review": "writer/review.md",
         "revise": "writer/revise.md",
@@ -63,6 +65,7 @@ EXAMPLES = {
     "script_narrative": "examples/script_narrative.md",
     "profile": "examples/profile.md",
     "storyboard": "examples/storyboard.md",
+    "sound": "examples/sound.md",
     "prompts": "examples/prompts.md",
     "review": "examples/review.md",
     "revise": "examples/revise.md",
@@ -145,6 +148,8 @@ def select_task(root: Path, stage: str | None, role: Role) -> str:
         return "notes" if role == "editor" else "storyboard"
     if stage == "film":
         return "edit"
+    if stage == "sound":
+        return "notes" if role == "editor" else "sound"
     if stage == "images":
         assets = _json(root, "work/assets.json")
         has_selected = any(

@@ -67,6 +67,15 @@ class Pictures(BaseModel):
     reserve_usd_per_clip_second: float = Field(default=0.10, ge=0.01, le=10.0)
 
 
+class Sounds(BaseModel):
+    """The models a film's cues are made with; prices come from the catalogue."""
+
+    music_model: str = "ace-step-v1-5-xl-turbo"
+    effects_model: str = "mirelo-sfx-1-5"
+    #: What a cue reserves when its model has no catalogue price.
+    reserve_usd_per_cue: float = Field(default=0.20, ge=0.01, le=10.0)
+
+
 class DirectEndpoint(BaseModel):
     """The one endpoint and model the direct path answers with until Phase E1."""
 
@@ -149,6 +158,7 @@ class Settings(BaseModel):
     roles: Roles = Roles()
     voices: Voices = Voices()
     pictures: Pictures = Pictures()
+    sounds: Sounds = Sounds()
     keys: Keys = Keys()
     new_films: NewFilms = NewFilms()
     prices: dict[str, str] = {}

@@ -52,7 +52,20 @@ class ProjectSummary(BaseModel):
     remaining_usd: str | None = None
     audio_url: str | None = None
     film_audio_url: str | None = None
+    sound_cues: int = 0
+    sound_sounding: int = 0
     updated_at: str | None = None
+
+
+def _sound_counts(root: Path) -> dict:
+    """How many cues the film has and how many sound; a cheap read of one small file."""
+    from mp3_to_videoclip import sound
+
+    cues = sound.read(root)["cues"]
+    return {
+        "sound_cues": len(cues),
+        "sound_sounding": sum(1 for cue in cues if sound._chosen(cue) is not None),
+    }
 
 
 def _mtime(path: Path) -> float:
@@ -335,6 +348,7 @@ def _film_summary(entry: Path, parked: set[str], result: list[ProjectSummary]) -
                 ),
                 spine=project.spine,
                 film_audio_url=_film_audio_url(entry, project),
+                **_sound_counts(entry),
                 updated_at=_updated_at(
                     entry,
                     [

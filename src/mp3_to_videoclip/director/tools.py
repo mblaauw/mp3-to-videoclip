@@ -79,7 +79,7 @@ TOOLS: list[dict] = [
     _tool(
         "get_film_frames",
         "Look at the newest render as delivered, with grade, crops and type: up to eight "
-        "film frames per call. Frames are 24 per second unless the project says otherwise.",
+        "film frames per call, at the project's frames per second.",
         {
             "slug": {"type": "string"},
             "frames": {"type": "array", "items": {"type": "integer"}, "maxItems": 8},
@@ -110,9 +110,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "update_voice_lines",
-        "Set the film's spoken voiceover lines: id, text, start_frame, optional gain_db and "
-        "reason, ordered by start_frame. Replaces the list. Use the user's words exactly. "
-        "The user makes the audio in Studio; this only places lines.",
+        "Set the spoken voiceover lines: id, text, start_frame, optional gain_db, ordered by "
+        "start_frame. Replaces the list; the user's words exactly. Studio makes the audio.",
         {
             "slug": {"type": "string"},
             "lines": {"type": "array", "items": {"type": "object"}},
@@ -121,8 +120,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "update_edit",
-        "Write the edit decision list (timing, motion, transitions, accents, text, grade). "
-        "Returns the saved edit and its report; fix every hard finding.",
+        "Write the whole edit decision list. Returns its report; fix every hard finding.",
         {"slug": {"type": "string"}, "edit": {"type": "object"}},
         ["slug", "edit"],
     ),
@@ -166,8 +164,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "update_treatments",
-        "Write one to three structurally different concepts, including any you keep. "
-        "Returns the saved artifact.",
+        "Write one to three structurally different concepts, including any you keep.",
         {
             "slug": {"type": "string"},
             "concepts": {
@@ -239,8 +236,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "place_story",
-        "Say when each passage of brief.treatment plays, in seconds from the first frame. Together "
-        "they must hold every word of the treatment, unchanged and in order.",
+        "Say when each passage of brief.treatment plays, in seconds from the first frame; "
+        "together they hold every word of the treatment, unchanged and in order.",
         {
             "slug": {"type": "string"},
             "passages": {
@@ -262,7 +259,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "get_images",
-        "Inspect up to eight selected stills as thumbnails. Use this before reviewing images.",
+        "Inspect up to eight selected stills as thumbnails, before reviewing images.",
         {
             "slug": {"type": "string"},
             "shot_ids": {
@@ -301,6 +298,13 @@ TOOLS: list[dict] = [
             "options": {"type": "array", "items": {"type": "string"}, "maxItems": 3},
         },
         ["slug", "target", "options"],
+    ),
+    _tool(
+        "write_sound_cues",
+        "Replace the sound cues: id, kind (music, ambience, effect), prompt, start and end "
+        "({frame} or {line}), gain_db, why. Only the owner buys a sound.",
+        {"slug": {"type": "string"}, "cues": {"type": "array", "items": {"type": "object"}}},
+        ["slug", "cues"],
     ),
     _tool(
         "batch_update_prompts",
@@ -355,8 +359,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "write_script",
-        "Write a story film's whole script. Refused after approval unless revising is true, sent "
-        "only when the owner asked. Every invented fact is a claim with invented true.",
+        "Write a story film's whole script. After approval it needs revising true, sent only "
+        "when the owner asked. Every invented fact is a claim with invented true.",
         {
             "slug": {"type": "string"},
             "structure": {"type": "string"},
@@ -419,9 +423,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "set_creative_profile",
-        "Create or replace the film's cast, places, arc, image rules, avoid list and look, once "
-        "after the treatment. Never repeat identity or wardrobe in shot prompts. Anyone in "
-        "the result's owner_must_confirm waits for the owner's permission: ask them.",
+        "Create or replace the cast, places, arc, image rules, avoid list and look, once after "
+        "the treatment. Anyone in the result's owner_must_confirm needs the owner: ask them.",
         {
             "slug": {"type": "string"},
             "characters": {
@@ -550,8 +553,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "update_shots",
-        "Edit content fields of named shots. Timing and motion are refused once an edit exists. "
-        "To add or remove shots use write_storyboard.",
+        "Edit content fields of named shots; timing and motion are refused once an edit "
+        "exists. Add or remove shots with write_storyboard.",
         {"slug": {"type": "string"}, "changes": {"type": "array", "items": {"type": "object"}}},
         ["slug", "changes"],
     ),
@@ -564,8 +567,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "create_storyboard",
-        "Build the film's timing skeleton once; it cannot be rebuilt afterwards. Leave "
-        "seconds and timing out unless you have a reason: the defaults follow the music.",
+        "Build the timing skeleton once; it cannot be rebuilt. Leave seconds and timing out "
+        "unless you have a reason: the defaults follow the music.",
         {
             "slug": {"type": "string"},
             "seconds": {
@@ -699,7 +702,7 @@ def _with_reasons() -> None:
             function["parameters"]["properties"]["reason"] = {
                 "type": "string",
                 "maxLength": MAX_REASON,
-                "description": "Why, in one plain sentence the owner would understand.",
+                "description": "Why, in one plain sentence for the owner.",
             }
             function["parameters"]["required"] = [*function["parameters"]["required"], "reason"]
 
@@ -966,6 +969,13 @@ def _tool_propose_motion(name, arguments, root, runner, projects_dir):
     return clips.propose_motion(root, arguments.get("shots") or [])
 
 
+def _tool_write_sound_cues(name, arguments, root, runner, projects_dir):
+    from .. import sound
+
+    spec = sound.set_cues(root, arguments.get("cues") or [])
+    return {"cues": [cue["id"] for cue in spec["cues"]], "note": "Only the owner buys a sound."}
+
+
 def _tool_batch_update_prompts(name, arguments, root, runner, projects_dir):
     return _batch_prompts(root, arguments.get("changes") or [])
 
@@ -1124,6 +1134,7 @@ HANDLERS = {
     "get_narration": _tool_get_script,
     "propose_alternatives": _tool_propose_alternatives,
     "propose_motion": _tool_propose_motion,
+    "write_sound_cues": _tool_write_sound_cues,
     "batch_update_prompts": _tool_batch_update_prompts,
     "compare_versions": _tool_compare_versions,
     "get_preview_frames": _tool_get_preview_frames,

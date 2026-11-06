@@ -38,6 +38,7 @@ ARTIFACTS = {
     "create_storyboard": "work/storyboard.json",
     "batch_update_prompts": "work/storyboard.json",
     "propose_motion": "work/motion-proposals.json",
+    "write_sound_cues": "work/sound.json",
 }
 WRITE_TOOLS = frozenset(ARTIFACTS)
 

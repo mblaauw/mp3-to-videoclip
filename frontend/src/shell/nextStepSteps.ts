@@ -322,3 +322,31 @@ export function storyboardStep(project: ProjectFacts, approvals: ApprovalMap): N
     actions: approvedAction("Approve storyboard", "storyboard"),
   };
 }
+
+/** Sound is optional: the bar says where it stands and never blocks the film. */
+export function soundStep(project: ProjectFacts): NextStep {
+  const cues = project.sound_cues ?? 0;
+  const silent = cues - (project.sound_sounding ?? 0);
+  if (cues === 0) {
+    return {
+      tone: "done",
+      title: "The film's sound is its music or its narration",
+      detail: "Add a cue here when a moment needs one; the film can be rendered without.",
+      actions: continueTo("film", "Go to Film"),
+    };
+  }
+  if (silent > 0) {
+    return {
+      tone: "you",
+      title: `${silent} of ${cues} cue${cues === 1 ? "" : "s"} ${silent === 1 ? "has" : "have"} no sound yet`,
+      detail: "Make it at the shown price, bring your own file, or remove the cue.",
+      actions: continueTo("film", "Go to Film anyway"),
+    };
+  }
+  return {
+    tone: "done",
+    title: `${cues} cue${cues === 1 ? "" : "s"} in the mix`,
+    detail: "The Player and every render hear them under the speech.",
+    actions: continueTo("film", "Go to Film"),
+  };
+}

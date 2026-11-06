@@ -350,6 +350,15 @@ def build_context(
             if project.spine != "soundtrack":
                 lines.extend(_story_on_song(root, project))
                 lines.append("")
+        try:
+            from .. import sound
+
+            if sound.read(root)["cues"] or stage == "sound":
+                lines.append("## Sound")
+                lines.extend(sound.summary_lines(root, project))
+                lines.append("")
+        except (OSError, ValueError, RuntimeError) as exc:
+            lines.extend([f"## Sound\nUnavailable: {_clip(exc, 180)}", ""])
         if board is None:
             lines.append("## Shots\nNo storyboard yet.")
             return "\n".join(lines)

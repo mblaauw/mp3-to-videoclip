@@ -25,6 +25,8 @@ export type ProjectSummary = {
   shots: number;
   signature_required?: boolean | null;
   slug: string;
+  sound_cues?: number;
+  sound_sounding?: number;
   spine?: string | null;
   stage_states?: { [key: string]: "done" | "you" | "changed" | "not_ready" };
   still_count: number;
@@ -784,7 +786,7 @@ export type HistoryRestore = {
 export type DeliveryLine = {
   id: string;
   label: string;
-  stage: "track" | "script" | "story" | "storyboard" | "images" | "film";
+  stage: "track" | "script" | "story" | "storyboard" | "images" | "sound" | "film";
   state: "done" | "you" | "blocked" | "optional";
   required: boolean;
   detail: string;
@@ -800,6 +802,25 @@ export type DeliveryChecklist = {
   lines: DeliveryLine[];
   stills: { kept: number; total: number };
   outstanding: string[];
+};
+
+export type SoundReport = {
+  cues: number;
+  sounding: number;
+  mixed: boolean;
+  loudness: { lufs: number; true_peak_db: number } | null;
+  notes: { code: string; message: string; cue?: string; at?: number }[];
+};
+
+export type SoundPayload = {
+  cues: import("./sound/cueBands").Cue[];
+  duration: number;
+  fps: number;
+  story_film: boolean;
+  lines: { id: string; start: number; end: number }[];
+  models: { id: string; label: string; for: "music" | "effects"; price: { amount: string; unit: string } | null; price_note: string; chosen: boolean }[];
+  report: SoundReport | null;
+  suggestions: number;
 };
 
 export type SettingsTest = {
@@ -1290,6 +1311,35 @@ export const api = {
     request<{ path: string }>(
       `/api/projects/${slug}/soundtrack/sound?filename=${encodeURIComponent(file.name)}`,
       { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } },
+    ),
+  sound: (slug: string) => request<SoundPayload>(`/api/projects/${slug}/sound`),
+  soundReport: (slug: string) => request<SoundReport>(`/api/projects/${slug}/sound/report`),
+  saveSound: (slug: string, cues: unknown[]) =>
+    request<SoundPayload>(`/api/projects/${slug}/sound`, {
+      method: "PUT",
+      body: JSON.stringify({ cues }),
+    }),
+  suggestSound: (slug: string) =>
+    request<SoundPayload>(`/api/projects/${slug}/sound/suggest`, { method: "POST", body: "{}" }),
+  selectSound: (slug: string, cueId: string, version: number | null) =>
+    request<SoundPayload>(`/api/projects/${slug}/sound/select`, {
+      method: "POST",
+      body: JSON.stringify({ cue_id: cueId, version }),
+    }),
+  uploadSound: (slug: string, cueId: string, file: File) =>
+    request<SoundPayload>(
+      `/api/projects/${slug}/sound/upload?cue_id=${encodeURIComponent(cueId)}&filename=${encodeURIComponent(file.name)}`,
+      { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } },
+    ),
+  estimateSound: (slug: string, cueIds: string[], model?: string) =>
+    request<{ quote_id: string; model: string; reserve_usd: string; tasks: { cue_id: string; seconds: number | null; reserve_usd: string }[]; decision: BudgetDecision }>(
+      `/api/projects/${slug}/sound/estimate`,
+      { method: "POST", body: JSON.stringify({ cue_ids: cueIds, ...(model ? { model } : {}) }) },
+    ),
+  generateSound: (slug: string, quoteId: string) =>
+    request<{ job_id?: string; needs_budget?: boolean; decision?: BudgetDecision }>(
+      `/api/projects/${slug}/sound/generate`,
+      { method: "POST", body: JSON.stringify({ quote_id: quoteId }) },
     ),
   chooseVoice: (slug: string, voice: string) =>
     request<ScriptPayload>(`/api/projects/${slug}/narration/voice`, {
