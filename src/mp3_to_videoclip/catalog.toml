@@ -113,9 +113,109 @@ provider = "runware"
 label = "Kling 2.5 Turbo Standard"
 capabilities = ["video"]
 price = { amount = "0.042", unit = "second" }
-price_note = "Published at 720p; clips come in 5 s or 10 s."
+price_note = "720p, no sound of its own; 5 s or 10 s. Sends no size: the model picks from the still. The quote reads the exact published rate."
 price_source = "https://runware.ai/docs/models/klingai-2-5-turbo-standard"
-price_checked = "2026-11-02"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "klingai-2-5-turbo-pro"
+provider = "runware"
+label = "Kling 2.5 Turbo Pro"
+capabilities = ["video"]
+price = { amount = "0.07", unit = "second" }
+price_note = "1080p, no sound of its own; 5 s or 10 s; a last frame too. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/klingai-2-5-turbo-pro"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "klingai-video-2-6-pro"
+provider = "runware"
+label = "Kling 2.6 Pro"
+capabilities = ["video"]
+price = { amount = "0.07", unit = "second" }
+price_note = "1080p; $0.14 per second with its own sound; 5 s or 10 s. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/klingai-video-2-6-pro"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "minimax-hailuo-02"
+provider = "runware"
+label = "MiniMax Hailuo 02"
+capabilities = ["video"]
+price = { amount = "0.056", unit = "second" }
+price_note = "768p; $0.0817 per second at 1080p, where only 6 s is allowed; 6 s or 10 s. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/minimax-hailuo-02"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "google-veo-3-1-fast"
+provider = "runware"
+label = "Google Veo 3.1 Fast"
+capabilities = ["video"]
+price = { amount = "0.10", unit = "second" }
+price_note = "720p or 1080p; $0.15 with its own sound; 4K $0.30, with sound $0.35; 4, 6 or 8 s. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/google-veo-3-1-fast"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "google-veo-3-1"
+provider = "runware"
+label = "Google Veo 3.1"
+capabilities = ["video"]
+price = { amount = "0.20", unit = "second" }
+price_note = "720p or 1080p; $0.40 with its own sound; 4K $0.40, with sound $0.60; 4, 6 or 8 s. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/google-veo-3-1"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "bytedance-seedance-1-0-pro"
+provider = "runware"
+label = "ByteDance Seedance 1.0 Pro"
+capabilities = ["video"]
+price = { amount = "0.01925", unit = "second" }
+price_note = "480p; $0.0969 per second at 1080p; 1.2 to 12 s. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/bytedance-seedance-1-0-pro"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "alibaba-wan2-5-preview"
+provider = "runware"
+label = "Alibaba Wan 2.5 Preview"
+capabilities = ["video"]
+price = { amount = "0.0946", unit = "second" }
+price_note = "720p; $0.1476 per second at 1080p; 5 s or 10 s; its own sound by default. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/alibaba-wan2-5-preview"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "pixverse-v5"
+provider = "runware"
+label = "PixVerse V5"
+capabilities = ["video"]
+price = { amount = "0.0224", unit = "second" }
+price_note = "360p or 540p; 720p $0.03, 1080p $0.0598; 5 s or 8 s. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/pixverse-v5"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "vidu-q2-pro"
+provider = "runware"
+label = "Vidu Q2 Pro"
+capabilities = ["video"]
+price = { amount = "0.09625", unit = "clip" }
+price_note = "Per clip: 720p 5 s; 720p 8 s $0.1375; 1080p 5 s $0.165, 8 s $0.2475; 1 to 8 s. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/vidu-q2-pro"
+price_checked = "2026-11-06"
+
+[[models]]
+id = "lightricks-ltx-2-5-pro"
+provider = "runware"
+label = "Lightricks LTX-2.5 Pro"
+capabilities = ["video"]
+price = { amount = "0.12", unit = "second" }
+price_note = "720p; $0.17 per second at 1080p; 6, 8 or 10 s; its own sound as a setting. The quote reads the exact published rate."
+price_source = "https://runware.ai/docs/models/lightricks-ltx-2-5-pro"
+price_checked = "2026-11-06"
 
 [[models]]
 id = "real-esrgan"

@@ -496,3 +496,33 @@ def test_a_used_correction_asks_for_a_new_round_with_a_reason(tmp_path):
         )
         assert started.status_code == 200
     assert budget.used_up_corrections(root, ["s001"]) == []
+
+
+def test_the_clip_models_and_a_models_options_are_offered_free(client, monkeypatch):
+    from mp3_to_videoclip import clips
+
+    listed = client.get("/api/projects/production/images/clip-models").json()["models"]
+    ids = [row["id"] for row in listed]
+    assert "klingai-2-5-turbo-standard" in ids and "google-veo-3-1-fast" in ids
+    assert all(row["price"] for row in listed)  # Settings names no model here, so none is chosen
+    monkeypatch.setattr(
+        clips,
+        "options_for",
+        lambda model, client=None: {
+            "model": model,
+            "live": True,
+            "durations": [4, 6, 8],
+            "resolutions": ["720p"],
+            "sized": False,
+            "audio": True,
+            "rates": [],
+        },  # fmt: skip
+    )
+    options = client.get(
+        "/api/projects/production/images/clip-options?model=google-veo-3-1-fast"
+    ).json()
+    assert options["durations"] == [4, 6, 8] and options["audio"] is True
+    refused = client.post(
+        "/api/projects/production/images/clips/estimate", json={"shot_ids": ["s001"], "seconds": -1}
+    )
+    assert refused.status_code == 400 and "seconds" in refused.text

@@ -134,15 +134,25 @@ export function ImagesStage(props: ImagesStageProps) {
           {visible.map((shot) => {
             const src = sourceUrl(slug, shot);
             const status = statusOf(shot);
+            const clip = shot.clip != null ? (shot.clips ?? []).find((item) => item.version === shot.clip) ?? null : null;
+            const clipSrc = clip ? `/api/projects/${slug}/clips/${encodeURIComponent(shot.owner)}/${clip.version}` : null;
             return (
               <button
                 type="button"
                 key={shot.id}
                 data-still={shot.id}
-                className={`still-tile ${status.tone} ${making.has(shot.owner) || making.has(shot.id) ? "making" : ""}`}
+                className={`still-tile ${status.tone} ${clip ? "clip" : ""} ${making.has(shot.owner) || making.has(shot.id) ? "making" : ""}`}
                 onClick={() => open(shot.id)}
-                aria-label={`Open ${shot.id}, ${status.label}`}
+                aria-label={`Open ${shot.id}, ${status.label}${clip ? `, a clip of ${clip.seconds.toFixed(1)} s` : ""}`}
                 aria-busy={making.has(shot.owner) || making.has(shot.id)}
+                onMouseEnter={(event) => void event.currentTarget.querySelector("video")?.play().catch(() => undefined)}
+                onMouseLeave={(event) => {
+                  const video = event.currentTarget.querySelector("video");
+                  if (video) {
+                    video.pause();
+                    video.currentTime = 0;
+                  }
+                }}
               >
                 {(making.has(shot.owner) || making.has(shot.id)) && (
                   <span className="still-making">
@@ -150,7 +160,9 @@ export function ImagesStage(props: ImagesStageProps) {
                     Making…
                   </span>
                 )}
-                {src ? (
+                {clipSrc && src ? (
+                  <video src={clipSrc} poster={src} muted loop playsInline preload="metadata" aria-hidden="true" />
+                ) : src ? (
                   <img src={src} alt="" loading="lazy" />
                 ) : (
                   <span className="still-missing">
@@ -160,6 +172,7 @@ export function ImagesStage(props: ImagesStageProps) {
                 )}
                 <span className="still-tags">
                   <span className={`still-pill ${status.tone}`}>{status.label}</span>
+                  {clip && <span className="still-pill clip">▶ Clip · {clip.seconds.toFixed(1)} s</span>}
                   {!shot.local && shot.versions.length > 1 && (
                     <span className="still-pill count">{shot.versions.length} versions</span>
                   )}

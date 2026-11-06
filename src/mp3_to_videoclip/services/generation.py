@@ -158,21 +158,36 @@ def run_upscale(root: Path, quote_id: str) -> dict:
         return upscale.generate_upscale(root, quote_id)
 
 
-def estimate_clips(root: Path, shot_ids: list[str]) -> dict:
-    """Quote a clip of each selected still; saves the quote and spends nothing."""
+def estimate_clips(root: Path, shot_ids: list[str], **choices) -> dict:
+    """Quote a clip of each selected still; saves the quote and spends nothing.
+
+    ``choices`` are the owner's: ``seconds``, ``model``, ``resolution``, ``audio`` and a
+    ``prompt`` of their own; each is left to the schema and Settings when absent.
+    """
     from mp3_to_videoclip import clips
     from mp3_to_videoclip.storage import project_lock
 
     with project_lock(root):
-        quote = clips.quote_clips(root, shot_ids)
+        quote = clips.quote_clips(root, shot_ids, **choices)
     return {
         "quote_id": quote["id"],
         "tasks": len(quote["tasks"]),
         "seconds": quote["seconds"],
         "reserve_usd": quote["reserve_total_usd"],
         "model": quote["model"],
+        "choices": quote.get("choices"),
+        "price_basis": quote.get("price_basis"),
+        "rate": quote.get("rate"),
+        "warning": quote.get("warning"),
         "pricing": quote.get("published_pricing"),
     }
+
+
+def clip_options(model: str) -> dict:
+    """What a video model lets the owner choose, from its free public schema."""
+    from mp3_to_videoclip import clips
+
+    return clips.options_for(model)
 
 
 def run_clips(root: Path, quote_id: str) -> dict:

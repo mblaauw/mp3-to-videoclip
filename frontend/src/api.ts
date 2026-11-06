@@ -424,6 +424,41 @@ export type ImageShot = {
   clip?: number | null;
   /** Why the Writer thinks this shot earns motion. */
   motion_why?: string;
+  /** The words a clip animates, from the storyboard; the panel may say its own. */
+  motion_prompt?: string;
+};
+
+export type ClipModel = {
+  id: string;
+  label: string;
+  price: { amount: string; unit: string } | null;
+  price_note: string;
+  price_checked: string;
+  chosen: boolean;
+};
+
+export type ClipOptions = {
+  model: string;
+  live: boolean;
+  durations: number[];
+  resolutions: string[];
+  sized: boolean;
+  audio: boolean;
+  rates: { amount: string; unit: string; label: string; display: string }[];
+};
+
+export type ClipChoices = { seconds?: number; model?: string; resolution?: string; audio?: boolean; prompt?: string };
+
+export type ClipEstimate = {
+  quote_id: string;
+  tasks: number;
+  seconds: number;
+  reserve_usd: string;
+  model: string;
+  choices: { resolution: string | null; audio: boolean | null; prompt: string | null } | null;
+  price_basis: "published rate" | "settings reserve" | null;
+  rate: { amount: string; unit: "second" | "clip"; label: string; display: string; usd: string } | null;
+  warning: string | null;
 };
 
 export type IntakePayload = {
@@ -1541,13 +1576,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ version }),
     }),
-  estimateClips: (slug: string, shotIds: string[]) =>
-    request<{
-      estimate: { quote_id: string; tasks: number; seconds: number; reserve_usd: string; model: string };
-      decision: { ok: boolean };
-    }>(`/api/projects/${slug}/images/clips/estimate`, {
+  clipModels: (slug: string) => request<{ models: ClipModel[] }>(`/api/projects/${slug}/images/clip-models`),
+  clipOptions: (slug: string, model: string) =>
+    request<ClipOptions>(`/api/projects/${slug}/images/clip-options?model=${encodeURIComponent(model)}`),
+  estimateClips: (slug: string, shotIds: string[], choices: ClipChoices = {}) =>
+    request<{ estimate: ClipEstimate; decision: { ok: boolean } }>(`/api/projects/${slug}/images/clips/estimate`, {
       method: "POST",
-      body: JSON.stringify({ shot_ids: shotIds }),
+      body: JSON.stringify({ shot_ids: shotIds, ...choices }),
     }),
   generateClips: (slug: string, quoteId: string) =>
     request<{ job_id?: string; needs_budget?: boolean }>(`/api/projects/${slug}/images/clips`, {
