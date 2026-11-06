@@ -318,6 +318,13 @@ def build_context(
                 lines.append(
                     f"- CTA: {_clip(intent.cta.text, 60)} {_clip(intent.cta.url, 100)}".rstrip()
                 )
+            # A story film's structure is its template, read elsewhere; any other kind's
+            # is what the owner asked for when the film was made.
+            if intent.structure and intent.kind != "narrative":
+                lines.append(
+                    f"- Structure the owner chose: {_clip(intent.structure, 80)}. The first "
+                    "concept uses it; any others may try different structures."
+                )
         lines.append(f"- Direction: {_clip(brief.direction)}")
         lines.append(f"- Style: {_clip(brief.style)}")
         lines.append(f"- Treatment: {_treatment(brief.treatment, task)}")

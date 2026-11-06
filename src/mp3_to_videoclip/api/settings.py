@@ -56,7 +56,16 @@ def _read(value: dict, path: tuple[str, ...]) -> str:
 
 def _public(settings: Settings) -> dict:
     """Never send a secret back to the browser; expose presence instead."""
-    from mp3_to_videoclip import kinds, publish, shotkinds, signature, structures, styles
+    from mp3_to_videoclip import (
+        formats,
+        kinds,
+        publish,
+        shotkinds,
+        signature,
+        structures,
+        styles,
+        voices,
+    )
 
     value = settings.model_dump()
     has = {}
@@ -87,6 +96,8 @@ def _public(settings: Settings) -> dict:
     value["kinds"] = kinds.public_kinds()
     value["shot_kinds"] = shotkinds.public_kinds()
     value["structures"] = structures.public()
+    value["formats"] = formats.public_formats()
+    value["voice_list"] = voices.catalogue()
     return value
 
 
