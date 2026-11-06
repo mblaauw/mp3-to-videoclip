@@ -112,27 +112,18 @@ def _newest(paths: list[Path]) -> float:
 
 # The render inputs ``domain.exports`` fingerprints, minus the budget-bearing
 # project document: a top-up never makes a delivered film stale.
-FINAL_INPUTS = (
-    "brief.json",
-    "brand.json",
-    "work/storyboard.json",
-    "work/assets.json",
-    "work/edit.json",
-    "work/graphics-spec.json",
-    "work/lyrics.json",
-    "work/events.json",
-)
-
-
 def _final_state(root: Path) -> str | None:
-    """Cheap library signal for Film: ``done``, ``changed`` or ``None``.
+    """Library signal for Film: ``done``, ``changed`` or ``None``.
 
     Only a stamped, verified, delivery-ready final counts; a movie named
     ``*-final-*`` without that report (an older compositor's output) does not.
-    The movie bytes are not re-hashed here; Film's export list stays the
-    authoritative check.
+    Whether it is still current is the same question Publish asks, so the two
+    never disagree: the film's inputs and the renderer's revision are compared
+    by hash, not by clock. The movie bytes are not re-hashed here; Film's
+    export list stays the authoritative check.
     """
-    inputs = _newest([root / name for name in FINAL_INPUTS])
+    from mp3_to_videoclip.domain.exports import render_currency
+
     state = None
     for report_path in (root / "renders").glob("*-final-*.json"):
         report = read_optional(report_path)
@@ -145,7 +136,11 @@ def _final_state(root: Path) -> str | None:
             and report_path.with_suffix(".mp4").is_file()
         ):
             continue
-        if _mtime(report_path) + 1 >= inputs:
+        try:
+            current, _reason = render_currency(root, report, "final")
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if current:
             return "done"
         state = "changed"
     return state
