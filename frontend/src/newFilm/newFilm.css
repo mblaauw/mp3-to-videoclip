@@ -10,7 +10,7 @@
 
 .new-film {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   align-items: start;
   color: var(--ink);
 }
@@ -430,24 +430,49 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The format's answers: each a fact, each changeable where it is shown. */
 .nf-facts {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s-1) var(--s-3);
+  gap: 4px;
   margin: var(--s-2) 0 0;
   padding-top: var(--s-3);
   border-top: 1px solid var(--line-soft);
   font-size: var(--t-13);
 }
 .nf-facts dt {
+  margin-top: var(--s-2);
   color: var(--muted);
+  font-size: var(--t-12);
+  font-weight: var(--w-medium);
+}
+.nf-facts dt:first-child {
+  margin-top: 0;
 }
 .nf-facts dd {
+  display: grid;
+  gap: 4px;
   margin: 0;
   color: var(--ink);
 }
-.nf-facts dd small {
+.nf-facts dd small,
+.nf-facts dd .nf-places small {
   color: var(--muted);
+  font-size: var(--t-12);
+  line-height: 1.4;
+}
+.nf-facts .nf-places {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.nf-facts .nf-segmented button {
+  padding: 4px 10px;
+  font-size: var(--t-12);
+}
+.nf-drop.compact {
+  padding: var(--s-3) var(--s-4);
 }
 
 .nf-actions {

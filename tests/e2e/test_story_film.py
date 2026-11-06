@@ -36,7 +36,7 @@ def test_new_film_offers_a_story_film_with_no_file(page: Page, studio):
     expect(create).to_be_disabled()
     page.get_by_role("button", name="Story film").click()
     expect(create).to_be_enabled()
-    expect(page.get_by_label("Structure")).to_have_value("five-beat-2m")
+    expect(page.get_by_role("complementary", name="At a glance")).to_contain_text("Five beats")
     create.click()
     expect(page.get_by_role("navigation", name="Stages").get_by_text("Script")).to_be_visible()
     expect(page.get_by_role("navigation", name="Stages").get_by_text("Track")).to_have_count(0)
