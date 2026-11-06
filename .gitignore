@@ -6,6 +6,7 @@ __pycache__/
 renderers/remotion/node_modules/
 renderers/remotion/.cache/
 projects/
+library/
 studio/
 backups/
 style-tests/

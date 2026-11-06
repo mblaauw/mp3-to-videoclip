@@ -118,7 +118,8 @@ export function modelsFor(
   );
 }
 
-const ROLES = ["writer", "editor", "critic", "narrator"] as const;
+// The roles that answer; the narrator is a voice, and the voice carries its model.
+const ROLES = ["writer", "editor", "critic"] as const;
 
 /** Each role's recommended provider and model. Everything else in a role is kept. */
 export function recommendedRoles(catalog: Catalog): Record<string, unknown> {

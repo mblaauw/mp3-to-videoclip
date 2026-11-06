@@ -95,14 +95,6 @@ export function RolesTab() {
           );
         })}
       </Section>
-      <Section title="Narrator" note={catalog.notes.narrator}>
-        <ChoiceRow
-          path="roles.narrator.model"
-          label="Narrator model"
-          options={modelOptions(modelsFor(catalog, ["speech"]))}
-          extra={<span className="settings-price">{priceWords(catalog.models.find((m) => m.id === roles.narrator.model))}</span>}
-        />
-      </Section>
     </>
   );
 }
@@ -137,6 +129,8 @@ export function VoicesTab() {
   const { catalog, settings, save } = usePanel();
   const voices = settings.voices;
   const offered = catalog.voices.filter((voice) => voice.provider === voices.provider);
+  const chosen = offered.find((voice) => voice.id === voices.default_voice);
+  const voiceModel = catalog.models.find((model) => model.id === chosen?.model);
   const providers = catalog.providers
     .filter((provider) => provider.unlocks.includes("voices"))
     .map((provider) => ({ value: provider.id, label: provider.label }));
@@ -161,6 +155,9 @@ export function VoicesTab() {
         options={offered.map((voice) => ({ value: voice.id, label: `${voice.label} (${voice.id})` }))}
         extra={<Sample voice={voices.default_voice} />}
       />
+      <Row label="Spoken by" hint={`The voice's own model. ${priceWords(voiceModel)}.`}>
+        <output>{voiceModel ? voiceModel.label || voiceModel.id : chosen?.model || "The provider's model"}</output>
+      </Row>
       <Row label="Favourites" hint="Offered first when a film chooses a voice.">
         <span className="settings-chips" role="group" aria-label="Favourite voices">
           {offered.map((voice) => (
@@ -184,38 +181,59 @@ export function PicturesTab() {
   const pictures = settings.pictures;
   const looks = settings.style_presets ?? [];
   const images = modelsFor(catalog, ["image"]);
-  const stills = catalog.models.find((model) => model.recommended.includes("pictures"));
+  const upscalers = modelsFor(catalog, ["upscale"]);
+  const recommendedUpscaler =
+    upscalers.find((model) => model.recommended.includes("upscaler")) ?? upscalers[0];
+  const chosenUpscaler = upscalers.find((model) => model.id === pictures.upscaler);
+  const oneStillModel = images.length <= 1;
   return (
     <>
       <Section
-        title="Models"
-        note={catalog.notes.pictures}
-        action={<Reset patch={recommendedPictures(looks.map((look) => look.id))} />}
+        title="Stills"
+        note={
+          oneStillModel
+            ? "Every look makes its stills with the one still model the catalogue lists. A film keeps the model it was made with."
+            : catalog.notes.pictures
+        }
+        action={oneStillModel ? undefined : <Reset patch={recommendedPictures(looks.map((look) => look.id))} />}
       >
-        {looks.map((look) => (
-          <ChoiceRow
-            key={look.id}
-            path={`pictures.image_model_by_look.${look.id}`}
-            label={`Stills for ${look.name}`}
-            options={modelOptions(images, "The look's own model")}
-            extra={
-              <span className="settings-price">
-                {priceWords(images.find((m) => m.id === pictures.image_model_by_look[look.id]) ?? stills)}
-              </span>
-            }
-          />
-        ))}
+        {oneStillModel ? (
+          <Row label="Still model" hint={priceWords(images[0])}>
+            <output>{images[0] ? images[0].label || images[0].id : "None listed"}</output>
+          </Row>
+        ) : (
+          looks.map((look) => {
+            const own = images.find((model) => model.id === look.model);
+            const chosen = images.find((model) => model.id === pictures.image_model_by_look[look.id]);
+            return (
+              <ChoiceRow
+                key={look.id}
+                path={`pictures.image_model_by_look.${look.id}`}
+                label={`Stills for ${look.name}`}
+                options={modelOptions(images, own ? `${own.label || own.id} (the look's own)` : "The look's own model")}
+                extra={<span className="settings-price">{priceWords(chosen ?? own)}</span>}
+              />
+            );
+          })
+        )}
+      </Section>
+      <Section title="Clips and upscaling" note="Used as soon as they are chosen.">
         <ChoiceRow
           path="pictures.video_model"
           label="Video model"
-          options={modelOptions(modelsFor(catalog, ["video"]), "None yet")}
+          hint="A clip starts from a shot's still. Clips need one."
+          options={modelOptions(modelsFor(catalog, ["video"]), "Not chosen")}
           extra={<span className="settings-price">{priceWords(catalog.models.find((m) => m.id === pictures.video_model))}</span>}
         />
         <ChoiceRow
           path="pictures.upscaler"
           label="Upscaler"
-          options={modelOptions(modelsFor(catalog, ["upscale"]), "None yet")}
-          extra={<span className="settings-price">{priceWords(catalog.models.find((m) => m.id === pictures.upscaler))}</span>}
+          hint="Makes a chosen still larger before the film is rendered."
+          options={modelOptions(
+            upscalers,
+            recommendedUpscaler ? `${recommendedUpscaler.label || recommendedUpscaler.id} (recommended)` : "None listed",
+          )}
+          extra={<span className="settings-price">{priceWords(chosenUpscaler ?? recommendedUpscaler)}</span>}
         />
       </Section>
       <Section title="What is set aside before buying">
@@ -230,7 +248,7 @@ export function PicturesTab() {
         <NumberRow
           path="pictures.reserve_usd_per_clip_second"
           label="Reserve per clip second"
-          hint="Stored for when clips arrive."
+          hint="What a clip's quote sets aside for each second; the journal keeps what was charged."
           min="0.01"
           max="10"
           step="0.01"
