@@ -102,6 +102,22 @@ def test_three_thumbnails_are_drawn_beside_the_final_and_one_is_chosen(film):
     assert set(delivery.listing(final)) >= {row["name"] for row in rows}
 
 
+def test_a_new_film_starts_on_the_presets_settings_name(film, tmp_path, monkeypatch):
+    from mp3_to_videoclip import config
+
+    monkeypatch.setattr(config, "settings_path", lambda: tmp_path / "settings.toml")
+    root = film
+    assert publish.read(root)["presets"] == ["youtube"]
+    config.save_settings(config.Settings(new_films={"presets": ["shorts", "tiktok", "shorts"]}))
+    assert publish.read(root)["presets"] == ["shorts"]
+    # An empty or unknown choice falls back; a film that chose keeps its choice.
+    config.save_settings(config.Settings(new_films={"presets": ["tiktok"]}))
+    assert publish.read(root)["presets"] == ["youtube"]
+    publish.set_presets(root, ["square"])
+    config.save_settings(config.Settings(new_films={"presets": ["reels"]}))
+    assert publish.read(root)["presets"] == ["square"]
+
+
 def test_presets_and_the_plan_name_what_is_missing(film):
     root = film
     assert publish.plan(root, None)[0]["missing"] == ["a verified final"]

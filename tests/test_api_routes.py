@@ -749,6 +749,28 @@ def test_settings_catalog_says_what_each_entry_needs(monkeypatch, tmp_path):
     assert rows["openai"]["ready"]["key"] is False
     assert "elevenlabs" not in rows
     assert "renderer" in body["computer"]
+    # Where things are, read-only: the productions folder and the library beside it.
+    assert body["folders"]["projects"] == {"path": str(tmp_path.resolve()), "films": 0}
+    assert body["folders"]["library"] == {
+        "path": str((tmp_path / "_library").resolve()),
+        "entries": 0,
+        "series": 0,
+    }
+
+
+def test_settings_say_where_they_are_saved_and_where_a_film_goes(monkeypatch, tmp_path):
+    monkeypatch.setattr("mp3_to_videoclip.api.settings.effective_settings", lambda: Settings())
+    with api_client(tmp_path) as client:
+        body = client.get("/api/settings").json()
+    assert body["file"].endswith("settings.toml")
+    assert body["new_films"]["presets"] == ["youtube"]
+    assert [row["id"] for row in body["publish_presets"]] == [
+        "youtube",
+        "shorts",
+        "reels",
+        "square",
+    ]
+    assert body["sounds"]["music_model"] == "ace-step-v1-5-xl-turbo"
 
 
 def test_settings_provider_and_voice_tests_spend_nothing(monkeypatch, tmp_path):

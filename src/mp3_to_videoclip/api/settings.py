@@ -16,6 +16,7 @@ from mp3_to_videoclip.config import (
     effective_settings,
     merge,
     save_settings,
+    settings_path,
 )
 from mp3_to_videoclip.director.routing import route_for
 
@@ -35,7 +36,7 @@ SECRETS = (
 NOTES = {
     "direct_path": "Your own endpoint: any address that speaks OpenAI's chat format.",
     "thinking": "Thinking level is stored but not used yet. Tokens per turn stops a turn at that many.",
-    "pictures": "New films still use each look's own model; these choices are stored for later.",
+    "pictures": "Stills still use each look's own model; a choice here is stored for later. The video model and the upscaler are used as soon as they are chosen.",
     "narrator": "A story film starts with this voice and can choose another on its Script stage.",
     "sounds": "A cue on the Sound stage is made with these; its price is shown before it is bought.",
 }
@@ -55,7 +56,7 @@ def _read(value: dict, path: tuple[str, ...]) -> str:
 
 def _public(settings: Settings) -> dict:
     """Never send a secret back to the browser; expose presence instead."""
-    from mp3_to_videoclip import kinds, shotkinds, signature, structures, styles
+    from mp3_to_videoclip import kinds, publish, shotkinds, signature, structures, styles
 
     value = settings.model_dump()
     has = {}
@@ -76,6 +77,8 @@ def _public(settings: Settings) -> dict:
     }
     value["has_runware_api_key"] = bool(settings.runware_api_key)
     value["notes"] = NOTES
+    value["file"] = str(settings_path())
+    value["publish_presets"] = publish.preset_rows()
     # What a new film of each kind starts with, so the form opens on the same answer.
     value["default_titles"] = {
         kind["id"]: signature.default_package(settings, kind["id"]) for kind in kinds.public_kinds()
@@ -154,16 +157,38 @@ async def test_settings(payload: dict):
     raise HTTPException(status_code=400, detail="kind must be runware, provider or voice")
 
 
+def _folders(projects_dir: Path, library_dir: Path) -> dict:
+    """Where the productions and the world library are, with what each holds. Read-only."""
+    from mp3_to_videoclip import library
+
+    films = (
+        sum(1 for path in projects_dir.iterdir() if (path / "project.json").is_file())
+        if projects_dir.is_dir()
+        else 0
+    )
+    return {
+        "projects": {"path": str(projects_dir), "films": films},
+        "library": {
+            "path": str(library_dir),
+            "entries": len(library.entries(library_dir)),
+            "series": len(library.list_series(library_dir)),
+        },
+    }
+
+
 @router.get("/catalog")
-async def get_catalog():
+async def get_catalog(request: Request):
     from mp3_to_videoclip import catalog, depth, lyric_tools, setup
+    from mp3_to_videoclip.api.library import library_dir_for
 
     view = await asyncio.to_thread(catalog.public_view, effective_settings())
+    folders = await asyncio.to_thread(_folders, _projects_dir(request), library_dir_for(request))
     return {
         **view,
         "computer": setup.status(),
         "lyric_tools": lyric_tools.status(),
         "depth_tools": depth.status(),
+        "folders": folders,
         "notes": NOTES,
     }
 

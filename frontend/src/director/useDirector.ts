@@ -7,7 +7,7 @@ import { type FilmUsage, type TurnUsage } from "../shell/modelCost";
 import type { Stage } from "../shell/nextStep";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { type ToolItem, UNDO_ARTIFACT, contentText } from "./ToolRows";
-import { type Role, type ChatItem, type StreamEvent, type DirectorPrompt, modelLabel } from "./chat";
+import { type Role, type ChatItem, type StreamEvent, type DirectorPrompt, modelLabel, roleForStage } from "./chat";
 
 export type DirectorProps = {
   slug: string;
@@ -29,9 +29,7 @@ export function useDirector({
   onBusyChange,
 }: DirectorProps) {
   const player = usePlayerClock();
-  const defaultRole: Role = ["story", "storyboard", "images"].includes(stage)
-    ? "writer"
-    : "editor";
+  const defaultRole: Role = roleForStage(stage);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

@@ -21,9 +21,13 @@ def _projects_dir(request: Request) -> Path:
     return Path(getattr(request.app.state, "projects_dir", "projects"))
 
 
-def _lib(request: Request) -> Path:
+def library_dir_for(request: Request) -> Path:
+    """Where this app's world library is: the flag, the environment, or beside the productions."""
     named = getattr(request.app.state, "library_dir", None)
     return Path(named) if named else library.library_dir(_projects_dir(request))
+
+
+_lib = library_dir_for
 
 
 def _public(entry: dict) -> dict:

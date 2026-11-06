@@ -113,6 +113,8 @@ class NewFilms(BaseModel):
     depth: float = Field(default=0.6, ge=0, le=1)
     signature_package: bool = True
     credit_roles: list[str] = ["director", "music", "visuals"]
+    #: Where a new film goes on Publish, until the film chooses for itself.
+    presets: list[str] = ["youtube"]
     brand: Brand = Brand()
 
 

@@ -7,6 +7,7 @@ import {
   priceWords,
   recommendedPictures,
   recommendedRoles,
+  recommendedSounds,
   recommendedVoices,
   type CatalogModel,
 } from "./settingsModel";
@@ -35,8 +36,18 @@ const THINKING: Option[] = [
 ];
 
 const ROLES = [
-  { id: "writer", label: "Writer", hint: "Story, storyboard and images.", needs: ["text"] },
-  { id: "editor", label: "Editor", hint: "Track and film, the cut.", needs: ["text"] },
+  {
+    id: "writer",
+    label: "Writer",
+    hint: "Story, script, storyboard, images, the sound cues and the release copy.",
+    needs: ["text"],
+  },
+  {
+    id: "editor",
+    label: "Editor",
+    hint: "Track and film: the cut, and notes on every other stage.",
+    needs: ["text"],
+  },
   { id: "critic", label: "Critic", hint: "Reviews a cut, so it must be able to see pictures.", needs: ["text", "vision"] },
 ];
 
@@ -220,6 +231,43 @@ export function PicturesTab() {
           path="pictures.reserve_usd_per_clip_second"
           label="Reserve per clip second"
           hint="Stored for when clips arrive."
+          min="0.01"
+          max="10"
+          step="0.01"
+        />
+      </Section>
+    </>
+  );
+}
+
+export function SoundsTab() {
+  const { catalog, settings } = usePanel();
+  const sounds = settings.sounds;
+  const beds = modelsFor(catalog, ["music"]);
+  const effects = modelsFor(catalog, ["effects"]);
+  return (
+    <>
+      <Section title="Models" note={catalog.notes.sounds} action={<Reset patch={recommendedSounds(catalog)} />}>
+        <ChoiceRow
+          path="sounds.music_model"
+          label="Music model"
+          hint="A bed or a piece of music under the film. Length follows the cue."
+          options={modelOptions(beds)}
+          extra={<span className="settings-price">{priceWords(beds.find((m) => m.id === sounds.music_model))}</span>}
+        />
+        <ChoiceRow
+          path="sounds.effects_model"
+          label="Effects model"
+          hint="A sound at a frame or a line: a door, rain, a room."
+          options={modelOptions(effects)}
+          extra={<span className="settings-price">{priceWords(effects.find((m) => m.id === sounds.effects_model))}</span>}
+        />
+      </Section>
+      <Section title="What is set aside before buying">
+        <NumberRow
+          path="sounds.reserve_usd_per_cue"
+          label="Reserve per cue"
+          hint="Only for a model with no catalogue price. A priced model reserves twice its quote, never under a cent."
           min="0.01"
           max="10"
           step="0.01"
