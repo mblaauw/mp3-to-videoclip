@@ -62,7 +62,19 @@ class ProjectSummary(BaseModel):
     sound_cues: int = 0
     sound_sounding: int = 0
     series: dict | None = None
+    released: bool = False
     updated_at: str | None = None
+
+
+def _released(root: Path) -> bool:
+    """Whether a release was recorded for the final that is still current."""
+    from mp3_to_videoclip import publish
+
+    value = publish.read(root).get("released")
+    if not isinstance(value, dict):
+        return False
+    final = publish.current_final(root)
+    return bool(final and value.get("final") == final.name)
 
 
 def _sound_counts(root: Path) -> dict:
@@ -358,6 +370,7 @@ def _film_summary(entry: Path, parked: set[str], result: list[ProjectSummary]) -
                 film_audio_url=_film_audio_url(entry, project),
                 **_sound_counts(entry),
                 series=project.series.model_dump() if project.series else None,
+                released=_released(entry),
                 updated_at=_updated_at(
                     entry,
                     [

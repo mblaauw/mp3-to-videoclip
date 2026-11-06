@@ -71,15 +71,13 @@ TOOLS: list[dict] = [
     _tool("get_storyboard", "Read the storyboard.", {"slug": {"type": "string"}}, ["slug"]),
     _tool(
         "get_edit",
-        "Read the cut, up to 30 shots at a time. The first page also has its sections, "
-        "grade and report; follow next_first for the rest.",
+        "Read the cut, 30 shots a page; the first page has sections, grade and report; follow next_first.",
         {"slug": {"type": "string"}, "first": {"type": "integer"}, "count": {"type": "integer"}},
         ["slug"],
     ),
     _tool(
         "get_film_frames",
-        "Look at the newest render as delivered, with grade, crops and type: up to eight "
-        "film frames per call, at the project's frames per second.",
+        "Look at the newest render as delivered, with grade, crops and type: up to eight film frames per call.",
         {
             "slug": {"type": "string"},
             "frames": {"type": "array", "items": {"type": "integer"}, "maxItems": 8},
@@ -88,9 +86,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "save_critique",
-        "Save the Critic's review of the newest render: a verdict and up to twelve notes, "
-        "each with severity (must_fix, should_fix or consider), note, and optional shot_id, "
-        "frame and suggestion. Advice only.",
+        "Save the Critic's review of the newest render: a verdict and up to twelve notes with severity (must_fix, should_fix, consider), note, and optional shot_id, frame, suggestion. Advice only.",
         {
             "slug": {"type": "string"},
             "verdict": {"type": "string"},
@@ -110,8 +106,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "update_voice_lines",
-        "Set the spoken voiceover lines: id, text, start_frame, optional gain_db, ordered by "
-        "start_frame. Replaces the list; the user's words exactly. Studio makes the audio.",
+        "Set the voiceover lines: id, text, start_frame, optional gain_db, in order. Replaces the list; the user's words exactly. Studio makes the audio.",
         {
             "slug": {"type": "string"},
             "lines": {"type": "array", "items": {"type": "object"}},
@@ -126,8 +121,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "get_cut_material",
-        "Read what the music and words offer to cut on, in film frames: named sections, sung "
-        "line starts, strong changes and beat estimates.",
+        "Read what the music and words offer to cut on, in film frames: sections, sung line starts, changes, beats.",
         {"slug": {"type": "string"}},
         ["slug"],
     ),
@@ -139,8 +133,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "set_captions",
-        "Choose which timed sung lines are drawn as captions: mode off, all or named, or a "
-        "list of line indexes. Saves the cut. SRT and VTT always carry every timed line.",
+        "Choose the timed lines drawn as captions: mode off, all or named, or line indexes. Saves the cut.",
         {
             "slug": {"type": "string"},
             "mode": {"type": "string", "enum": ["off", "all", "named"]},
@@ -150,8 +143,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "get_song_map",
-        "Read the song map in film frames: tempo with its octave rival, key, bars, downbeats, "
-        "beats, sections with energy words, density targets and first sung lines, and changes.",
+        "Read the song map in film frames: tempo and its octave rival, key, bars, downbeats, beats, sections with energy, density targets, first sung lines, changes.",
         {"slug": {"type": "string"}},
         ["slug"],
     ),
@@ -223,8 +215,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "sort_idea",
-        "Say which of the user's own sentences are story, style, rules or things to avoid, word for "
-        "word: anything not in the paste, used twice or left out is refused.",
+        "Sort the user's own sentences into story, style, rules or avoid, word for word: "
+        "anything not in the paste, used twice or left out is refused.",
         {
             "slug": {"type": "string"},
             "story": {"type": "array", "items": {"type": "string"}},
@@ -273,8 +265,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "propose_motion",
-        "Name the few shots that earn a clip, each with why. Replaces the list and spends "
-        "nothing: only the owner buys a clip, on Images.",
+        "Name the few shots that earn a clip, each with why. Replaces the list; only the "
+        "owner buys a clip.",
         {
             "slug": {"type": "string"},
             "shots": {
@@ -290,8 +282,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "propose_alternatives",
-        "Offer the owner two or three versions of one field and let them choose. Nothing is "
-        "written. Use it when the choice is theirs; then stop and wait.",
+        "Offer the owner two or three versions of one field and let them choose; nothing is written. Then stop and wait.",
         {
             "slug": {"type": "string"},
             "target": {"type": "string", "description": "Such as shots.s004.image_prompt."},
@@ -301,14 +292,24 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "write_sound_cues",
-        "Replace the sound cues: id, kind (music, ambience, effect), prompt, start and end "
-        "({frame} or {line}), gain_db, why. Only the owner buys a sound.",
+        "Replace the cues: id, kind (music, ambience, effect), prompt, start and end as {frame} or {line}, gain_db, why. Only the owner buys.",
         {"slug": {"type": "string"}, "cues": {"type": "array", "items": {"type": "object"}}},
         ["slug", "cues"],
     ),
     _tool(
+        "write_publish_copy",
+        "Write the release copy: one to three titles, a description, tags, from the brief and script only.",
+        {
+            "slug": {"type": "string"},
+            "titles": {"type": "array", "items": {"type": "string"}},
+            "description": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+        },
+        ["slug", "titles", "description"],
+    ),
+    _tool(
         "batch_update_prompts",
-        "Change many shots' image prompts as one change, validated as a whole board.",
+        "Change many shots' image prompts as one change.",
         {
             "slug": {"type": "string"},
             "changes": {
@@ -324,7 +325,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "describe_images",
-        "One or two plain sentences per still, from your vision model; cached per still.",
+        "One or two plain sentences per still, from your vision model, cached.",
         {
             "slug": {"type": "string"},
             "shot_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
@@ -333,7 +334,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "compare_versions",
-        "Two versions of one shot as thumbnails, with what differed in how they were made.",
+        "Two versions of one shot as thumbnails, and what differed.",
         {
             "slug": {"type": "string"},
             "shot_id": {"type": "string"},
@@ -359,8 +360,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "write_script",
-        "Write a story film's whole script. After approval it needs revising true, sent only "
-        "when the owner asked. Every invented fact is a claim with invented true.",
+        "Write the whole script. After approval it needs revising true, sent only when the "
+        "owner asked. Every invented fact is a claim with invented true.",
         {
             "slug": {"type": "string"},
             "structure": {"type": "string"},
@@ -397,8 +398,8 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "update_lines",
-        "Change named lines of a story film's script. A changed line's take goes stale, and "
-        "re-recording it costs money, so say which ones you changed.",
+        "Change named lines of the script. A changed line's take goes stale and costs money "
+        "to redo, so say which.",
         {
             "slug": {"type": "string"},
             "changes": {"type": "array", "items": {"type": "object"}},
@@ -408,16 +409,14 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "get_narration",
-        "Read a story film's takes, its timing, and each beat's budget against the real takes. "
-        "Nothing here spends: the owner records from the Script stage.",
+        "Read a story film's takes, their timing and each beat's budget against them. Nothing here spends.",
         {"slug": {"type": "string"}},
         ["slug"],
     ),
     _tool(
         "update_brief",
-        "Patch the brief with an RFC 7396 JSON merge. Omit fields you do not change; "
-        "direction, style and treatment cannot be blanked. Returns the new brief. "
-        "Use set_creative_profile for characters, scenes, image rules, avoid and look.",
+        "Merge-patch the brief (RFC 7396); omit what you keep; direction, style and treatment "
+        "cannot be blanked. Cast, places, rules and look go through set_creative_profile.",
         {"slug": {"type": "string"}, "patch": {"type": "object"}},
         ["slug", "patch"],
     ),
@@ -560,8 +559,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "write_storyboard",
-        "Replace the whole shot list, adding, removing or retiming freely. Send every shot; they "
-        "must cover the film exactly. Refused once a cut exists, or if it drops paid stills.",
+        "Replace the whole shot list; send every shot, covering the film exactly. Refused once a cut exists, or if it drops paid stills.",
         {"slug": {"type": "string"}, "shots": {"type": "array", "items": {"type": "object"}}},
         ["slug", "shots"],
     ),
@@ -582,8 +580,7 @@ TOOLS: list[dict] = [
     ),
     _tool(
         "generate_images",
-        "Price a paid image batch for the selected shots. It buys nothing: the owner buys it "
-        "with the button this puts in the conversation.",
+        "Price a paid image batch for the selected shots. It buys nothing: the owner buys it with the button this shows.",
         {
             "slug": {"type": "string"},
             "shot_ids": {"type": "array", "items": {"type": "string"}},
@@ -976,6 +973,21 @@ def _tool_write_sound_cues(name, arguments, root, runner, projects_dir):
     return {"cues": [cue["id"] for cue in spec["cues"]], "note": "Only the owner buys a sound."}
 
 
+def _tool_write_publish_copy(name, arguments, root, runner, projects_dir):
+    from .. import publish
+
+    saved = publish.set_copy(
+        root,
+        {
+            "titles": arguments.get("titles") or [],
+            "description": arguments.get("description") or "",
+            "tags": arguments.get("tags") or [],
+        },
+        by="writer",
+    )
+    return {"saved": True, "titles": saved["copy"]["titles"], "tags": len(saved["copy"]["tags"])}
+
+
 def _tool_batch_update_prompts(name, arguments, root, runner, projects_dir):
     return _batch_prompts(root, arguments.get("changes") or [])
 
@@ -1135,6 +1147,7 @@ HANDLERS = {
     "propose_alternatives": _tool_propose_alternatives,
     "propose_motion": _tool_propose_motion,
     "write_sound_cues": _tool_write_sound_cues,
+    "write_publish_copy": _tool_write_publish_copy,
     "batch_update_prompts": _tool_batch_update_prompts,
     "compare_versions": _tool_compare_versions,
     "get_preview_frames": _tool_get_preview_frames,

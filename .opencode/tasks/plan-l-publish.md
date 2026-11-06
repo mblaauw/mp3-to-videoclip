@@ -103,3 +103,21 @@ Approval hashes, the preview checkbox flow, `delivery.make_package`, render rout
   the owner cannot reach by accident, not a proof. The record says so.
 - Thumbnail type over a busy frame can be hard to read; the band is darkened to a fixed
   contrast and the owner chooses among three.
+
+## Done, 5 Nov 2026
+
+Four commits on `film/phase-l-publish`, stacked on the library phase: `watched.py`;
+`publish.py`; the routes and the W7 task; the stage. Decisions D1 to D7 as written.
+
+**Proved:** 2 listening tests (seconds unioned and never forgotten, other bytes start over,
+98% rule, the live mix as its own media), 5 publish tests on a real small final (a link that
+is not the call to action's and a figure the brief never gave are refused, the last copy is
+kept in a history, three thumbnails at 1280×720 under 2 MB never rewritten, presets name what
+is missing and stop once the package exists, the release waits for the ear, the copy and the
+thumbnail and then writes a manifest, a paid task still out blocks it), 2 route and tool
+tests, 6 frontend tests, one browser test that draws the thumbnails and picks one.
+
+**Not proven:** playback coverage is what a browser reports; nobody checked a speaker. The
+Writer's copy has met no real model. The thumbnail's type is Inter, because the renderer's
+Fraunces and Bebas Neue are WOFF2, which Pillow cannot open; a TTF of either would let the
+thumbnail use the film's own face. No film has been marked released.

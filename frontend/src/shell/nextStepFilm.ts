@@ -176,7 +176,7 @@ export function filmStep(project: ProjectFacts, approvals: ApprovalMap, images: 
       tone: "done",
       title: "Final ready.",
       detail: "A verified final of the current cut is under Rendered files.",
-      actions: [],
+      actions: continueTo("publish", "Go to Publish"),
     };
   }
   if (onlyTheCutChanged(approvals, images)) {

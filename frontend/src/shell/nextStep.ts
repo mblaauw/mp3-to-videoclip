@@ -1,9 +1,9 @@
-import { DIFFICULTY_WORDS, trackStep, storyStep, scriptStep, storyboardStep, soundStep } from "./nextStepSteps.ts";
+import { DIFFICULTY_WORDS, trackStep, storyStep, scriptStep, storyboardStep, soundStep, publishStep } from "./nextStepSteps.ts";
 import { imagesStep, filmStep } from "./nextStepFilm.ts";
 
 /** One place for the sticky next-step copy and its single primary action. */
 
-export type Stage = "track" | "script" | "story" | "storyboard" | "images" | "sound" | "film";
+export type Stage = "track" | "script" | "story" | "storyboard" | "images" | "sound" | "film" | "publish";
 export type StageState = "done" | "you" | "changed" | "not_ready" | "running";
 export type NextTone = "done" | "you" | "changed" | "error";
 export type NextTarget =
@@ -58,6 +58,8 @@ export type ProjectFacts = {
   /** The Sound stage's cues, and how many of them have a sound. */
   sound_cues?: number;
   sound_sounding?: number;
+  /** The library knows a release was recorded for the current final. */
+  released?: boolean;
   /** Film knows a current titles review is waiting to be inspected. */
   titles_review_ready?: boolean;
   /** The Director can answer here. Unknown until settings load, so never assumed false. */
@@ -114,6 +116,7 @@ const ON_THIS_PAGE: Record<Stage, NextTarget> = {
   images: "pictures",
   sound: "director",
   film: "render",
+  publish: "director",
 };
 
 /** A next step never sends the owner to the page they are already on. */
@@ -141,6 +144,7 @@ function stepFor(
   if (stage === "storyboard") return storyboardStep(project, approvals);
   if (stage === "images") return imagesStep(project, approvals, images, budget);
   if (stage === "sound") return soundStep(project);
+  if (stage === "publish") return publishStep(project);
   return filmStep(project, approvals, images);
 }
 
