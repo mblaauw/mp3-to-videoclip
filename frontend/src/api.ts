@@ -894,7 +894,7 @@ export type SoundReport = {
   sounding: number;
   mixed: boolean;
   loudness: { lufs: number; true_peak_db: number } | null;
-  notes: { code: string; message: string; cue?: string; at?: number }[];
+  notes: { code: string; message: string; cue?: string; at?: number; end?: number }[];
 };
 
 export type SoundPayload = {
@@ -905,6 +905,8 @@ export type SoundPayload = {
   lines: { id: string; start: number; end: number }[];
   shots: { id: string; start: number; end: number; still: string | null }[];
   beats: { id: string; start: number; end: number }[];
+  /** Where someone speaks, in seconds: takes on a story film, placed lines on a song film. */
+  speech?: { start: number; end: number }[];
   models: { id: string; label: string; for: "music" | "effects"; price: { amount: string; unit: string } | null; price_note: string; chosen: boolean }[];
   report: SoundReport | null;
   suggestions: number;

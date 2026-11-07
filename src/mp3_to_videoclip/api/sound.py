@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from mp3_to_videoclip import catalog, sound
+from mp3_to_videoclip import audio, catalog, sound
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.api.errors import ApiError
@@ -67,6 +67,18 @@ def _stills(root: Path) -> dict[str, str]:
     return stills
 
 
+def _speech(root: Path, project) -> list[dict]:
+    """Where someone speaks, in seconds: the voice a cue ducks under, for the stage's map."""
+    try:
+        spans = sound.speech_spans(root, project)
+    except (OSError, ValueError):
+        return []
+    return [
+        {"start": round(first / audio.SAMPLE_RATE, 3), "end": round(last / audio.SAMPLE_RATE, 3)}
+        for first, last in spans
+    ]
+
+
 def _payload(root: Path, *, measure: bool = False) -> dict:
     project = P.load_project(root, verify_source=False)
     spec = sound.read(root)
@@ -98,6 +110,7 @@ def _payload(root: Path, *, measure: bool = False) -> dict:
             {"id": beat_id, "start": start, "end": end}
             for beat_id, (start, end) in found["beats"].items()
         ],  # fmt: skip
+        "speech": _speech(root, project),
         "models": _models(),
         "report": sound.report(root, project) if measure else None,
         "suggestions": len(sound.suggest(root)),
