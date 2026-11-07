@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type Budget, type Job, type ProjectSummary } from "../api";
+import { OPEN_BUDGET } from "../api/errorAction";
 import { useJobs } from "../jobs/store";
 import { toast } from "../toast";
 import { Button, Pill, StatusDot, type PillTone, type StatusTone } from "../ui";
@@ -77,10 +78,13 @@ function StuckTask({
     try {
       const result = await api.recoverTask(slug, task.id);
       if (result.recovered) onChanged();
+      if (result.failed) setSettling(true);
       setState(
         result.recovered
           ? "It came back."
-          : result.answered
+          : result.failed
+            ? "The provider says it failed and won't come back. Find it on your provider's usage page, then record what it billed."
+            : result.answered
             ? "Still being made. Check again later."
             : "The provider isn't answering. Check again later.",
       );
@@ -377,6 +381,12 @@ export function TopBar({
       job.kind === "analysis" &&
       ["queued", "running", "stopping"].includes(job.status),
   );
+
+  useEffect(() => {
+    const open = () => setPop("budget");
+    window.addEventListener(OPEN_BUDGET, open);
+    return () => window.removeEventListener(OPEN_BUDGET, open);
+  }, []);
 
   useEffect(() => {
     if (!pop) return;

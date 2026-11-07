@@ -63,6 +63,7 @@ _MISSING = {
 
 def engine_error(exc: Exception) -> ApiError:
     """The one mapping from an engine refusal to what the API answers."""
+    from mp3_to_videoclip.budget import Unreconciled
     from mp3_to_videoclip.providers import MissingProviderKey, ProviderError
     from mp3_to_videoclip.storage import ProjectBusy, RevisionConflict
 
@@ -74,6 +75,8 @@ def engine_error(exc: Exception) -> ApiError:
         return ApiError(409, str(exc), "project_busy")
     if isinstance(exc, RevisionConflict):
         return ApiError(409, str(exc), "conflict")
+    if isinstance(exc, Unreconciled):
+        return ApiError(409, str(exc), exc.code)
     if isinstance(exc, MissingProviderKey):
         return ApiError(409, str(exc), exc.code)
     if isinstance(exc, ProviderError):

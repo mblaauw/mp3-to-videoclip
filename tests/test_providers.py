@@ -251,6 +251,29 @@ def test_submit_upstream_unsafe_error_code_is_normalised():
     assert excinfo.value.code == "provider_error"
 
 
+def test_a_provider_timeout_answered_with_504_says_the_task_ended():
+    uuid = "220e9503-5a86-4c8f-9cc3-7b4a96e2a503"
+
+    def handler(_):
+        ended = {"code": "failedProviderTimeout", "message": f"timeout {KEY}", "taskUUID": uuid, "status": "error"}  # fmt: skip
+        return httpx.Response(504, json={"data": [], "errors": [ended]})
+
+    with pytest.raises(ProviderError) as excinfo:
+        RunwareClient(KEY, client_for(handler)).recover_video(uuid)
+    assert excinfo.value.code == "task_failed" and KEY not in str(excinfo.value)
+
+
+def test_a_bare_504_is_still_silence():
+    def handler(_):
+        return httpx.Response(504, text="gateway timeout")
+
+    with pytest.raises(ProviderError) as excinfo:
+        RunwareClient(KEY, client_for(handler)).recover_video(
+            "220e9503-5a86-4c8f-9cc3-7b4a96e2a503"
+        )
+    assert excinfo.value.code == "http_error"
+
+
 def test_secret_shaped_error_token_is_not_echoed():
     def handler(_):
         return httpx.Response(200, json={"errors": [{"code": KEY}]})

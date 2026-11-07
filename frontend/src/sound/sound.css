@@ -50,6 +50,24 @@
   align-items: center;
   gap: var(--s-2);
 }
+.sound-make-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.sound-make .ui-state {
+  flex-basis: 100%;
+}
+.sound-refusal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-13);
+  line-height: 1.45;
+}
 
 /* The map: a label column and the film's length, one lane per kind of sound. */
 .sound-map {
@@ -420,6 +438,15 @@
   align-items: center;
   gap: var(--s-3);
   padding: 0 var(--s-3);
+}
+/* A price to confirm or a refusal to read takes the row's full width, under the cue. */
+.cue-row:has(.sound-make.quoted, .sound-make .ui-state) .cue-row-side {
+  grid-column: 1 / -1;
+  padding: 0 var(--s-3) var(--s-3) var(--s-4);
+}
+.cue-row-top b,
+.cue-row-when {
+  white-space: nowrap;
 }
 .cue-row-level {
   color: var(--muted);

@@ -31,6 +31,8 @@ const COPY: Record<string, string> = {
   analysis_missing: "The song has not been analyzed yet.",
   artifact_missing: "That file is not there yet.",
   quote_missing: "That quote is no longer there. Estimate again.",
+  unresolved_task:
+    "A paid task hasn't come back, so nothing new can be bought on this film. Open the budget to check it or record what it billed.",
   service_unavailable: "Studio is still starting up. Try again in a moment.",
   // What a provider answered. Nothing was charged for a refused request.
   network_error: "The provider could not be reached. Check the connection and try again.",
@@ -46,7 +48,10 @@ const COPY: Record<string, string> = {
   upstream_error: "The provider answered with an error.",
 };
 
-export type ErrorAction = { label: string; settings: true } | { label: string; stage: string };
+export type ErrorAction =
+  | { label: string; settings: true }
+  | { label: string; budget: true }
+  | { label: string; stage: string };
 
 const SETTINGS_CODES = new Set([
   "no_llm_key",
@@ -71,6 +76,7 @@ export function errorCopy(code: string | null | undefined): string | undefined {
 export function errorAction(code: string | null | undefined): ErrorAction | undefined {
   if (!code) return undefined;
   if (SETTINGS_CODES.has(code)) return { label: "Open settings", settings: true };
+  if (code === "unresolved_task") return { label: "Open the budget", budget: true };
   return STAGE_CODES[code];
 }
 

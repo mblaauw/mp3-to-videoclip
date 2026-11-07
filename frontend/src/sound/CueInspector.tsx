@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type SoundPayload } from "../api";
+import { OPEN_BUDGET } from "../api/errorAction";
+import { ApiError, errorAction } from "../api/errors";
 import { notifyProjectChanged } from "../shell/projectEvents";
 import { Button, ErrorState } from "../ui";
 import { CloseIcon, PauseIcon, PlayIcon } from "../ui/icons";
@@ -72,45 +74,70 @@ export function PlayButton({ playing, label, onClick }: { playing: boolean; labe
   );
 }
 
-/** Two clicks: first the price, then the purchase. */
-export function Make({ slug, cueIds, label, variant = "default" }: { slug: string; cueIds: string[]; label: string; variant?: "default" | "primary" | "quiet" }) {
+type Problem = { message: string; code?: string; fault: boolean };
+
+function problemOf(caught: unknown): Problem {
+  if (caught instanceof ApiError) return { message: caught.message, code: caught.code, fault: caught.status >= 500 };
+  return { message: caught instanceof Error ? caught.message : String(caught), fault: true };
+}
+
+/** A refusal is a sentence with its one way out; only a fault is "something went wrong". */
+function MakeProblem({ problem, what }: { problem: Problem; what: string }) {
+  if (problem.fault) return <ErrorState what={what} error={problem.message} compact />;
+  const action = errorAction(problem.code);
+  return (
+    <p className="ui-state error compact sound-refusal" role="alert">
+      {problem.message}
+      {action && "budget" in action && (
+        <Button size="small" variant="quiet" onClick={() => window.dispatchEvent(new Event(OPEN_BUDGET))}>
+          {action.label}
+        </Button>
+      )}
+    </p>
+  );
+}
+
+/** Two clicks: first the price, then the purchase. `blocked` says why it cannot be priced yet. */
+export function Make({ slug, cueIds, label, variant = "default", blocked, prepare }: { slug: string; cueIds: string[]; label: string; variant?: "default" | "primary" | "quiet"; blocked?: string; prepare?: () => Promise<void> }) {
   const [quote, setQuote] = useState<{ id: string; price: string; count: number; model: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const run = async (step: () => Promise<void>) => {
     setBusy(true);
-    setError(null);
+    setProblem(null);
     try {
       await step();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setProblem(problemOf(caught));
     } finally {
       setBusy(false);
     }
   };
   if (quote) {
     return (
-      <span className="sound-make">
-        <Button
-          size="small"
-          variant="primary"
-          disabled={busy}
-          onClick={() =>
-            void run(async () => {
-              const started = await api.generateSound(slug, quote.id);
-              if (started.needs_budget) throw new Error("The budget has no room for this.");
-              setQuote(null);
-              notifyProjectChanged({ slug });
-            })
-          }
-        >
-          Make {quote.count} · {dollars(quote.price)}
-        </Button>
-        <Button size="small" variant="quiet" disabled={busy} onClick={() => setQuote(null)}>
-          Not now
-        </Button>
+      <span className="sound-make quoted">
+        <span className="sound-make-buttons">
+          <Button
+            size="small"
+            variant="primary"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const started = await api.generateSound(slug, quote.id);
+                if (started.needs_budget) throw new Error("The budget has no room for this.");
+                setQuote(null);
+                notifyProjectChanged({ slug });
+              })
+            }
+          >
+            Make {quote.count} · {dollars(quote.price)}
+          </Button>
+          <Button size="small" variant="quiet" disabled={busy} onClick={() => setQuote(null)}>
+            Not now
+          </Button>
+        </span>
         <span className="hint">with {quote.model}</span>
-        {error && <ErrorState what="making the sound" error={error} compact />}
+        {problem && <MakeProblem problem={problem} what="making the sound" />}
       </span>
     );
   }
@@ -119,17 +146,21 @@ export function Make({ slug, cueIds, label, variant = "default" }: { slug: strin
       <Button
         size="small"
         variant={variant}
-        disabled={busy || cueIds.length === 0}
+        disabled={busy || cueIds.length === 0 || Boolean(blocked)}
+        title={blocked}
         onClick={() =>
           void run(async () => {
+            // The price is of the saved cues: words typed a moment ago are saved first.
+            await prepare?.();
             const made = await api.estimateSound(slug, cueIds);
-            setQuote({ id: made.quote_id, price: made.reserve_usd, count: made.tasks.length, model: made.model });
+            setQuote({ id: made.quote_id, price: made.reserve_usd, count: made.tasks.length, model: made.model_label || made.model });
           })
         }
       >
         {busy ? "Working out the price…" : label}
       </Button>
-      {error && <ErrorState what="pricing the sound" error={error} compact />}
+      {blocked && <span className="hint">{blocked}</span>}
+      {problem && <MakeProblem problem={problem} what="pricing the sound" />}
     </span>
   );
 }
@@ -263,6 +294,7 @@ export function CueInspector({
   onData,
   onHear,
   onClose,
+  onSaveNow,
 }: {
   slug: string;
   cue: Cue;
@@ -275,6 +307,7 @@ export function CueInspector({
   onData: (data: SoundPayload) => void;
   onHear: (seconds: number) => void;
   onClose: () => void;
+  onSaveNow: () => Promise<void>;
 }) {
   const file = useRef<HTMLInputElement>(null);
   const describe = useRef<HTMLTextAreaElement>(null);
@@ -344,7 +377,14 @@ export function CueInspector({
         ) : (
           <>
             <span className="insp-silent">No sound yet</span>
-            <Make slug={slug} cueIds={[cue.id]} label="Make this sound" variant="primary" />
+            <Make
+              slug={slug}
+              cueIds={[cue.id]}
+              label="Make this sound"
+              variant="primary"
+              prepare={onSaveNow}
+              blocked={words.trim() ? undefined : "Say what it sounds like first."}
+            />
           </>
         )}
       </div>
@@ -543,7 +583,7 @@ export function CueInspector({
         )}
         {fit && <small className="hint">{fit}</small>}
         <div className="insp-actions">
-          {playing || cue.versions.length > 0 ? <Make slug={slug} cueIds={[cue.id]} label="Make another version" /> : null}
+          {playing || cue.versions.length > 0 ? <Make slug={slug} cueIds={[cue.id]} label="Make another version" prepare={onSaveNow} blocked={words.trim() ? undefined : "Say what it sounds like first."} /> : null}
           <Button size="small" variant="quiet" onClick={() => file.current?.click()}>
             Use your own file
           </Button>

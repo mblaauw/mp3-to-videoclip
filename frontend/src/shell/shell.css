@@ -743,8 +743,32 @@ body {
 .role-row {
   display: flex;
   gap: 4px;
-  padding: 0 var(--s-4) var(--s-3);
+  padding: 0 var(--s-4) var(--s-2);
+}
+/* Which messages the list shows; a reading choice, apart from who answers. */
+.thread-view {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: 0 var(--s-4) var(--s-2);
   border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: var(--t-12);
+}
+.thread-view .link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.thread-view .link:disabled {
+  color: var(--muted);
+  cursor: default;
 }
 .role-row button {
   flex: 1;

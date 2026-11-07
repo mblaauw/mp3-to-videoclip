@@ -343,6 +343,12 @@ def check_capacity(root: Path, additional_usd, *, context: str = "submission"):
     return record
 
 
+class Unreconciled(ValueError):
+    """A paid task still out holds the film's spending until the owner settles it."""
+
+    code = "unresolved_task"
+
+
 def require_reconciled(root: Path, admitted=()):
     """No new work after ambiguous prior tasks; allow this run's live workers."""
     allowed = set(admitted)
@@ -352,7 +358,7 @@ def require_reconciled(root: Path, admitted=()):
         if t.get("status") in UNRESOLVED_STATUSES and t.get("uuid", key) not in allowed
     ]
     if unresolved:
-        raise ValueError(
+        raise Unreconciled(
             "A paid task hasn't come back, so nothing new can be bought on this film. Open the "
             "budget to check it again or record what it billed (unresolved tasks need "
             "recovery/reconciliation before new spending: " + ", ".join(unresolved) + ")"

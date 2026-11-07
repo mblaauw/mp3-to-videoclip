@@ -101,6 +101,21 @@ def _safe_code(value) -> str:
     return value if isinstance(value, str) and value in _PUBLIC_ERROR_CODES else "provider_error"
 
 
+def _ended_code(entry: dict) -> str:
+    """A task the provider says ended in error: its public code, else ``task_failed``.
+
+    That is an answer, not silence: the task will not come back and can be settled.
+    """
+    code = entry.get("code")
+    return code if isinstance(code, str) and code in _PUBLIC_ERROR_CODES else "task_failed"
+
+
+def _task_ended(entry) -> bool:
+    return (
+        isinstance(entry, dict) and entry.get("status") == "error" and bool(entry.get("taskUUID"))
+    )
+
+
 def _check_host(host: str) -> None:
     name = host.strip("[]").lower()
     if name == "localhost" or name.endswith(".localhost"):
@@ -267,6 +282,9 @@ class RunwareClient:
                 first = errors[0] if isinstance(errors, list) and errors else None
                 if isinstance(first, dict) and first.get("code") in _PUBLIC_ERROR_CODES:
                     code = first["code"]
+                elif _task_ended(first):
+                    # Runware answers a provider's own timeout with a 5xx and the task's end.
+                    code = _ended_code(first)
             raise ProviderError(code, status=response.status_code)
         try:
             data = response.json()
@@ -281,6 +299,8 @@ class RunwareClient:
         errors = data.get("errors")
         if errors:
             first = errors[0] if isinstance(errors, list) and errors else None
+            if _task_ended(first):
+                raise ProviderError(_ended_code(first))
             code = first.get("code") if isinstance(first, dict) else None
             raise ProviderError(_safe_code(code))
         tasks = data.get("data")
@@ -315,7 +335,7 @@ class RunwareClient:
     def _result(task: dict | None, task_uuid: str) -> dict:
         if task is None or task.get("status") == "error":
             if task is not None:
-                raise ProviderError(_safe_code(task.get("code")))
+                raise ProviderError(_ended_code(task))
             raise ProviderError("mismatched_task")
         if task.get("status") in _PENDING or task.get("imageURL") is None:
             return {"taskUUID": task_uuid}
@@ -346,7 +366,7 @@ class RunwareClient:
         task = self._match(data, task_uuid)
         if task is None or task.get("status") == "error":
             if task is not None:
-                raise ProviderError(_safe_code(task.get("code")))
+                raise ProviderError(_ended_code(task))
             return None
         if task.get("status") in _PENDING or task.get("imageURL") is None:
             return None
@@ -439,7 +459,7 @@ class RunwareClient:
         if task is None:
             raise ProviderError("mismatched_task")
         if task.get("status") == "error":
-            raise ProviderError(_safe_code(task.get("code")))
+            raise ProviderError(_ended_code(task))
         if task.get("status") in _PENDING or task.get("mediaUUID") is None:
             return {"taskUUID": task_uuid}  # pending: caller persists the UUID and recovers
         media_uuid = task.get("mediaUUID")
@@ -465,7 +485,7 @@ class RunwareClient:
         if task is None:
             return None
         if task.get("status") == "error":
-            raise ProviderError(_safe_code(task.get("code")))
+            raise ProviderError(_ended_code(task))
         response = task.get("response")
         if not isinstance(response, dict):
             return None
@@ -538,7 +558,7 @@ class RunwareClient:
         if original.get("operation") != "upload":
             return None
         if original.get("status") == "error":
-            raise ProviderError(_safe_code(original.get("code")))
+            raise ProviderError(_ended_code(original))
         if original.get("status") in _PENDING or original.get("mediaUUID") is None:
             return None
         return self._upload_result(original, task_uuid)
@@ -551,7 +571,7 @@ class RunwareClient:
         if task is None:
             return None
         if task.get("status") == "error":
-            raise ProviderError(_safe_code(task.get("code")))
+            raise ProviderError(_ended_code(task))
         if task.get("status") in _PENDING or task.get("audioURL") is None:
             return None
         cost = task.get("cost")
@@ -591,7 +611,7 @@ class RunwareClient:
         if task is None:
             return None
         if task.get("status") == "error":
-            raise ProviderError(_safe_code(task.get("code")))
+            raise ProviderError(_ended_code(task))
         if task.get("status") in _PENDING or task.get("videoURL") is None:
             return None
         cost = task.get("cost")
@@ -658,7 +678,7 @@ class RunwareClient:
     def _text_result(task: dict | None, task_uuid: str) -> dict:
         if task is None or task.get("status") == "error":
             if task is not None:
-                raise ProviderError(_safe_code(task.get("code")))
+                raise ProviderError(_ended_code(task))
             raise ProviderError("mismatched_task")
         if task.get("status") in _PENDING or task.get("text") is None:
             return {"taskUUID": task_uuid}
@@ -697,7 +717,7 @@ class RunwareClient:
         if task is None:
             return None
         if task.get("status") == "error":
-            raise ProviderError(_safe_code(task.get("code")))
+            raise ProviderError(_ended_code(task))
         if task.get("status") in _PENDING or task.get("text") is None:
             return None
         return self._text_completed(task, task_uuid)

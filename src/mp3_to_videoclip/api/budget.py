@@ -61,7 +61,10 @@ async def recover_task(slug: str, task_id: str, request: Request):
 
     try:
         recovered = await asyncio.to_thread(run)
-    except ProviderError:
+    except ProviderError as exc:
+        if exc.code == "task_failed":
+            # The provider's last word: it ended in error and will not come back. Settling stays the owner's.
+            return {"recovered": False, "answered": True, "failed": True}
         # A provider's bad day is the expected answer here, not a fault in the Studio.
         return {"recovered": False, "answered": False}
     return {"recovered": bool(recovered), "answered": True}

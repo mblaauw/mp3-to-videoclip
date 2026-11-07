@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from mp3_to_videoclip import audio, catalog, sound
+from mp3_to_videoclip import budget as engine_budget
 from mp3_to_videoclip import production as P
 from mp3_to_videoclip.api._helpers import project_root
 from mp3_to_videoclip.api.errors import ApiError
@@ -199,12 +200,17 @@ async def estimate_sound(slug: str, request: Request, payload: dict):
     cue_ids = payload.get("cue_ids")
     if cue_ids is not None and (not isinstance(cue_ids, list) or not all(isinstance(c, str) for c in cue_ids)):  # fmt: skip
         raise HTTPException(status_code=400, detail="cue_ids is a list of cue ids")
+    engine_budget.require_reconciled(
+        root
+    )  # Before a price: a held film can buy nothing at any price.
     with project_lock(root):
         quote = sound.quote_cues(root, cue_ids, model=payload.get("model") or None)
     runware_api_key()  # Still before a price is shown: nothing can be bought without the key.
+    label = next((row["label"] for row in _models() if row["id"] == quote["model"]), quote["model"])
     return {
         "quote_id": quote["id"],
         "model": quote["model"],
+        "model_label": label,
         "tasks": [
             {"cue_id": t["cue_id"], "seconds": t["seconds"], "reserve_usd": t["reserve_usd"]}
             for t in quote["tasks"]
