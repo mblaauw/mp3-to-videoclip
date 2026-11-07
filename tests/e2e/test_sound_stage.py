@@ -61,13 +61,49 @@ def test_a_placed_cue_shows_its_places_on_the_spine_and_a_click_offers_an_effect
     assert saved.status_code == 200, saved.text
     page.goto(studio.film("sound"))
     expect(page.get_by_role("heading", name="Sound")).to_be_visible()
-    expect(page.locator(".sound-playhead")).to_have_count(1)
+    expect(page.locator(".map-playhead").first).to_be_visible()
     places = page.locator(".cue-place")
     assert places.count() >= 2
     row = page.locator("#cue-tick")
     expect(row).to_contain_text("every 1 s")
-    row.get_by_role("button", name="Edit").click()
-    expect(row.get_by_label("Plays")).to_have_value("every")
-    expect(row.get_by_label("Start kind")).to_have_value("frame")
-    page.locator(".sound-ruler").click(position={"x": 40, "y": 30})
+    expect(row).to_contain_text("a clock tick")
+    row.locator(".cue-row-main").click()
+    inspector = page.get_by_role("complementary", name="Cue tick")
+    expect(inspector.get_by_role("radio", name="Every few seconds")).to_have_attribute(
+        "aria-checked", "true"
+    )
+    expect(inspector.get_by_label("From kind")).to_have_value("frame")
+    page.locator(".map-track.lane-cues.ambience").click(position={"x": 40, "y": 10})
     expect(page.get_by_role("button", name=re.compile(r"^Add an effect at"))).to_be_visible()
+
+
+def test_a_cue_edited_in_the_inspector_saves_itself(page: Page, studio):
+    saved = httpx.put(
+        f"{studio.api}/sound",
+        json={
+            "cues": [
+                {
+                    "id": "rain",
+                    "kind": "ambience",
+                    "prompt": "rain",
+                    "start": {"frame": 0},
+                    "end": {"frame": -1},
+                }
+            ]
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    page.goto(studio.film("sound"))
+    page.get_by_role("button", name=re.compile(r"^rain, ambience")).click()
+    inspector = page.get_by_role("complementary", name="Cue rain")
+    inspector.get_by_label("What rain sounds like").fill("soft rain on a tin roof ")
+    inspector.get_by_role("radio", name="At a moment").click()
+    expect(page.locator(".save-state")).to_contain_text("Saved")
+    cue = httpx.get(f"{studio.api}/sound").json()["cues"][0]
+    assert cue["prompt"] == "soft rain on a tin roof"
+    assert cue["start"] == cue["end"] == {"frame": 0}
+    # The words on screen keep the space the owner typed; the saved cue is trimmed.
+    expect(inspector.get_by_label("What rain sounds like")).to_have_value(
+        "soft rain on a tin roof "
+    )
+    expect(page.locator("#cue-rain")).to_contain_text("at 0:00.0")

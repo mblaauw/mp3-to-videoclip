@@ -32,6 +32,8 @@ def test_the_stage_lists_suggests_keeps_and_serves(tmp_path):
         base = f"/api/projects/{root.name}/sound"
         empty = client.get(base).json()
         assert empty["cues"] == [] and empty["story_film"] is True and empty["suggestions"] == 6
+        # The one take on disk is where the voice is; cues duck under it.
+        assert len(empty["speech"]) == 1 and empty["speech"][0]["end"] > empty["speech"][0]["start"]
         assert {m["for"] for m in empty["models"]} == {"music", "effects"}
         assert all(m["price"] for m in empty["models"])
         suggested = client.post(f"{base}/suggest", json={}).json()

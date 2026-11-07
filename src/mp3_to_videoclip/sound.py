@@ -689,7 +689,7 @@ def report(root: Path, project: Project | None = None) -> dict:
         mixed = None
     if mixed is not None:
         for start, end in _silences(mixed):
-            notes.append({"code": "silence", "at": start, "message": f"Silence from {start:.0f} s to {end:.0f} s, {end - start:.0f} s with nothing to hear."})  # fmt: skip
+            notes.append({"code": "silence", "at": start, "end": end, "message": f"Silence from {start:.0f} s to {end:.0f} s, {end - start:.0f} s with nothing to hear."})  # fmt: skip
         stats = music.loudness_stats(mixed)
         if stats is not None:
             measured = {"lufs": round(float(stats["input_i"]), 1), "true_peak_db": round(float(stats.get("input_tp", 0.0)), 1)}  # fmt: skip
