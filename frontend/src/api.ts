@@ -1508,7 +1508,7 @@ export const api = {
       { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } },
     ),
   estimateSound: (slug: string, cueIds: string[], model?: string) =>
-    request<{ quote_id: string; model: string; reserve_usd: string; tasks: { cue_id: string; seconds: number | null; reserve_usd: string }[]; decision: BudgetDecision }>(
+    request<{ quote_id: string; model: string; model_label?: string; reserve_usd: string; tasks: { cue_id: string; seconds: number | null; reserve_usd: string }[]; decision: BudgetDecision }>(
       `/api/projects/${slug}/sound/estimate`,
       { method: "POST", body: JSON.stringify({ cue_ids: cueIds, ...(model ? { model } : {}) }) },
     ),
@@ -1665,7 +1665,7 @@ export const api = {
     ),
   budget: (slug: string) => request<Budget>(`/api/projects/${slug}/budget`),
   recoverTask: (slug: string, task: string) =>
-    request<{ recovered: boolean; answered: boolean }>(
+    request<{ recovered: boolean; answered: boolean; failed?: boolean }>(
       `/api/projects/${slug}/tasks/${task}/recover`,
       { method: "POST", body: "{}" },
     ),

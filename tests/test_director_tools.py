@@ -859,6 +859,15 @@ def _write_board(tmp_path, shots):
     )
 
 
+def test_write_storyboard_before_the_skeleton_says_what_to_do(tmp_path):
+    root = make_api_project(tmp_path)
+    shots = _board_of(root, 6)
+    (root / "work/storyboard.json").unlink()
+    result = _write_board(tmp_path, shots)
+    assert "call create_storyboard first" in result["error"]
+    assert str(tmp_path) not in result["error"]
+
+
 def test_write_storyboard_can_add_shots_the_skeleton_never_had(tmp_path):
     root = make_api_project(tmp_path)
     before = len(P.load_board(root).shots)

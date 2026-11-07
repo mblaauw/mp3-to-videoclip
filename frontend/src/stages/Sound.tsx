@@ -175,6 +175,8 @@ export function SoundStage({ slug, music = null }: { slug: string; music?: Music
   const cues = merged(data, drafts);
   const ordered = [...cues].sort((a, b) => (a.start_seconds ?? Infinity) - (b.start_seconds ?? Infinity) || a.id.localeCompare(b.id));
   const silent = cues.filter((cue) => !chosen(cue)).map((cue) => cue.id);
+  // A cue without words cannot be priced; its row asks for them instead.
+  const makeable = cues.filter((cue) => !chosen(cue) && cue.prompt.trim()).map((cue) => cue.id);
   const current = selected ? (cues.find((cue) => cue.id === selected) ?? null) : null;
   const notesFor = (id: string) => (report?.notes ?? []).filter((note) => note.cue === id).map((note) => note.message);
 
@@ -252,7 +254,15 @@ export function SoundStage({ slug, music = null }: { slug: string; music?: Music
         </h2>
         <div className="sound-head-actions">
           <SaveState status={status} savedAt={savedAt} onRetry={() => void flush()} />
-          {silent.length > 0 && <Make slug={slug} cueIds={silent} label={`Make ${silent.length === 1 ? "the silent cue" : `all ${silent.length} silent cues`}`} variant="primary" />}
+          {makeable.length > 0 && (
+            <Make
+              slug={slug}
+              cueIds={makeable}
+              label={makeable.length === 1 ? (silent.length === 1 ? "Make the silent cue" : `Make ${makeable[0]}`) : `Make ${makeable.length === silent.length ? "all " : ""}${makeable.length} silent cues`}
+              variant="primary"
+              prepare={flush}
+            />
+          )}
           {data.suggestions > 0 && (
             <Button size="small" variant="quiet" disabled={busy} onClick={() => void act(() => api.suggestSound(slug))}>
               Suggest cues
@@ -344,8 +354,12 @@ export function SoundStage({ slug, music = null }: { slug: string; music?: Music
                           <span className="cue-row-level">{dbWords(cue.gain_db)}</span>
                           <PlayButton playing={audition.playing === key} label={`${cue.id} on its own`} onClick={() => audition.toggle(key, soundUrl(slug, cue.id, sound.version))} />
                         </>
+                      ) : cue.prompt.trim() ? (
+                        <Make slug={slug} cueIds={[cue.id]} label="Make this sound" prepare={flush} />
                       ) : (
-                        <Make slug={slug} cueIds={[cue.id]} label="Make this sound" />
+                        <Button size="small" onClick={() => setSelected(cue.id)}>
+                          Describe it
+                        </Button>
                       )}
                     </span>
                   </li>
@@ -373,6 +387,7 @@ export function SoundStage({ slug, music = null }: { slug: string; music?: Music
             }}
             onHear={hear}
             onClose={() => setSelected(null)}
+            onSaveNow={flush}
           />
         ) : (
           <MixPanel cues={cues} report={report} measuring={measuring} onMeasure={() => void measure()} onSelect={setSelected} />

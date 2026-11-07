@@ -65,15 +65,12 @@ export function Director(props: DirectorProps) {
         >
           Critic
         </button>
-        <button
-          type="button"
-          className={both ? "on" : ""}
-          aria-pressed={both}
-          disabled={busy}
-          onClick={() => setBoth(true)}
-          title="Everyone's messages in order, to read"
-        >
-          Both
+      </div>
+      {/* What the list shows, apart from who answers: one role's thread, or all of them to read. */}
+      <div className="thread-view">
+        <span>{both ? "Every role's messages, in order" : `The ${ROLE_NAME[role]}'s thread`}</span>
+        <button type="button" className="link" disabled={busy} aria-pressed={both} onClick={() => setBoth(!both)}>
+          {both ? `Show only the ${ROLE_NAME[role]}` : "Show every role"}
         </button>
       </div>
       <div className="messages" aria-live="polite" ref={listRef} onScroll={onScroll}>
@@ -87,11 +84,7 @@ export function Director(props: DirectorProps) {
           ) : (
             <div className="msg assistant" key={`m-${block.index}`}>
               <div className="who">
-                {block.item.kind === "assistant" && block.item.role
-                  ? block.item.role === "writer"
-                    ? "Writer"
-                    : "Editor"
-                  : "Director"}
+                {block.item.kind === "assistant" && block.item.role ? ROLE_NAME[block.item.role] : "Director"}
                 {block.item.kind === "assistant" && usageLine(block.item.usage) && (
                   <span className="msg-usage">{usageLine(block.item.usage)}</span>
                 )}

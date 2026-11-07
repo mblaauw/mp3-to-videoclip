@@ -52,6 +52,19 @@ def test_a_provider_outage_is_an_answer_and_buys_nothing(tmp_path, monkeypatch):
     assert read_json(root / "work/tasks.json")[TASK]["status"] == "submitted"
 
 
+def test_a_task_the_provider_ended_is_failed_and_still_the_owners_to_settle(tmp_path, monkeypatch):
+    root = _stuck(tmp_path)
+
+    def ended(*_):
+        raise ProviderError("task_failed", status=504)
+
+    monkeypatch.setattr(generation, "recover", ended)
+    with api_client(tmp_path) as client:
+        said = client.post(f"/api/projects/production/tasks/{TASK}/recover", json={})
+    assert said.json() == {"recovered": False, "answered": True, "failed": True}
+    assert read_json(root / "work/tasks.json")[TASK]["status"] == "submitted"
+
+
 def test_settling_needs_evidence_and_frees_the_film(tmp_path):
     root = _stuck(tmp_path)
     url = f"/api/projects/production/tasks/{TASK}/resolve"

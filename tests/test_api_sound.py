@@ -76,6 +76,7 @@ def test_a_quote_and_a_run_go_through_the_journal(tmp_path, monkeypatch):
         assert estimate.status_code == 200, estimate.text
         quote = estimate.json()
         assert quote["model"] == "ace-step-v1-5-xl-turbo" and quote["decision"]["ok"] is True
+        assert quote["model_label"] == "ACE-Step v1.5 XL Turbo"
         assert quote["tasks"][0]["cue_id"] == "bed"
         refused = client.post(f"{base}/generate", json={})
         assert refused.status_code == 400
@@ -93,6 +94,16 @@ def test_a_quote_and_a_run_go_through_the_journal(tmp_path, monkeypatch):
     assert task["kind"] == "sound" and task["status"] == "ready"
     assert sound.read(root)["cues"][0]["selected"] == 1
     assert len(fake.submitted) == 1
+
+
+def test_a_held_film_is_told_before_a_price_and_offered_the_budget(tmp_path):
+    root = _film(tmp_path)
+    sound.set_cues(root, [{"id": "bed", "kind": "music", "prompt": "a slow bed"}])
+    journal = {"t1": {"uuid": "t1", "kind": "clip", "status": "submitted", "reserve_usd": "0.5"}}
+    (root / "work/tasks.json").write_text(json.dumps(journal))
+    with api_client(tmp_path) as client:
+        said = client.post(f"/api/projects/{root.name}/sound/estimate", json={"cue_ids": ["bed"]})
+    assert said.status_code == 409 and said.json()["code"] == "unresolved_task"
 
 
 def test_the_writer_names_the_cues_and_the_snapshot_hears_them(tmp_path):

@@ -785,7 +785,9 @@ class Shot(Model):
         if self.kind == "era" and self.era_id is None:
             raise ValueError("an era shot needs an era_id")
         if self.era_id is not None and self.kind != "era":
-            raise ValueError("era_id only belongs to an era shot")
+            raise ValueError(
+                'era_id only belongs to an era shot: set kind to "era", or leave era_id out'
+            )
         if self.kind == "product" and not (self.product_ref or self.asset):
             raise ValueError("a product shot needs a product_ref or an uploaded asset")
         if self.product_ref is not None and self.kind != "product":

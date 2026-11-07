@@ -40,6 +40,37 @@ def test_a_silent_cue_is_counted_and_its_price_needs_a_key(page: Page, studio):
     assert "[Errno" not in page.locator("body").inner_text()
 
 
+def test_a_cue_without_words_asks_for_them_instead_of_a_price(page: Page, studio):
+    saved = httpx.put(
+        f"{studio.api}/sound",
+        json={
+            "cues": [
+                {
+                    "id": "room",
+                    "kind": "ambience",
+                    "prompt": "",
+                    "start": {"frame": 0},
+                    "end": {"frame": -1},
+                }
+            ]
+        },  # fmt: skip
+    )
+    assert saved.status_code == 200, saved.text
+    page.goto(studio.film("sound"))
+    expect(
+        page.locator(".sound-head").get_by_role("button", name=re.compile("^Make"))
+    ).to_have_count(0)
+    page.locator("#cue-room").get_by_role("button", name="Describe it").click()
+    inspector = page.get_by_label("Cue room")
+    make = inspector.get_by_role("button", name="Make this sound")
+    expect(make).to_be_disabled()
+    expect(inspector).to_contain_text("Say what it sounds like first.")
+    expect(page.get_by_label("What room sounds like")).to_be_focused()
+    page.get_by_label("What room sounds like").fill("a quiet hall, distant footsteps")
+    expect(make).to_be_enabled()
+    assert "Something went wrong" not in page.locator("body").inner_text()
+
+
 def test_a_placed_cue_shows_its_places_on_the_spine_and_a_click_offers_an_effect(
     page: Page, studio
 ):

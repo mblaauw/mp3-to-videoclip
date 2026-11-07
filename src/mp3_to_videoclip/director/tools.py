@@ -1059,6 +1059,8 @@ def _tool_write_storyboard(name, arguments, root, runner, projects_dir):
     from mp3_to_videoclip import production as P
     from mp3_to_videoclip import shotkinds
 
+    if not (root / "work/storyboard.json").exists():
+        raise ValueError("there is no storyboard yet: call create_storyboard first, then write_storyboard")  # fmt: skip
     board = P.write_storyboard(root, arguments.get("shots") or [])
     return {
         "saved": True,
